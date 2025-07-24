@@ -1,0 +1,9 @@
+{
+    "current_location": "Apartment B2",
+    "time_of_day": "Morning",
+    "locations": {
+        "Apartment B2": {
+            "description": "A cramped, dilapidated apartment with peeling wallpaper, a single window overlooking a brick wall, and a bulletin board covered in faded flyers and an old photograph."
+        }
+    }
+}
