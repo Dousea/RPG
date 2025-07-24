@@ -1,0 +1,18 @@
+{
+    "Dale": {
+        "description": "A weathered survivor wearing a patched leather jacket. His eyes dart nervously around the room",
+        "location": "Hallway",
+        "status": [
+            "cautious",
+            "armed"
+        ]
+    },
+    "Sarah": {
+        "description": "An elderly woman clutching a worn backpack. She moves slowly but with purpose",
+        "location": "Ground Floor",
+        "status": [
+            "tired",
+            "determined"
+        ]
+    }
+}

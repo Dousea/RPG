@@ -1,0 +1,40 @@
+{
+    "Apartment B2": {
+        "description": "A cramped apartment with boarded windows and scattered debris. The air smells of mold and decay.",
+        "connections": [
+            "Hallway"
+        ],
+        "items": [
+            "rusty can",
+            "torn newspaper"
+        ]
+    },
+    "Hallway": {
+        "description": "A dimly lit hallway with flickering overhead lights. Doors line both sides, most are locked or barricaded.",
+        "connections": [
+            "Apartment B2",
+            "Stairwell"
+        ],
+        "items": [
+            "broken glass"
+        ]
+    },
+    "Stairwell": {
+        "description": "A concrete stairwell echoing with distant sounds. Graffiti covers the walls and the air is thick with dust.",
+        "connections": [
+            "Hallway",
+            "Ground Floor"
+        ],
+        "items": []
+    },
+    "Ground Floor": {
+        "description": "The building's entrance area. Sunlight streams through cracked windows, illuminating the abandoned lobby.",
+        "connections": [
+            "Stairwell"
+        ],
+        "items": [
+            "old magazine",
+            "bent spoon"
+        ]
+    }
+}
