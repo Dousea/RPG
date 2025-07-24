@@ -5,9 +5,16 @@ import os
 import json
 import requests # Make sure to install this: pip install requests
 from flask import Flask, request, jsonify, render_template # Make sure to install this: pip install Flask
+import faiss # Make sure to install this: pip install faiss-cpu
+import numpy as np
+from sentence_transformers import SentenceTransformer # Make sure to install this: pip install sentence-transformers
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
+
+# --- Global Memory System Variables ---
+faiss_index = None
+sentence_model = None
 
 # --- Game Constants ---
 GAME_DATA_DIR = "gamedata"
@@ -17,6 +24,7 @@ EVENTS_FILE = os.path.join(GAME_DATA_DIR, "events.json")
 LOCATIONS_FILE = os.path.join(GAME_DATA_DIR, "locations.json")
 NPCS_FILE = os.path.join(GAME_DATA_DIR, "npcs.json")
 SUMMARIES_FILE = os.path.join(GAME_DATA_DIR, "summaries.json")
+FULL_EVENT_LOG_FILE = os.path.join(GAME_DATA_DIR, "full_event_log.json")
 MAX_EVENTS = 5 # The number of recent events to keep in context
 EVENTS_THRESHOLD = 10 # Trigger summarization when events exceed this number
 
@@ -75,6 +83,9 @@ def setup_game_files():
     if not os.path.exists(SUMMARIES_FILE):
         with open(SUMMARIES_FILE, 'w') as f:
             json.dump([], f, indent=4)
+    if not os.path.exists(FULL_EVENT_LOG_FILE):
+        with open(FULL_EVENT_LOG_FILE, 'w') as f:
+            json.dump(["The adventure begins."], f, indent=4)
 
 def load_state():
     """Loads all game state from JSON files into a dictionary."""
@@ -90,13 +101,16 @@ def load_state():
         npcs_data = json.load(f)
     with open(SUMMARIES_FILE, 'r') as f:
         summaries_data = json.load(f)
+    with open(FULL_EVENT_LOG_FILE, 'r') as f:
+        full_event_log_data = json.load(f)
     return {
         "character": character_data, 
         "world": world_data, 
         "events": events_data, 
         "locations": locations_data, 
         "npcs": npcs_data,
-        "summaries": summaries_data
+        "summaries": summaries_data,
+        "full_event_log": full_event_log_data
     }
 
 def save_state(state_data):
@@ -113,6 +127,8 @@ def save_state(state_data):
         json.dump(state_data["npcs"], f, indent=4)
     with open(SUMMARIES_FILE, 'w') as f:
         json.dump(state_data["summaries"], f, indent=4)
+    with open(FULL_EVENT_LOG_FILE, 'w') as f:
+        json.dump(state_data["full_event_log"], f, indent=4)
 
 # === LLM Integration (The REAL version) ===
 
@@ -269,12 +285,22 @@ def run_summarization_check(state):
 
 def run_game_turn(player_input):
     """
-    This function orchestrates a single turn of the game with Heuristic Filtering.
+    This function orchestrates a single turn of the game with Phase 3 Hybrid Memory System.
     """
     # Step A: Load Full Game State
     state = load_state()
     
-    # Step B: HEURISTIC FILTERING (NEW STEP)
+    # Step B: SEMANTIC SEARCH (NEW STEP - Deep Memory Retrieval)
+    retrieved_indices = search_faiss_index(player_input, k=2)
+    deep_memories = []
+    if retrieved_indices:
+        deep_memories = [state["full_event_log"][i] for i in retrieved_indices if i < len(state["full_event_log"])]
+    
+    print(f"Retrieved {len(deep_memories)} deep memories for input: '{player_input}'")
+    for i, memory in enumerate(deep_memories):
+        print(f"  Deep Memory {i+1}: {memory}")
+    
+    # Step C: HEURISTIC FILTERING
     current_location = state['world']['current_location']
     
     # Create contextual_locations
@@ -295,7 +321,7 @@ def run_game_turn(player_input):
         if npc_data.get('location') == current_location:
             contextual_npcs[npc_name] = npc_data
     
-    # Step C: Assemble the NEW LLM Prompt
+    # Step D: Assemble the HYBRID LLM Prompt
     char = state['character']
     world = state['world']
     events = state['events']
@@ -335,6 +361,15 @@ def run_game_turn(player_input):
     if not npcs_present_section.strip():
         npcs_present_section = "    None\n\n"
     
+    # Format deep memories (NEW SECTION)
+    deep_memory_section = ""
+    if deep_memories:
+        for memory in deep_memories:
+            deep_memory_section += f"    {memory}\n\n"
+        deep_memory_section = deep_memory_section.rstrip("\n")
+    else:
+        deep_memory_section = "    None"
+    
     # Format recent events (up to 5, in reverse chronological order)
     events_section = ""
     for event in events[:5]:  # Take only the first 5 (most recent)
@@ -349,8 +384,14 @@ def run_game_turn(player_input):
     if state["summaries"]:
         summary_section = state["summaries"][-1]  # Get the most recent summary
 
+    # NEW HYBRID PROMPT STRUCTURE
     llm_prompt = f"""[CHARACTER]
 Name: {char['name']}, Status: {', '.join(char['status'])}, Inventory: {', '.join(char['inventory'])}
+
+[DEEP MEMORY]
+(Recalled from past events based on your input)
+
+{deep_memory_section}
 
 [WORLD]
 Current Location: {current_location}
@@ -370,24 +411,26 @@ Time: {world['time_of_day']}
 {npcs_present_section.rstrip()}
 
 [SUMMARY OF PAST EVENTS]
+(A narrative overview of the long-term past)
 
 {summary_section}
 
 [RECENT EVENTS]
+(What just happened)
 
 {events_section}
 
 [SCENE]
 {player_input}"""
     
-    print("--- Assembled Prompt for LLM ---")
+    print("--- Assembled Hybrid Prompt for LLM ---")
     print(llm_prompt)
-    print("--------------------------------")
+    print("---------------------------------------")
 
-    # Step D: Query the LLM
+    # Step E: Query the LLM
     llm_response_str = query_llm(llm_prompt)
 
-    # Step E: Parse and Apply LLM Response
+    # Step F: Parse and Apply LLM Response
     try:
         # Clean up the response if it's wrapped in markdown code blocks
         clean_response = llm_response_str.strip()
@@ -434,16 +477,23 @@ Time: {world['time_of_day']}
         else:
             print(f"Warning: Unknown file key in state_changes: {file_key}")
 
-    # Add the new event and trim the log
+    # Step G: Add to BOTH memory systems
     new_event = llm_data.get("new_event")
     if new_event:
+        # Add to recent events (short-term memory)
         state["events"].insert(0, new_event)
         state["events"] = state["events"][:MAX_EVENTS]
+        
+        # Add to full event log (deep memory) - CRITICAL NEW STEP
+        state["full_event_log"].append(new_event)
+        
+        # Rebuild FAISS index immediately for new searchable memory
+        build_faiss_index(state["full_event_log"])
 
-    # Step F: Run Summarization Check
+    # Step H: Run Summarization Check
     run_summarization_check(state)
 
-    # Step G: Save Game State
+    # Step I: Save Game State
     save_state(state)
 
     # Prepare the data to send back to the frontend
@@ -453,6 +503,78 @@ Time: {world['time_of_day']}
         "inventory": state['character']['inventory']
     }
     return turn_result
+
+
+# === FAISS Memory System Functions ===
+
+def initialize_sentence_model():
+    """Initialize the sentence transformer model globally."""
+    global sentence_model
+    if sentence_model is None:
+        print("Loading sentence transformer model...")
+        sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+        print("Sentence transformer model loaded.")
+
+def build_faiss_index(events_list):
+    """
+    Builds a FAISS index from the provided list of events.
+    """
+    global faiss_index, sentence_model
+    
+    # Initialize the model if needed
+    initialize_sentence_model()
+    
+    if not events_list:
+        print("No events to index.")
+        faiss_index = None
+        return
+    
+    print(f"Building FAISS index from {len(events_list)} events...")
+    
+    # Generate embeddings for all events
+    embeddings = sentence_model.encode(events_list)
+    embeddings = np.array(embeddings).astype('float32')
+    
+    # Create FAISS index
+    dimension = embeddings.shape[1]
+    faiss_index = faiss.IndexFlatIP(dimension)  # Inner Product (cosine similarity)
+    
+    # Normalize embeddings for cosine similarity
+    faiss.normalize_L2(embeddings)
+    
+    # Add embeddings to index
+    faiss_index.add(embeddings)
+    
+    print(f"FAISS index built with {faiss_index.ntotal} events.")
+
+def search_faiss_index(query_text, k=2):
+    """
+    Searches the FAISS index for the k most similar events to the query.
+    Returns a list of indices into the original events list.
+    """
+    global faiss_index, sentence_model
+    
+    if faiss_index is None or sentence_model is None:
+        print("FAISS index or sentence model not initialized.")
+        return []
+    
+    if faiss_index.ntotal == 0:
+        print("FAISS index is empty.")
+        return []
+    
+    # Encode the query
+    query_embedding = sentence_model.encode([query_text])
+    query_embedding = np.array(query_embedding).astype('float32')
+    
+    # Normalize for cosine similarity
+    faiss.normalize_L2(query_embedding)
+    
+    # Search the index
+    k = min(k, faiss_index.ntotal)  # Don't search for more than we have
+    scores, indices = faiss_index.search(query_embedding, k)
+    
+    # Return the indices (convert from numpy to list)
+    return indices[0].tolist()
 
 
 # === Flask Web Routes ===
@@ -487,17 +609,29 @@ def reset_game():
     if os.path.exists(SUMMARIES_FILE): os.remove(SUMMARIES_FILE)
     if os.path.exists(LOCATIONS_FILE): os.remove(LOCATIONS_FILE)
     if os.path.exists(NPCS_FILE): os.remove(NPCS_FILE)
+    if os.path.exists(FULL_EVENT_LOG_FILE): os.remove(FULL_EVENT_LOG_FILE)
     
     # Create fresh ones
     setup_game_files()
+    
+    # Rebuild FAISS index with fresh data
+    state = load_state()
+    build_faiss_index(state["full_event_log"])
     
     return jsonify({"message": "Game has been reset."})
 
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    print("Starting RPG server...")
+    print("Starting RPG server with Phase 3 Hybrid Memory System...")
     setup_game_files()
+    
+    # Initialize FAISS index from existing full event log
+    print("Initializing FAISS memory system...")
+    state = load_state()
+    build_faiss_index(state["full_event_log"])
+    print("FAISS memory system ready.")
+    
     # 'host="0.0.0.0"' makes the server accessible on your local network
     app.run(host="0.0.0.0", port=5000, debug=True)
 
