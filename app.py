@@ -156,17 +156,30 @@ def query_llm(prompt_text):
                     "Describe the world, actions, and consequences in a gritty, narrative style. "
                     "IMPORTANT: Only perform actions that the player explicitly requests. Do not assume or perform actions automatically. "
                     "If the player says 'look around' or 'scan the area', only DESCRIBE what they see - do not pick up items or interact with objects unless specifically told to do so. "
-                    "Your response MUST be a single, valid JSON object (not wrapped in markdown code blocks) with three keys: "
-                    "'response_text' (the story narrative for the player), "
-                    "'new_event' (a brief summary of what happened for the event log), "
-                    "and 'state_changes' (a JSON object with filenames as keys and the changed data as values). "
-                    "For state_changes: "
-                    "- 'character.json' for character updates (use 'inventory' key in lowercase) "
-                    "- 'world.json' for world updates (current_location, time_of_day only) "
-                    "- 'locations.json' for location updates: ALWAYS use specific location name as key, then 'items' array "
-                    "- 'npcs.json' for NPC updates (specific NPC name as key) "
-                    "CRITICAL: When moving items, update 'locations.json' with the specific location name, NOT 'world.json'. "
-                    "Example for taking an item: {'locations.json': {'Apartment B2': {'items': ['remaining_item1', 'remaining_item2']}}}"
+                    "Your response must follow this EXACT format with these section markers:\n\n"
+                    "STORY:\n"
+                    "[Write the narrative story text here]\n\n"
+                    "EVENT:\n"
+                    "[Write a brief summary for the event log]\n\n"
+                    "ACTIONS:\n"
+                    "[List any actions that need to happen, one per line. Available actions:]\n"
+                    "- TAKE item_name\n"
+                    "- DROP item_name\n"
+                    "- MOVE_TO location_name\n"
+                    "- TIME_ADVANCE morning/afternoon/evening/night\n"
+                    "- STATUS_ADD status_name\n"
+                    "- STATUS_REMOVE status_name\n"
+                    "- NPC_MOVE npc_name TO location_name\n"
+                    "- NPC_STATUS npc_name ADD status_name\n"
+                    "- NPC_STATUS npc_name REMOVE status_name\n"
+                    "[If no actions needed, write: NONE]\n\n"
+                    "Example response:\n"
+                    "STORY:\n"
+                    "You reach down and pick up the rusty can from the floor. It's heavier than expected.\n\n"
+                    "EVENT:\n"
+                    "Orton picked up a rusty can\n\n"
+                    "ACTIONS:\n"
+                    "TAKE rusty can"
                 )
             },
             {
@@ -182,30 +195,22 @@ def query_llm(prompt_text):
         response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
         
         # Extract the content from the LLM's response
-        llm_response_json = response.json()['choices'][0]['message']['content']
+        llm_response_text = response.json()['choices'][0]['message']['content']
         
         # It's good practice to print what the LLM returned, for debugging
         print("--- LLM Raw Response ---")
-        print(llm_response_json)
+        print(llm_response_text)
         print("------------------------")
 
-        return llm_response_json
+        return llm_response_text
 
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to LLM Studio: {e}")
-        # Return an error message in the same JSON format
-        return json.dumps({
-            "response_text": f"Error: Could not connect to the LLM. Is LM Studio running? ({e})",
-            "new_event": "A connection error occurred.",
-            "state_changes": {}
-        })
+        # Return an error message in the simple text format
+        return f"STORY:\nError: Could not connect to the LLM. Is LM Studio running? ({e})\n\nEVENT:\nA connection error occurred.\n\nACTIONS:\nNONE"
     except (KeyError, IndexError) as e:
         print(f"Error parsing LLM response: {e}")
-        return json.dumps({
-            "response_text": f"Error: The LLM returned an unexpected response format. Check the LM Studio console. ({e})",
-            "new_event": "An LLM format error occurred.",
-            "state_changes": {}
-        })
+        return f"STORY:\nError: The LLM returned an unexpected response format. Check the LM Studio console. ({e})\n\nEVENT:\nAn LLM format error occurred.\n\nACTIONS:\nNONE"
 
 
 def query_llm_for_summary(text_to_summarize):
@@ -249,6 +254,272 @@ def query_llm_for_summary(text_to_summarize):
     except (KeyError, IndexError) as e:
         print(f"Error parsing LLM summary response: {e}")
         return f"Summary unavailable due to parsing error: {e}"
+
+
+def parse_llm_response(llm_response_text):
+    """
+    Parse the simple text-based LLM response into components.
+    Returns a dictionary with 'story', 'event', and 'actions' keys.
+    """
+    # Initialize default values
+    story = "The world is silent."
+    event = "Nothing happened."
+    actions = []
+    
+    # Split response into sections
+    sections = llm_response_text.split('\n\n')
+    current_section = None
+    
+    for section in sections:
+        section = section.strip()
+        if section.startswith('STORY:'):
+            current_section = 'story'
+            story = section[6:].strip()  # Remove 'STORY:' prefix
+        elif section.startswith('EVENT:'):
+            current_section = 'event'
+            event = section[6:].strip()  # Remove 'EVENT:' prefix
+        elif section.startswith('ACTIONS:'):
+            current_section = 'actions'
+            actions_text = section[8:].strip()  # Remove 'ACTIONS:' prefix
+            if actions_text.upper() != 'NONE':
+                # Split actions by newlines and clean them up
+                actions = [action.strip() for action in actions_text.split('\n') if action.strip()]
+        elif current_section and section:
+            # Continue previous section if we have content
+            if current_section == 'story':
+                story += '\n' + section
+            elif current_section == 'event':
+                event += '\n' + section
+            elif current_section == 'actions' and section.upper() != 'NONE':
+                actions.extend([action.strip() for action in section.split('\n') if action.strip()])
+    
+    return {
+        'story': story,
+        'event': event,
+        'actions': actions
+    }
+
+
+def execute_action(action_str, state):
+    """
+    Execute a single action command on the game state.
+    Returns True if the action was successful, False otherwise.
+    """
+    if not action_str or action_str.upper() == 'NONE':
+        return True
+    
+    parts = action_str.strip().split()
+    if not parts:
+        return False
+        
+    command = parts[0].upper()
+    
+    try:
+        if command == "TAKE":
+            return handle_take_action(parts[1:], state)
+        elif command == "DROP":
+            return handle_drop_action(parts[1:], state)
+        elif command == "MOVE_TO":
+            return handle_move_action(parts[1:], state)
+        elif command == "TIME_ADVANCE":
+            return handle_time_action(parts[1:], state)
+        elif command == "STATUS_ADD":
+            return handle_status_add_action(parts[1:], state)
+        elif command == "STATUS_REMOVE":
+            return handle_status_remove_action(parts[1:], state)
+        elif command == "NPC_MOVE":
+            return handle_npc_move_action(parts[1:], state)
+        elif command == "NPC_STATUS":
+            return handle_npc_status_action(parts[1:], state)
+        else:
+            print(f"Warning: Unknown action command: {command}")
+            return False
+    except Exception as e:
+        print(f"Error executing action '{action_str}': {e}")
+        return False
+
+
+def handle_take_action(args, state):
+    """Handle TAKE item_name action"""
+    if not args:
+        return False
+        
+    item_name = " ".join(args)  # Handle multi-word items
+    current_location = state['world']['current_location']
+    
+    # Remove from location
+    if current_location in state['locations']:
+        location_items = state['locations'][current_location].get('items', [])
+        if item_name in location_items:
+            location_items.remove(item_name)
+            state['character']['inventory'].append(item_name)
+            print(f"Action executed: Took '{item_name}' from {current_location}")
+            return True
+    
+    print(f"Action failed: Could not take '{item_name}' from {current_location}")
+    return False
+
+
+def handle_drop_action(args, state):
+    """Handle DROP item_name action"""
+    if not args:
+        return False
+        
+    item_name = " ".join(args)
+    current_location = state['world']['current_location']
+    
+    # Remove from inventory
+    if item_name in state['character']['inventory']:
+        state['character']['inventory'].remove(item_name)
+        
+        # Add to current location
+        if current_location in state['locations']:
+            state['locations'][current_location].setdefault('items', []).append(item_name)
+            print(f"Action executed: Dropped '{item_name}' in {current_location}")
+            return True
+    
+    print(f"Action failed: Could not drop '{item_name}'")
+    return False
+
+
+def handle_move_action(args, state):
+    """Handle MOVE_TO location_name action"""
+    if not args:
+        return False
+        
+    target_location = " ".join(args)
+    current_location = state['world']['current_location']
+    
+    # Validate connection exists
+    if current_location in state['locations']:
+        connections = state['locations'][current_location].get('connections', [])
+        if target_location in connections and target_location in state['locations']:
+            state['world']['current_location'] = target_location
+            print(f"Action executed: Moved from {current_location} to {target_location}")
+            return True
+    
+    print(f"Action failed: Cannot move from {current_location} to {target_location}")
+    return False
+
+
+def handle_time_action(args, state):
+    """Handle TIME_ADVANCE time_period action"""
+    if not args:
+        return False
+        
+    time_period = args[0].lower()
+    valid_times = ['morning', 'afternoon', 'evening', 'night']
+    
+    if time_period in valid_times:
+        state['world']['time_of_day'] = time_period.capitalize()
+        print(f"Action executed: Time advanced to {time_period}")
+        return True
+    
+    print(f"Action failed: Invalid time period '{time_period}'")
+    return False
+
+
+def handle_status_add_action(args, state):
+    """Handle STATUS_ADD status_name action"""
+    if not args:
+        return False
+        
+    status_name = " ".join(args)
+    if status_name not in state['character']['status']:
+        state['character']['status'].append(status_name)
+        print(f"Action executed: Added status '{status_name}' to character")
+        return True
+    
+    print(f"Action failed: Character already has status '{status_name}'")
+    return False
+
+
+def handle_status_remove_action(args, state):
+    """Handle STATUS_REMOVE status_name action"""
+    if not args:
+        return False
+        
+    status_name = " ".join(args)
+    if status_name in state['character']['status']:
+        state['character']['status'].remove(status_name)
+        print(f"Action executed: Removed status '{status_name}' from character")
+        return True
+    
+    print(f"Action failed: Character does not have status '{status_name}'")
+    return False
+
+
+def handle_npc_move_action(args, state):
+    """Handle NPC_MOVE npc_name TO location_name action"""
+    if len(args) < 3 or args[-2].upper() != 'TO':
+        return False
+        
+    # Find the TO keyword and split around it
+    to_index = -1
+    for i, arg in enumerate(args):
+        if arg.upper() == 'TO':
+            to_index = i
+            break
+    
+    if to_index == -1:
+        return False
+        
+    npc_name = " ".join(args[:to_index])
+    location_name = " ".join(args[to_index + 1:])
+    
+    if npc_name in state['npcs'] and location_name in state['locations']:
+        state['npcs'][npc_name]['location'] = location_name
+        print(f"Action executed: Moved NPC '{npc_name}' to {location_name}")
+        return True
+    
+    print(f"Action failed: Could not move NPC '{npc_name}' to {location_name}")
+    return False
+
+
+def handle_npc_status_action(args, state):
+    """Handle NPC_STATUS npc_name ADD/REMOVE status_name action"""
+    if len(args) < 3:
+        return False
+        
+    # Find ADD or REMOVE keyword
+    action_index = -1
+    action_type = None
+    for i, arg in enumerate(args):
+        if arg.upper() in ['ADD', 'REMOVE']:
+            action_index = i
+            action_type = arg.upper()
+            break
+    
+    if action_index == -1:
+        return False
+        
+    npc_name = " ".join(args[:action_index])
+    status_name = " ".join(args[action_index + 1:])
+    
+    if npc_name not in state['npcs']:
+        print(f"Action failed: Unknown NPC '{npc_name}'")
+        return False
+    
+    npc_statuses = state['npcs'][npc_name].setdefault('status', [])
+    
+    if action_type == 'ADD':
+        if status_name not in npc_statuses:
+            npc_statuses.append(status_name)
+            print(f"Action executed: Added status '{status_name}' to NPC '{npc_name}'")
+            return True
+        else:
+            print(f"Action failed: NPC '{npc_name}' already has status '{status_name}'")
+            return False
+    elif action_type == 'REMOVE':
+        if status_name in npc_statuses:
+            npc_statuses.remove(status_name)
+            print(f"Action executed: Removed status '{status_name}' from NPC '{npc_name}'")
+            return True
+        else:
+            print(f"Action failed: NPC '{npc_name}' does not have status '{status_name}'")
+            return False
+    
+    return False
 
 
 def run_summarization_check(state):
@@ -430,55 +701,39 @@ Time: {world['time_of_day']}
     # Step E: Query the LLM
     llm_response_str = query_llm(llm_prompt)
 
-    # Step F: Parse and Apply LLM Response
+    # Step F: Parse and Apply LLM Response (NEW TEXT-BASED PARSING)
     try:
-        # Clean up the response if it's wrapped in markdown code blocks
-        clean_response = llm_response_str.strip()
-        if clean_response.startswith('```json'):
-            clean_response = clean_response[7:]  # Remove ```json
-        if clean_response.startswith('```'):
-            clean_response = clean_response[3:]   # Remove ```
-        if clean_response.endswith('```'):
-            clean_response = clean_response[:-3]  # Remove trailing ```
-        clean_response = clean_response.strip()
+        # Parse the simple text-based response
+        parsed_response = parse_llm_response(llm_response_str)
         
-        llm_data = json.loads(clean_response)
-    except json.JSONDecodeError as e:
-        # If the LLM returns invalid JSON, we can't proceed with state changes.
+        # Extract components
+        story_text = parsed_response['story']
+        new_event = parsed_response['event']
+        actions = parsed_response['actions']
+        
+        print(f"--- Parsed Response ---")
+        print(f"Story: {story_text}")
+        print(f"Event: {new_event}")
+        print(f"Actions: {actions}")
+        print("----------------------")
+        
+        # Execute all actions
+        for action in actions:
+            if action.strip():
+                success = execute_action(action, state)
+                if not success:
+                    print(f"Failed to execute action: {action}")
+        
+    except Exception as e:
+        # If parsing fails, we can still return the raw response
+        print(f"Error parsing LLM response: {e}")
         return {
-            "story_text": f"LLM Response Error: The AI returned invalid JSON. The game state has not been changed.\n\nJSON Error: {str(e)}\n\nRaw response:\n{llm_response_str}",
+            "story_text": f"Response Parsing Error: Could not parse the AI response properly.\n\nError: {str(e)}\n\nRaw response:\n{llm_response_str}",
             "current_location": state['world']['current_location'],
             "inventory": state['character']['inventory']
         }
 
-    # Update state dictionaries based on the 'state_changes' block
-    state_changes = llm_data.get("state_changes", {})
-    for file_key, changes in state_changes.items():
-        # Handle character updates
-        if file_key in ["character.json", "orton.json"]:
-            state["character"].update(changes)
-        # Handle world updates
-        elif file_key in ["world.json"]:
-            state["world"].update(changes)
-        # Handle location updates
-        elif file_key in ["locations.json"]:
-            for location_name, location_changes in changes.items():
-                if location_name in state["locations"]:
-                    state["locations"][location_name].update(location_changes)
-                else:
-                    print(f"Warning: Unknown location in state_changes: {location_name}")
-        # Handle NPC updates
-        elif file_key in ["npcs.json"]:
-            for npc_name, npc_changes in changes.items():
-                if npc_name in state["npcs"]:
-                    state["npcs"][npc_name].update(npc_changes)
-                else:
-                    print(f"Warning: Unknown NPC in state_changes: {npc_name}")
-        else:
-            print(f"Warning: Unknown file key in state_changes: {file_key}")
-
     # Step G: Add to BOTH memory systems
-    new_event = llm_data.get("new_event")
     if new_event:
         # Add to recent events (short-term memory)
         state["events"].insert(0, new_event)
@@ -498,7 +753,7 @@ Time: {world['time_of_day']}
 
     # Prepare the data to send back to the frontend
     turn_result = {
-        "story_text": llm_data.get("response_text", "The world is silent."),
+        "story_text": story_text,
         "current_location": state['world']['current_location'],
         "inventory": state['character']['inventory']
     }
@@ -623,7 +878,7 @@ def reset_game():
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    print("Starting RPG server with Phase 3 Hybrid Memory System...")
+    print("Starting RPG server...")
     setup_game_files()
     
     # Initialize FAISS index from existing full event log
