@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 
+import entity
 import modifier
 import player
 import weapon
 
 
 @dataclass
-class Item:
-    id: str
+class Item(entity.Entity):
     name: str
     description: str
     tags: list[str]

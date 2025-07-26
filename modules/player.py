@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+import entity
 import item
 import perk
 import trait
@@ -45,10 +46,8 @@ EquipmentSlot = HoldableSlot | ArmorSlot | AccessorySlot
 
 
 @dataclass
-class Player:
+class Player(entity.Entity):
     name: str
-    hit_points: int = 100
-    max_hit_points: int = 100
     experience_points: int = 0
     level: int = 1
     max_inventory_size: int = 20
