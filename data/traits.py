@@ -37,8 +37,8 @@ TRAITS: dict[str, trait.Trait] = {
             ),
             effect.Event[event.WeaponTakeDamage](
                 effect=lambda _: modifier.DamageMultiplier(
-                    multiplier=0.9
-                ),  # Reduce damage taken by 10%
+                    multiplier=1.1
+                ),  # Increase damage taken by 10%
             ),
         ],
     ),
@@ -57,8 +57,8 @@ TRAITS: dict[str, trait.Trait] = {
             ),
             effect.Event[event.WeaponTakeDamage](
                 effect=lambda _: modifier.DamageMultiplier(
-                    multiplier=1.1
-                ),  # Increase damage taken by 10%
+                    multiplier=0.9
+                ),  # Decrease damage taken by 10%
             ),
         ],
     ),
