@@ -16,3 +16,14 @@ class Once:
 class Event[T: event.Type]:
     effect: Callable[[T], modifier.Modifier | None]
     condition: Callable[[T], bool] = lambda _: True  # Default to always true
+
+
+AnyEventEffect = (
+    Event[event.QuestCompletion]
+    | Event[event.WeaponTakeDamage]
+    | Event[event.WeaponDealDamage]
+    | Event[event.ApplyItem]
+    | Event[event.ConsumeItem]
+)
+
+AnyEffect = Once | AnyEventEffect
