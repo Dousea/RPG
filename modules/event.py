@@ -1,48 +1,45 @@
 from dataclasses import dataclass
-from typing import Any
 
+import entity
 import item
-import player
 import quest
-
-
-Entity = player.Player | Any # Could be any entity that can interact with items or events
 
 
 @dataclass
 class QuestCompletion:
-    source: player.Player
+    source: entity.Player
     experience_points_gained: int
     styles: list[quest.QuestStyle]  # e.g., [QuestStyle.NON_VIOLENT, QuestStyle.STEALTH]
 
 
 @dataclass
-class WeaponTakeDamage:
-    source: Entity  # Could be player, an object, etc.
+class WeaponTakeDamage[
+    T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
+]:
+    source: T  # Could be player, an object, etc.
     weapon: item.MeleeWeapon | item.RangedWeapon
     damage: int
-    target: Entity  # The one that took the damage
+    target: U  # The one that took the damage
 
 
 @dataclass
-class WeaponDealDamage:
-    source: Entity  # The one dealing the damage
+class WeaponDealDamage[
+    T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
+]:
+    source: T  # The one dealing the damage
     weapon: item.MeleeWeapon | item.RangedWeapon
     damage: int
-    target: Entity  # Could be player, an object, etc.
+    target: U  # Could be player, an object, etc.
 
 
 @dataclass
-class ApplyItem:
-    source: Entity  # The one applying the item
+class ApplyItem[T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity]:
+    source: T  # The one applying the item
     item: item.Appliable
-    target: Entity  # Could be player, an object, etc.
+    target: U  # Could be player, an object, etc.
 
 
 @dataclass
-class ConsumeItem:
-    source: Any
+class ConsumeItem[T: entity.Entity = entity.Entity]:
+    source: T  # The one consuming the item
     item: item.Consumable
-
-
-Type = QuestCompletion | WeaponTakeDamage | WeaponDealDamage | ApplyItem | ConsumeItem

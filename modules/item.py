@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 
-import entity
 import modifier
 import player
 import weapon
 
 
 @dataclass
-class Item(entity.Entity):
+class Item:
+    id: str
     name: str
     description: str
+    max_hit_points: int
     tags: list[str]
 
 

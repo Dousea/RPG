@@ -1,4 +1,4 @@
-from modules import effect, event, item, modifier, perk, player, quest
+from modules import effect, entity, item, modifier, perk, player, quest
 
 PERKS: dict[str, perk.Perk] = {
     "PerkID_GunSlinger": perk.Perk(
@@ -14,13 +14,13 @@ PERKS: dict[str, perk.Perk] = {
                     }
                 )
             ),  # Increase agility and strength for better firearm handling
-            effect.Event[event.WeaponDealDamage](
+            effect.WeaponDamageDealt[entity.Player](
                 condition=lambda event: isinstance(event.weapon, item.RangedWeapon),
                 effect=lambda _: modifier.DamageMultiplier(
                     multiplier=1.2
                 ),  # Increase damage dealt with ranged weapons by 20%
             ),
-            effect.Event[event.WeaponTakeDamage](
+            effect.WeaponDamageTaken[entity.Player](
                 condition=lambda event: isinstance(event.weapon, item.RangedWeapon),
                 effect=lambda _: modifier.DamageMultiplier(
                     multiplier=0.9
@@ -56,7 +56,7 @@ PERKS: dict[str, perk.Perk] = {
                     }
                 )  # Increase charisma and intelligence
             ),
-            effect.Event[event.QuestCompletion](
+            effect.QuestCompleted(
                 condition=lambda event: quest.QuestStyle.SOCIAL in event.styles,
                 effect=lambda _: modifier.XPMultiplier(
                     multiplier=1.5

@@ -1,10 +1,4 @@
-from dataclasses import dataclass, field
 from enum import StrEnum
-
-import entity
-import item
-import perk
-import trait
 
 
 class Attribute(StrEnum):
@@ -43,35 +37,3 @@ class AccessorySlot(StrEnum):
 
 
 EquipmentSlot = HoldableSlot | ArmorSlot | AccessorySlot
-
-
-@dataclass
-class Player(entity.Entity):
-    name: str
-    experience_points: int = 0
-    level: int = 1
-    max_inventory_size: int = 20
-    inventory: list[item.Item] = field(default_factory=list[item.Item])
-    hunger: int = 100
-    thirst: int = 100
-    morale: int = 100
-    attributes: dict[Attribute, int] = field(
-        default_factory=lambda: {
-            Attribute.AGILITY: 3,
-            Attribute.STRENGTH: 3,
-            Attribute.INTELLIGENCE: 3,
-            Attribute.WILLPOWER: 3,
-            Attribute.LUCK: 3,
-            Attribute.CHARISMA: 3,
-        }
-    )
-    equipment: dict[EquipmentSlot, item.Equippable | None] = field(
-        default_factory=lambda: {
-            **{slot: None for slot in HoldableSlot},
-            **{slot: None for slot in ArmorSlot},
-            **{slot: None for slot in AccessorySlot},
-        }
-    )
-    traits: list[trait.Trait] = field(default_factory=list[trait.Trait])
-    perks: list[perk.Perk] = field(default_factory=list[perk.Perk])
-    conditions: list[Condition] = field(default_factory=list[Condition])

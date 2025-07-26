@@ -1,4 +1,4 @@
-from modules import effect, event, modifier, player, quest, trait
+from modules import effect, entity, modifier, player, quest, trait
 
 TRAITS: dict[str, trait.Trait] = {
     "TraitID_Hemophobia": trait.Trait(
@@ -6,13 +6,13 @@ TRAITS: dict[str, trait.Trait] = {
         name="Hemophobia",
         description="You are logical and excel in non-violent situations, but the sight of blood and gore can send you into a panic.",
         effects=[
-            effect.Event[event.QuestCompletion](
+            effect.QuestCompleted(
                 condition=lambda event: quest.QuestStyle.NON_VIOLENT in event.styles,
                 effect=lambda _: modifier.XPMultiplier(
                     multiplier=1.5
                 ),  # Increase XP gain for non-violent quests,
             ),
-            effect.Event[event.ApplyItem](
+            effect.ItemApplied[entity.Player](
                 condition=lambda event: "medical" in event.item.tags,
                 effect=lambda event: (
                     modifier.Conditions(conditions={player.Condition.PANIC: True})
@@ -35,7 +35,7 @@ TRAITS: dict[str, trait.Trait] = {
                     }
                 )  # Increase agility, decrease strength
             ),
-            effect.Event[event.WeaponTakeDamage](
+            effect.WeaponDamageTaken[entity.Player](
                 effect=lambda _: modifier.DamageMultiplier(
                     multiplier=1.1
                 ),  # Increase damage taken by 10%
@@ -55,7 +55,7 @@ TRAITS: dict[str, trait.Trait] = {
                     }
                 )  # Increase strength, decrease agility
             ),
-            effect.Event[event.WeaponTakeDamage](
+            effect.WeaponDamageTaken[entity.Player](
                 effect=lambda _: modifier.DamageMultiplier(
                     multiplier=0.9
                 ),  # Decrease damage taken by 10%
