@@ -16,7 +16,7 @@ class Item:
 
 @dataclass
 class Equippable(Item):
-    slots: list[character.equipment.EquipmentSlot]
+    slots: list[character.equipment.AnyEquipmentSlot]
 
     def __post_init__(self):
         if not self.slots:
@@ -37,7 +37,7 @@ class Armor(Equippable):
 
 @dataclass
 class Accessory(Equippable):
-    modifiers: list[modifier.Modifier]
+    modifiers: list[modifier.AnyModifier]
 
     def __post_init__(self):
         super().__post_init__()
@@ -64,13 +64,13 @@ class Holdable(Equippable):
 # Consumable is a type of Holdable that can be consumed for an effect.
 @dataclass
 class Consumable(Holdable):
-    modifiers: list[modifier.Modifier]
+    modifiers: list[modifier.AnyModifier]
 
 
 # Appliable is a type of Holdable that can apply effects when used.
 @dataclass
 class Appliable(Holdable):
-    modifiers: list[modifier.Modifier]
+    modifiers: list[modifier.AnyModifier]
 
 
 @dataclass

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 import entity
 import item
@@ -43,3 +44,12 @@ class ApplyItem[T: entity.Entity = entity.Entity, U: entity.Entity = entity.Enti
 class ConsumeItem[T: entity.Entity = entity.Entity]:
     source: T  # The one consuming the item
     item: item.Consumable
+
+
+AnyEvent = (
+    QuestCompletion
+    | WeaponTakeDamage[Any, Any]
+    | WeaponDealDamage[Any, Any]
+    | ApplyItem[Any, Any]
+    | ConsumeItem[Any]
+)

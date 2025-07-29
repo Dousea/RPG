@@ -14,7 +14,7 @@ class Once:
 
 @dataclass
 class QuestCompleted:
-    effect: Callable[[event.QuestCompletion], modifier.Modifier | None]
+    effect: Callable[[event.QuestCompletion], modifier.AnyModifier | None]
     condition: Callable[[event.QuestCompletion], bool] = (
         lambda _: True
     )  # Default to always true
@@ -24,7 +24,7 @@ class QuestCompleted:
 class WeaponDamageTaken[
     T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
 ]:
-    effect: Callable[[event.WeaponTakeDamage[T, U]], modifier.Modifier | None]
+    effect: Callable[[event.WeaponTakeDamage[T, U]], modifier.AnyModifier | None]
     condition: Callable[[event.WeaponTakeDamage[T, U]], bool] = lambda _: True
 
 
@@ -32,17 +32,27 @@ class WeaponDamageTaken[
 class WeaponDamageDealt[
     T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
 ]:
-    effect: Callable[[event.WeaponDealDamage[T, U]], modifier.Modifier | None]
+    effect: Callable[[event.WeaponDealDamage[T, U]], modifier.AnyModifier | None]
     condition: Callable[[event.WeaponDealDamage[T, U]], bool] = lambda _: True
 
 
 @dataclass
 class ItemApplied[T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity]:
-    effect: Callable[[event.ApplyItem[T, U]], modifier.Modifier | None]
+    effect: Callable[[event.ApplyItem[T, U]], modifier.AnyModifier | None]
     condition: Callable[[event.ApplyItem[T, U]], bool] = lambda _: True
 
 
 @dataclass
 class ItemConsumed[T: entity.Entity = entity.Entity]:
-    effect: Callable[[event.ConsumeItem[T]], modifier.Modifier | None]
+    effect: Callable[[event.ConsumeItem[T]], modifier.AnyModifier | None]
     condition: Callable[[event.ConsumeItem[T]], bool] = lambda _: True
+
+
+AnyEffect = (
+    Once
+    | QuestCompleted
+    | WeaponDamageTaken[Any, Any]
+    | WeaponDamageDealt[Any, Any]
+    | ItemApplied[Any, Any]
+    | ItemConsumed[Any]
+)

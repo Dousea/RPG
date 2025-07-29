@@ -49,7 +49,7 @@ class ReputationAdjustment:
     amount: int
 
 
-Modifier = (
+AnyModifier = (
     XPMultiplier
     | DamageMultiplier
     | Conditions

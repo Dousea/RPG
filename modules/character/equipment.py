@@ -19,4 +19,4 @@ class AccessorySlot(StrEnum):
     ACCESSORY_2 = "accessory_2"
 
 
-EquipmentSlot = HoldableSlot | ArmorSlot | AccessorySlot
+AnyEquipmentSlot = HoldableSlot | ArmorSlot | AccessorySlot

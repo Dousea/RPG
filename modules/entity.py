@@ -57,12 +57,14 @@ class Player(Entity):
             character.player.Attribute.CHARISMA: 3,
         }
     )
-    equipment: dict[character.equipment.EquipmentSlot, item.Equippable | None] = field(
-        default_factory=lambda: {
-            **{slot: None for slot in character.equipment.HoldableSlot},
-            **{slot: None for slot in character.equipment.ArmorSlot},
-            **{slot: None for slot in character.equipment.AccessorySlot},
-        }
+    equipment: dict[character.equipment.AnyEquipmentSlot, item.Equippable | None] = (
+        field(
+            default_factory=lambda: {
+                **{slot: None for slot in character.equipment.HoldableSlot},
+                **{slot: None for slot in character.equipment.ArmorSlot},
+                **{slot: None for slot in character.equipment.AccessorySlot},
+            }
+        )
     )
     traits: list[trait.Trait] = field(default_factory=list[trait.Trait])
     perks: list[perk.Perk] = field(default_factory=list[perk.Perk])

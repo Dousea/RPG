@@ -12,4 +12,4 @@ class RangedType(StrEnum):
     SHOTGUN = "shotgun"
 
 
-Type = MeleeType | RangedType
+AnyWeaponType = MeleeType | RangedType
