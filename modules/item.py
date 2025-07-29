@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
+import character.equipment
 import modifier
-import player
 import weapon
 
 
@@ -16,7 +16,7 @@ class Item:
 
 @dataclass
 class Equippable(Item):
-    slots: list[player.EquipmentSlot]
+    slots: list[character.equipment.EquipmentSlot]
 
     def __post_init__(self):
         if not self.slots:
@@ -29,7 +29,9 @@ class Armor(Equippable):
 
     def __post_init__(self):
         super().__post_init__()
-        if not all(isinstance(slot, player.ArmorSlot) for slot in self.slots):
+        if not all(
+            isinstance(slot, character.equipment.ArmorSlot) for slot in self.slots
+        ):
             raise ValueError("Armor can only use ArmorSlot instances")
 
 
@@ -39,7 +41,9 @@ class Accessory(Equippable):
 
     def __post_init__(self):
         super().__post_init__()
-        if not all(isinstance(slot, player.AccessorySlot) for slot in self.slots):
+        if not all(
+            isinstance(slot, character.equipment.AccessorySlot) for slot in self.slots
+        ):
             raise ValueError("Accessory can only use AccessorySlot instances")
 
 
@@ -49,7 +53,9 @@ class Holdable(Equippable):
 
     def __post_init__(self):
         super().__post_init__()
-        if not all(isinstance(slot, player.HoldableSlot) for slot in self.slots):
+        if not all(
+            isinstance(slot, character.equipment.HoldableSlot) for slot in self.slots
+        ):
             raise ValueError("Holdable can only use HoldableSlot instances")
         if self.is_two_handed and len(self.slots) != 2:
             raise ValueError("Two-handed items must occupy exactly two slots.")

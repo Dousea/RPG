@@ -1,4 +1,5 @@
-from modules import effect, entity, item, modifier, perk, player, quest
+from modules import effect, entity, item, modifier, perk, quest
+from modules.character import player
 
 PERKS: dict[str, perk.Perk] = {
     "PerkID_GunSlinger": perk.Perk(

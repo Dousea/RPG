@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-import player
+import character.condition
+import character.faction
+import character.player
 
 
 @dataclass
@@ -25,12 +27,24 @@ class HPAdjustment:
 
 @dataclass
 class Conditions:
-    conditions: dict[player.Condition, bool]
+    conditions: dict[character.condition.Condition, bool]
 
 
 @dataclass
 class Attributes:
-    attributes: dict[player.Attribute, int]
+    attributes: dict[character.player.Attribute, int]
+
+
+@dataclass
+class AffinityAdjustment:
+    target_npc_id: str
+    amount: int
+
+
+@dataclass
+class ReputationAdjustment:
+    target_faction: character.faction.Faction
+    amount: int
 
 
 Modifier = (
@@ -40,4 +54,6 @@ Modifier = (
     | Attributes
     | HPAdjustment
     | XPAdjustment
+    | AffinityAdjustment
+    | ReputationAdjustment
 )

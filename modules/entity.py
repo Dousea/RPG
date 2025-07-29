@@ -2,9 +2,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+import character.condition
+import character.equipment
+import character.player
 import item
 import perk
-import player
 import trait
 
 
@@ -45,26 +47,28 @@ class Player(Entity):
     hunger: int = 100
     thirst: int = 100
     morale: int = 100
-    attributes: dict[player.Attribute, int] = field(
+    attributes: dict[character.player.Attribute, int] = field(
         default_factory=lambda: {
-            player.Attribute.AGILITY: 3,
-            player.Attribute.STRENGTH: 3,
-            player.Attribute.INTELLIGENCE: 3,
-            player.Attribute.WILLPOWER: 3,
-            player.Attribute.LUCK: 3,
-            player.Attribute.CHARISMA: 3,
+            character.player.Attribute.AGILITY: 3,
+            character.player.Attribute.STRENGTH: 3,
+            character.player.Attribute.INTELLIGENCE: 3,
+            character.player.Attribute.WILLPOWER: 3,
+            character.player.Attribute.LUCK: 3,
+            character.player.Attribute.CHARISMA: 3,
         }
     )
-    equipment: dict[player.EquipmentSlot, item.Equippable | None] = field(
+    equipment: dict[character.equipment.EquipmentSlot, item.Equippable | None] = field(
         default_factory=lambda: {
-            **{slot: None for slot in player.HoldableSlot},
-            **{slot: None for slot in player.ArmorSlot},
-            **{slot: None for slot in player.AccessorySlot},
+            **{slot: None for slot in character.equipment.HoldableSlot},
+            **{slot: None for slot in character.equipment.ArmorSlot},
+            **{slot: None for slot in character.equipment.AccessorySlot},
         }
     )
     traits: list[trait.Trait] = field(default_factory=list[trait.Trait])
     perks: list[perk.Perk] = field(default_factory=list[perk.Perk])
-    conditions: list[player.Condition] = field(default_factory=list[player.Condition])
+    conditions: list[character.condition.Condition] = field(
+        default_factory=list[character.condition.Condition]
+    )
 
     @property
     def max_hit_points(self) -> int:

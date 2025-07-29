@@ -1,23 +1,6 @@
 from enum import StrEnum
 
 
-class Attribute(StrEnum):
-    AGILITY = "agility"
-    STRENGTH = "strength"
-    INTELLIGENCE = "intelligence"
-    WILLPOWER = "willpower"
-    LUCK = "luck"
-    CHARISMA = "charisma"
-
-
-class Condition(StrEnum):
-    POISONED = "poisoned"
-    STUNNED = "stunned"
-    BURNED = "burned"
-    FROZEN = "frozen"
-    PANIC = "panic"
-
-
 class HoldableSlot(StrEnum):
     RIGHT_HAND = "right_hand"
     LEFT_HAND = "left_hand"

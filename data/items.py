@@ -1,4 +1,5 @@
-from modules import item, modifier, player, weapon
+from modules import item, modifier, weapon
+from modules.character import equipment
 
 ITEMS: dict[str, item.Item] = {
     "item_crowbar": item.MeleeWeapon(
@@ -10,8 +11,8 @@ ITEMS: dict[str, item.Item] = {
         type=weapon.MeleeType.BLUNT,
         damage=5,
         slots=[
-            player.HoldableSlot.RIGHT_HAND,
-            player.HoldableSlot.LEFT_HAND,
+            equipment.HoldableSlot.RIGHT_HAND,
+            equipment.HoldableSlot.LEFT_HAND,
         ],
         is_two_handed=True,
     ),
@@ -25,8 +26,8 @@ ITEMS: dict[str, item.Item] = {
         damage=10,
         range=5,
         slots=[
-            player.HoldableSlot.RIGHT_HAND,
-            player.HoldableSlot.LEFT_HAND,
+            equipment.HoldableSlot.RIGHT_HAND,
+            equipment.HoldableSlot.LEFT_HAND,
         ],
         is_two_handed=False,
     ),
@@ -36,8 +37,8 @@ ITEMS: dict[str, item.Item] = {
         description="A key to apartment 3B.",
         max_hit_points=10,
         slots=[
-            player.HoldableSlot.RIGHT_HAND,
-            player.HoldableSlot.LEFT_HAND,
+            equipment.HoldableSlot.RIGHT_HAND,
+            equipment.HoldableSlot.LEFT_HAND,
         ],
         is_two_handed=False,
         tags=["key", "accessory"],
@@ -49,8 +50,8 @@ ITEMS: dict[str, item.Item] = {
         max_hit_points=5,
         tags=["food", "consumable"],
         slots=[
-            player.HoldableSlot.RIGHT_HAND,
-            player.HoldableSlot.LEFT_HAND,
+            equipment.HoldableSlot.RIGHT_HAND,
+            equipment.HoldableSlot.LEFT_HAND,
         ],
         is_two_handed=False,
         modifiers=[
@@ -65,7 +66,7 @@ ITEMS: dict[str, item.Item] = {
         description="Old and comfortable.",
         max_hit_points=15,
         tags=["clothing", "armor"],
-        slots=[player.ArmorSlot.TORSO],
+        slots=[equipment.ArmorSlot.TORSO],
         defense=2,
     ),
     "item_first_aid_kit": item.Appliable(
@@ -75,8 +76,8 @@ ITEMS: dict[str, item.Item] = {
         max_hit_points=20,
         tags=["medical", "appliable"],
         slots=[
-            player.HoldableSlot.RIGHT_HAND,
-            player.HoldableSlot.LEFT_HAND,
+            equipment.HoldableSlot.RIGHT_HAND,
+            equipment.HoldableSlot.LEFT_HAND,
         ],
         is_two_handed=False,
         modifiers=[

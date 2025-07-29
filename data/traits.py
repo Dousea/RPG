@@ -1,4 +1,5 @@
-from modules import effect, entity, modifier, player, quest, trait
+from modules import effect, entity, modifier, quest, trait
+from modules.character import player, condition
 
 TRAITS: dict[str, trait.Trait] = {
     "TraitID_Hemophobia": trait.Trait(
@@ -15,7 +16,7 @@ TRAITS: dict[str, trait.Trait] = {
             effect.ItemApplied[entity.Player](
                 condition=lambda event: "medical" in event.item.tags,
                 effect=lambda event: (
-                    modifier.Conditions(conditions={player.Condition.PANIC: True})
+                    modifier.Conditions(conditions={condition.Condition.PANIC: True})
                     if event.source.attributes[player.Attribute.WILLPOWER] < 5
                     else None
                 ),
