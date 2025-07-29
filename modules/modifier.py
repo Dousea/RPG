@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-import character.condition
 import character.faction
 import character.player
+import character.state
 
 
 @dataclass
@@ -27,7 +27,7 @@ class HPAdjustment:
 
 @dataclass
 class Conditions:
-    conditions: dict[character.condition.Condition, bool]
+    conditions: dict[character.state.Condition, bool]
 
 
 @dataclass
@@ -37,12 +37,14 @@ class Attributes:
 
 @dataclass
 class AffinityAdjustment:
-    target_npc_id: str
+    source_id: str
+    target_id: str
     amount: int
 
 
 @dataclass
 class ReputationAdjustment:
+    source_faction: character.faction.Faction
     target_faction: character.faction.Faction
     amount: int
 

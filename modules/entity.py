@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-import character.condition
 import character.equipment
 import character.player
+import character.state
 import item
 import perk
 import trait
@@ -66,8 +66,8 @@ class Player(Entity):
     )
     traits: list[trait.Trait] = field(default_factory=list[trait.Trait])
     perks: list[perk.Perk] = field(default_factory=list[perk.Perk])
-    conditions: list[character.condition.Condition] = field(
-        default_factory=list[character.condition.Condition]
+    conditions: list[character.state.Condition] = field(
+        default_factory=list[character.state.Condition]
     )
 
     @property
