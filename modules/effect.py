@@ -2,57 +2,60 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import entity
-import event
-import modifier
+from entity import BaseEntity
+from entity.player import PlayerEntity
+from event import (
+    ApplyItemEvent,
+    ConsumeItemEvent,
+    QuestCompletionEvent,
+    WeaponDealDamageEvent,
+    WeaponTakeDamageEvent,
+)
+from modifier import AnyModifier
 
 
 @dataclass
-class Once:
-    effect: Callable[[entity.Player], Any]
+class OnceEffect:
+    effect: Callable[[PlayerEntity], Any]
 
 
 @dataclass
-class QuestCompleted:
-    effect: Callable[[event.QuestCompletion], modifier.AnyModifier | None]
-    condition: Callable[[event.QuestCompletion], bool] = (
+class QuestCompletedEffect:
+    effect: Callable[[QuestCompletionEvent], AnyModifier | None]
+    condition: Callable[[QuestCompletionEvent], bool] = (
         lambda _: True
     )  # Default to always true
 
 
 @dataclass
-class WeaponDamageTaken[
-    T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
-]:
-    effect: Callable[[event.WeaponTakeDamage[T, U]], modifier.AnyModifier | None]
-    condition: Callable[[event.WeaponTakeDamage[T, U]], bool] = lambda _: True
+class WeaponDamageTakenEffect[T: BaseEntity = BaseEntity, U: BaseEntity = BaseEntity]:
+    effect: Callable[[WeaponTakeDamageEvent[T, U]], AnyModifier | None]
+    condition: Callable[[WeaponTakeDamageEvent[T, U]], bool] = lambda _: True
 
 
 @dataclass
-class WeaponDamageDealt[
-    T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
-]:
-    effect: Callable[[event.WeaponDealDamage[T, U]], modifier.AnyModifier | None]
-    condition: Callable[[event.WeaponDealDamage[T, U]], bool] = lambda _: True
+class WeaponDamageDealtEffect[T: BaseEntity = BaseEntity, U: BaseEntity = BaseEntity]:
+    effect: Callable[[WeaponDealDamageEvent[T, U]], AnyModifier | None]
+    condition: Callable[[WeaponDealDamageEvent[T, U]], bool] = lambda _: True
 
 
 @dataclass
-class ItemApplied[T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity]:
-    effect: Callable[[event.ApplyItem[T, U]], modifier.AnyModifier | None]
-    condition: Callable[[event.ApplyItem[T, U]], bool] = lambda _: True
+class ItemAppliedEffect[T: BaseEntity = BaseEntity, U: BaseEntity = BaseEntity]:
+    effect: Callable[[ApplyItemEvent[T, U]], AnyModifier | None]
+    condition: Callable[[ApplyItemEvent[T, U]], bool] = lambda _: True
 
 
 @dataclass
-class ItemConsumed[T: entity.Entity = entity.Entity]:
-    effect: Callable[[event.ConsumeItem[T]], modifier.AnyModifier | None]
-    condition: Callable[[event.ConsumeItem[T]], bool] = lambda _: True
+class ItemConsumedEffect[T: BaseEntity = BaseEntity]:
+    effect: Callable[[ConsumeItemEvent[T]], AnyModifier | None]
+    condition: Callable[[ConsumeItemEvent[T]], bool] = lambda _: True
 
 
 AnyEffect = (
-    Once
-    | QuestCompleted
-    | WeaponDamageTaken[Any, Any]
-    | WeaponDamageDealt[Any, Any]
-    | ItemApplied[Any, Any]
-    | ItemConsumed[Any]
+    OnceEffect
+    | QuestCompletedEffect
+    | WeaponDamageTakenEffect[Any, Any]
+    | WeaponDamageDealtEffect[Any, Any]
+    | ItemAppliedEffect[Any, Any]
+    | ItemConsumedEffect[Any]
 )

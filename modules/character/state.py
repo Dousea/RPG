@@ -1,7 +1,7 @@
 from enum import StrEnum
 
 
-class Disposition(StrEnum):
+class CharacterDisposition(StrEnum):
     LOYAL = "loyal"
     FRIENDLY = "friendly"
     NEUTRAL = "neutral"
@@ -11,7 +11,7 @@ class Disposition(StrEnum):
     HATED = "hated"
 
 
-class Condition(StrEnum):
+class CharacterCondition(StrEnum):
     POISONED = "poisoned"
     STUNNED = "stunned"
     BURNED = "burned"

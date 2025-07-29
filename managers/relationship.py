@@ -1,8 +1,9 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from modules import modifier
-from modules.character import faction, state
+from modules.character.faction import CharacterFaction
+from modules.character.state import CharacterDisposition
+from modules.modifier import AffinityModifier, ReputationModifier
 
 
 @dataclass
@@ -21,7 +22,7 @@ class RelationshipManager:
 
     # The core data structure for faction-to-faction standings.
     # Format: {source_faction: {target_faction: reputation_score}}
-    reputations: dict[faction.Faction, dict[faction.Faction, int]] = field(
+    reputations: dict[CharacterFaction, dict[CharacterFaction, int]] = field(
         default_factory=lambda: defaultdict(dict)
     )
 
@@ -33,15 +34,17 @@ class RelationshipManager:
         return self.affinities.get(source_id, {}).get(target_id, 0)
 
     def get_reputation(
-        self, source_faction: faction.Faction, target_faction: faction.Faction
+        self,
+        source_faction: CharacterFaction,
+        target_faction: CharacterFaction,
     ) -> int:
         """
-        Safely gets the reputation score of a source faction towards a target faction.
+        Safely gets the reputation score of a source faction towards a target
         Defaults to 0 if no specific relationship exists.
         """
         return self.reputations.get(source_faction, {}).get(target_faction, 0)
 
-    def apply_affinity_modifier(self, mod: modifier.AffinityAdjustment):
+    def apply_affinity_modifier(self, mod: AffinityModifier):
         """
         Applies a change to the affinity between two entities.
         Clamps the affinity value between a min and max to prevent runaway scores.
@@ -61,7 +64,7 @@ class RelationshipManager:
             f"[Relationship] Affinity of '{mod.source_id}' towards '{mod.target_id}' is now {clamped_affinity}."
         )
 
-    def apply_reputation_modifier(self, mod: modifier.ReputationAdjustment):
+    def apply_reputation_modifier(self, mod: ReputationModifier):
         """
         Applies a change to the reputation between two factions.
         Clamps the reputation value to prevent runaway scores.
@@ -78,28 +81,28 @@ class RelationshipManager:
 
         source_faction_opinions[mod.target_faction] = clamped_reputation
         print(
-            f"[Relationship] Reputation of Faction '{mod.source_faction.value}' towards '{mod.target_faction.value}' is now {clamped_reputation}."
+            f"[Relationship] Reputation of Faction '{mod.source_faction}' towards '{mod.target_faction}' is now {clamped_reputation}."
         )
 
-    def get_disposition_from_affinity(self, affinity: int) -> state.Disposition:
+    def get_disposition_from_affinity(self, affinity: int) -> CharacterDisposition:
         """
         Calculates a Disposition enum based on a numerical affinity score.
-        This can be called to determine an NPC's immediate emotional state.
+        This can be called to determine an NPC's immediate emotional
         """
         if affinity >= 75:
-            return state.Disposition.LOYAL
+            return CharacterDisposition.LOYAL
         if affinity >= 40:
-            return state.Disposition.FRIENDLY
+            return CharacterDisposition.FRIENDLY
         if affinity <= -75:
-            return state.Disposition.HATED
+            return CharacterDisposition.HATED
         if affinity <= -40:
-            return state.Disposition.HOSTILE
+            return CharacterDisposition.HOSTILE
         if affinity < 0:
-            return state.Disposition.WARY
+            return CharacterDisposition.WARY
 
-        return state.Disposition.NEUTRAL
+        return CharacterDisposition.NEUTRAL
 
-    def get_disposition(self, source_id: str, target_id: str) -> state.Disposition:
+    def get_disposition(self, source_id: str, target_id: str) -> CharacterDisposition:
         """
         Convenience method to get the disposition of one entity to another directly.
         """

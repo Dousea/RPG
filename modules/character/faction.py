@@ -1,7 +1,7 @@
 from enum import StrEnum
 
 
-class Faction(StrEnum):
+class CharacterFaction(StrEnum):
     PLAYER = "player"
     SURVIVORS = "survivors"
     VULTURES = "vultures"

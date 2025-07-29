@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-import entity
+from entity import BaseEntity
 
 
 @dataclass
@@ -9,6 +9,13 @@ class Location:
     name: str
     description: str
     connections: dict[str, str]  # e.g., {"north": "location_id_hallway"}
-    entities: list[entity.Entity] = field(
-        default_factory=list[entity.Entity]
+    entities: list[BaseEntity] = field(
+        default_factory=list[BaseEntity]
     )  # For players, items, doors, terminals, etc.
+
+
+@dataclass
+class World:
+    locations: dict[str, Location] = field(
+        default_factory=dict[str, Location]
+    )  # e.g., {"location_id_town_square": Location(...)}

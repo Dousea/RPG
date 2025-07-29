@@ -1,55 +1,52 @@
 from dataclasses import dataclass
 from typing import Any
 
-import entity
-import item
-import quest
+from entity import BaseEntity
+from entity.player import PlayerEntity
+from item import AppliableItem, ConsumableItem, MeleeWeaponItem, RangedWeaponItem
+from quest import QuestStyle
 
 
 @dataclass
-class QuestCompletion:
-    source: entity.Player
+class QuestCompletionEvent:
+    source: PlayerEntity
     experience_points_gained: int
-    styles: list[quest.QuestStyle]  # e.g., [QuestStyle.NON_VIOLENT, QuestStyle.STEALTH]
+    styles: list[QuestStyle]  # e.g., [QuestStyle.NON_VIOLENT, QuestStyle.STEALTH]
 
 
 @dataclass
-class WeaponTakeDamage[
-    T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
-]:
+class WeaponTakeDamageEvent[T: BaseEntity = BaseEntity, U: BaseEntity = BaseEntity]:
     source: T  # Could be player, an object, etc.
-    weapon: item.MeleeWeapon | item.RangedWeapon
+    weapon: MeleeWeaponItem | RangedWeaponItem
     damage: int
     target: U  # The one that took the damage
 
 
 @dataclass
-class WeaponDealDamage[
-    T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity
-]:
+class WeaponDealDamageEvent[T: BaseEntity = BaseEntity, U: BaseEntity = BaseEntity]:
     source: T  # The one dealing the damage
-    weapon: item.MeleeWeapon | item.RangedWeapon
+    weapon: MeleeWeaponItem | RangedWeaponItem
     damage: int
     target: U  # Could be player, an object, etc.
 
 
 @dataclass
-class ApplyItem[T: entity.Entity = entity.Entity, U: entity.Entity = entity.Entity]:
+class ApplyItemEvent[T: BaseEntity = BaseEntity, U: BaseEntity = BaseEntity]:
     source: T  # The one applying the item
-    item: item.Appliable
+    item: AppliableItem
     target: U  # Could be player, an object, etc.
 
 
 @dataclass
-class ConsumeItem[T: entity.Entity = entity.Entity]:
+class ConsumeItemEvent[T: BaseEntity = BaseEntity]:
     source: T  # The one consuming the item
-    item: item.Consumable
+    item: ConsumableItem
 
 
 AnyEvent = (
-    QuestCompletion
-    | WeaponTakeDamage[Any, Any]
-    | WeaponDealDamage[Any, Any]
-    | ApplyItem[Any, Any]
-    | ConsumeItem[Any]
+    QuestCompletionEvent
+    | WeaponTakeDamageEvent[Any, Any]
+    | WeaponDealDamageEvent[Any, Any]
+    | ApplyItemEvent[Any, Any]
+    | ConsumeItemEvent[Any]
 )

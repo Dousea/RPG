@@ -1,0 +1,52 @@
+from dataclasses import dataclass, field
+
+from character.equipment import (
+    AnyCharacterEquipmentSlot,
+    CharacterAccessorySlot,
+    CharacterArmorSlot,
+    CharacterHoldableSlot,
+)
+from character.player import PlayerAttribute, PlayerPerk, PlayerTrait
+from character.state import CharacterCondition
+from item import BaseItem
+
+from ..item import EquippableItem
+from . import BaseEntity
+
+
+@dataclass
+class PlayerEntity(BaseEntity):
+    name: str
+    experience_points: int = 0
+    level: int = 1
+    max_inventory_size: int = 20
+    inventory: list[BaseItem] = field(default_factory=list[BaseItem])
+    hunger: int = 100
+    thirst: int = 100
+    morale: int = 100
+    attributes: dict[PlayerAttribute, int] = field(
+        default_factory=lambda: {
+            PlayerAttribute.AGILITY: 3,
+            PlayerAttribute.STRENGTH: 3,
+            PlayerAttribute.INTELLIGENCE: 3,
+            PlayerAttribute.WILLPOWER: 3,
+            PlayerAttribute.LUCK: 3,
+            PlayerAttribute.CHARISMA: 3,
+        }
+    )
+    equipment: dict[AnyCharacterEquipmentSlot, EquippableItem | None] = field(
+        default_factory=lambda: {
+            **{slot: None for slot in CharacterHoldableSlot},
+            **{slot: None for slot in CharacterArmorSlot},
+            **{slot: None for slot in CharacterAccessorySlot},
+        }
+    )
+    traits: list[PlayerTrait] = field(default_factory=list[PlayerTrait])
+    perks: list[PlayerPerk] = field(default_factory=list[PlayerPerk])
+    conditions: list[CharacterCondition] = field(
+        default_factory=list[CharacterCondition]
+    )
+
+    @property
+    def max_hit_points(self) -> int:
+        return 100

@@ -1,15 +1,15 @@
 from enum import StrEnum
 
 
-class MeleeType(StrEnum):
+class MeleeWeaponType(StrEnum):
     BLUNT = "blunt"
     BLADE = "blade"
 
 
-class RangedType(StrEnum):
+class RangedWeaponType(StrEnum):
     PISTOL = "pistol"
     RIFLE = "rifle"
     SHOTGUN = "shotgun"
 
 
-AnyWeaponType = MeleeType | RangedType
+AnyWeaponType = MeleeWeaponType | RangedWeaponType

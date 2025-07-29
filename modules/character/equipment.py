@@ -1,12 +1,12 @@
 from enum import StrEnum
 
 
-class HoldableSlot(StrEnum):
+class CharacterHoldableSlot(StrEnum):
     RIGHT_HAND = "right_hand"
     LEFT_HAND = "left_hand"
 
 
-class ArmorSlot(StrEnum):
+class CharacterArmorSlot(StrEnum):
     HEAD = "head"
     TORSO = "torso"
     LEGS = "legs"
@@ -14,9 +14,11 @@ class ArmorSlot(StrEnum):
     SHOULDERS = "shoulders"  # For backpacks, etc.
 
 
-class AccessorySlot(StrEnum):
+class CharacterAccessorySlot(StrEnum):
     ACCESSORY_1 = "accessory_1"  # For watches, etc.
     ACCESSORY_2 = "accessory_2"
 
 
-AnyEquipmentSlot = HoldableSlot | ArmorSlot | AccessorySlot
+AnyCharacterEquipmentSlot = (
+    CharacterHoldableSlot | CharacterArmorSlot | CharacterAccessorySlot
+)

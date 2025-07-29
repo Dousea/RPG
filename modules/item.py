@@ -1,12 +1,18 @@
 from dataclasses import dataclass
 
-import character.equipment
-import modifier
-import weapon
+from character.equipment import (
+    AnyCharacterEquipmentSlot,
+    CharacterAccessorySlot,
+    CharacterArmorSlot,
+    CharacterHoldableSlot,
+)
+from item import BaseItem, EquippableItem
+from modifier import AnyModifier
+from weapon import MeleeWeaponType, RangedWeaponType
 
 
 @dataclass
-class Item:
+class BaseItem:
     id: str
     name: str
     description: str
@@ -15,8 +21,8 @@ class Item:
 
 
 @dataclass
-class Equippable(Item):
-    slots: list[character.equipment.AnyEquipmentSlot]
+class EquippableItem(BaseItem):
+    slots: list[AnyCharacterEquipmentSlot]
 
     def __post_init__(self):
         if not self.slots:
@@ -24,38 +30,32 @@ class Equippable(Item):
 
 
 @dataclass
-class Armor(Equippable):
+class ArmorItem(EquippableItem):
     defense: int
 
     def __post_init__(self):
         super().__post_init__()
-        if not all(
-            isinstance(slot, character.equipment.ArmorSlot) for slot in self.slots
-        ):
+        if not all(isinstance(slot, CharacterArmorSlot) for slot in self.slots):
             raise ValueError("Armor can only use ArmorSlot instances")
 
 
 @dataclass
-class Accessory(Equippable):
-    modifiers: list[modifier.AnyModifier]
+class AccessoryItem(EquippableItem):
+    modifiers: list[AnyModifier]
 
     def __post_init__(self):
         super().__post_init__()
-        if not all(
-            isinstance(slot, character.equipment.AccessorySlot) for slot in self.slots
-        ):
+        if not all(isinstance(slot, CharacterAccessorySlot) for slot in self.slots):
             raise ValueError("Accessory can only use AccessorySlot instances")
 
 
 @dataclass
-class Holdable(Equippable):
+class HoldableItem(EquippableItem):
     is_two_handed: bool
 
     def __post_init__(self):
         super().__post_init__()
-        if not all(
-            isinstance(slot, character.equipment.HoldableSlot) for slot in self.slots
-        ):
+        if not all(isinstance(slot, CharacterHoldableSlot) for slot in self.slots):
             raise ValueError("Holdable can only use HoldableSlot instances")
         if self.is_two_handed and len(self.slots) != 2:
             raise ValueError("Two-handed items must occupy exactly two slots.")
@@ -63,19 +63,19 @@ class Holdable(Equippable):
 
 # Consumable is a type of Holdable that can be consumed for an effect.
 @dataclass
-class Consumable(Holdable):
-    modifiers: list[modifier.AnyModifier]
+class ConsumableItem(HoldableItem):
+    modifiers: list[AnyModifier]
 
 
 # Appliable is a type of Holdable that can apply effects when used.
 @dataclass
-class Appliable(Holdable):
-    modifiers: list[modifier.AnyModifier]
+class AppliableItem(HoldableItem):
+    modifiers: list[AnyModifier]
 
 
 @dataclass
-class MeleeWeapon(Holdable):
-    type: weapon.MeleeType
+class MeleeWeaponItem(HoldableItem):
+    type: MeleeWeaponType
     damage: int
 
     def __post_init__(self):
@@ -85,8 +85,8 @@ class MeleeWeapon(Holdable):
 
 
 @dataclass
-class RangedWeapon(Holdable):
-    type: weapon.RangedType
+class RangedWeaponItem(HoldableItem):
+    type: RangedWeaponType
     damage: int
     range: int
 

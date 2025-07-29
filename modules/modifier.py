@@ -1,61 +1,61 @@
 from dataclasses import dataclass
 
-import character.faction
-import character.player
-import character.state
+from character.faction import CharacterFaction
+from character.player import PlayerAttribute
+from character.state import CharacterCondition
 
 
 @dataclass
-class XPMultiplier:
+class XPMultiplicativeModifier:
     multiplier: float
 
 
 @dataclass
-class DamageMultiplier:
+class DamageMultiplicativeModifier:
     multiplier: float
 
 
 @dataclass
-class XPAdjustment:
+class XPModifier:
     amount: int
 
 
 @dataclass
-class HPAdjustment:
+class HPModifier:
     amount: int
 
 
 @dataclass
-class Conditions:
-    conditions: dict[character.state.Condition, bool]
+class ConditionsModifier:
+    conditions: dict[CharacterCondition, bool]
 
 
 @dataclass
-class Attributes:
-    attributes: dict[character.player.Attribute, int]
+class AttributesModifier:
+    attributes: dict[PlayerAttribute, int]
 
 
 @dataclass
-class AffinityAdjustment:
+class AffinityModifier:
     source_id: str
     target_id: str
     amount: int
 
 
 @dataclass
-class ReputationAdjustment:
-    source_faction: character.faction.Faction
-    target_faction: character.faction.Faction
+class ReputationModifier:
+    source_faction: CharacterFaction
+    target_faction: CharacterFaction
     amount: int
 
 
 AnyModifier = (
-    XPMultiplier
-    | DamageMultiplier
-    | Conditions
-    | Attributes
-    | HPAdjustment
-    | XPAdjustment
-    | AffinityAdjustment
-    | ReputationAdjustment
+    XPMultiplicativeModifier
+    | DamageMultiplicativeModifier
+    | ConditionsModifier
+    | AttributesModifier
+    | HPModifier
+    | XPModifier
+    | AffinityModifier
+    | ReputationModifier
 )
