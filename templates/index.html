@@ -53,16 +53,32 @@
         </div>
 
         <!-- Right Panel: Game State -->
-        <div class="w-full md:w-1/3 flex-shrink-0 bg-black/50 border-2 border-green-700 rounded-lg p-4 flex flex-col gap-4">
+        <div class="w-full md:w-1/3 flex-shrink-0 bg-black/50 border-2 border-green-700 rounded-lg p-4 flex flex-col gap-4 overflow-y-auto">
             <div>
                 <h2 class="text-2xl border-b border-green-500/50 mb-2">LOCATION</h2>
-                <p id="location-status" class="text-xl">an abandoned apartment</p>
+                <p id="location-status" class="text-xl">&mdash;</p>
+                <p id="time-status" class="text-lg text-green-300/70">&mdash;</p>
+            </div>
+            <div>
+                <h2 class="text-2xl border-b border-green-500/50 mb-2">CONDITION</h2>
+                <p id="condition-status" class="text-lg">&mdash;</p>
             </div>
             <div>
                 <h2 class="text-2xl border-b border-green-500/50 mb-2">INVENTORY</h2>
                 <ul id="inventory-list" class="list-disc list-inside text-xl">
-                    <li>pocket knife</li>
-                    <li>water bottle</li>
+                    <li class="text-green-300/50">(empty)</li>
+                </ul>
+            </div>
+            <div>
+                <h2 class="text-2xl border-b border-green-500/50 mb-2">PRESENT</h2>
+                <ul id="npc-list" class="list-disc list-inside text-xl">
+                    <li class="text-green-300/50">(no one)</li>
+                </ul>
+            </div>
+            <div>
+                <h2 class="text-2xl border-b border-green-500/50 mb-2">GOALS</h2>
+                <ul id="goal-list" class="list-disc list-inside text-lg">
+                    <li class="text-green-300/50">(none)</li>
                 </ul>
             </div>
         </div>
@@ -83,31 +99,73 @@
         // DOM Element References
         const storyDisplay = document.getElementById('story-display');
         const locationStatus = document.getElementById('location-status');
+        const timeStatus = document.getElementById('time-status');
+        const conditionStatus = document.getElementById('condition-status');
         const inventoryList = document.getElementById('inventory-list');
+        const npcList = document.getElementById('npc-list');
+        const goalList = document.getElementById('goal-list');
         const inputForm = document.getElementById('input-form');
         const playerInput = document.getElementById('player-input');
         const submitButton = document.getElementById('submit-button');
         const resetButton = document.getElementById('reset-button');
 
-        // Function to update the UI with new game state
-        function updateUI(data) {
-            // Add the new story text
-            const storyParagraph = document.createElement('p');
-            storyParagraph.innerHTML = `<span class="text-green-300/50">&gt; ${playerInput.value}</span><br>${data.story_text}`;
-            storyDisplay.appendChild(document.createElement('hr'));
-            storyDisplay.appendChild(storyParagraph);
-            storyDisplay.scrollTop = storyDisplay.scrollHeight; // Auto-scroll to bottom
-
-            // Update location
-            locationStatus.textContent = data.current_location;
-
-            // Update inventory
-            inventoryList.innerHTML = '';
-            data.inventory.forEach(item => {
+        // Render a list, falling back to a dimmed placeholder when empty.
+        function renderList(element, items, emptyLabel) {
+            element.innerHTML = '';
+            if (!items || items.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'text-green-300/50 list-none';
+                li.textContent = emptyLabel;
+                element.appendChild(li);
+                return;
+            }
+            items.forEach(item => {
                 const li = document.createElement('li');
                 li.textContent = item;
-                inventoryList.appendChild(li);
+                element.appendChild(li);
             });
+        }
+
+        // Append one story beat. Player input is set as text, never HTML, so a
+        // '<' in what the player types cannot break out into markup.
+        function appendStory(playerText, storyText) {
+            const paragraph = document.createElement('p');
+            if (playerText) {
+                const echo = document.createElement('span');
+                echo.className = 'text-green-300/50';
+                echo.textContent = `> ${playerText}`;
+                paragraph.appendChild(echo);
+                paragraph.appendChild(document.createElement('br'));
+            }
+            paragraph.appendChild(document.createTextNode(storyText));
+            paragraph.classList.add('whitespace-pre-wrap');
+            storyDisplay.appendChild(document.createElement('hr'));
+            storyDisplay.appendChild(paragraph);
+            storyDisplay.scrollTop = storyDisplay.scrollHeight;
+        }
+
+        // Refresh the side panel from a state payload.
+        function updatePanel(data) {
+            locationStatus.textContent = data.current_location;
+            timeStatus.textContent =
+                `Day ${data.day} - ${data.time_of_day} - ${data.apocalypse_stage}`;
+            conditionStatus.textContent = data.condition;
+            renderList(inventoryList, data.inventory, '(empty)');
+            renderList(npcList, data.npcs_present, '(no one)');
+
+            const goals = data.goals || { short_term: [], long_term: [] };
+            const labelled = [
+                ...(goals.short_term || []).map(g => `[short] ${g}`),
+                ...(goals.long_term || []).map(g => `[long] ${g}`),
+            ];
+            renderList(goalList, labelled, '(none)');
+        }
+
+        function updateUI(data, playerText) {
+            if (data.story_text) {
+                appendStory(playerText, data.story_text);
+            }
+            updatePanel(data);
         }
 
         // Function to handle form submission
@@ -133,7 +191,7 @@
                 }
 
                 const data = await response.json();
-                updateUI(data);
+                updateUI(data, inputText);
 
             } catch (error) {
                 console.error('Error during game turn:', error);
@@ -168,10 +226,23 @@
             }
         }
 
+        // Load the real world state so a reloaded page is not showing defaults.
+        async function loadState() {
+            try {
+                const response = await fetch('/state');
+                if (!response.ok) return;
+                updatePanel(await response.json());
+            } catch (error) {
+                console.error('Could not load game state:', error);
+            }
+        }
+
         // Event Listeners
         inputForm.addEventListener('submit', handleTurn);
         resetButton.addEventListener('click', handleReset);
-        
+
+        loadState();
+
         // Give focus to the input box on page load
         playerInput.focus();
     </script>
