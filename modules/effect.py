@@ -2,16 +2,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from entity import BaseEntity
-from entity.player import PlayerEntity
-from event import (
+from .entity import BaseEntity
+from .entity.player import PlayerEntity
+from .event import (
     ApplyItemEvent,
     ConsumeItemEvent,
     QuestCompletionEvent,
     WeaponDealDamageEvent,
     WeaponTakeDamageEvent,
 )
-from modifier import AnyModifier
+from .modifier import AnyModifier
 
 
 @dataclass

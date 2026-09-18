@@ -1,8 +1,8 @@
 # In a new modules/npc.py
 from dataclasses import dataclass, field
 
-from faction import CharacterFaction
-from state import CharacterCondition, CharacterDisposition
+from .faction import CharacterFaction
+from .state import CharacterCondition, CharacterDisposition
 
 
 @dataclass

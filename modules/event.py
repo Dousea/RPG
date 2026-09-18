@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
-from entity import BaseEntity
-from entity.player import PlayerEntity
-from item import AppliableItem, ConsumableItem, MeleeWeaponItem, RangedWeaponItem
-from quest import QuestStyle
+from .entity import BaseEntity
+from .entity.player import PlayerEntity
+from .item import AppliableItem, ConsumableItem, MeleeWeaponItem, RangedWeaponItem
+from .quest import QuestStyle
 
 
 @dataclass

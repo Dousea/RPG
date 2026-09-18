@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from entity import BaseEntity
+from .entity import BaseEntity
 
 
 @dataclass
@@ -16,6 +16,8 @@ class Location:
 
 @dataclass
 class World:
+    time: str = "12:00 PM"
+    date: str = "2023-10-01"
     locations: dict[str, Location] = field(
         default_factory=dict[str, Location]
     )  # e.g., {"location_id_town_square": Location(...)}

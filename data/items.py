@@ -97,3 +97,18 @@ ITEMS: dict[str, BaseItem] = {
         ],
     ),
 }
+
+
+def find_item_by_name(name: str) -> BaseItem | None:
+    """Resolve a display name (or item id) to a catalog item, case-insensitively.
+
+    The LLM writes item names as prose ("First Aid Kit"), not ids, so every
+    action that names an item goes through here.
+    """
+    needle = name.strip().casefold()
+    if not needle:
+        return None
+    for item_id, item in ITEMS.items():
+        if needle in (item_id.casefold(), item.name.casefold()):
+            return item
+    return None

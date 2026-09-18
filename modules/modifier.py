@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from character.faction import CharacterFaction
-from character.player import PlayerAttribute
-from character.state import CharacterCondition
+from .character.faction import CharacterFaction
+from .character.player import PlayerAttribute
+from .character.state import CharacterCondition
 
 
 @dataclass

@@ -1,26 +1,28 @@
 from dataclasses import dataclass, field
 
-from character.equipment import (
+from ..character.equipment import (
     AnyCharacterEquipmentSlot,
     CharacterAccessorySlot,
     CharacterArmorSlot,
     CharacterHoldableSlot,
 )
-from character.player import PlayerAttribute, PlayerPerk, PlayerTrait
-from character.state import CharacterCondition
-from item import BaseItem
-
-from ..item import EquippableItem
+from ..character.player import PlayerAttribute, PlayerPerk, PlayerTrait
+from ..character.state import CharacterCondition
 from . import BaseEntity
+from .item import ItemEntity
 
 
 @dataclass
 class PlayerEntity(BaseEntity):
     name: str
+    current_location_id: str
+    # Stable identity for saves and RelationshipManager keys. `BaseEntity.id`
+    # is `id(self)` and changes every restart, so it must not be used for either.
+    entity_id: str = "player"
     experience_points: int = 0
     level: int = 1
     max_inventory_size: int = 20
-    inventory: list[BaseItem] = field(default_factory=list[BaseItem])
+    inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     hunger: int = 100
     thirst: int = 100
     morale: int = 100
@@ -34,7 +36,7 @@ class PlayerEntity(BaseEntity):
             PlayerAttribute.CHARISMA: 3,
         }
     )
-    equipment: dict[AnyCharacterEquipmentSlot, EquippableItem | None] = field(
+    equipment: dict[AnyCharacterEquipmentSlot, ItemEntity | None] = field(
         default_factory=lambda: {
             **{slot: None for slot in CharacterHoldableSlot},
             **{slot: None for slot in CharacterArmorSlot},

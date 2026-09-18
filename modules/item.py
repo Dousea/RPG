@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 
-from character.equipment import (
+from .character.equipment import (
     AnyCharacterEquipmentSlot,
     CharacterAccessorySlot,
     CharacterArmorSlot,
     CharacterHoldableSlot,
 )
-from item import BaseItem, EquippableItem
-from modifier import AnyModifier
-from weapon import MeleeWeaponType, RangedWeaponType
+from .modifier import AnyModifier
+from .weapon import MeleeWeaponType, RangedWeaponType
 
 
 @dataclass
