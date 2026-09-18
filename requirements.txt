@@ -1,5 +1,7 @@
-Flask==2.3.3
-requests==2.31.0
-faiss-cpu==1.7.4
-sentence-transformers==2.2.2
-numpy==1.24.3
+# Requires Python 3.13+ (the game model uses PEP 696 type-parameter defaults).
+# Lower bounds rather than pins -- pin from `pip freeze` if you need a lockfile.
+Flask>=3.0
+requests>=2.32
+numpy>=2.1
+faiss-cpu>=1.10
+sentence-transformers>=3.0
