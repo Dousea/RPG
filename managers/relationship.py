@@ -26,6 +26,26 @@ class RelationshipManager:
         default_factory=lambda: defaultdict(dict)
     )
 
+    # How much one entity trusts another. Tracked separately from affinity:
+    # liking someone and relying on them are different axes, and the narrative
+    # layer moves them independently.
+    # Format: {source_entity_id: {target_entity_id: trust_score}}
+    trusts: dict[str, dict[str, int]] = field(default_factory=lambda: defaultdict(dict))
+
+    def get_trust(self, source_id: str, target_id: str) -> int:
+        """Safely gets the trust score of a source entity towards a target."""
+        return self.trusts.get(source_id, {}).get(target_id, 0)
+
+    def adjust_trust(self, source_id: str, target_id: str, amount: int) -> int:
+        """Applies a change to trust, clamped to the same range as affinity."""
+        source_trust = self.trusts.setdefault(source_id, {})
+        new_trust = max(-100, min(source_trust.get(target_id, 0) + amount, 100))
+        source_trust[target_id] = new_trust
+        print(
+            f"[Relationship] Trust of '{source_id}' towards '{target_id}' is now {new_trust}."
+        )
+        return new_trust
+
     def get_affinity(self, source_id: str, target_id: str) -> int:
         """
         Safely gets the affinity score of a source entity towards a target entity.
