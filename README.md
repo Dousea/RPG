@@ -1,306 +1,201 @@
 # Local LLM RPG
 
-A text-based RPG game powered by a local Large Language Model (LLM) with advanced memory management and semantic search capabilities. This project creates an immersive storytelling experience using AI-driven narrative generation with persistent game state and intelligent memory retrieval.
+A text-based RPG powered by a local Large Language Model (LLM), with a typed
+game model, persistent state and semantic memory retrieval. The game is set in a
+slow-burn zombie apocalypse; the LLM acts as game master while the Python model
+owns the rules.
 
-## 🎮 Project Overview
+## Architecture
 
-This RPG system combines traditional text-based adventure gaming with cutting-edge AI technology to create dynamic, contextual storytelling. The game features a post-apocalyptic setting where players navigate through various locations, interact with NPCs, manage inventory, and experience AI-generated narrative responses that adapt to their choices.
-
-### Key Features
-
-- **AI-Powered Storytelling**: Uses local LLM (via LM Studio) for dynamic narrative generation
-- **Hybrid Memory System**: Combines short-term recent events with long-term semantic memory
-- **Persistent Game State**: All game data is stored in JSON files and maintained across sessions
-- **Semantic Search**: FAISS-powered similarity search for retrieving relevant past events
-- **Web Interface**: Modern, terminal-styled web UI built with Flask and Tailwind CSS
-- **Real-time Gameplay**: Instant responses and state updates through REST API
-
-## 🏗️ Technical Architecture
-
-### Core Components
-
-#### 1. **Flask Web Server** (`app.py`)
-
-- **Framework**: Flask with JSON API endpoints
-- **Routes**:
-  - `/` - Serves the game interface
-  - `/play` - Processes player input and returns game responses
-  - `/reset` - Resets game state to initial conditions
-
-#### 2. **LLM Integration**
-
-- **Local Model**: Connects to LM Studio running locally on port 1234
-- **API**: OpenAI-compatible chat completions endpoint
-- **Response Format**: Structured JSON with story text, events, and state changes
-- **Dual Purpose**: Main gameplay responses + event summarization
-
-#### 3. **Hybrid Memory System**
-
-##### Phase 3 Memory Architecture
+The codebase is layered. Each layer only depends on the ones above it:
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Short-term    │    │   Deep Memory    │    │   Summaries     │
-│  (events.json)  │    │ (full_event_log) │    │(summaries.json) │
-│                 │    │                  │    │                 │
-│ Last 5 events   │    │ All events ever  │    │ Condensed past  │
-│ Immediate       │    │ FAISS indexed    │    │ Long-term arc   │
-│ context         │    │ Semantic search  │    │ Narrative flow  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+modules/     Pure game model -- entities, items, events, effects, modifiers.
+             No I/O, no framework, no LLM.
+data/        Static content -- the item catalog, the map, NPC roster,
+             trait and perk definitions.
+managers/    Game logic -- GameManager (state + action application + prompt
+             assembly) and RelationshipManager (affinity, trust, reputation).
+adapters/    Everything that touches the outside world.
+app.py       HTTP only.
 ```
 
-##### Memory Components
+`modules/` and `managers/` know nothing about Flask, HTTP, JSON files or FAISS.
+Every such dependency lives in `adapters/`:
 
-- **Recent Events**: Last 5 actions stored in `events.json` for immediate context
-- **Deep Memory**: Complete event history in `full_event_log.json` with FAISS indexing
-- **Semantic Search**: Vector similarity search using sentence transformers
-- **Auto-Summarization**: LLM-generated summaries when event count exceeds threshold
+| Module | Responsibility |
+| --- | --- |
+| `adapters/llm.py` | LM Studio chat completions, the game-master system prompt, response parsing |
+| `adapters/memory.py` | FAISS semantic search over the full event log |
+| `adapters/persistence.py` | Save/load a `GameManager` to `gamedata/engine_state.json` |
+| `adapters/engine.py` | `GameEngine` -- orchestrates one turn end to end |
 
-#### 4. **FAISS Vector Search Engine**
-
-```python
-# Key Implementation Details:
-- Model: 'all-MiniLM-L6-v2' sentence transformer
-- Index Type: IndexFlatIP (Inner Product for cosine similarity)
-- Embedding Dimension: 384
-- Normalization: L2 normalization for cosine similarity
-- Real-time Updates: Index rebuilt after each new event
-```
-
-#### 5. **Game State Management**
-
-##### JSON Data Structure
+### A turn
 
 ```
-gamedata/
-├── character.json     # Player stats, inventory, status
-├── world.json         # Current location, time of day
-├── events.json        # Recent 5 events (short-term memory)
-├── full_event_log.json # Complete event history (deep memory)
-├── locations.json     # All locations with descriptions, items, connections
-├── npcs.json          # NPC data with status and locations
-└── summaries.json     # LLM-generated story summaries
+POST /play
+    |
+    v
+GameEngine.play()                        [adapters/engine.py]
+    |
+    +-- SemanticMemory.search()          recall relevant past events (FAISS)
+    +-- GameManager.build_prompt()       assemble the full context
+    +-- llm.query_game_master()          ask LM Studio what happens
+    +-- llm.parse_response()             split into STORY / EVENT / ACTIONS
+    +-- GameManager.apply_action() * N   apply each state change
+    +-- GameManager.record_event()       push to short-term + full log
+    +-- SemanticMemory.rebuild()         reindex
+    +-- llm.query_summary()              fold old events into a summary
+    +-- persistence.save()               write engine_state.json
+    |
+    v
+JSON payload -> frontend
 ```
 
-##### State Update Flow
+Turns are serialized behind a lock in `GameEngine`, because Flask's dev server
+is threaded and two overlapping requests would otherwise interleave mutations of
+the same `GameManager` and race on the save file.
 
-1. Load current state from JSON files
-2. Perform semantic search on player input
-3. Filter contextual data (current location, nearby areas, present NPCs)
-4. Assemble hybrid prompt with deep memories + recent context
-5. Process LLM response and parse state changes
-6. Update JSON files and rebuild FAISS index
+### Memory
 
-#### 6. **Frontend Interface**
+Three tiers, all assembled into the prompt:
 
-- **Technology**: HTML5 + Tailwind CSS + Vanilla JavaScript
-- **Design**: Retro terminal aesthetic with green-on-black color scheme
-- **Font**: VT323 monospace for authentic computer terminal feel
-- **Layout**: Responsive design with story panel and action input
-- **Features**: Auto-scrolling, blinking cursor, reset functionality
+- **Recent events** -- the last 5, verbatim, as immediate context.
+- **Deep memory** -- the full event log, FAISS-indexed with `all-MiniLM-L6-v2`
+  (384-dim, `IndexFlatIP` over L2-normalized vectors, i.e. cosine similarity).
+  The top 2 matches for the player's input are recalled each turn.
+- **Summaries** -- once 10 unsummarized events accumulate, the LLM condenses
+  them into a narrative paragraph so long-term arcs survive without the prompt
+  growing without bound.
 
-### Data Flow Architecture
+### State
 
-```
-Player Input → Flask Route → Game Turn Processing
-     ↓
-Semantic Search (FAISS) ← Full Event Log
-     ↓
-Context Assembly ← Current State (JSON files)
-     ↓
-LLM Prompt Generation → LM Studio
-     ↓
-Response Parsing ← AI-Generated JSON
-     ↓
-State Updates → JSON Files + FAISS Rebuild
-     ↓
-Frontend Response ← Game Results
-```
+All dynamic state lives in one file, `gamedata/engine_state.json`, written
+atomically (temp file + replace) after every turn.
 
-## 🛠️ Technical Implementation Details
+Only *dynamic* state is saved. Static definitions -- item stats, location names
+and connections, trait and perk effects -- stay in `data/` and are looked up by
+id on load, so content can be rebalanced without invalidating saves. A save
+whose `version` does not match `SCHEMA_VERSION` is discarded rather than loaded
+half-understood, and unknown ids (a deleted item, a renamed location) are
+dropped with a log line instead of crashing the load.
 
-### Memory Management Strategy
+Persisted: player (position, condition, inventory, equipment, traits, perks),
+NPCs (position, status, notes, condition), relationships (affinity, trust,
+reputation), narrative state (day, time of day, goals, flags, apocalypse stage)
+and all three memory tiers.
 
-#### Semantic Search Implementation
+> The older per-file `gamedata/*.json` (`character.json`, `world.json`,
+> `npcs.json`, ...) belonged to the previous engine and are no longer read or
+> written. They are left in place so nothing is lost; delete them when you are
+> confident you do not want the old save.
 
-- **Purpose**: Retrieve contextually relevant past events based on current player input
-- **Technology**: FAISS (Facebook AI Similarity Search) with sentence transformers
-- **Model**: `all-MiniLM-L6-v2` for generating 384-dimensional embeddings
-- **Search**: Returns top 2 most semantically similar past events
+## Actions
 
-#### Heuristic Filtering
-
-- **Location-based**: Only includes NPCs and items in current/adjacent locations
-- **Relevance**: Filters game world data to provide focused context to LLM
-- **Performance**: Reduces prompt size while maintaining narrative coherence
-
-#### Auto-Summarization
-
-- **Trigger**: Activates when events exceed 10 items
-- **Process**: LLM condenses older events into narrative paragraphs
-- **Result**: Maintains long-term story continuity without context overflow
-
-### LLM Prompt Engineering
-
-#### Structured Prompt Format
+The LLM returns state changes as one action per line. Every verb below maps to a
+handler in `GameManager`. An unparseable or impossible action is logged and
+skipped -- the narrative still stands, the state change just does not happen.
 
 ```
-[CHARACTER] - Current player state
-[DEEP MEMORY] - Semantically retrieved past events
-[WORLD] - Current location and time
-[ITEMS IN CURRENT LOCATION] - Available objects
-[NEARBY LOCATIONS] - Connected areas
-[NPCS PRESENT] - Characters in current location
-[SUMMARY OF PAST EVENTS] - Long-term narrative
-[RECENT EVENTS] - Last 5 actions
-[SCENE] - Current player input
+TAKE <item>                          DROP <item>
+MOVE_TO <location|direction>         TIME_ADVANCE morning|afternoon|evening|night
+STATUS_ADD <status>                  STATUS_REMOVE <status>
+UPDATE_CONDITION <field> <value>     SET_FLAG <flag> true|false
+ADD_GOAL short_term|long_term <t>    REMOVE_GOAL short_term|long_term <t>
+UPDATE_RELATIONSHIP <npc> affection|trust <+/-N>
+ADD_RELATIONSHIP_NOTE <npc> <text>
+UPDATE_INVENTORY <item> ADD|REMOVE|UPDATE_CONDITION|UPDATE_QUANTITY <value>
+NPC_MOVE <npc> TO <location>         NPC_STATUS <npc> ADD|REMOVE <status>
 ```
 
-#### Response Format Requirements
+`UPDATE_CONDITION` accepts `health`, `hunger`, `thirst`, `morale` (numeric; a
+leading `+`/`-` adjusts, a bare number sets) and `sleep`, `infection_risk`
+(free text). `MOVE_TO` accepts a location id, a display name, or a compass
+direction out of the current room.
 
-- **Structure**: Valid JSON with three required keys
-- **Content**: `response_text`, `new_event`, `state_changes`
-- **State Updates**: Specific file targeting for precise game state modifications
+Relationships are directional and stored source -> target. Everything that reads
+them asks how the **NPC** regards the **player**, so that is the direction
+`UPDATE_RELATIONSHIP` and the starting values in `data/npcs.py` write.
 
-## 📋 Requirements
+## Requirements
 
-### System Dependencies
+**Python 3.13 or newer.** The game model uses PEP 696 type-parameter defaults
+(`class WeaponTakeDamageEvent[T: BaseEntity = BaseEntity, ...]`), which 3.12
+rejects with a bare `SyntaxError`.
 
-```
-Python 3.8+
-LM Studio (local LLM server)
-Compatible local language model
-```
+Plus [LM Studio](https://lmstudio.ai/) running a chat model on port 1234 with
+its OpenAI-compatible API enabled.
 
-### Python Packages
+## Setup
 
-```
-Flask==2.3.3
-requests==2.31.0
-faiss-cpu==1.7.4
-sentence-transformers==2.2.2
-numpy==1.24.3
-```
-
-## 🚀 Installation & Setup
-
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Setup LM Studio
-
-1. Download and install [LM Studio](https://lmstudio.ai/)
-2. Load a compatible chat model (recommend 7B+ parameters)
-3. Start local server on port 1234
-4. Ensure OpenAI-compatible API is enabled
-
-### 3. Run the Game
-
-```bash
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python app.py
 ```
 
-### 4. Access Game Interface
+`.venv` is gitignored. To skip activation, call the interpreter directly:
+`.venv\Scripts\python -m pip install -r requirements.txt`, then
+`.venv\Scripts\python app.py`.
 
-Open your browser and navigate to: `http://localhost:5000`
+Then open <http://localhost:5000>.
 
-## 🎯 Game Features
+`/reset` deletes the save and starts a fresh game.
 
-### World Exploration
+## Tests
 
-- **Post-apocalyptic setting** with interconnected locations
-- **Dynamic descriptions** generated by AI based on context
-- **Item management** with persistent inventory system
-- **Location-based interactions** with environmental objects
-
-### NPC Interactions
-
-- **Contextual NPCs** with unique personalities and statuses
-- **Location-aware encounters** - NPCs appear only in their designated areas
-- **Dynamic dialogue** generated based on current game state and history
-
-### Memory System Benefits
-
-- **Continuity**: References to past events maintain story coherence
-- **Depth**: Long-term character development and world evolution
-- **Relevance**: Semantic search surfaces meaningful connections
-- **Performance**: Efficient memory usage with summarization
-
-## 🧠 AI & Memory System
-
-### Semantic Memory Retrieval
-
-The system uses advanced NLP to understand player intent and retrieve relevant past experiences:
-
-- **Input Analysis**: Player commands are encoded into vector embeddings
-- **Similarity Search**: FAISS finds the most contextually relevant past events
-- **Context Integration**: Retrieved memories are woven into the current narrative
-
-### State Persistence
-
-Every game action is preserved across sessions:
-
-- **Complete History**: Full event log maintains perfect recall
-- **Efficient Access**: FAISS indexing enables fast similarity searches
-- **Narrative Continuity**: Summarization preserves long-term story arcs
-
-### Dynamic World Building
-
-The AI creates an evolving world that responds to player choices:
-
-- **Consistent Locations**: Physical spaces maintain logical properties
-- **Persistent NPCs**: Characters remember interactions and evolve
-- **Consequence System**: Past actions influence future possibilities
-
-## 🔧 Configuration
-
-### Memory System Tuning
-
-- `MAX_EVENTS = 5`: Number of recent events in short-term memory
-- `EVENTS_THRESHOLD = 10`: Trigger point for auto-summarization
-- `k=2`: Number of deep memories retrieved per search
-
-### LLM Settings
-
-- Temperature: 0.7 (balanced creativity/consistency)
-- Model: Local model via LM Studio
-- API Endpoint: `http://localhost:1234/v1/chat/completions`
-
-## 📁 Project Structure
-
-```
-RPG/
-├── app.py                 # Main Flask application
-├── requirements.txt       # Python dependencies
-├── README.md             # This documentation
-├── templates/
-│   └── index.html        # Web interface
-└── gamedata/
-    ├── character.json    # Player data
-    ├── world.json        # World state
-    ├── events.json       # Recent events
-    ├── full_event_log.json # Complete history
-    ├── locations.json    # Game world map
-    ├── npcs.json         # Non-player characters
-    └── summaries.json    # Story summaries
+```powershell
+.venv\Scripts\python -m unittest discover -s tests -t . -b
 ```
 
-## 🎮 How to Play
+`-b` buffers stdout so the engine's per-turn logging only appears for failing
+tests. The suite is offline and takes a few seconds: the LLM and the embedding
+model are stubbed, and every test that persists writes to a temp directory
+rather than your real save.
 
-1. **Start the game** by running the Flask application
-2. **Read the scenario** presented in the story panel
-3. **Type your action** in the input field (e.g., "look around", "take the knife", "talk to Dale")
-4. **View the AI response** as the story unfolds based on your choices
-5. **Continue exploring** - your actions shape the narrative and world state
+| File | Covers |
+| --- | --- |
+| `tests/test_game_manager.py` | Starting state, prompt assembly, all 15 action verbs, memory tiers |
+| `tests/test_persistence.py` | Save/load round trip, schema guarding, corrupt and stale saves |
+| `tests/test_llm.py` | STORY/EVENT/ACTIONS parsing |
+| `tests/test_engine.py` | Turn orchestration, summarization, LLM failure, reset |
+| `tests/test_routes.py` | All four routes through Flask's test client |
+| `tests/test_memory.py` | FAISS recall (opt-in, see below) |
 
-## 🔮 Future Enhancements
+`tests/test_memory.py` exercises real FAISS and a real embedding model, so it is
+skipped unless you opt in — the first run downloads `all-MiniLM-L6-v2`:
 
-- **Multiple character classes** with unique abilities
-- **Combat system** with tactical decision-making
-- **Branching storylines** with multiple endings
-- **Save/load game slots** for multiple playthroughs
-- **Enhanced NPC AI** with individual memory systems
-- **Multiplayer support** for collaborative storytelling
+```powershell
+$env:RPG_TEST_EMBEDDINGS="1"; .venv\Scripts\python -m unittest discover -s tests -t . -b
+```
+
+## Endpoints
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/` | GET | The game interface |
+| `/state` | GET | Current state, so a reloaded page shows the real world |
+| `/play` | POST | `{"input": "..."}` -> runs a turn |
+| `/reset` | POST | Deletes the save, starts a new game |
+
+## Configuration
+
+| Setting | Location |
+| --- | --- |
+| `MAX_RECENT_EVENTS` (5) | `managers/game.py` |
+| `SUMMARY_THRESHOLD` (10) | `managers/game.py` |
+| `DEFAULT_RECALL` (2) | `adapters/memory.py` |
+| `EMBEDDING_MODEL_NAME` | `adapters/memory.py` |
+| `LM_STUDIO_URL`, temperature, system prompt | `adapters/llm.py` |
+| `SCHEMA_VERSION`, `SAVE_FILE` | `adapters/persistence.py` |
+
+## Known gaps
+
+- The event/effect pipeline (`GameManager.drain_event_queue`, traits and perks
+  producing modifiers) is implemented but nothing enqueues events yet -- the LLM
+  action verbs do not create `WeaponDealDamageEvent` and friends. Combat is
+  therefore defined but unreachable.
+- `NpcEntity` has hit points and an inventory, but no action verb uses them.
+- `adapters/memory.py` imports `sentence_transformers` at module scope, which
+  contacts the Hugging Face Hub on import even when no embedding is needed.
