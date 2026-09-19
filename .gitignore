@@ -22,3 +22,9 @@ typings
 # Local secrets, should any ever be needed. config.yml is tracked and is not the
 # place for them.
 .env
+
+# The live save, rewritten after every turn. Named exactly rather than with
+# gamedata/*.json: the legacy per-file saves next to it are tracked on purpose
+# (see the README), and a glob would quietly ignore files git already follows.
+# If you rename it via persistence.save_file_name in config.yml, rename it here.
+gamedata/engine_state.json
