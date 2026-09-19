@@ -252,26 +252,23 @@ class GameManager:
             disposition = self.relationship_manager.get_disposition(
                 npc.npc_id, self.player.entity_id
             )
-            affinity = self.relationship_manager.get_affinity(
-                npc.npc_id, self.player.entity_id
-            )
-            trust = self.relationship_manager.get_trust(
+            trust_level = self.relationship_manager.get_trust_level(
                 npc.npc_id, self.player.entity_id
             )
             lines.append(
                 f" - {npc.name}"
                 f"{f' ({npc.age})' if npc.age is not None else ''}: {npc.description}"
             )
-            lines.append(
-                f"   Disposition: {disposition} "
-                f"(affection {affinity:+d}, trust {trust:+d})"
-            )
+            lines.append(f"   Disposition: {disposition} (trust: {trust_level})")
             if npc.status:
                 lines.append(f"   Status: {', '.join(npc.status)}")
             if npc.personality:
                 lines.append(f"   Personality: {', '.join(npc.personality)}")
             if npc.notes:
-                lines.append(f"   Notes: {npc.notes}")
+                # ADD_RELATIONSHIP_NOTE writes Orton's read on someone, not the
+                # NPC's private thoughts, so this side of the firewall is where
+                # it belongs -- but say whose impressions they are.
+                lines.append(f"   Orton's impressions: {npc.notes}")
         return "\n".join(lines)
 
     def _get_summary_section(self) -> str:

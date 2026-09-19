@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from modules.character.faction import CharacterFaction
-from modules.character.state import CharacterDisposition
+from modules.character.state import CharacterDisposition, CharacterTrust
 from modules.modifier import AffinityModifier, ReputationModifier
 
 
@@ -128,3 +128,26 @@ class RelationshipManager:
         """
         affinity = self.get_affinity(source_id, target_id)
         return self.get_disposition_from_affinity(affinity)
+
+    def get_trust_level_from_trust(self, trust: int) -> CharacterTrust:
+        """Band a trust score, the way get_disposition_from_affinity bands
+        affinity. The bands are the only form in which trust leaves the
+        simulation."""
+        if trust >= 75:
+            return CharacterTrust.UNWAVERING
+        if trust >= 40:
+            return CharacterTrust.SOLID
+        if trust >= 10:
+            return CharacterTrust.TENTATIVE
+        if trust <= -40:
+            return CharacterTrust.BROKEN
+        if trust < 0:
+            return CharacterTrust.GUARDED
+
+        return CharacterTrust.UNFORMED
+
+    def get_trust_level(self, source_id: str, target_id: str) -> CharacterTrust:
+        """
+        Convenience method to get how far one entity relies on another directly.
+        """
+        return self.get_trust_level_from_trust(self.get_trust(source_id, target_id))

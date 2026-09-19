@@ -38,7 +38,8 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(
             self.gm.relationship_manager.get_trust("npc_emma", "player"), 5
         )
-        self.assertIn("trust +5", self.gm.build_prompt("look"))
+        # The prompt shows the band, never the number -- see the firewall tests.
+        self.assertIn("trust: unformed", self.gm.build_prompt("look"))
 
     def test_two_games_do_not_share_mutable_state(self):
         # Locations and NPCs used to be module-level singletons, so a dropped
@@ -93,6 +94,37 @@ class PromptTests(unittest.TestCase):
         prompt = self.gm.build_prompt("look")
         self.assertIn("Orton locked the door.", prompt)
         self.assertIn("The city grew quiet.", prompt)
+
+
+class KnowledgeFirewallTests(unittest.TestCase):
+    """The prompt must not hand the game master numbers Orton cannot know."""
+
+    def setUp(self):
+        self.gm = GameManager()
+
+    def _npcs_section(self) -> str:
+        prompt = self.gm.build_prompt("look")
+        return prompt.split("[NPCS PRESENT]")[1].split("[SUMMARY OF PAST EVENTS]")[0]
+
+    def test_raw_relationship_scores_never_reach_the_prompt(self):
+        self.gm.apply_action("UPDATE_RELATIONSHIP Emma affection +37")
+        self.gm.apply_action("UPDATE_RELATIONSHIP Emma trust +42")
+        section = self._npcs_section()
+
+        self.assertIn("Emma", section)
+        for leak in ("37", "42", "affection", "trust +"):
+            self.assertNotIn(leak, section)
+
+    def test_scores_are_reported_as_bands(self):
+        self.gm.apply_action("UPDATE_RELATIONSHIP Emma affection +50")
+        self.gm.apply_action("UPDATE_RELATIONSHIP Emma trust +45")
+        self.assertIn("Disposition: friendly (trust: solid)", self.gm.build_prompt("look"))
+
+    def test_bands_move_with_the_underlying_scores(self):
+        self.assertIn("Disposition: neutral (trust: unformed)", self.gm.build_prompt("look"))
+        self.gm.apply_action("UPDATE_RELATIONSHIP Emma affection -50")
+        self.gm.apply_action("UPDATE_RELATIONSHIP Emma trust -45")
+        self.assertIn("Disposition: hostile (trust: broken)", self.gm.build_prompt("look"))
 
 
 class ActionTests(unittest.TestCase):
