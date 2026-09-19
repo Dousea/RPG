@@ -16,7 +16,10 @@ _DEFAULTS: dict[str, Any] = {
         "base_url": "http://localhost:1234/v1/chat/completions",
         "model_name": "local-model",
         "request_timeout": 300,
-        "game_master_temperature": 0.7,
+        # Low temperature: the parser proposes actions, not prose, so it
+        # should be as consistent/predictable as the local model allows.
+        "parser_temperature": 0.2,
+        "narrator_temperature": 0.7,
         "summarizer_temperature": 0.5,
     },
     "memory": {

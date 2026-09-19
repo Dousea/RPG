@@ -1,6 +1,6 @@
 # Engine Authority
 
-> **Status: Partial.** The engine can veto an impossible state change, but it never decides an outcome — the LLM narrates first and declares the deltas afterwards. Prose is unchecked; a veto is reported back to the narrator on the *next* turn (`[CONTINUITY]`), which is the earliest the story can admit a delta never landed. See [Implementation Status](00-status.md).
+> **Status: Implemented, at the game's current scale.** A parser call proposes actions; `managers/validator.py` and `managers/simulation.py` decide every outcome on doc 01's authoritative list — HP, inventory, movement, combat, quest completion, discovered world state, time — before the narrator is ever called. The narrator receives an `[OUTCOMES]` block of already-decided facts and has no `ACTIONS:` section left to declare state through. `[CONTINUITY]` still exists but only as a defensive fallback for an exception inside the Simulation Core, not the normal path. What this does *not* cover: procedural world generation, simulation level-of-detail, and a Story Director (docs 05–07, 09) remain unbuilt — this holds at four rooms and three NPCs, not at scale. See [Implementation Status](00-status.md).
 
 ## 1. Core Principle: Engine Authority
 

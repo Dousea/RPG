@@ -1,0 +1,85 @@
+"""ContextBuilder: the knowledge-firewall boundary between state and prompts."""
+
+import unittest
+
+from managers.context import ContextBuilder
+from managers.game import GameManager
+from modules.action import DiscoverFlagAction, SetFlagAction
+from tests.support import resolve_actions
+
+
+class WorldFlagFirewallTests(unittest.TestCase):
+    """doc 11's actual complaint: every world flag went out unfiltered,
+    whether or not anything in the story ever revealed it to the player."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def test_an_undiscovered_flag_never_reaches_the_narrator_prompt(self):
+        resolve_actions(self.gm, SetFlagAction(flag_name="power_grid_stable", value=False))
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertNotIn("power_grid_stable", prompt)
+
+    def test_a_discovered_flag_reaches_the_narrator_prompt(self):
+        resolve_actions(
+            self.gm,
+            SetFlagAction(flag_name="power_grid_stable", value=False),
+            DiscoverFlagAction(flag_name="power_grid_stable"),
+        )
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("power_grid_stable=False", prompt)
+
+    def test_discovering_a_flag_that_was_never_set_is_harmless(self):
+        resolve_actions(self.gm, DiscoverFlagAction(flag_name="never_set"))
+        prompt = self.builder.build_narrator_prompt("look")
+        # Nothing to show -- the flag has no value -- but this must not raise.
+        self.assertIn("Flags: None", prompt)
+
+    def test_setting_the_same_flag_twice_does_not_undiscover_it(self):
+        resolve_actions(
+            self.gm,
+            SetFlagAction(flag_name="power_grid_stable", value=False),
+            DiscoverFlagAction(flag_name="power_grid_stable"),
+            SetFlagAction(flag_name="power_grid_stable", value=True),
+        )
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("power_grid_stable=True", prompt)
+
+
+class ParserPromptFirewallTests(unittest.TestCase):
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def test_parser_prompt_carries_no_relationship_or_flag_data_at_all(self):
+        resolve_actions(
+            self.gm,
+            SetFlagAction(flag_name="power_grid_stable", value=False),
+            DiscoverFlagAction(flag_name="power_grid_stable"),
+        )
+        prompt = self.builder.build_parser_prompt("look")
+        self.assertNotIn("power_grid_stable", prompt)
+        self.assertNotIn("Disposition", prompt)
+
+
+class NpcGoalVisibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def test_npc_goals_are_shown_as_visible_intent(self):
+        emma = self.gm.resolve_npc("Emma")
+        emma.goals.append("find out who the new neighbor is")
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("Visible intent: find out who the new neighbor is", prompt)
+
+    def test_npc_knowledge_is_never_rendered(self):
+        emma = self.gm.resolve_npc("Emma")
+        emma.knowledge.add("secret_bunker_location")
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertNotIn("secret_bunker_location", prompt)
+
+
+if __name__ == "__main__":
+    unittest.main()

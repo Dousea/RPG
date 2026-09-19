@@ -1,4 +1,9 @@
-"""GameEngine turn orchestration, with the LLM and the embedding model stubbed."""
+"""GameEngine turn orchestration, with the LLM and the embedding model stubbed.
+
+Two LLM calls per turn now, not one: the parser proposes actions (script via
+`ScriptedLLM(actions=...)`), the engine validates and simulates them, and the
+narrator describes what already happened (script via `ScriptedLLM(story=...)`).
+"""
 
 import unittest
 
@@ -8,12 +13,8 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
-TURN = (
-    "STORY:\nYou walk north into the office.\n\n"
-    "EVENT:\nOrton entered the office\n\n"
-    "ACTIONS:\nMOVE_TO north\nUPDATE_RELATIONSHIP Emma affection +12\n"
-    "ADD_GOAL short_term Find a weapon"
-)
+MOVE_NORTH_ACTIONS = "ACTIONS:\nMOVE_TO north\nUPDATE_RELATIONSHIP Emma affection +12\nADD_GOAL short_term Find a weapon"
+MOVE_NORTH_STORY = "STORY:\nYou walk north into the office.\n\nEVENT:\nOrton entered the office"
 
 
 class EngineTestCase(IsolatedSaveTestCase):
@@ -21,17 +22,20 @@ class EngineTestCase(IsolatedSaveTestCase):
 
     def setUp(self):
         super().setUp()
-        self.llm = ScriptedLLM(response=TURN)
-        self._original_gm = engine_module.llm.query_game_master
+        self.llm = ScriptedLLM(actions=MOVE_NORTH_ACTIONS, story=MOVE_NORTH_STORY)
+        self._original_parser = engine_module.llm.query_parser
+        self._original_narrator = engine_module.llm.query_narrator
         self._original_summary = engine_module.llm.query_summary
-        engine_module.llm.query_game_master = self.llm.query_game_master
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
         engine_module.llm.query_summary = self.llm.query_summary
 
         self.engine = GameEngine()
         self.engine.memory = FakeMemory()
 
     def tearDown(self):
-        engine_module.llm.query_game_master = self._original_gm
+        engine_module.llm.query_parser = self._original_parser
+        engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
         super().tearDown()
 
@@ -56,11 +60,15 @@ class TurnTests(EngineTestCase):
             self.engine.manager.memory.full_event_log,
         )
 
-    def test_recalled_memories_reach_the_prompt(self):
+    def test_player_input_reaches_the_parser_prompt(self):
+        self.engine.play("peer down the corridor")
+        self.assertIn("peer down the corridor", self.llm.prompts[-1])
+
+    def test_recalled_memories_reach_the_narrator_prompt(self):
         self.engine.manager.memory.full_event_log.append("Orton heard sirens.")
         self.engine.memory.next_hits = [0]
         self.engine.play("what was that noise")
-        self.assertIn("Orton heard sirens.", self.llm.prompts[-1])
+        self.assertIn("Orton heard sirens.", self.llm.narrator_prompts[-1])
 
     def test_out_of_range_recall_hits_are_ignored(self):
         # A stale index must not blow up the turn.
@@ -92,34 +100,33 @@ class TurnTests(EngineTestCase):
         self.assertNotIn("Emma", after["npcs_present"])  # office
 
     def test_failed_actions_do_not_abort_the_turn(self):
-        self.llm.response = (
-            "STORY:\nYou try.\n\nEVENT:\nOrton tried\n\n"
-            "ACTIONS:\nMOVE_TO Atlantis\nADD_GOAL short_term Survive"
-        )
+        self.llm.actions = "ACTIONS:\nMOVE_TO Atlantis\nADD_GOAL short_term Survive"
+        self.llm.story = "STORY:\nYou try.\n\nEVENT:\nOrton tried"
         result = self.engine.play("go somewhere")
         self.assertEqual(result["story_text"], "You try.")
-        # The bad action was skipped, the good one still applied.
+        # The bad action was refused, the good one still applied.
         self.assertEqual(result["current_location"], "Hallway")
         self.assertIn("Survive", result["goals"]["short_term"])
 
-    def test_refused_actions_are_fed_back_into_the_next_prompt(self):
-        # Prose is written before the deltas are applied, so a refused delta
-        # leaves the story describing something that never happened. The engine
-        # cannot un-write it; it can tell the next turn to reconcile.
-        self.llm.response = (
-            "STORY:\nYou pocket the medkit.\n\nEVENT:\nOrton took a medkit\n\n"
-            "ACTIONS:\nTAKE Medkit"
-        )
+    def test_refused_actions_are_surfaced_to_the_narrator_the_same_turn(self):
+        # Doc 01's inversion: a refusal is validated before any prose exists,
+        # so the narrator sees it as an [OUTCOMES] fact this turn, not as a
+        # next-turn [CONTINUITY] correction for damage already done.
+        self.llm.actions = "ACTIONS:\nTAKE Medkit"
+        self.llm.story = "STORY:\nYou reach for it.\n\nEVENT:\nOrton reached for something"
         self.engine.play("take the medkit")
-        self.assertEqual(len(self.engine.manager.narrative.pending_corrections), 1)
-        self.assertIn("TAKE Medkit", self.engine.manager.narrative.pending_corrections[0])
-
-        self.llm.response = TURN
-        self.engine.play("go north")
-        self.assertIn("[CONTINUITY]", self.llm.prompts[-1])
-        self.assertIn("TAKE Medkit", self.llm.prompts[-1])
-        # A clean turn clears them again.
+        self.assertIn("[OUTCOMES]", self.llm.narrator_prompts[-1])
+        self.assertIn("Refused:", self.llm.narrator_prompts[-1])
+        self.assertIn("No 'Medkit' here to take.", self.llm.narrator_prompts[-1])
+        # Nothing was deferred: pending_corrections/[CONTINUITY] stays empty.
         self.assertEqual(self.engine.manager.narrative.pending_corrections, [])
+        self.assertIn("(Nothing to correct)", self.llm.narrator_prompts[-1])
+
+    def test_unparseable_action_lines_are_surfaced_but_do_not_abort_the_turn(self):
+        self.llm.actions = "ACTIONS:\nFROBNICATE the widget\nADD_GOAL short_term Survive"
+        result = self.engine.play("do something weird")
+        self.assertIn("Survive", result["goals"]["short_term"])
+        self.assertIn("Refused:", self.llm.narrator_prompts[-1])
 
 
 class SummarizationTests(EngineTestCase):
@@ -137,12 +144,12 @@ class SummarizationTests(EngineTestCase):
 
 
 class FailureTests(EngineTestCase):
-    def test_llm_failure_surfaces_as_story_text(self):
+    def test_parser_failure_surfaces_as_story_text(self):
         self.llm.error = LLMError("LM Studio is not running")
         result = self.engine.play("look around")
         self.assertIn("LM Studio is not running", result["story_text"])
 
-    def test_llm_failure_leaves_state_untouched(self):
+    def test_parser_failure_leaves_state_untouched(self):
         self.engine.play("go north")  # a good turn first
         log_before = list(self.engine.manager.memory.full_event_log)
 
@@ -153,6 +160,25 @@ class FailureTests(EngineTestCase):
         self.assertEqual(self.engine.manager.memory.full_event_log, log_before)
         reloaded = persistence.load(self.save_path)
         self.assertEqual(reloaded.memory.full_event_log, log_before)
+
+    def test_narrator_failure_still_persists_the_engines_decision(self):
+        # Movement was already decided by the engine before the narrator was
+        # asked to describe it -- a rendering failure must not discard that.
+        class FailingNarrator(ScriptedLLM):
+            def query_narrator(self, prompt: str) -> str:
+                self.narrator_prompts.append(prompt)
+                raise LLMError("LM Studio dropped the connection")
+
+        self.llm = FailingNarrator(actions=MOVE_NORTH_ACTIONS)
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
+
+        result = self.engine.play("go north")
+
+        self.assertIn("LM Studio dropped the connection", result["story_text"])
+        self.assertEqual(self.engine.manager.player.current_location_id, "location_id_office")
+        reloaded = persistence.load(self.save_path)
+        self.assertEqual(reloaded.player.current_location_id, "location_id_office")
 
     def test_summarization_failure_does_not_lose_the_turn(self):
         def boom(text):
@@ -194,7 +220,8 @@ class LifecycleTests(EngineTestCase):
 
     def test_reset_does_not_leak_previous_world_state(self):
         self.engine.play("go north")
-        self.engine.manager.apply_action("TAKE Crowbar")
+        self.llm.actions = "ACTIONS:\nTAKE Crowbar"
+        self.engine.play("take the crowbar")
         self.engine.reset()
         office = self.engine.manager.world.locations["location_id_office"]
         self.assertIn("Crowbar", [e.item.name for e in office.entities])

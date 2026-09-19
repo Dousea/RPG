@@ -33,8 +33,9 @@ from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.location import World
+from modules.quest import QuestState, QuestStatus
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 GAME_DATA_DIR = config.persistence.game_data_dir
 SAVE_FILE = os.path.join(GAME_DATA_DIR, config.persistence.save_file_name)
@@ -131,6 +132,8 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 "conditions": [condition.value for condition in npc.conditions],
                 "inventory": [_item_entity_to_dict(e) for e in npc.inventory],
                 "base_max_hit_points": npc.base_max_hit_points,
+                "goals": list(npc.goals),
+                "knowledge": sorted(npc.knowledge),
             }
             for npc in manager.npcs.values()
         ],
@@ -156,6 +159,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "apocalypse_stage": narrative.apocalypse_stage,
             "goals": {k: list(v) for k, v in narrative.goals.items()},
             "flags": dict(narrative.flags),
+            "discovered_flags": sorted(narrative.discovered_flags),
             "player_status": list(narrative.player_status),
             "conditions": dict(narrative.conditions),
             "pending_corrections": list(narrative.pending_corrections),
@@ -164,6 +168,14 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "recent_events": list(memory.recent_events),
             "full_event_log": list(memory.full_event_log),
             "summaries": list(memory.summaries),
+        },
+        "quests": {
+            quest_id: {
+                "status": quest.status.value,
+                "objectives": list(quest.objectives),
+                "completed_objectives": list(quest.completed_objectives),
+            }
+            for quest_id, quest in manager.quests.items()
         },
     }
 
@@ -214,6 +226,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         apocalypse_stage=narrative_data.get("apocalypse_stage", "Normal"),
         goals={**default_goals, **narrative_data.get("goals", {})},
         flags=narrative_data.get("flags", {}),
+        discovered_flags=set(narrative_data.get("discovered_flags", [])),
         player_status=narrative_data.get("player_status", []),
         conditions={
             "sleep": "Rested",
@@ -230,6 +243,16 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         summaries=memory_data.get("summaries", []),
     )
 
+    quests = {
+        quest_id: QuestState(
+            quest_id=quest_id,
+            status=QuestStatus(quest_data.get("status", "active")),
+            objectives=quest_data.get("objectives", []),
+            completed_objectives=quest_data.get("completed_objectives", []),
+        )
+        for quest_id, quest_data in data.get("quests", {}).items()
+    }
+
     return GameManager(
         world=world,
         player=player,
@@ -237,6 +260,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         npcs=npcs,
         narrative=narrative,
         memory=memory,
+        quests=quests,
     )
 
 
@@ -343,6 +367,8 @@ def _npcs_from_dict(entries: list[dict[str, Any]]) -> dict[str, NpcEntity]:
                 if e is not None
             ],
             base_max_hit_points=entry.get("base_max_hit_points", 100),
+            goals=entry.get("goals", []),
+            knowledge=set(entry.get("knowledge", [])),
         )
         npc.hit_points = int(entry.get("hit_points", npc.max_hit_points))
         npcs[npc.npc_id] = npc

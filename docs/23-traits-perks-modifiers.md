@@ -1,6 +1,6 @@
 # Traits, Perks, Effects, and Modifiers
 
-> **Status: Implemented, unreachable.** `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event`. Nothing constructs the events that drive it. See [Implementation Status](00-status.md).
+> **Status: Implemented, live.** `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event`. `managers/simulation.py`'s `SimulationCore` now constructs the events that drive it — every `ATTACK` and `USE_ITEM` action goes through this chain. See [Implementation Status](00-status.md).
 
 The design documents mention traits only in passing, as something a world
 generator might roll for an NPC. In the implementation they are a general
@@ -71,20 +71,26 @@ event, for effects applied at character creation. Nothing dispatches it.
 
 ## Matching handlers to events
 
-`_event_matches_effect_handler` compares class names by prefix:
+`_event_matches_effect_handler` used to compare class names by prefix:
 
 ```text
 WeaponTakeDamageEvent  ←  WeaponDamageTakenEffect ?
 ```
 
-That comparison **fails**. The handler name does not start with the event name;
-the pairing is `WeaponTakeDamage` ↔ `WeaponDamageTaken`, which is a
-rearrangement, not a prefix. The code's own docstring raises this
-(*"this logic might need to be more robust"*). It has never been observed
-failing because nothing enqueues an event to dispatch.
+That comparison **failed unconditionally**. The handler name does not start
+with the event name; the pairing is `WeaponTakeDamage` ↔ `WeaponDamageTaken`,
+which is a rearrangement, not a prefix. It was never observed failing only
+because nothing enqueued an event to dispatch.
 
-A registry mapping event type to handler type would be both correct and
-cheaper than introspection.
+It has been replaced with exactly the registry this document suggested:
+`EVENT_TO_EFFECT_TYPES` in `managers/game.py` maps each event type to the
+effect-handler types that react to it, checked with `isinstance`. A second
+map, `EFFECT_REQUIRED_ROLE`, closes a related bug the string comparison could
+never have caught even if fixed naively: `_broadcast_event` visits both an
+event's source and target, and without a role check, an attacker who happens
+to also carry a "damage taken" trait would have it fire on their own
+outgoing hit. Each effect type now declares which role (`"source"` or
+`"target"`) an entity must occupy to be eligible to react at all.
 
 ## Modifiers
 
@@ -108,31 +114,42 @@ than letting the order in which traits happened to fire decide the outcome.
 
 ## Application
 
-`GameManager._apply_modifiers` currently handles three of the eight:
+`GameManager._apply_modifiers` now handles five of the eight:
 `DamageMultiplicativeModifier` (composed, then applied to the event's target),
 `AffinityModifier` and `ReputationModifier` (forwarded to the
-[relationship manager](22-relationships.md)). `XPModifier`,
-`HPModifier`, `ConditionsModifier`, `AttributesModifier` and
-`XPMultiplicativeModifier` are collected and dropped.
+[relationship manager](22-relationships.md)), and `HPModifier` and
+`ConditionsModifier` (applied to the event's target, or its source for an
+event with none). `XPModifier`, `AttributesModifier` and
+`XPMultiplicativeModifier` are still collected and dropped — nothing on the
+live path produces them yet (`OnceEffect`, which is how `AttributesModifier`
+is meant to apply, runs at character creation, not per-event, and nothing
+dispatches it still; see [document 00](00-status.md)'s open issues).
 
-`AffinityModifier` is the only modifier reachable in a real game, because
-`UPDATE_RELATIONSHIP` constructs one directly and hands it to the relationship
-manager — bypassing the event pipeline entirely.
+`managers/simulation.py`'s `SimulationCore` is the actual caller for combat
+and item use — it calls `_broadcast_event` directly rather than
+`drain_event_queue`, because a single `ATTACK` needs to combine modifiers
+from *two* events (a `WeaponDealDamageEvent` for the attacker's reactions and
+a `WeaponTakeDamageEvent` for the defender's) before applying damage exactly
+once, which `drain_event_queue`'s one-event-in, one-event-applied loop can't
+express. `drain_event_queue`/`GameManager._apply_modifiers`/`event_queue`
+remain as a simpler broadcast-and-apply convenience for a future event that
+only needs one perspective, and `SimulationCore.resolve` uses it for item
+use (`ConsumeItemEvent`/`ApplyItemEvent`), where there's no dealt/taken split.
 
-## Why it is unreachable
+## Why it used to be unreachable, and isn't now
 
-`GameManager.event_queue` is drained by `drain_event_queue`, which is called by
-`process_turn`, which is called by nothing. The live turn loop is
-`GameEngine.play`, which never touches the queue. `process_turn` still contains
-the commented-out sketch of how an action was meant to become an event.
+`GameManager.event_queue` used to be drained by `drain_event_queue`, called by
+`process_turn`, called by nothing — the live turn loop was `GameEngine.play`,
+which never touched the queue. Both `process_turn` and its placeholder
+`_generate_narrative_for_turn` (a hardcoded string) have been deleted; they
+were the dead scaffold this section used to describe.
 
-To make combat reachable, something must turn a player intent into a
-`WeaponDealDamageEvent`. Under the current architecture that something would be
-the game master emitting an action verb — which means the LLM would decide that
-a hit landed, and the pipeline would only scale the damage. Under
-[document 01](01-engine-authority.md)'s architecture the engine would decide,
-and the pipeline would be the rules. The dead code is waiting on that choice,
-not on an implementation.
+[Document 01](01-engine-authority.md)'s architecture answers the question
+this document used to leave open: the engine decides whether a hit landed,
+not the LLM. `managers/validator.py`'s `ActionValidator` accepts or rejects
+an `ATTACK` (is the target here, are they already down, is the player
+capable of attacking), and `SimulationCore._resolve_attack` is what actually
+constructs the events above and lets this chain run.
 
 ---
 

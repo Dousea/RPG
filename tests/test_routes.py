@@ -8,20 +8,19 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
-TURN = (
-    "STORY:\nYou walk north into the office.\n\n"
-    "EVENT:\nOrton entered the office\n\n"
-    "ACTIONS:\nMOVE_TO north\nADD_GOAL short_term Find a weapon"
-)
+ACTIONS = "ACTIONS:\nMOVE_TO north\nADD_GOAL short_term Find a weapon"
+STORY = "STORY:\nYou walk north into the office.\n\nEVENT:\nOrton entered the office"
 
 
 class RouteTestCase(IsolatedSaveTestCase):
     def setUp(self):
         super().setUp()
-        self.llm = ScriptedLLM(response=TURN)
-        self._original_gm = engine_module.llm.query_game_master
+        self.llm = ScriptedLLM(actions=ACTIONS, story=STORY)
+        self._original_parser = engine_module.llm.query_parser
+        self._original_narrator = engine_module.llm.query_narrator
         self._original_summary = engine_module.llm.query_summary
-        engine_module.llm.query_game_master = self.llm.query_game_master
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
         engine_module.llm.query_summary = self.llm.query_summary
 
         # Install a prepared engine so the lazy singleton does not build a real
@@ -37,7 +36,8 @@ class RouteTestCase(IsolatedSaveTestCase):
 
     def tearDown(self):
         app_module._engine = self._original_engine
-        engine_module.llm.query_game_master = self._original_gm
+        engine_module.llm.query_parser = self._original_parser
+        engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
         super().tearDown()
 

@@ -1,6 +1,6 @@
 # Data Model and Persistence
 
-> **Status: Partial.** See the *As Implemented* section at the end for the real schemas. See [Implementation Status](00-status.md).
+> **Status: Partial.** Exit requirements and NPC `goals`/`knowledge` — two gaps this document used to call out explicitly — now exist. See the *As Implemented* section at the end for the real schemas, and [Implementation Status](00-status.md).
 
 ## Data Model
 
@@ -270,12 +270,16 @@ Location(id, name, description, connections: dict[str, str], entities: list)
 World(time, date, locations: dict[str, Location])
 ```
 
-`connections` maps a direction to a destination id and **carries no
-requirements**. There is no lock state, no hidden or blocked exit, no door
-object in the graph. `DoorEntity` and `ContainerEntity` with
-`UnlockableEntityLockState` exist in `modules/entity/object.py` and are used by
-nothing — they are the beginning of the structured exits this document asks
-for, not an implementation of them.
+`connections` itself still maps a direction to a bare destination id with no
+requirements field — but a requirement can now sit *alongside* it: a
+`DoorEntity` placed in `Location.entities` (see `data/locations.py`'s
+lobby-to-storage-room door) carries `leads_to`, `state`
+(`UnlockableEntityLockState.LOCKED`/`UNLOCKED`) and `key_id`, and
+`managers/validator.py`'s `ActionValidator` checks for one blocking a
+`MOVE_TO` before accepting it. This is exits-as-structured-data for the one
+case that exists (a locked door with a key), not the general
+hidden/blocked/destroyed-exit model this document describes — there is still
+no way to mark an exit merely hidden, or damaged rather than locked.
 
 `World.time` and `World.date` are **derived**, not stored state: `GameManager`
 renders them from the narrative clock (`NarrativeState.day` / `.time_of_day`) in
@@ -293,14 +297,19 @@ personality: list[str]               status: list[str]
 notes: str                           free text, appended to by the game master
 romance_eligible: bool
 conditions: list[CharacterCondition] inventory: list[ItemEntity]
+goals: list[str]                     knowledge: set[str]
 base_max_hit_points = 100
 ```
 
 Compared with this document's NPC: relationships live in
-[`RelationshipManager`](22-relationships.md) rather than on the record, and
-there are **no `goals` and no `knowledge` fields**. An NPC cannot want anything
-or know anything. `personality`, `notes` and `romance_eligible` have no
-counterpart in the design and exist to steer the game master's characterisation.
+[`RelationshipManager`](22-relationships.md) rather than on the record.
+`goals` and `knowledge` now exist as fields (previously entirely absent — an
+NPC could not want or know anything), but `goals` is rendered to the narrator
+as visible intent (see [document 11](11-knowledge-firewall.md)) rather than
+driving any behavior of the NPC's own, and `knowledge` is written to and
+persisted but read by nothing yet — there is no dialogue or query system that
+consumes it. `personality`, `notes` and `romance_eligible` have no
+counterpart in the design and exist to steer the narrator's characterisation.
 
 ### Persistence
 

@@ -53,6 +53,18 @@ ITEMS: dict[str, BaseItem] = {
         is_two_handed=False,
         tags=["key", "accessory"],
     ),
+    "item_storage_key": HoldableItem(
+        id="item_storage_key",
+        name="Storage Room Key",
+        description="A worn brass key labeled 'STORAGE' in faded marker.",
+        max_hit_points=10,
+        slots=[
+            CharacterHoldableSlot.RIGHT_HAND,
+            CharacterHoldableSlot.LEFT_HAND,
+        ],
+        is_two_handed=False,
+        tags=["key", "accessory"],
+    ),
     "item_canned_beans": ConsumableItem(
         id="item_canned_beans",
         name="Canned Beans",

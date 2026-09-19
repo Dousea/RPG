@@ -9,8 +9,10 @@ llm:
   model_name: "local-model"
   # Seconds to wait for a response before giving up.
   request_timeout: 300
-  # Sampling temperature for the game master's narrative turns.
-  game_master_temperature: 0.7
+  # Sampling temperature for the intent parser (proposes actions, not prose).
+  parser_temperature: 0.2
+  # Sampling temperature for the narrator's prose turns.
+  narrator_temperature: 0.7
   # Sampling temperature for summarizing old events.
   summarizer_temperature: 0.5
 

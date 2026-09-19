@@ -1,8 +1,11 @@
 """LM Studio client and response parsing.
 
-The system prompt and the STORY/EVENT/ACTIONS response contract are carried over
-from the original app.py loop unchanged -- the model is tuned for that format,
-and the action verbs match GameManager's handlers one for one.
+Two roles, two calls, in place of the old single game-master call: the parser
+turns player input plus a minimal scene description into a proposed ACTIONS
+block (no prose, and no authority -- the engine validates and simulates every
+line before anything is narrated); the narrator then turns the engine's
+already-decided outcome facts into STORY/EVENT prose. Per docs/01-engine-authority.md,
+the LLM interprets intent and writes prose; it never decides state.
 """
 
 import requests
@@ -14,8 +17,51 @@ LM_STUDIO_URL = config.llm.base_url
 # LM Studio serves whatever model is loaded; this value is ignored.
 MODEL_NAME = config.llm.model_name
 
-GAME_MASTER_SYSTEM_PROMPT = (
-    "You are the game master for a serious, grounded, text-based zombie apocalypse RPG. "
+PARSER_SYSTEM_PROMPT = (
+    "You are the intent parser for a text-based zombie apocalypse RPG. Orton, "
+    "a software developer, is the player character. Your only job is to turn "
+    "what Orton says he does into a list of game actions. You do not write "
+    "prose, and you do not decide whether an action succeeds -- the game "
+    "engine resolves that afterwards, before anything is narrated.\n\n"
+    "CRITICAL: only propose actions Orton explicitly asked for. If he says "
+    "'look around', propose NONE -- looking is not an action that changes "
+    "anything. Never invent an action he did not ask for, and never propose "
+    "an outcome (damage numbers, how an NPC reacts) -- only the action "
+    "itself; the engine decides what happens.\n\n"
+    "Respond with ONLY an actions block, in this exact format:\n\n"
+    "ACTIONS:\n"
+    "[List any game actions implied by the input, one per line. Available actions:]\n"
+    "- TAKE item_name\n"
+    "- DROP item_name\n"
+    "- MOVE_TO location_name\n"
+    "- ATTACK target_name\n"
+    "- USE_ITEM item_name\n"
+    "- TIME_ADVANCE morning/afternoon/evening/night\n"
+    "- STATUS_ADD status_name\n"
+    "- STATUS_REMOVE status_name\n"
+    "- UPDATE_CONDITION hunger/thirst/morale/sleep/infection_risk value\n"
+    "- ADD_GOAL short_term/long_term goal_text\n"
+    "- REMOVE_GOAL short_term/long_term goal_text\n"
+    "- UPDATE_RELATIONSHIP npc_name affection/trust +/-number\n"
+    "- ADD_RELATIONSHIP_NOTE npc_name note_text\n"
+    "- SET_FLAG flag_name true/false\n"
+    "- DISCOVER_FLAG flag_name (Orton has just learned this world fact, whatever it is)\n"
+    "- UPDATE_INVENTORY item_name ADD/REMOVE/UPDATE_CONDITION/UPDATE_QUANTITY value\n"
+    "- NPC_MOVE npc_name TO location_name\n"
+    "- NPC_STATUS npc_name ADD/REMOVE status_name\n"
+    "[If no actions are implied, write: NONE]\n\n"
+    "Note: there is no action for dealing or taking damage directly, and no "
+    "way to set health -- ATTACK is how combat starts; the engine computes "
+    "the result.\n\n"
+    "Example:\n"
+    "Input: 'I pick up the crowbar and head north'\n"
+    "ACTIONS:\n"
+    "TAKE Crowbar\n"
+    "MOVE_TO north"
+)
+
+NARRATOR_SYSTEM_PROMPT = (
+    "You are the narrator for a serious, grounded, text-based zombie apocalypse RPG. "
     "Write in second-person ('you') addressing Orton, a software developer trying to survive societal collapse.\n\n"
     "ORTON'S CHARACTER:\n"
     "- Software developer, lives alone, just moved to new apartment\n"
@@ -31,42 +77,22 @@ GAME_MASTER_SYSTEM_PROMPT = (
     "- Focus on realistic human reactions and relationship dynamics\n"
     "- Allow downtime: conversations, bonding, vulnerability, arguments\n"
     "- Present choices but allow custom responses\n"
-    "- Romance should evolve naturally based on character interactions\n"
-    "- CRITICAL: Only perform actions Orton explicitly requests\n"
-    "- If he says 'look around', only DESCRIBE - don't auto-interact with objects\n"
-    "- [CONTINUITY] lists changes the engine refused last turn. Those things did "
-    "not happen, whatever the story implied: write around them, don't repeat them\n\n"
+    "- Romance should evolve naturally based on character interactions\n\n"
+    "[OUTCOMES] tells you exactly what happened this turn -- movement, combat, "
+    "item use, everything the engine already decided before you were asked to "
+    "write anything. Narrate what is there. Never contradict it, never invent "
+    "your own HP/inventory/combat numbers, and never describe something "
+    "labeled 'Refused' as having succeeded -- write around it instead.\n\n"
     "Your response must follow this EXACT format:\n\n"
     "STORY:\n"
     "[Write the narrative in second-person, addressing Orton directly]\n\n"
     "EVENT:\n"
     "[Brief summary for the event log]\n\n"
-    "ACTIONS:\n"
-    "[List any game state changes needed, one per line. Available actions:]\n"
-    "- TAKE item_name\n"
-    "- DROP item_name\n"
-    "- MOVE_TO location_name\n"
-    "- TIME_ADVANCE morning/afternoon/evening/night\n"
-    "- STATUS_ADD status_name\n"
-    "- STATUS_REMOVE status_name\n"
-    "- UPDATE_CONDITION health/hunger/thirst/morale/sleep/infection_risk value\n"
-    "- ADD_GOAL short_term/long_term goal_text\n"
-    "- REMOVE_GOAL short_term/long_term goal_text\n"
-    "- UPDATE_RELATIONSHIP npc_name affection/trust +/-number\n"
-    "- ADD_RELATIONSHIP_NOTE npc_name note_text\n"
-    "- SET_FLAG flag_name true/false\n"
-    "- UPDATE_INVENTORY item_name ADD/REMOVE/UPDATE_CONDITION/UPDATE_QUANTITY value\n"
-    "- NPC_MOVE npc_name TO location_name\n"
-    "- NPC_STATUS npc_name ADD/REMOVE status_name\n"
-    "[If no actions needed, write: NONE]\n\n"
     "Example:\n"
     "STORY:\n"
     "You glance at your neighbor Emma as she struggles with groceries. Her smile seems genuine as she notices you watching.\n\n"
     "EVENT:\n"
-    "Orton observed Emma in the hallway\n\n"
-    "ACTIONS:\n"
-    "UPDATE_RELATIONSHIP Emma affection +1\n"
-    "ADD_RELATIONSHIP_NOTE Emma Seemed friendly, might be worth getting to know"
+    "Orton observed Emma in the hallway"
 )
 
 SUMMARIZER_SYSTEM_PROMPT = (
@@ -106,14 +132,21 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
         raise LLMError(f"LM Studio returned an unexpected response shape: {exc}") from exc
 
 
-def query_game_master(prompt_text: str) -> str:
-    """Run one game-master turn. Raises LLMError on failure."""
-    raw = _chat(
-        GAME_MASTER_SYSTEM_PROMPT, prompt_text, temperature=config.llm.game_master_temperature
-    )
-    print("--- LLM Raw Response ---")
+def query_parser(prompt_text: str) -> str:
+    """Ask the intent parser what actions player input implies. Raises LLMError on failure."""
+    raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature=config.llm.parser_temperature)
+    print("--- Parser Raw Response ---")
     print(raw)
-    print("------------------------")
+    print("---------------------------")
+    return raw
+
+
+def query_narrator(prompt_text: str) -> str:
+    """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure."""
+    raw = _chat(NARRATOR_SYSTEM_PROMPT, prompt_text, temperature=config.llm.narrator_temperature)
+    print("--- Narrator Raw Response ---")
+    print(raw)
+    print("-----------------------------")
     return raw
 
 
@@ -126,14 +159,34 @@ def query_summary(text_to_summarize: str) -> str:
     ).strip()
 
 
-def parse_response(llm_response_text: str) -> dict[str, object]:
-    """Split a STORY/EVENT/ACTIONS response into its three parts.
+def parse_action_response(llm_response_text: str) -> list[str]:
+    """Extract raw action lines from a parser-call response.
 
-    Section headers are matched line by line rather than by splitting on blank
-    lines, so a story containing blank lines survives intact.
+    Tolerant of the model dropping the `ACTIONS:` header: with only one
+    section to write, a small local model sometimes skips the header it used
+    to need to distinguish ACTIONS from STORY/EVENT. If no header is found,
+    every non-blank line is treated as a candidate action line, which is what
+    `modules.action.parse_action_plan` would have received anyway.
     """
-    sections: dict[str, list[str]] = {"story": [], "event": [], "actions": []}
-    headers = {"STORY:": "story", "EVENT:": "event", "ACTIONS:": "actions"}
+    lines = llm_response_text.splitlines()
+    header_index = next(
+        (i for i, line in enumerate(lines) if line.strip().upper().startswith("ACTIONS:")),
+        None,
+    )
+    if header_index is not None:
+        remainder = lines[header_index].strip()[len("ACTIONS:") :].strip()
+        lines = ([remainder] if remainder else []) + lines[header_index + 1 :]
+    return [line for line in lines if line.strip()]
+
+
+def parse_narrator_response(llm_response_text: str) -> dict[str, str]:
+    """Split a STORY/EVENT narrator response into its two parts.
+
+    Section headers are matched line by line rather than by splitting on
+    blank lines, so a story containing blank lines survives intact.
+    """
+    sections: dict[str, list[str]] = {"story": [], "event": []}
+    headers = {"STORY:": "story", "EVENT:": "event"}
     current: str | None = None
 
     for line in llm_response_text.splitlines():
@@ -152,14 +205,8 @@ def parse_response(llm_response_text: str) -> dict[str, object]:
 
     story = "\n".join(sections["story"]).strip()
     event = "\n".join(sections["event"]).strip()
-    actions = [
-        action.strip().lstrip("-").strip()
-        for action in sections["actions"]
-        if action.strip() and action.strip().upper() != "NONE"
-    ]
 
     return {
         "story": story or "The world is silent.",
         "event": event or "Nothing happened.",
-        "actions": actions,
     }

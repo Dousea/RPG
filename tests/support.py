@@ -6,6 +6,28 @@ import unittest
 from pathlib import Path
 
 from adapters import persistence
+from managers.game import GameManager
+from managers.simulation import SimulationCore
+from modules.action import AnyAction
+
+
+def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
+    """Validate and resolve actions directly, bypassing the LLM turn loop.
+
+    `GameManager.apply_action`/`_ACTION_HANDLERS` no longer exist -- the
+    Action Validator and Simulation Core (managers/validator.py,
+    managers/simulation.py) are the only path to mutating state now. Tests
+    that need to set up state (rather than test the pipeline itself) go
+    through this helper instead of poking fields directly, so fixtures stay
+    honest about what the engine actually allows. Actions are resolved one at
+    a time, in order, exactly as `SimulationCore.resolve` does for a real
+    turn, so an earlier action (e.g. a move) can unlock a later one (e.g. a
+    take) within the same call.
+    """
+    facts = SimulationCore(gm).resolve(list(actions))
+    for action, fact in zip(actions, facts):
+        assert not fact.startswith("Refused:"), f"setup action {action!r} failed: {fact}"
+    return facts
 
 
 class FakeMemory:
@@ -30,20 +52,38 @@ class FakeMemory:
 
 
 class ScriptedLLM:
-    """Replaces adapters.llm's two network calls with canned answers."""
+    """Replaces adapters.llm's three network calls with canned answers.
 
-    def __init__(self, response: str = "", summary: str = "A summary."):
-        self.response = response
+    `actions` scripts the parser call (an ACTIONS: block, or "NONE"); `story`
+    scripts the narrator call (a STORY:/EVENT: block). Kept as two separate
+    scripts because the turn loop now makes two calls, not one.
+    """
+
+    def __init__(
+        self,
+        actions: str = "ACTIONS:\nNONE",
+        story: str = "STORY:\n...\n\nEVENT:\n...",
+        summary: str = "A summary.",
+    ):
+        self.actions = actions
+        self.story = story
         self.summary = summary
-        self.prompts: list[str] = []
+        self.prompts: list[str] = []  # parser-call prompts
+        self.narrator_prompts: list[str] = []
         self.summarized: list[str] = []
         self.error: Exception | None = None
 
-    def query_game_master(self, prompt: str) -> str:
+    def query_parser(self, prompt: str) -> str:
         self.prompts.append(prompt)
         if self.error is not None:
             raise self.error
-        return self.response
+        return self.actions
+
+    def query_narrator(self, prompt: str) -> str:
+        self.narrator_prompts.append(prompt)
+        if self.error is not None:
+            raise self.error
+        return self.story
 
     def query_summary(self, text: str) -> str:
         self.summarized.append(text)

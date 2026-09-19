@@ -1,70 +1,85 @@
-"""Parsing of the STORY / EVENT / ACTIONS response format."""
+"""Parsing of the parser call's ACTIONS block and the narrator's STORY/EVENT."""
 
 import unittest
 
-from adapters.llm import parse_response
+from adapters.llm import parse_action_response, parse_narrator_response
 
 
-class ParseResponseTests(unittest.TestCase):
+class ParseActionResponseTests(unittest.TestCase):
     def test_well_formed_response(self):
-        parsed = parse_response(
-            "STORY:\nYou step into the hall.\n\n"
-            "EVENT:\nOrton entered the hallway\n\n"
-            "ACTIONS:\nMOVE_TO hallway\nUPDATE_RELATIONSHIP Emma affection +1"
+        lines = parse_action_response("ACTIONS:\nMOVE_TO hallway\nUPDATE_RELATIONSHIP Emma affection +1")
+        self.assertEqual(lines, ["MOVE_TO hallway", "UPDATE_RELATIONSHIP Emma affection +1"])
+
+    def test_none_is_kept_as_a_line(self):
+        # modules.action.parse_action_plan is what actually treats NONE as
+        # "no actions" -- this function only extracts lines.
+        self.assertEqual(parse_action_response("ACTIONS:\nNONE"), ["NONE"])
+
+    def test_bulleted_actions_are_kept_as_written(self):
+        lines = parse_action_response("ACTIONS:\n- TAKE Crowbar\n- DROP Crowbar")
+        self.assertEqual(lines, ["- TAKE Crowbar", "- DROP Crowbar"])
+
+    def test_content_on_the_header_line_is_kept(self):
+        self.assertEqual(parse_action_response("ACTIONS: MOVE_TO north"), ["MOVE_TO north"])
+
+    def test_header_is_case_insensitive(self):
+        self.assertEqual(parse_action_response("actions:\nTAKE Crowbar"), ["TAKE Crowbar"])
+
+    def test_missing_header_falls_back_to_every_line(self):
+        # A small local model asked for one section sometimes drops the
+        # header it used to need to disambiguate from STORY/EVENT.
+        self.assertEqual(parse_action_response("MOVE_TO north\nTAKE Crowbar"), ["MOVE_TO north", "TAKE Crowbar"])
+
+    def test_blank_lines_are_dropped(self):
+        lines = parse_action_response("ACTIONS:\nTAKE Crowbar\n\n   \nDROP Crowbar")
+        self.assertEqual(lines, ["TAKE Crowbar", "DROP Crowbar"])
+
+    def test_empty_response(self):
+        self.assertEqual(parse_action_response(""), [])
+
+
+class ParseNarratorResponseTests(unittest.TestCase):
+    def test_well_formed_response(self):
+        parsed = parse_narrator_response(
+            "STORY:\nYou step into the hall.\n\nEVENT:\nOrton entered the hallway"
         )
         self.assertEqual(parsed["story"], "You step into the hall.")
         self.assertEqual(parsed["event"], "Orton entered the hallway")
-        self.assertEqual(
-            parsed["actions"],
-            ["MOVE_TO hallway", "UPDATE_RELATIONSHIP Emma affection +1"],
-        )
 
     def test_blank_lines_inside_the_story_survive(self):
-        # Sections are found by header, not by splitting on blank lines, so a
-        # multi-paragraph story stays intact.
-        parsed = parse_response(
-            "STORY:\nFirst paragraph.\n\nSecond paragraph.\n\n"
-            "EVENT:\nSomething\n\nACTIONS:\nNONE"
+        parsed = parse_narrator_response(
+            "STORY:\nFirst paragraph.\n\nSecond paragraph.\n\nEVENT:\nSomething"
         )
         self.assertEqual(parsed["story"], "First paragraph.\n\nSecond paragraph.")
 
-    def test_none_means_no_actions(self):
-        parsed = parse_response("STORY:\nQuiet.\n\nEVENT:\nIdle\n\nACTIONS:\nNONE")
-        self.assertEqual(parsed["actions"], [])
-
-    def test_bulleted_actions_are_cleaned(self):
-        parsed = parse_response(
-            "STORY:\nx\n\nEVENT:\ny\n\nACTIONS:\n- TAKE Crowbar\n- DROP Crowbar"
-        )
-        self.assertEqual(parsed["actions"], ["TAKE Crowbar", "DROP Crowbar"])
-
     def test_content_on_the_header_line_is_kept(self):
-        parsed = parse_response("STORY: All on one line.\n\nEVENT: Something\n\nACTIONS: NONE")
+        parsed = parse_narrator_response("STORY: All on one line.\n\nEVENT: Something")
         self.assertEqual(parsed["story"], "All on one line.")
         self.assertEqual(parsed["event"], "Something")
-        self.assertEqual(parsed["actions"], [])
 
     def test_headers_are_case_insensitive(self):
-        parsed = parse_response("story:\nx\n\nevent:\ny\n\nactions:\nNONE")
+        parsed = parse_narrator_response("story:\nx\n\nevent:\ny")
         self.assertEqual(parsed["story"], "x")
         self.assertEqual(parsed["event"], "y")
 
     def test_missing_sections_fall_back_to_defaults(self):
-        parsed = parse_response("just some prose with no headers at all")
+        parsed = parse_narrator_response("just some prose with no headers at all")
         self.assertEqual(parsed["story"], "The world is silent.")
         self.assertEqual(parsed["event"], "Nothing happened.")
-        self.assertEqual(parsed["actions"], [])
 
     def test_empty_response(self):
-        parsed = parse_response("")
+        parsed = parse_narrator_response("")
         self.assertEqual(parsed["story"], "The world is silent.")
-        self.assertEqual(parsed["actions"], [])
+        self.assertEqual(parsed["event"], "Nothing happened.")
 
-    def test_blank_action_lines_are_dropped(self):
-        parsed = parse_response(
-            "STORY:\nx\n\nEVENT:\ny\n\nACTIONS:\nTAKE Crowbar\n\n   \nDROP Crowbar"
+    def test_a_stray_actions_section_is_not_recognized_as_a_header(self):
+        # The narrator is not asked for ACTIONS anymore; if it emits one
+        # anyway, it is not authoritative and is simply absorbed as story/
+        # event text rather than crashing the parse.
+        parsed = parse_narrator_response(
+            "STORY:\nYou look around.\n\nEVENT:\nOrton looked around\n\nACTIONS:\nNONE"
         )
-        self.assertEqual(parsed["actions"], ["TAKE Crowbar", "DROP Crowbar"])
+        self.assertEqual(parsed["event"], "Orton looked around\n\nACTIONS:\nNONE")
 
 
 if __name__ == "__main__":

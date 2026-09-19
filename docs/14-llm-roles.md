@@ -1,6 +1,6 @@
 # Local LLM Roles and Narrator Constraints
 
-> **Status: Partial.** One model does both jobs in one call (`adapters/llm.py`). The narrator constraints below are stated in the system prompt and enforced nowhere. See [Implementation Status](00-status.md).
+> **Status: Partial.** Two calls now, `query_parser` and `query_narrator` in `adapters/llm.py`, each with its own system prompt and response format — the narrator's no longer has an `ACTIONS:` section to fill at all. The constraints below are structurally reinforced (the narrator has nothing left to declare state through) but still not mechanically enforced against a model that ignores its prompt. See [Implementation Status](00-status.md).
 
 ## Local LLM Roles
 

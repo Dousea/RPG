@@ -6,32 +6,60 @@ from pathlib import Path
 
 from adapters import persistence
 from managers.game import GameManager
-from tests.support import IsolatedSaveTestCase
+from modules.quest import QuestState, QuestStatus
+from tests.support import IsolatedSaveTestCase, resolve_actions
+from modules.action import (
+    AddGoalAction,
+    AddRelationshipNoteAction,
+    DiscoverFlagAction,
+    MoveAction,
+    NpcMoveAction,
+    NpcStatusAction,
+    SetFlagAction,
+    StatusAddAction,
+    TakeAction,
+    TimeAdvanceAction,
+    UpdateConditionAction,
+    UpdateInventoryAction,
+    UpdateRelationshipAction,
+)
 
 
 def played_game() -> GameManager:
     """A game with something changed on every persisted axis."""
     gm = GameManager()
-    for action in (
-        "MOVE_TO north",
-        "TAKE Crowbar",
-        "UPDATE_CONDITION health 55",
-        "UPDATE_CONDITION hunger 70",
-        "UPDATE_CONDITION sleep Exhausted",
-        "UPDATE_RELATIONSHIP Emma affection +12",
-        "UPDATE_RELATIONSHIP Emma trust -2",
-        "ADD_RELATIONSHIP_NOTE Emma Seemed shaken",
-        "ADD_GOAL short_term Find a weapon",
-        "ADD_GOAL long_term Leave the city",
-        "SET_FLAG power_grid_stable false",
-        "TIME_ADVANCE evening",
-        "STATUS_ADD panic",
-        "NPC_MOVE Emma TO Lobby",
-        "NPC_STATUS Emma ADD frightened",
-        "UPDATE_INVENTORY First Aid Kit ADD 1",
-    ):
-        succeeded, message = gm.apply_action(action)
-        assert succeeded, f"setup action {action!r} failed: {message}"
+    resolve_actions(
+        gm,
+        MoveAction(destination="north"),
+        TakeAction(item_name="Crowbar"),
+        UpdateConditionAction(field_name="hunger", raw_value="70"),
+        UpdateConditionAction(field_name="sleep", raw_value="Exhausted"),
+        UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=12),
+        UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-2),
+        AddRelationshipNoteAction(npc_name="Emma", note="Seemed shaken"),
+        AddGoalAction(horizon="short_term", goal_text="Find a weapon"),
+        AddGoalAction(horizon="long_term", goal_text="Leave the city"),
+        SetFlagAction(flag_name="power_grid_stable", value=False),
+        DiscoverFlagAction(flag_name="power_grid_stable"),
+        TimeAdvanceAction(time_of_day="evening"),
+        StatusAddAction(status="panic"),
+        NpcMoveAction(npc_name="Emma", destination="Lobby"),
+        NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
+        UpdateInventoryAction(item_name="First Aid Kit", operation="ADD", value="1"),
+    )
+    # Health is retired as an LLM-declarable action (docs/01-engine-authority.md);
+    # it only ever changes through combat or item effects. Set directly here
+    # since this fixture is exercising persistence, not the action pipeline.
+    gm.player.hit_points = 55
+    emma = gm.resolve_npc("Emma")
+    emma.goals.append("find out who the new neighbor is")
+    emma.knowledge.add("secret_bunker_location")
+    gm.quests["find_the_bunker"] = QuestState(
+        quest_id="find_the_bunker",
+        status=QuestStatus.ACTIVE,
+        objectives=["discover:bunker_location", "defeat:npc_marcus"],
+        completed_objectives=["discover:bunker_location"],
+    )
     gm.record_event("Orton entered the office.")
     gm.memory.summaries.append("The first day passed quietly.")
     gm.narrative.pending_corrections = ["TAKE Medkit -- No 'Medkit' here to take."]
@@ -89,6 +117,17 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertIn("frightened", emma.status)
         self.assertIn("Seemed shaken", emma.notes)
 
+    def test_npc_goals_and_knowledge_round_trip(self):
+        emma = self.loaded.resolve_npc("Emma")
+        self.assertIn("find out who the new neighbor is", emma.goals)
+        self.assertIn("secret_bunker_location", emma.knowledge)
+
+    def test_quest_state_round_trips(self):
+        quest = self.loaded.quests["find_the_bunker"]
+        self.assertEqual(quest.status, QuestStatus.ACTIVE)
+        self.assertEqual(quest.objectives, ["discover:bunker_location", "defeat:npc_marcus"])
+        self.assertEqual(quest.completed_objectives, ["discover:bunker_location"])
+
     def test_relationships_keep_their_direction(self):
         manager = self.loaded.relationship_manager
         self.assertEqual(manager.get_affinity("npc_emma", "player"), 12)
@@ -102,6 +141,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertIn("Find a weapon", self.loaded.narrative.goals["short_term"])
         self.assertIn("Leave the city", self.loaded.narrative.goals["long_term"])
         self.assertIs(self.loaded.narrative.flags["power_grid_stable"], False)
+        self.assertIn("power_grid_stable", self.loaded.narrative.discovered_flags)
         self.assertEqual(
             self.loaded.narrative.pending_corrections,
             self.original.narrative.pending_corrections,
@@ -130,8 +170,8 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(self.loaded.memory.summaries, self.original.memory.summaries)
 
     def test_the_loaded_game_is_still_playable(self):
-        succeeded, message = self.loaded.apply_action("MOVE_TO south")
-        self.assertTrue(succeeded, message)
+        facts = resolve_actions(self.loaded, MoveAction(destination="south"))
+        self.assertFalse(facts[0].startswith("Refused:"), facts[0])
         self.assertEqual(self.loaded.player.current_location_id, "location_id_hallway")
 
 
@@ -169,6 +209,13 @@ class BadSaveTests(IsolatedSaveTestCase):
             data = json.load(handle)
         data["version"] = persistence.SCHEMA_VERSION + 1
         self.write(data)
+        self.assertIsNone(persistence.load(self.save_path))
+
+    def test_a_v1_save_is_discarded_cleanly_not_crashed(self):
+        # v1 predates NpcEntity.goals/.knowledge and discovered_flags -- the
+        # existing "unreadable save -> fresh game" policy handles this with
+        # no migration code, by design (adapters/persistence.py module doc).
+        self.write({"version": 1, "player": {}, "narrative": {}})
         self.assertIsNone(persistence.load(self.save_path))
 
     def test_corrupt_json_returns_none(self):

@@ -1,0 +1,439 @@
+"""Simulation Core: deterministic outcome resolution for accepted actions.
+
+Validates each action (via `managers/validator.py`) and decides what actually
+happens -- HP, inventory, position, the clock -- before any prose exists.
+Movement, inventory, and world-state actions are direct field mutations;
+combat and item use additionally build real events and run them through the
+event/effect/modifier pipeline in `managers/game.py` (already built,
+previously never invoked -- see `GameManager._broadcast_event`), so trait/perk
+reactions in `data/traits.py`/`data/perks.py` actually fire.
+
+`resolve()` returns one outcome-fact string per action -- what the narrator
+prompt describes. The narrator is never the source of truth for anything in
+this list; it only puts prose around facts the engine already decided.
+"""
+
+import random
+
+from managers.game import GameManager
+from managers.validator import Accepted, ActionValidator, Rejected
+from modules.action import (
+    NARRATIVE_CONDITION_FIELDS,
+    AddGoalAction,
+    AddRelationshipNoteAction,
+    AnyAction,
+    AttackAction,
+    DiscoverFlagAction,
+    DropAction,
+    MoveAction,
+    NpcMoveAction,
+    NpcStatusAction,
+    RemoveGoalAction,
+    SetFlagAction,
+    StatusAddAction,
+    StatusRemoveAction,
+    TakeAction,
+    TimeAdvanceAction,
+    UpdateConditionAction,
+    UpdateInventoryAction,
+    UpdateRelationshipAction,
+    UseItemAction,
+)
+from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.item import ItemEntity
+from modules.event import ApplyItemEvent, ConsumeItemEvent, WeaponDealDamageEvent, WeaponTakeDamageEvent
+from modules.item import ConsumableItem, MeleeWeaponItem, RangedWeaponItem
+from modules.modifier import (
+    AffinityModifier,
+    ConditionsModifier,
+    DamageMultiplicativeModifier,
+    HPModifier,
+    ReputationModifier,
+)
+from modules.weapon import MeleeWeaponType
+
+# Fists deal a token amount of damage so an unarmed ATTACK still resolves
+# through the same event/modifier pipeline as an armed one, instead of being a
+# special case.
+UNARMED_WEAPON = MeleeWeaponItem(
+    id="unarmed",
+    name="bare hands",
+    description="No weapon -- just hands.",
+    max_hit_points=1,
+    tags=["unarmed"],
+    type=MeleeWeaponType.BLUNT,
+    damage=2,
+    slots=[CharacterHoldableSlot.RIGHT_HAND],
+    is_two_handed=False,
+)
+
+# +/-10% variance on damage rolls. Building seeded/versioned RNG (doc 16) is
+# explicitly out of scope; this is just enough randomness that combat doesn't
+# read as a fixed calculator.
+DAMAGE_JITTER = 0.10
+
+# Action types whose resolution costs the next tick of the coarse clock
+# (morning/afternoon/evening/night). Ordinary actions no longer depend on the
+# LLM remembering to emit TIME_ADVANCE -- the engine owns the clock outright.
+# A dedicated sub-tick clock is doc 08 territory and out of scope here.
+_TICK_COSTING_ACTIONS = (MoveAction, AttackAction)
+
+
+class SimulationCore:
+    def __init__(
+        self,
+        manager: GameManager,
+        validator: ActionValidator | None = None,
+        rng: random.Random | None = None,
+    ):
+        self.manager = manager
+        self.validator = validator if validator is not None else ActionValidator(manager)
+        self._rng = rng if rng is not None else random.Random()
+
+    def resolve(self, actions: list[AnyAction]) -> list[str]:
+        """Validate and resolve each action in order, one at a time.
+
+        Order matters within a turn: an earlier action can change whether a
+        later one is legal (move into a room, then take something only
+        reachable from there). Every action is therefore validated against
+        state as it stands *after* every prior action in this same turn has
+        already resolved -- never against one upfront snapshot of the whole
+        list, which would reject "move north, take crowbar" because the
+        crowbar wasn't reachable before the move happened.
+        """
+        facts: list[str] = []
+        for action in actions:
+            result = self.validator.validate(action)
+            if isinstance(result, Rejected):
+                facts.append(f"Refused: {type(result.action).__name__} -- {result.reason}")
+            else:
+                facts.append(self._resolve_one(result))
+        return facts
+
+    def _resolve_one(self, accepted: Accepted) -> str:
+        handler = self._RESOLVERS.get(type(accepted.action))
+        if handler is None:
+            return f"No resolver registered for {type(accepted.action).__name__}."
+        fact = handler(self, accepted)
+        if type(accepted.action) in _TICK_COSTING_ACTIONS:
+            self._advance_one_tick()
+        return fact
+
+    def _advance_one_tick(self) -> None:
+        from managers.game import TIMES_OF_DAY
+
+        current = TIMES_OF_DAY.index(self.manager.narrative.time_of_day)
+        self.manager._action_time_advance(TIMES_OF_DAY[(current + 1) % len(TIMES_OF_DAY)])
+
+    # === Movement ===
+
+    def _resolve_move(self, accepted: Accepted) -> str:
+        location = accepted.resolved["location"]
+        self.manager.player.current_location_id = location.id
+        return f"Move to {location.name}: succeeded."
+
+    # === Items ===
+
+    def _resolve_take(self, accepted: Accepted) -> str:
+        entity = accepted.resolved["item_entity"]
+        manager = self.manager
+        manager.current_location.entities.remove(entity)
+        manager.player.inventory.append(entity)
+        return f"Take {entity.item.name}: succeeded."
+
+    def _resolve_drop(self, accepted: Accepted) -> str:
+        entity = accepted.resolved["item_entity"]
+        manager = self.manager
+        manager.player.inventory.remove(entity)
+        manager.current_location.entities.append(entity)
+        return f"Drop {entity.item.name}: succeeded."
+
+    def _resolve_use_item(self, accepted: Accepted) -> str:
+        manager = self.manager
+        entity = accepted.resolved["item_entity"]
+        item = entity.item
+        player = manager.player
+
+        # The item's own effect (e.g. a medkit's HPModifier) is not a trait/
+        # perk reaction -- it applies unconditionally whenever the item is
+        # used, so it is applied directly rather than through the broadcast.
+        for modifier in item.modifiers:
+            self._apply_modifier(player, modifier)
+
+        if isinstance(item, ConsumableItem):
+            event = ConsumeItemEvent(source=player, item=item)
+            manager.player.inventory.remove(entity)
+        else:
+            event = ApplyItemEvent(source=player, item=item, target=player)
+
+        for modifier in manager._broadcast_event(event):
+            self._apply_modifier(player, modifier)
+
+        return (
+            f"Use {item.name}: succeeded, "
+            f"Orton now at {player.hit_points}/{player.max_hit_points} HP."
+        )
+
+    def _resolve_update_inventory(self, accepted: Accepted) -> str:
+        manager = self.manager
+        action: UpdateInventoryAction = accepted.action
+
+        if action.operation == "ADD":
+            item = accepted.resolved["item"]
+            manager.player.inventory.append(ItemEntity(item=item))
+            return f"Added {item.name} to inventory."
+
+        entity = accepted.resolved["item_entity"]
+        if action.operation == "REMOVE":
+            manager.player.inventory.remove(entity)
+            return f"Removed {entity.item.name} from inventory."
+        if action.operation == "UPDATE_CONDITION":
+            entity.hit_points = int(action.value)
+            return f"{entity.item.name} condition is now {entity.hit_points}."
+
+        # UPDATE_QUANTITY: N copies of an item are N entities; adjust the
+        # count to match the target, capped by remaining inventory room.
+        target_quantity = int(action.value)
+        matching = [e for e in manager.player.inventory if e.item.id == entity.item.id]
+        while len(matching) > target_quantity:
+            manager.player.inventory.remove(matching.pop())
+        room = manager.player.max_inventory_size - len(manager.player.inventory)
+        for _ in range(min(target_quantity - len(matching), room)):
+            manager.player.inventory.append(ItemEntity(item=entity.item))
+        return f"{entity.item.name} quantity is now {target_quantity}."
+
+    # === Combat ===
+
+    def _resolve_attack(self, accepted: Accepted) -> str:
+        manager = self.manager
+        npc = accepted.resolved["npc"]
+        attacker = manager.player
+        weapon = self._equipped_weapon(attacker) or UNARMED_WEAPON
+        base_damage = weapon.damage
+
+        # Two events for one hit: one for the attacker's "dealt" reactions
+        # (e.g. Gun Slinger's +20% with ranged weapons), one for the
+        # defender's "taken" reactions (e.g. Small Frame's +10% damage
+        # taken). Both contribute to a single combined multiplier so the hit
+        # is only ever subtracted once.
+        dealt_event = WeaponDealDamageEvent(
+            source=attacker, weapon=weapon, damage=base_damage, target=npc
+        )
+        taken_event = WeaponTakeDamageEvent(
+            source=attacker, weapon=weapon, damage=base_damage, target=npc
+        )
+        dealt_modifiers = manager._broadcast_event(dealt_event)
+        taken_modifiers = manager._broadcast_event(taken_event)
+
+        multiplier = 1.0
+        for modifier in (*dealt_modifiers, *taken_modifiers):
+            if isinstance(modifier, DamageMultiplicativeModifier):
+                multiplier *= modifier.multiplier
+
+        jitter = 1.0 + self._rng.uniform(-DAMAGE_JITTER, DAMAGE_JITTER)
+        final_damage = max(1, int(base_damage * multiplier * jitter))
+
+        before = npc.hit_points
+        npc.hit_points -= final_damage
+        dealt = before - npc.hit_points
+
+        self._apply_relationship_modifiers(dealt_modifiers)
+        self._apply_relationship_modifiers(taken_modifiers)
+
+        if npc.hit_points <= 0:
+            fact = (
+                f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, "
+                f"{npc.name} is down."
+            )
+            quest_note = self._advance_quests(f"defeat:{npc.npc_id}")
+            return f"{fact} {quest_note}".rstrip() if quest_note else fact
+        return (
+            f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, "
+            f"{npc.name} now at {npc.hit_points}/{npc.max_hit_points} HP."
+        )
+
+    def _advance_quests(self, objective_key: str) -> str:
+        """Mark `objective_key` complete on every active quest that has it.
+
+        The only way a quest advances -- there is no LLM verb for it. Called
+        wherever the Simulation Core resolves an action that could complete
+        one (currently: discovering a flag, defeating an NPC)."""
+        from modules.quest import QuestStatus
+
+        notes: list[str] = []
+        for quest in self.manager.quests.values():
+            if quest.status != QuestStatus.ACTIVE:
+                continue
+            if objective_key not in quest.objectives:
+                continue
+            if objective_key in quest.completed_objectives:
+                continue
+            quest.completed_objectives.append(objective_key)
+            notes.append(f"Quest '{quest.quest_id}' objective complete: {objective_key}.")
+            if quest.is_complete():
+                quest.status = QuestStatus.COMPLETED
+                notes.append(f"Quest '{quest.quest_id}' completed!")
+        return " ".join(notes)
+
+    @staticmethod
+    def _equipped_weapon(player) -> MeleeWeaponItem | RangedWeaponItem | None:
+        for entity in player.equipment.values():
+            if entity is not None and isinstance(entity.item, (MeleeWeaponItem, RangedWeaponItem)):
+                return entity.item
+        return None
+
+    def _apply_relationship_modifiers(self, modifiers) -> None:
+        for modifier in modifiers:
+            if isinstance(modifier, AffinityModifier):
+                self.manager.relationship_manager.apply_affinity_modifier(modifier)
+            elif isinstance(modifier, ReputationModifier):
+                self.manager.relationship_manager.apply_reputation_modifier(modifier)
+
+    def _apply_modifier(self, entity, modifier) -> None:
+        """Apply one modifier directly to an entity (item effects, item-use
+        trait reactions). Attribute/XP modifiers have no current producer on
+        this path and are intentionally left unhandled rather than guessed
+        at; see docs/00-status.md for the note."""
+        if isinstance(modifier, HPModifier):
+            entity.hit_points += modifier.amount
+        elif isinstance(modifier, ConditionsModifier):
+            for condition, active in modifier.conditions.items():
+                if active and condition not in entity.conditions:
+                    entity.conditions.append(condition)
+                elif not active and condition in entity.conditions:
+                    entity.conditions.remove(condition)
+        elif isinstance(modifier, AffinityModifier):
+            self.manager.relationship_manager.apply_affinity_modifier(modifier)
+        elif isinstance(modifier, ReputationModifier):
+            self.manager.relationship_manager.apply_reputation_modifier(modifier)
+
+    # === World state (goals / flags / relationships / NPCs / status / time) ===
+
+    def _resolve_add_goal(self, accepted: Accepted) -> str:
+        action: AddGoalAction = accepted.action
+        goals = self.manager.narrative.goals[action.horizon]
+        if action.goal_text not in goals:
+            goals.append(action.goal_text)
+        return f"Added {action.horizon} goal: {action.goal_text}."
+
+    def _resolve_remove_goal(self, accepted: Accepted) -> str:
+        action: RemoveGoalAction = accepted.action
+        self.manager.narrative.goals[action.horizon].remove(action.goal_text)
+        return f"Removed {action.horizon} goal: {action.goal_text}."
+
+    def _resolve_set_flag(self, accepted: Accepted) -> str:
+        action: SetFlagAction = accepted.action
+        self.manager.narrative.flags[action.flag_name] = action.value
+        return f"Flag '{action.flag_name}' is now {action.value}."
+
+    def _resolve_discover_flag(self, accepted: Accepted) -> str:
+        action: DiscoverFlagAction = accepted.action
+        self.manager.narrative.discovered_flags.add(action.flag_name)
+        value = self.manager.narrative.flags.get(action.flag_name)
+        fact = f"Discovered flag '{action.flag_name}' (currently {value})."
+        quest_note = self._advance_quests(f"discover:{action.flag_name}")
+        return f"{fact} {quest_note}".rstrip() if quest_note else fact
+
+    def _resolve_update_relationship(self, accepted: Accepted) -> str:
+        action: UpdateRelationshipAction = accepted.action
+        npc = accepted.resolved["npc"]
+        manager = self.manager
+        if action.axis == "affection":
+            manager.relationship_manager.apply_affinity_modifier(
+                AffinityModifier(
+                    source_id=npc.npc_id,
+                    target_id=manager.player.entity_id,
+                    amount=action.amount,
+                )
+            )
+            score = manager.relationship_manager.get_affinity(
+                npc.npc_id, manager.player.entity_id
+            )
+        else:
+            score = manager.relationship_manager.adjust_trust(
+                npc.npc_id, manager.player.entity_id, action.amount
+            )
+        return f"{npc.name} {action.axis} is now {score}."
+
+    def _resolve_add_relationship_note(self, accepted: Accepted) -> str:
+        action: AddRelationshipNoteAction = accepted.action
+        npc = accepted.resolved["npc"]
+        npc.notes = f"{npc.notes}; {action.note}" if npc.notes else action.note
+        return f"Noted about {npc.name}: {action.note}"
+
+    def _resolve_npc_move(self, accepted: Accepted) -> str:
+        npc = accepted.resolved["npc"]
+        location = accepted.resolved["location"]
+        npc.current_location_id = location.id
+        return f"{npc.name} moved to {location.name}."
+
+    def _resolve_npc_status(self, accepted: Accepted) -> str:
+        action: NpcStatusAction = accepted.action
+        npc = accepted.resolved["npc"]
+        if action.operation == "ADD":
+            if action.status not in npc.status:
+                npc.status.append(action.status)
+            return f"{npc.name} is now '{action.status}'."
+        npc.status.remove(action.status)
+        return f"{npc.name} is no longer '{action.status}'."
+
+    def _resolve_status_add(self, accepted: Accepted) -> str:
+        action: StatusAddAction = accepted.action
+        manager = self.manager
+        condition = manager._as_condition(action.status)
+        if condition is not None and condition not in manager.player.conditions:
+            manager.player.conditions.append(condition)
+        if action.status not in manager.narrative.player_status:
+            manager.narrative.player_status.append(action.status)
+        return f"Added status '{action.status}'."
+
+    def _resolve_status_remove(self, accepted: Accepted) -> str:
+        action: StatusRemoveAction = accepted.action
+        manager = self.manager
+        condition = manager._as_condition(action.status)
+        if condition is not None and condition in manager.player.conditions:
+            manager.player.conditions.remove(condition)
+        manager.narrative.player_status.remove(action.status)
+        return f"Removed status '{action.status}'."
+
+    def _resolve_update_condition(self, accepted: Accepted) -> str:
+        action: UpdateConditionAction = accepted.action
+        manager = self.manager
+        if action.field_name in NARRATIVE_CONDITION_FIELDS:
+            manager.narrative.conditions[action.field_name] = action.raw_value
+            return f"{action.field_name} is now {action.raw_value}."
+
+        attribute = action.field_name  # hunger / thirst / morale
+        if action.raw_value[0] in "+-":
+            new_value = getattr(manager.player, attribute) + int(action.raw_value)
+        else:
+            new_value = int(action.raw_value)
+        setattr(manager.player, attribute, max(0, min(new_value, 100)))
+        return f"{action.field_name} is now {getattr(manager.player, attribute)}."
+
+    def _resolve_time_advance(self, accepted: Accepted) -> str:
+        action: TimeAdvanceAction = accepted.action
+        manager = self.manager
+        manager._action_time_advance(action.time_of_day)
+        return f"Time is now {action.time_of_day} (day {manager.narrative.day})."
+
+    _RESOLVERS = {
+        MoveAction: _resolve_move,
+        TakeAction: _resolve_take,
+        DropAction: _resolve_drop,
+        AttackAction: _resolve_attack,
+        UseItemAction: _resolve_use_item,
+        TimeAdvanceAction: _resolve_time_advance,
+        StatusAddAction: _resolve_status_add,
+        StatusRemoveAction: _resolve_status_remove,
+        UpdateConditionAction: _resolve_update_condition,
+        AddGoalAction: _resolve_add_goal,
+        RemoveGoalAction: _resolve_remove_goal,
+        UpdateRelationshipAction: _resolve_update_relationship,
+        AddRelationshipNoteAction: _resolve_add_relationship_note,
+        SetFlagAction: _resolve_set_flag,
+        DiscoverFlagAction: _resolve_discover_flag,
+        UpdateInventoryAction: _resolve_update_inventory,
+        NpcMoveAction: _resolve_npc_move,
+        NpcStatusAction: _resolve_npc_status,
+    }

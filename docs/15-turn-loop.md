@@ -1,6 +1,6 @@
 # Full Turn Loop and Failure Handling
 
-> **Status: Partial.** In `GameEngine.play`, steps 2-6 collapse into a single LLM call and steps 4, 5, 8, 9 and 12 do not occur. The failure taxonomy is partly real: a failed action is logged, skipped, and carried into the next prompt as a `[CONTINUITY]` note, and the turn stands. See [Implementation Status](00-status.md).
+> **Status: Partial.** `GameEngine.play` now makes two LLM calls, not one — steps 2-3 are a real parser call and typed action plan (`modules/action.py`), steps 5-7 are `ActionValidator`/`SimulationCore`, and narration happens after, not before, with a refusal surfaced the *same* turn via `[OUTCOMES]` rather than next turn's `[CONTINUITY]`. Step 4 (entity resolution) is folded into the validator rather than a separate stage; there is still no distinct world/story/NPC/faction rules layer beyond quest advancement. See [Implementation Status](00-status.md).
 
 ## Full Turn Loop
 

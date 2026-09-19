@@ -1,6 +1,6 @@
 # Context Construction and Memory Layers
 
-> **Status: Partial.** The context builder exists but is not selective. See the *As Implemented* section at the end for the memory model that was actually built. See [Implementation Status](00-status.md).
+> **Status: Partial.** The context builder is now its own module (`managers/context.py`'s `ContextBuilder`), and the parser and narrator get two genuinely different, purpose-built prompts rather than variations on one. It is still not selective within the narrator's prompt — the whole local world goes out every turn, filtered only for relationship scores and discovered world flags, not the spatial memory layers below. See the *As Implemented* section at the end for the memory model that was actually built, and [Implementation Status](00-status.md).
 
 ## Context Construction
 
@@ -141,11 +141,16 @@ SUMMARIES         every 10 events, folded by the LLM into one narrative
 truncated — it is the corpus the vector index is built from, not prompt
 material. Only the three tiers above reach the model.
 
-A fourth section, `[CONTINUITY]`, is not memory of the story but memory of the
-*engine*: the state deltas the game master declared last turn that
-`apply_action` refused (`NarrativeState.pending_corrections`). It exists because
-prose is written before deltas are applied, so a refusal leaves the narration
-describing something that never happened. See
+A fourth and fifth section round out the narrator prompt, both assembled by
+`managers/context.py`'s `ContextBuilder`: `[OUTCOMES]`, what the Action
+Validator and Simulation Core already decided *this* turn (movement, combat,
+item use, refusals) — the normal path now, described in
+[document 01](01-engine-authority.md) — and `[CONTINUITY]`
+(`NarrativeState.pending_corrections`), which used to carry a refusal into
+the *next* turn's prompt because prose was written before deltas were
+applied. That is no longer the normal case: outcomes are decided before
+narration, so `[CONTINUITY]` is now a defensive fallback for the rare case
+Simulation Core itself throws, not the primary correction mechanism. See
 [document 15](15-turn-loop.md).
 
 Together they bound prompt growth against an unbounded game: recent events are

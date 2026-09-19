@@ -18,74 +18,81 @@ never part of the original design set.
 | **Planned** | Design intent. No code. Preserved deliberately as a target. |
 | **Superseded** | The document was overtaken by a different decision. |
 
-## The central divergence
+## The central divergence (resolved for engine authority; still open for scale)
 
-The design target inverts the real control flow.
+The design target inverts the real control flow. That inversion is now real
+for the axis document 01 cares about — outcomes are decided before they are
+narrated — at the scale the game actually runs at (four rooms, three NPCs).
 
 ```text
 DESIGNED (docs 01, 15, 21)            BUILT (adapters/engine.py)
 
 player input                           player input
     ↓                                      ↓
-LLM parser → action plan               semantic recall (FAISS)
+LLM parser → action plan               semantic recall (FAISS, for the narrator)
     ↓                                      ↓
-entity resolution                      build_prompt()  -- full world context
+entity resolution                      LLM call #1: parser → ACTIONS block
     ↓                                      ↓
-validation (preconditions)             one LLM call: game master
+validation (preconditions)             modules/action.parse_action_plan
     ↓                                      ↓
-SIMULATION decides outcome             parse STORY / EVENT / ACTIONS
+SIMULATION decides outcome             managers/validator.ActionValidator
     ↓                                      ↓
-events → bus → subsystems              apply_action() × N  -- reject the impossible
+events → bus → subsystems              managers/simulation.SimulationCore
     ↓                                      ↓
-knowledge firewall                     record event, reindex, summarize, save
+knowledge firewall                     managers/context.ContextBuilder
     ↓                                      ↓
-context builder                        return payload
-    ↓
-LLM narrator → prose
+context builder                        LLM call #2: narrator → STORY / EVENT
+    ↓                                      ↓
+LLM narrator → prose                   record event, reindex, summarize, save
 ```
 
-In the design, the engine decides what happens and the LLM describes it. In the
-build, the LLM decides what happens and the engine vetoes deltas it can prove
-impossible. Everything downstream follows from that inversion: there is no
-parser stage, no action plan, no precondition validation and no event bus,
-because the LLM is the simulation.
+Validation and simulation happen between the two LLM calls, not after the
+second one — the narrator is handed an `[OUTCOMES]` block of already-decided
+facts (movement, combat, item use, quest progress) and writes prose around
+it. It cannot invent a different HP total, a different combat result, or an
+NPC's location, because those were never its decision to begin with.
+`[CONTINUITY]`/`NarrativeState.pending_corrections` still exist but are no
+longer the normal path: `GameEngine.play` never writes to them. They are a
+defensive fallback for the one case pre-narration validation can't catch —
+an exception inside the Simulation Core itself.
 
-The one back-edge is a report, not a check: deltas the engine refuses are carried
-into the next prompt as `[CONTINUITY]`, so the story can admit one turn late that
-they never happened. It cannot stop the prose that already implied they did.
-
-This is a coherent design for the game as it currently is — three rooms, three
-NPCs, a slow-burn social story. It does not scale to what documents 05, 06 and
-07 describe. Closing that gap is a rewrite of the turn loop, not an increment.
+What did **not** change: there is still no procedural world generation, no
+simulation level-of-detail for distant NPCs, and no Story Director reacting
+to arbitrary world state (documents 05, 06, 07 — see below). The event/effect/
+modifier pipeline (document 23) is real now for combat and item use, but only
+for the two event families that exist; it is not a general-purpose bus other
+subsystems publish to. Closing *that* gap — scaling past a handful of rooms —
+is still the rewrite documents 05/06/07 describe, not an increment on top of
+this one.
 
 ## Document map
 
 | Doc | Status | Implemented by | Gap |
 | --- | --- | --- | --- |
-| [01 Engine Authority](01-engine-authority.md) | Partial | `managers/game.py` `apply_action` | Authority is exercised *after* narration, not before. The engine can reject a state delta but never determines an outcome. Prose is unchecked; a rejection is reported to the narrator on the next turn, not this one. |
-| [02 System Boundaries](02-system-boundaries.md) | Planned | — | No event bus. `GameManager.event_queue` exists and is drained, but nothing enqueues. No simulation core. |
-| [03 Intent Parsing](03-intent-parsing.md) | Planned | — | No parser model, no action plan. The 15 verbs in `_ACTION_HANDLERS` are *state deltas* the game master declares, not player intents it proposes — a different layer than the `LOOK/MOVE/ATTACK` vocabulary here. No grammar-constrained decoding. |
+| [01 Engine Authority](01-engine-authority.md) | Implemented (at current scale) | `managers/validator.py`, `managers/simulation.py`, `adapters/engine.py` `play()` | Player HP, inventory, movement, combat, time and quest completion are engine-decided before the narrator is called. Not implemented: hidden-info/faction-state depth beyond discovered flags, and everything documents 05–09 would add if the world grew past a handful of rooms. |
+| [02 System Boundaries](02-system-boundaries.md) | Partial | `managers/game.py` `_broadcast_event`, `EVENT_TO_EFFECT_TYPES` | Combat and item-use events are constructed and dispatched, role-aware (a "damage taken" handler only fires for the actual target). This is direct dispatch to a fixed pair of event families, not a general publish/subscribe bus other subsystems can register against — the typed event taxonomy in this document is still aspirational. |
+| [03 Intent Parsing](03-intent-parsing.md) | Partial | `modules/action.py`, `adapters/llm.py` `query_parser` | A separate parser call proposes a typed `AnyAction` plan (`modules/action.py`) before anything is decided, matching this document's intent. Still missing: grammar-constrained decoding (the model can still emit unparseable text, caught as a `ParseFailure`) and true entity-resolution ambiguity handling (04 is unchanged). |
 | [04 Entity Resolution](04-entity-resolution.md) | Partial | `resolve_npc`, `resolve_location`, `_find_item_entity` | Exact casefold matching on name or id only. No description-based resolution, no ambiguity state, no clarification round trip. |
-| [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Three hand-written rooms. No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. |
-| [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are nine of them. |
-| [07 Story Architecture](07-story-architecture.md) | Planned | `NarrativeState.goals`, `.flags` | Story state is two string lists and a `dict[str, bool]`. No arcs, objectives, conditions or director. `modules/quest.py` is a single enum. |
-| [08 Time and Scheduling](08-time-and-scheduling.md) | Planned | `_action_time_advance`, `_sync_world_clock` | Time advances only when the game master emits `TIME_ADVANCE`. No clock, no tick frequencies, nothing time-driven. There is at least only one clock now: `World.time`/`.date` are rendered from `NarrativeState.day`/`.time_of_day`. |
-| [09 Zombie Survival](09-zombie-survival.md) | Planned | — | No noise, no light, no visibility, no scavenging model. |
-| [10 Combat and Stealth](10-combat-and-stealth.md) | Planned | `modules/event.py`, `modules/modifier.py` | The damage event and modifier types exist and `_apply_modifiers` handles them. Nothing constructs them, so combat is defined and unreachable. |
-| [11 Knowledge Firewall](11-knowledge-firewall.md) | Partial | `_get_npcs_present_section`, `RelationshipManager` bands | Affinity and trust reach the prompt as labels, never as integers. Nothing else is filtered: every world flag, every NPC status and every note still goes out whole, because there is no per-actor knowledge model to filter against. The document now carries an *As Implemented* section. |
-| [12 Data Model and Persistence](12-data-model.md) | Partial | `modules/`, `adapters/persistence.py` | Real schemas are richer than the ones here in some places (equipment, attributes, durability) and absent in others (no exit requirements, no NPC goals or knowledge). Persistence is a full snapshot, not base + mutations. The document now carries an *As Implemented* section. |
-| [13 Context and Memory](13-context-and-memory.md) | Partial | `build_prompt`, `adapters/memory.py` | The context builder exists but is not selective — it sends the whole local world every turn, filtered only for relationship scores. Memory layers are compressive (recent / vector-recalled / summarized), not spatial (global / zone / location / scene). The document now carries an *As Implemented* section. |
-| [14 LLM Roles](14-llm-roles.md) | Partial | `adapters/llm.py` | One model does both jobs in one call. The narrator constraints listed here are stated in the system prompt and enforced nowhere. |
-| [15 Turn Loop](15-turn-loop.md) | Partial | `adapters/engine.py` `play()` | Steps 2–6 collapse into a single LLM call; steps 4, 5, 8, 9 and 12 do not occur. The failure taxonomy is partly real: `apply_action` returns `(bool, message)`, and a failed action is logged, skipped, and handed to the next prompt as a `[CONTINUITY]` note. |
-| [16 Determinism and Versioning](16-determinism-and-versioning.md) | Partial | `adapters/persistence.py` `SCHEMA_VERSION` | No seeded randomness anywhere — the only nondeterminism is the LLM itself, which is not seeded. `SCHEMA_VERSION` is the sole version; there is no generator, rules, combat or loot version. |
-| [17 Observability and Security](17-observability-and-security.md) | Partial | `print()` calls in `engine.py`, `game.py` | Turn logging is unstructured stdout. No state diff, no context snapshot, no replayable trace. LLM output *is* validated before it mutates state, which is the security half of this document. |
-| [18 Module Layout](18-module-layout.md) | Superseded | `modules/`, `data/`, `managers/`, `adapters/` | The real layout splits by *purity* (pure model → static data → logic → I/O), not by subsystem. See the layering table in the root `README.md`. |
+| [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Four hand-written rooms (one behind a locked door). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
+| [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are nine of them. Out of scope for the engine-authority work. |
+| [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. |
+| [08 Time and Scheduling](08-time-and-scheduling.md) | Partial | `SimulationCore._advance_one_tick`, `_action_time_advance`, `_sync_world_clock` | Ordinary actions (move, attack) now advance the clock themselves — the engine owns time progression instead of depending on the LLM to remember `TIME_ADVANCE`. Still one coarse clock (four parts of a day), no sub-tick frequencies, no hunger/stamina/weather driven by it. Deeper scheduling is out of scope. |
+| [09 Zombie Survival](09-zombie-survival.md) | Planned | — | No noise, no light, no visibility, no scavenging model. Out of scope for the engine-authority work. |
+| [10 Combat and Stealth](10-combat-and-stealth.md) | Partial | `managers/simulation.py` `_resolve_attack`, `modules/event.py`, `modules/modifier.py` | `ATTACK` is a real action: it resolves through the event/modifier pipeline, applies equipped-weapon damage with jitter, and both "dealt" and "taken" trait/perk reactions actually fire (Small Frame, Gun Slinger). No stealth, no ranged distance/line-of-sight, no armor mitigation yet — this is base damage resolution, not the full document. |
+| [11 Knowledge Firewall](11-knowledge-firewall.md) | Partial | `managers/context.py`, `NarrativeState.discovered_flags`, `NpcEntity.knowledge`/`.goals` | Affinity/trust are still banded, and world flags are now filtered too: a flag only reaches the narrator prompt once a `DISCOVER_FLAG` action has marked it discovered, separately from the engine setting its value. `NpcEntity.knowledge` exists but is deliberately never rendered (no dialogue system consumes it yet); NPC `status` and `notes` still go out unfiltered. The document's *As Implemented* section should be read alongside this. |
+| [12 Data Model and Persistence](12-data-model.md) | Partial | `modules/`, `adapters/persistence.py`, `modules/quest.py` | Exit requirements now exist (`DoorEntity` wired into `data/locations.py`, checked by `ActionValidator`), and NPCs carry `goals`/`knowledge` fields. Persistence is still a full snapshot, not base + mutations, and quest state (see doc 07) is a flat checklist, not the model this document describes. |
+| [13 Context and Memory](13-context-and-memory.md) | Partial | `managers/context.py` `ContextBuilder`, `adapters/memory.py` | The context builder is now its own module (`managers/context.py`), independently testable, and the parser gets a *separate, minimal* context from the narrator's full one — a step toward selectivity. It still sends the whole local world to the narrator every turn, and memory layers remain compressive (recent / vector-recalled / summarized), not spatial (global / zone / location / scene). |
+| [14 LLM Roles](14-llm-roles.md) | Partial | `adapters/llm.py` `query_parser`/`query_narrator` | Two calls, two roles, two system prompts — parser proposes actions only, narrator only narrates and no longer has an `ACTIONS:` section to fill at all. The narrator's *constraints* (don't invent HP/inventory/combat results) are stated in its system prompt and structurally reinforced (it has nothing to declare state through), but still not mechanically enforced against a malicious or careless model. |
+| [15 Turn Loop](15-turn-loop.md) | Partial | `adapters/engine.py` `play()` | Real steps now: parser call → `parse_action_plan` → `ActionValidator` → `SimulationCore` → narrator call → record/reindex/summarize/save. Missing relative to the 15-step design: no separate entity-resolution stage (folded into the validator), no world/story/NPC/faction *rules* layer beyond quest advancement, no structured failure taxonomy beyond `Rejected`/`ParseFailure`. |
+| [16 Determinism and Versioning](16-determinism-and-versioning.md) | Partial | `adapters/persistence.py` `SCHEMA_VERSION` | No seeded randomness anywhere — combat damage jitter (`managers/simulation.py`) and the LLM itself are both unseeded. `SCHEMA_VERSION` (now 2) is the sole version; there is no generator, rules, combat or loot version. Explicitly out of scope for the engine-authority work. |
+| [17 Observability and Security](17-observability-and-security.md) | Partial | `print()` calls in `engine.py`, `game.py`, `simulation.py` | Turn logging is unstructured stdout. No state diff, no context snapshot, no replayable trace. LLM output *is* validated and simulated before it mutates state, which is the security half of this document, and now happens before narration too. Structured tracing is out of scope for the engine-authority work. |
+| [18 Module Layout](18-module-layout.md) | Superseded | `modules/`, `data/`, `managers/`, `adapters/` | The real layout splits by *purity* (pure model → static data → logic → I/O), not by subsystem. `managers/validator.py`, `managers/simulation.py` and `managers/context.py` extend that split; see the layering table in the root `README.md`. |
 | [19 End-to-End Example](19-end-to-end-example.md) | Planned | — | Traces a turn through stages that do not exist. |
-| [20 Principles](20-principles.md) | Partial | — | Principles 1, 2, 7 and 10 are honoured in spirit. 3, 4, 5, 6, 8 and 9 are not implemented at all. |
+| [20 Principles](20-principles.md) | Partial | — | Principles 1, 2, 7 and 10 are honoured in spirit, and 3 ("events connect systems") and 6 ("knowledge is scoped") are now partly true for combat/item-use and world flags respectively. 4, 5, 8 and 9 remain unimplemented. |
 | [21 Final Architecture](21-final-architecture.md) | Planned | — | The summary diagram of the design target. |
 | [22 Relationships](22-relationships.md) | Implemented | `managers/relationship.py` | — |
-| [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `_broadcast_event` | Pipeline works; no event source feeds it. |
-| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | — |
+| [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
+| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | Schema bumped to v2 for `NpcEntity.goals`/`.knowledge`, `discovered_flags`, and quest state; the existing "mismatched version → discard, start fresh" policy handled it with no migration code. |
 
 ## Known issues
 
@@ -121,31 +128,54 @@ narrates to it. `NpcEntity.notes` stay in the prompt but are now labelled
 `Orton's impressions:`, which is what `ADD_RELATIONSHIP_NOTE` actually writes —
 the old `Notes:` label was what made them look like NPC-private data.
 
+### Fixed (engine authority)
+
+**Narration and state no longer disagree in the normal case.** The turn loop
+now makes two LLM calls: a parser proposes actions before any prose exists,
+`ActionValidator`/`SimulationCore` decide what actually happens, and only then
+is the narrator called — with an `[OUTCOMES]` block telling it exactly what
+was decided, including any refusals. `[CONTINUITY]`/`pending_corrections`
+still exist but `GameEngine.play` never writes to them anymore; they are a
+defensive fallback for an exception inside the Simulation Core itself, not
+the normal error path. Document 14's narrator constraints are now
+structurally reinforced (the narrator has no `ACTIONS:` section to declare
+state through at all) though still not mechanically enforced against a
+malicious or careless model.
+
+**Combat is no longer dead code.** `SimulationCore._resolve_attack` builds a
+`WeaponDealDamageEvent`/`WeaponTakeDamageEvent` pair for every `ATTACK`
+action, and the event-to-handler matcher (`EVENT_TO_EFFECT_TYPES` in
+`managers/game.py`) replaces the string-prefix comparison that used to make
+`_event_matches_effect_handler` return `False` unconditionally — every trait
+and perk effect in `data/traits.py`/`data/perks.py` fires now, and only for
+the correct side of the hit (a "damage taken" effect no longer fires for the
+attacker just because they're also part of the event).
+
+**The prompt leaks less.** World flags are now filtered the same way
+relationship scores are: a flag only reaches the narrator once a
+`DISCOVER_FLAG` action has marked it discovered, separate from the engine
+setting its value. `NpcEntity.knowledge`/`.goals` exist as real fields.
+
 ### Open
 
-**Narration and state can still disagree.** Because prose is written before the
-deltas are applied, a rejected action leaves the player reading something that
-did not happen. Rejections are now fed back: `GameEngine.play` collects them into
-`NarrativeState.pending_corrections` and the next prompt carries them as
-`[CONTINUITY]`, so the story is told the medkit never went into the bag and can
-write around it. That is damage control, not authority — the contradictory
-sentence has already been shown to the player, and a narrator that ignores the
-section is unaccountable. Closing it properly means deciding outcomes before
-narrating them, which is the inversion at the top of this document. Document
-14's narrator constraints remain unenforceable under it.
+**The prompt still leaks some things.** NPC `status` and `notes` still go out
+whole every turn — only relationship scores and world flags are filtered.
+`NpcEntity.knowledge` exists but nothing consumes it yet (no dialogue system
+to gate against it), so it's a real field with no read-side firewall
+depending on it. See document 11's *As Implemented* section.
 
-**The prompt still leaks, less.** The scores are filtered; nothing else is.
-Every world flag, every NPC `status` and every note goes out whole every turn,
-because there is nothing to filter against — no NPC `knowledge` field, no player
-knowledge set, no context builder that chooses. See document 11's *As
-Implemented* section for what the real firewall needs.
+**Quest state is a checklist, not a director.** `QuestState`/`GameManager.quests`
+let the engine track and complete objectives without any LLM verb able to
+force completion, but there is no arc/objective/condition graph and nothing
+reacts to world state on its own — a quest advances only when
+`SimulationCore` notices a specific action matched a specific objective
+string. A real Story Director (document 07) is out of scope here.
 
-**Combat is dead code.** Unchanged, and not a documentation discrepancy: the
-damage events, modifiers and the `_apply_modifiers` pipeline all exist and are
-honestly described in documents 10 and 23 and in the root `README.md` under
-*Known gaps*. What is missing is a producer — no action verb constructs a
-`WeaponDealDamageEvent`, so nothing enqueues. Giving it one means deciding how
-combat resolves, which is a feature (document 10), not a fix.
+**Scale is still unaddressed.** Everything above holds at the game's current
+size — four rooms, three NPCs. Documents 05 (world generation), 06
+(simulation LOD) and 09 (zombie survival systems) describe what growing past
+that would need, and none of it exists. That remains a separate, larger
+rewrite, not an increment on the engine-authority work.
 
 ---
 

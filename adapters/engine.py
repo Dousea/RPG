@@ -1,4 +1,10 @@
-"""Orchestrates one game turn: recall -> prompt -> LLM -> apply -> persist."""
+"""Orchestrates one game turn: recall -> parse -> validate -> simulate -> narrate -> persist.
+
+Two LLM calls, not one: the parser proposes actions from player input before
+anything is decided, the engine validates and simulates them, and only then
+does the narrator describe what already happened. See
+docs/01-engine-authority.md.
+"""
 
 import threading
 from typing import Any
@@ -6,6 +12,8 @@ from typing import Any
 from adapters import llm, persistence
 from adapters.memory import SemanticMemory
 from managers.game import GameManager
+from managers.simulation import SimulationCore
+from modules.action import parse_action_plan
 
 
 class GameEngine:
@@ -29,7 +37,7 @@ class GameEngine:
         with self._lock:
             manager = self.manager
 
-            # 1. Recall semantically relevant past events.
+            # 1. Recall semantically relevant past events (for the narrator).
             indices = self.memory.search(player_input)
             deep_memories = [
                 manager.memory.full_event_log[i]
@@ -38,37 +46,52 @@ class GameEngine:
             ]
             print(f"[Engine] Recalled {len(deep_memories)} deep memories.")
 
-            # 2. Ask the game master what happens.
-            prompt = manager.build_prompt(player_input, deep_memories)
+            # 2. Ask the parser what Orton is trying to do. No prose exists yet.
+            parser_prompt = manager.build_parser_prompt(player_input)
             try:
-                raw_response = llm.query_game_master(prompt)
+                raw_actions = llm.query_parser(parser_prompt)
             except llm.LLMError as exc:
-                # The turn did not happen: no event recorded, nothing saved.
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
-            parsed = llm.parse_response(raw_response)
+            action_lines = llm.parse_action_response(raw_actions)
+            actions, parse_failures = parse_action_plan(action_lines)
+
+            # 3. Validate and simulate, one action at a time in order. This is
+            # where the engine decides what happens -- before the narrator
+            # writes a single word about it.
+            outcome_facts = SimulationCore(manager).resolve(actions)
+            for failure in parse_failures:
+                print(f"[Engine] Unparseable action '{failure.raw}': {failure.reason}")
+                outcome_facts.append(f"Refused: '{failure.raw}' -- {failure.reason}")
+
+            # 4. Ask the narrator to describe what already happened.
+            narrator_prompt = manager.build_narrator_prompt(
+                player_input, outcome_facts, deep_memories
+            )
+            try:
+                raw_response = llm.query_narrator(narrator_prompt)
+            except llm.LLMError as exc:
+                # Unlike a parser failure, real state changes may already
+                # exist here -- the engine decided them before asking for
+                # prose, and a rendering failure must not discard engine
+                # truth. Record the outcome facts as this turn's event
+                # verbatim and persist, so state and disk agree even though
+                # nothing was narrated.
+                fallback_event = "; ".join(outcome_facts) if outcome_facts else "Nothing happened."
+                manager.record_event(fallback_event)
+                self.memory.rebuild(manager.memory.full_event_log)
+                persistence.save(manager)
+                return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
+
+            parsed = llm.parse_narrator_response(raw_response)
             story_text = str(parsed["story"])
             event_text = str(parsed["event"])
-            actions: list[str] = list(parsed["actions"])  # type: ignore[arg-type]
 
-            # 3. Apply the state changes it asked for.
-            corrections: list[str] = []
-            for action in actions:
-                succeeded, message = manager.apply_action(action)
-                print(f"[Engine] {'OK  ' if succeeded else 'FAIL'} {action} -- {message}")
-                if not succeeded:
-                    corrections.append(f"{action} -- {message}")
-            # The prompt this turn already carried last turn's refusals, so they
-            # are spent; replace them with whatever was refused just now. The
-            # narration is already written and cannot be taken back -- the next
-            # turn is the earliest the story can admit the delta never landed.
-            manager.narrative.pending_corrections = corrections
-
-            # 4. Record the event in both memory tiers and reindex.
+            # 5. Record the event in both memory tiers and reindex.
             manager.record_event(event_text)
             self.memory.rebuild(manager.memory.full_event_log)
 
-            # 5. Summarize if enough history has built up.
+            # 6. Summarize if enough history has built up.
             self._run_summarization()
 
             persistence.save(manager)
