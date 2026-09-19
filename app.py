@@ -7,6 +7,7 @@ index and persistence. Game rules live in `managers/` and `modules/`.
 
 from flask import Flask, jsonify, render_template, request
 
+import config
 from adapters.engine import GameEngine
 
 app = Flask(__name__)
@@ -60,5 +61,5 @@ if __name__ == "__main__":
     # Build the engine up front so a slow save load or model warm-up happens
     # before the first request rather than during it.
     get_engine()
-    print("Server ready at http://localhost:5000")
-    app.run(debug=True, port=5000)
+    print(f"Server ready at http://{config.server.host}:{config.server.port}")
+    app.run(debug=config.server.debug, host=config.server.host, port=config.server.port)

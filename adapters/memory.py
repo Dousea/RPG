@@ -9,11 +9,13 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-EMBEDDING_DIMENSION = 384
+import config
+
+EMBEDDING_MODEL_NAME = config.memory.embedding_model_name
+EMBEDDING_DIMENSION = config.memory.embedding_dimension
 
 # Number of past events recalled per turn.
-DEFAULT_RECALL = 2
+DEFAULT_RECALL = config.memory.default_recall
 
 
 class SemanticMemory:

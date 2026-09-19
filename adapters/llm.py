@@ -7,10 +7,12 @@ and the action verbs match GameManager's handlers one for one.
 
 import requests
 
-LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions"
+import config
+
+LM_STUDIO_URL = config.llm.base_url
 
 # LM Studio serves whatever model is loaded; this value is ignored.
-MODEL_NAME = "local-model"
+MODEL_NAME = config.llm.model_name
 
 GAME_MASTER_SYSTEM_PROMPT = (
     "You are the game master for a serious, grounded, text-based zombie apocalypse RPG. "
@@ -90,7 +92,7 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
             LM_STUDIO_URL,
             headers={"Content-Type": "application/json"},
             json=payload,
-            timeout=300,
+            timeout=config.llm.request_timeout,
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
@@ -104,7 +106,9 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
 
 def query_game_master(prompt_text: str) -> str:
     """Run one game-master turn. Raises LLMError on failure."""
-    raw = _chat(GAME_MASTER_SYSTEM_PROMPT, prompt_text, temperature=0.7)
+    raw = _chat(
+        GAME_MASTER_SYSTEM_PROMPT, prompt_text, temperature=config.llm.game_master_temperature
+    )
     print("--- LLM Raw Response ---")
     print(raw)
     print("------------------------")
@@ -114,7 +118,9 @@ def query_game_master(prompt_text: str) -> str:
 def query_summary(text_to_summarize: str) -> str:
     """Condense events into a narrative paragraph. Raises LLMError on failure."""
     return _chat(
-        SUMMARIZER_SYSTEM_PROMPT, text_to_summarize, temperature=0.5
+        SUMMARIZER_SYSTEM_PROMPT,
+        text_to_summarize,
+        temperature=config.llm.summarizer_temperature,
     ).strip()
 
 

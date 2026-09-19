@@ -1,0 +1,82 @@
+"""Loads config.yml once and exposes it as a nested, attribute-accessible object.
+
+Every value has a hardcoded fallback here, so a missing file or a missing key
+degrades to the old built-in defaults rather than crashing.
+"""
+
+import os
+from typing import Any
+
+import yaml
+
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yml")
+
+_DEFAULTS: dict[str, Any] = {
+    "llm": {
+        "base_url": "http://localhost:1234/v1/chat/completions",
+        "model_name": "local-model",
+        "request_timeout": 300,
+        "game_master_temperature": 0.7,
+        "summarizer_temperature": 0.5,
+    },
+    "memory": {
+        "embedding_model_name": "all-MiniLM-L6-v2",
+        "embedding_dimension": 384,
+        "default_recall": 2,
+    },
+    "game": {
+        "max_recent_events": 5,
+        "summary_threshold": 10,
+    },
+    "persistence": {
+        "game_data_dir": "gamedata",
+        "save_file_name": "engine_state.json",
+    },
+    "server": {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "debug": True,
+    },
+}
+
+
+class ConfigSection:
+    """Read-only attribute access over a dict of config values."""
+
+    def __init__(self, values: dict[str, Any]):
+        self._values = values
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self._values[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+
+def _merge(defaults: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(defaults)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _load() -> dict[str, Any]:
+    try:
+        with open(CONFIG_PATH, encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        print(f"[Config] Could not read {CONFIG_PATH}: {exc}. Using defaults.")
+        data = {}
+    return _merge(_DEFAULTS, data)
+
+
+_raw = _load()
+
+llm = ConfigSection(_raw["llm"])
+memory = ConfigSection(_raw["memory"])
+game = ConfigSection(_raw["game"])
+persistence = ConfigSection(_raw["persistence"])
+server = ConfigSection(_raw["server"])

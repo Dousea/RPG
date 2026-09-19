@@ -13,6 +13,7 @@ import json
 import os
 from typing import Any
 
+import config
 from data.items import ITEMS
 from data.locations import build_starting_locations
 from data.npcs import build_starting_npcs
@@ -35,8 +36,8 @@ from modules.location import World
 
 SCHEMA_VERSION = 1
 
-GAME_DATA_DIR = "gamedata"
-SAVE_FILE = os.path.join(GAME_DATA_DIR, "engine_state.json")
+GAME_DATA_DIR = config.persistence.game_data_dir
+SAVE_FILE = os.path.join(GAME_DATA_DIR, config.persistence.save_file_name)
 
 # Equipment slots are three separate enums; this resolves a saved slot name back
 # to the right one.

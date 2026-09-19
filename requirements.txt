@@ -2,6 +2,7 @@
 # Lower bounds rather than pins -- pin from `pip freeze` if you need a lockfile.
 Flask>=3.0
 requests>=2.32
+PyYAML>=6.0
 numpy>=2.1
 faiss-cpu>=1.10
 sentence-transformers>=3.0
