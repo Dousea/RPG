@@ -78,6 +78,12 @@ class PromptTests(unittest.TestCase):
     def test_prompt_carries_deep_memories(self):
         prompt = self.gm.build_prompt("look", ["Orton heard sirens."])
         self.assertIn("Orton heard sirens.", prompt)
+    def test_prompt_carries_pending_corrections(self):
+        self.assertIn("(Nothing to correct)", self.gm.build_prompt("look"))
+        self.gm.narrative.pending_corrections = ["TAKE Medkit -- No 'Medkit' here to take."]
+        prompt = self.gm.build_prompt("look")
+        self.assertIn("[CONTINUITY]", prompt)
+        self.assertIn("No 'Medkit' here to take.", prompt)
 
     def test_prompt_describes_present_npcs_only(self):
         prompt = self.gm.build_prompt("look")

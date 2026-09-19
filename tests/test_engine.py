@@ -102,6 +102,25 @@ class TurnTests(EngineTestCase):
         self.assertEqual(result["current_location"], "Hallway")
         self.assertIn("Survive", result["goals"]["short_term"])
 
+    def test_refused_actions_are_fed_back_into_the_next_prompt(self):
+        # Prose is written before the deltas are applied, so a refused delta
+        # leaves the story describing something that never happened. The engine
+        # cannot un-write it; it can tell the next turn to reconcile.
+        self.llm.response = (
+            "STORY:\nYou pocket the medkit.\n\nEVENT:\nOrton took a medkit\n\n"
+            "ACTIONS:\nTAKE Medkit"
+        )
+        self.engine.play("take the medkit")
+        self.assertEqual(len(self.engine.manager.narrative.pending_corrections), 1)
+        self.assertIn("TAKE Medkit", self.engine.manager.narrative.pending_corrections[0])
+
+        self.llm.response = TURN
+        self.engine.play("go north")
+        self.assertIn("[CONTINUITY]", self.llm.prompts[-1])
+        self.assertIn("TAKE Medkit", self.llm.prompts[-1])
+        # A clean turn clears them again.
+        self.assertEqual(self.engine.manager.narrative.pending_corrections, [])
+
 
 class SummarizationTests(EngineTestCase):
     def test_summary_is_produced_once_enough_events_accumulate(self):

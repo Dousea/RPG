@@ -71,6 +71,11 @@ class NarrativeState:
     conditions: dict[str, str] = field(
         default_factory=lambda: {"sleep": "Rested", "infection_risk": "No"}
     )
+    # State deltas the game master declared last turn that the engine refused.
+    # Prose is written before deltas are applied, so a refusal leaves the story
+    # describing something that never happened; carrying the refusals into the
+    # next prompt is how the narrative gets a chance to reconcile itself.
+    pending_corrections: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -242,7 +247,14 @@ class GameManager:
 
     def _get_npcs_present_section(self) -> str:
         """Generate the NPCs present section, with how each one currently
-        regards the player."""
+        regards the player.
+
+        This is the one place the social model is read out to the narrator, so it
+        is where the knowledge firewall sits: affinity and trust go out as bands,
+        never as the underlying integers. Orton can tell that Emma has warmed to
+        him; he cannot read `affection +37` off her face, and a game master given
+        the number narrates to it.
+        """
         npcs = self.npcs_in_location(self.player.current_location_id)
         if not npcs:
             return "No one else is here."
@@ -280,6 +292,13 @@ class GameManager:
         if not self.memory.recent_events:
             return "(No recent events)"
         return "\n".join(f" - {event}" for event in self.memory.recent_events)
+
+    def _get_corrections_section(self) -> str:
+        if not self.narrative.pending_corrections:
+            return "(Nothing to correct)"
+        return "\n".join(
+            f" - {correction}" for correction in self.narrative.pending_corrections
+        )
 
     def build_prompt(self, player_input: str, deep_memories: list[str] | None = None) -> str:
         """Assemble the full LLM prompt for a turn.
@@ -386,6 +405,13 @@ Flags: {', '.join(f'{k}={v}' for k, v in narrative.flags.items()) if narrative.f
 (What just happened)
 
 {self._get_events_section().rstrip()}
+
+[CONTINUITY]
+(Changes you asked for last turn that the engine refused. The state never
+changed, so whatever last turn's prose implied about them did not happen.
+Reconcile the story with that if it comes up -- do not re-declare them.)
+
+{self._get_corrections_section().rstrip()}
 
 [SCENE]
 {player_input}"""

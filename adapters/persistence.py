@@ -158,6 +158,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "flags": dict(narrative.flags),
             "player_status": list(narrative.player_status),
             "conditions": dict(narrative.conditions),
+            "pending_corrections": list(narrative.pending_corrections),
         },
         "memory": {
             "recent_events": list(memory.recent_events),
@@ -219,6 +220,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
             "infection_risk": "No",
             **narrative_data.get("conditions", {}),
         },
+        pending_corrections=narrative_data.get("pending_corrections", []),
     )
 
     memory_data = data.get("memory", {})

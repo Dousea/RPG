@@ -34,6 +34,7 @@ def played_game() -> GameManager:
         assert succeeded, f"setup action {action!r} failed: {message}"
     gm.record_event("Orton entered the office.")
     gm.memory.summaries.append("The first day passed quietly.")
+    gm.narrative.pending_corrections = ["TAKE Medkit -- No 'Medkit' here to take."]
     return gm
 
 
@@ -101,6 +102,11 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertIn("Find a weapon", self.loaded.narrative.goals["short_term"])
         self.assertIn("Leave the city", self.loaded.narrative.goals["long_term"])
         self.assertIs(self.loaded.narrative.flags["power_grid_stable"], False)
+        self.assertEqual(
+            self.loaded.narrative.pending_corrections,
+            self.original.narrative.pending_corrections,
+        )
+
     def test_world_clock_is_rebuilt_from_the_narrative_clock(self):
         # It is derived state, so a save written before it existed -- or one hand
         # edited -- still loads with the two in agreement.

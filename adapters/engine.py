@@ -52,9 +52,17 @@ class GameEngine:
             actions: list[str] = list(parsed["actions"])  # type: ignore[arg-type]
 
             # 3. Apply the state changes it asked for.
+            corrections: list[str] = []
             for action in actions:
                 succeeded, message = manager.apply_action(action)
                 print(f"[Engine] {'OK  ' if succeeded else 'FAIL'} {action} -- {message}")
+                if not succeeded:
+                    corrections.append(f"{action} -- {message}")
+            # The prompt this turn already carried last turn's refusals, so they
+            # are spent; replace them with whatever was refused just now. The
+            # narration is already written and cannot be taken back -- the next
+            # turn is the earliest the story can admit the delta never landed.
+            manager.narrative.pending_corrections = corrections
 
             # 4. Record the event in both memory tiers and reindex.
             manager.record_event(event_text)
