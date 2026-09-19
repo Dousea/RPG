@@ -1,4 +1,24 @@
+# Python bytecode
 __pycache__
+*.py[cod]
+
+# Virtualenv (see the README for how it is built)
+.venv
+
+# Editor state and the vendored type stubs it generates
 .vscode
 typings
-.venv
+
+# Test tooling. .pytest_cache ships its own .gitignore, but say it here too so
+# the repo does not depend on a generated file to stay clean.
+.pytest_cache
+
+# Claude Code. Worktrees under here are throwaway clones of this whole repo and
+# must never be committed; settings.local.json is per-developer. A shared
+# .claude/settings.json is deliberately left trackable.
+.claude/worktrees/
+.claude/settings.local.json
+
+# Local secrets, should any ever be needed. config.yml is tracked and is not the
+# place for them.
+.env
