@@ -199,6 +199,35 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(self.gm.narrative.day, 2)
         self.assertActionRejected("TIME_ADVANCE teatime")
 
+    def test_time_advance_to_the_same_part_of_day_keeps_the_day(self):
+        # Regression: the wrap check was `<=`, so re-declaring the current part
+        # of the day silently pushed the calendar forward.
+        self.assertEqual(self.gm.narrative.time_of_day, "morning")
+        self.assertAction("TIME_ADVANCE morning")
+        self.assertEqual(self.gm.narrative.day, 1)
+        self.assertAction("TIME_ADVANCE night")
+        self.assertAction("TIME_ADVANCE night")
+        self.assertEqual(self.gm.narrative.day, 1)
+
+    def test_world_clock_follows_the_narrative_clock(self):
+        # Regression: nothing ever wrote World.time/date, so the prompt claimed
+        # noon on 1 October 2023 for the entire game.
+        self.assertEqual(self.gm.world.time, "08:00 AM")
+        self.assertEqual(self.gm.world.date, "2023-10-01")
+
+        self.assertAction("TIME_ADVANCE evening")
+        self.assertEqual(self.gm.world.time, "07:00 PM")
+        self.assertEqual(self.gm.world.date, "2023-10-01")
+
+        self.assertAction("TIME_ADVANCE morning")  # rolls over into day 2
+        self.assertEqual(self.gm.world.time, "08:00 AM")
+        self.assertEqual(self.gm.world.date, "2023-10-02")
+
+    def test_world_clock_agrees_with_the_narrative_clock_in_the_prompt(self):
+        self.assertAction("TIME_ADVANCE evening")
+        prompt = self.gm.build_prompt("look")
+        self.assertIn("Day 1, Evening -- 07:00 PM, 2023-10-01", prompt)
+
     def test_status_maps_onto_simulated_conditions(self):
         self.assertAction("STATUS_ADD panic")
         self.assertIn("panic", [c.value for c in self.gm.player.conditions])

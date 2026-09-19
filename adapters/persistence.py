@@ -192,6 +192,9 @@ def from_dict(data: dict[str, Any]) -> GameManager:
             if entity is not None:
                 location.entities.append(entity)
 
+    # World.time/date are derived from the narrative clock, which GameManager
+    # re-renders on construction. The saved values are carried over so a save is
+    # still readable on its own, but they are not trusted.
     world = World(
         time=world_data.get("time", "12:00 PM"),
         date=world_data.get("date", "2023-10-01"),

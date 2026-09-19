@@ -101,6 +101,20 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertIn("Find a weapon", self.loaded.narrative.goals["short_term"])
         self.assertIn("Leave the city", self.loaded.narrative.goals["long_term"])
         self.assertIs(self.loaded.narrative.flags["power_grid_stable"], False)
+    def test_world_clock_is_rebuilt_from_the_narrative_clock(self):
+        # It is derived state, so a save written before it existed -- or one hand
+        # edited -- still loads with the two in agreement.
+        self.assertEqual(self.loaded.world.time, "07:00 PM")
+        self.assertEqual(self.loaded.world.date, "2023-10-01")
+
+    def test_a_save_with_a_stale_world_clock_is_corrected_on_load(self):
+        data = persistence.to_dict(self.original)
+        data["world"]["time"] = "12:00 PM"
+        data["world"]["date"] = "2023-10-01"
+        data["narrative"]["day"] = 4
+        rebuilt = persistence.from_dict(data)
+        self.assertEqual(rebuilt.world.time, "07:00 PM")
+        self.assertEqual(rebuilt.world.date, "2023-10-04")
 
     def test_memory_tiers(self):
         self.assertEqual(

@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 
+import config
 from data.items import find_item_by_name
 from data.locations import build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
@@ -23,12 +25,27 @@ from modules.modifier import (
 )
 
 # Number of recent events kept in the prompt as short-term memory.
-MAX_RECENT_EVENTS = 5
+MAX_RECENT_EVENTS = config.game.max_recent_events
 
 # Once the recent-event buffer is this full, the older half is summarized.
-SUMMARY_THRESHOLD = 10
+SUMMARY_THRESHOLD = config.game.summary_threshold
 
 TIMES_OF_DAY = ("morning", "afternoon", "evening", "night")
+
+# The game has one clock. `NarrativeState.day` and `.time_of_day` are it;
+# `World.time` and `World.date` are a wall-clock rendering of the same instant,
+# derived by `_sync_world_clock`. They used to be independent, and since nothing
+# ever wrote them the game master was told it was noon on 1 October 2023 for the
+# entire game while the narrative clock moved underneath.
+CLOCK_BY_TIME_OF_DAY = {
+    "morning": "08:00 AM",
+    "afternoon": "01:00 PM",
+    "evening": "07:00 PM",
+    "night": "11:00 PM",
+}
+
+# The calendar date of day 1.
+WORLD_START_DATE = date(2023, 10, 1)
 
 # Narrative condition tracks that have no numeric field on PlayerEntity.
 NARRATIVE_CONDITIONS = ("sleep", "infection_risk")
@@ -124,6 +141,24 @@ class GameManager:
                 self.relationship_manager.adjust_trust(
                     npc_id, self.player.entity_id, scores.get("trust", 0)
                 )
+
+        # Whatever the world arrived with, the narrative clock is authoritative.
+        # Doing this here also repairs saves written while the two could drift.
+        self._sync_world_clock()
+
+    # === Clock ===
+
+    def _sync_world_clock(self) -> None:
+        """Render the narrative clock onto `World.time` and `World.date`.
+
+        Called on construction and whenever the narrative clock moves. Nothing
+        else may write those two fields: they are a view, not a second clock.
+        """
+        self.world.time = CLOCK_BY_TIME_OF_DAY.get(
+            self.narrative.time_of_day, CLOCK_BY_TIME_OF_DAY["morning"]
+        )
+        days_elapsed = max(self.narrative.day, 1) - 1
+        self.world.date = (WORLD_START_DATE + timedelta(days=days_elapsed)).isoformat()
 
     # === Lookup helpers ===
 
@@ -434,12 +469,15 @@ Flags: {', '.join(f'{k}={v}' for k, v in narrative.flags.items()) if narrative.f
         target = args.strip().casefold()
         if target not in TIMES_OF_DAY:
             return False, f"Unknown time of day: '{args}'."
-        # Rolling backwards past night means a new day began.
-        if TIMES_OF_DAY.index(target) <= TIMES_OF_DAY.index(
+        # Rolling *backwards* past night means a new day began. Strictly
+        # backwards: re-declaring the part of the day we are already in is a
+        # no-op, not midnight.
+        if TIMES_OF_DAY.index(target) < TIMES_OF_DAY.index(
             self.narrative.time_of_day
         ):
             self.narrative.day += 1
         self.narrative.time_of_day = target
+        self._sync_world_clock()
         return True, f"Time is now {target} (day {self.narrative.day})."
 
     def _action_status_add(self, args: str) -> tuple[bool, str]:
