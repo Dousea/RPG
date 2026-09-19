@@ -277,8 +277,12 @@ object in the graph. `DoorEntity` and `ContainerEntity` with
 nothing — they are the beginning of the structured exits this document asks
 for, not an implementation of them.
 
-`World.time` and `World.date` are static strings that nothing ever updates. See
-*Known issues* in [document 00](00-status.md).
+`World.time` and `World.date` are **derived**, not stored state: `GameManager`
+renders them from the narrative clock (`NarrativeState.day` / `.time_of_day`) in
+`_sync_world_clock`, on construction and whenever the clock moves. They are
+persisted so a save reads on its own, but the saved values are not trusted — a
+load recomputes them, which repairs saves written while the two could drift.
+Nothing else may write them.
 
 ### NPC
 

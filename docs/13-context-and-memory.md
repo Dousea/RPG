@@ -141,6 +141,13 @@ SUMMARIES         every 10 events, folded by the LLM into one narrative
 truncated — it is the corpus the vector index is built from, not prompt
 material. Only the three tiers above reach the model.
 
+A fourth section, `[CONTINUITY]`, is not memory of the story but memory of the
+*engine*: the state deltas the game master declared last turn that
+`apply_action` refused (`NarrativeState.pending_corrections`). It exists because
+prose is written before deltas are applied, so a refusal leaves the narration
+describing something that never happened. See
+[document 15](15-turn-loop.md).
+
 Together they bound prompt growth against an unbounded game: recent events are
 capped, deep memory is capped, and only the summary list grows — one paragraph
 per ten turns.
@@ -183,8 +190,9 @@ exit; every NPC present with their complete record; all summaries; recent
 events; deep memory. Nothing is chosen based on the player's input except the
 two deep memories.
 
-**There is no firewall.** See [document 11](11-knowledge-firewall.md). The NPC
-section alone sends raw affinity and trust integers and private notes.
+**The firewall is one filter, not a model.** Relationship scores are banded
+before they reach the prompt; nothing else is filtered by what the player could
+know. See [document 11](11-knowledge-firewall.md).
 
 **Global, zone and location memory do not exist.** World-scale truths live in
 `NarrativeState.apocalypse_stage` (one string) and `flags` (booleans). There is

@@ -1,6 +1,6 @@
 # Engine Authority
 
-> **Status: Partial.** The engine can veto an impossible state change, but it never decides an outcome — the LLM narrates first and declares the deltas afterwards. Prose is unchecked. See [Implementation Status](00-status.md).
+> **Status: Partial.** The engine can veto an impossible state change, but it never decides an outcome — the LLM narrates first and declares the deltas afterwards. Prose is unchecked; a veto is reported back to the narrator on the *next* turn (`[CONTINUITY]`), which is the earliest the story can admit a delta never landed. See [Implementation Status](00-status.md).
 
 ## 1. Core Principle: Engine Authority
 

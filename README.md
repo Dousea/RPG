@@ -42,7 +42,7 @@ GameEngine.play()                        [adapters/engine.py]
     +-- GameManager.build_prompt()       assemble the full context
     +-- llm.query_game_master()          ask LM Studio what happens
     +-- llm.parse_response()             split into STORY / EVENT / ACTIONS
-    +-- GameManager.apply_action() * N   apply each state change
+    +-- GameManager.apply_action() * N   apply each state change, keep refusals
     +-- GameManager.record_event()       push to short-term + full log
     +-- SemanticMemory.rebuild()         reindex
     +-- llm.query_summary()              fold old events into a summary
@@ -82,8 +82,10 @@ dropped with a log line instead of crashing the load.
 
 Persisted: player (position, condition, inventory, equipment, traits, perks),
 NPCs (position, status, notes, condition), relationships (affinity, trust,
-reputation), narrative state (day, time of day, goals, flags, apocalypse stage)
-and all three memory tiers.
+reputation), narrative state (day, time of day, goals, flags, apocalypse stage,
+pending corrections) and all three memory tiers. The world clock (`World.time`,
+`World.date`) is written too, but it is derived from the narrative day and time
+of day and recomputed on load.
 
 > The older per-file `gamedata/*.json` (`character.json`, `world.json`,
 > `npcs.json`, ...) belonged to the previous engine and are no longer read or
@@ -95,6 +97,9 @@ and all three memory tiers.
 The LLM returns state changes as one action per line. Every verb below maps to a
 handler in `GameManager`. An unparseable or impossible action is logged and
 skipped -- the narrative still stands, the state change just does not happen.
+Because the prose is written before the deltas are applied, refusals are also
+carried into the next prompt as a `[CONTINUITY]` section, so the story is told
+what did not happen and can write around it one turn later.
 
 ```
 TAKE <item>                          DROP <item>
@@ -116,6 +121,11 @@ direction out of the current room.
 Relationships are directional and stored source -> target. Everything that reads
 them asks how the **NPC** regards the **player**, so that is the direction
 `UPDATE_RELATIONSHIP` and the starting values in `data/npcs.py` write.
+
+The scores themselves never reach the prompt. `build_prompt` sends banded labels
+-- `Disposition: friendly (trust: solid)` -- because the player has no way to
+read an integer off someone's face, and a game master given the number narrates
+to the number. The bands live in `RelationshipManager`.
 
 ## Requirements
 

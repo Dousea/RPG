@@ -1,6 +1,6 @@
 # Time and Scheduling
 
-> **Status: Planned.** Time advances only when the game master emits `TIME_ADVANCE`. Nothing is driven by a clock. See [Implementation Status](00-status.md).
+> **Status: Planned.** Time advances only when the game master emits `TIME_ADVANCE`, and nothing is driven by a clock. There is now exactly one clock, at least: `NarrativeState.day` / `.time_of_day`, which `World.time` and `World.date` are rendered from. See [Implementation Status](00-status.md).
 
 Time should be a first-class simulation subsystem.
 

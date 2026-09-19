@@ -1,6 +1,6 @@
 # Full Turn Loop and Failure Handling
 
-> **Status: Partial.** In `GameEngine.play`, steps 2-6 collapse into a single LLM call and steps 4, 5, 8, 9 and 12 do not occur. The failure taxonomy is partly real: a failed action is logged and skipped, and the turn stands. See [Implementation Status](00-status.md).
+> **Status: Partial.** In `GameEngine.play`, steps 2-6 collapse into a single LLM call and steps 4, 5, 8, 9 and 12 do not occur. The failure taxonomy is partly real: a failed action is logged, skipped, and carried into the next prompt as a `[CONTINUITY]` note, and the turn stands. See [Implementation Status](00-status.md).
 
 ## Full Turn Loop
 
