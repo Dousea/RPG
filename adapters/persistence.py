@@ -18,6 +18,7 @@ from data.items import ITEMS
 from data.locations import build_starting_locations
 from data.npcs import build_starting_npcs
 from data.perks import PERKS
+from data.quests import build_starting_quests
 from data.traits import TRAITS
 from managers.game import GameManager, MemoryState, NarrativeState
 from managers.relationship import RelationshipManager
@@ -171,8 +172,10 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
         },
         "quests": {
             quest_id: {
+                "title": quest.title,
                 "status": quest.status.value,
                 "objectives": list(quest.objectives),
+                "objective_labels": dict(quest.objective_labels),
                 "completed_objectives": list(quest.completed_objectives),
             }
             for quest_id, quest in manager.quests.items()
@@ -243,15 +246,26 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         summaries=memory_data.get("summaries", []),
     )
 
-    quests = {
-        quest_id: QuestState(
-            quest_id=quest_id,
-            status=QuestStatus(quest_data.get("status", "active")),
-            objectives=quest_data.get("objectives", []),
-            completed_objectives=quest_data.get("completed_objectives", []),
-        )
-        for quest_id, quest_data in data.get("quests", {}).items()
-    }
+    quest_entries = data.get("quests", {})
+    if not quest_entries:
+        # Empty/missing means either a brand-new game or a save written
+        # before quest content existed (schema v2 already had the "quests"
+        # key, just always empty) -- seed the starting roster rather than
+        # leaving the player with none, same fallback build_starting_npcs()
+        # uses for an empty "npcs" list.
+        quests = build_starting_quests()
+    else:
+        quests = {
+            quest_id: QuestState(
+                quest_id=quest_id,
+                title=quest_data.get("title", ""),
+                status=QuestStatus(quest_data.get("status", "active")),
+                objectives=quest_data.get("objectives", []),
+                objective_labels=quest_data.get("objective_labels", {}),
+                completed_objectives=quest_data.get("completed_objectives", []),
+            )
+            for quest_id, quest_data in quest_entries.items()
+        }
 
     return GameManager(
         world=world,

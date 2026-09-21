@@ -12,6 +12,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 """
 
 from managers.game import GameManager
+from modules.quest import QuestStatus
 
 
 class ContextBuilder:
@@ -117,6 +118,32 @@ class ContextBuilder:
         if not visible:
             return "None"
         return ", ".join(f"{k}={v}" for k, v in visible.items())
+
+    def _quests_section(self) -> str:
+        """Active quest objectives, in plain language.
+
+        Quest completion is engine-decided (`SimulationCore._advance_quests`)
+        -- there is no LLM verb for it -- but the narrator still needs to know
+        what Orton is working toward so it can weave it into prose. Only
+        ACTIVE quests render; a quest that just completed this turn already
+        shows up in [OUTCOMES], and there is no reason to keep prompting the
+        narrator about one that's done.
+        """
+        active = [
+            quest
+            for quest in self.manager.quests.values()
+            if quest.status == QuestStatus.ACTIVE
+        ]
+        if not active:
+            return "None"
+        lines: list[str] = []
+        for quest in active:
+            lines.append(f" - {quest.title or quest.quest_id}")
+            for objective in quest.objectives:
+                label = quest.objective_labels.get(objective, objective)
+                done = objective in quest.completed_objectives
+                lines.append(f"   [{'x' if done else ' '}] {label}")
+        return "\n".join(lines)
 
     # === Parser prompt ===
 
@@ -259,6 +286,11 @@ Flags: {self._discovered_flags_section()}
 [NPCS PRESENT]
 
 {self._npcs_present_section().rstrip()}
+
+[QUESTS]
+(What Orton is currently working toward, engine-tracked. [x] is complete.)
+
+{self._quests_section().rstrip()}
 
 [SUMMARY OF PAST EVENTS]
 (A narrative overview of the long-term past)

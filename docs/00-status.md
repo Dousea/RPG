@@ -75,7 +75,7 @@ this one.
 | [04 Entity Resolution](04-entity-resolution.md) | Partial | `resolve_npc`, `resolve_location`, `_find_item_entity` | Exact casefold matching on name or id only. No description-based resolution, no ambiguity state, no clarification round trip. |
 | [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Four hand-written rooms (one behind a locked door). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
 | [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are nine of them. Out of scope for the engine-authority work. |
-| [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. |
+| [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `data/quests.py`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. |
 | [08 Time and Scheduling](08-time-and-scheduling.md) | Partial | `SimulationCore._advance_one_tick`, `_action_time_advance`, `_sync_world_clock` | Ordinary actions (move, attack) now advance the clock themselves — the engine owns time progression instead of depending on the LLM to remember `TIME_ADVANCE`. Still one coarse clock (four parts of a day), no sub-tick frequencies, no hunger/stamina/weather driven by it. Deeper scheduling is out of scope. |
 | [09 Zombie Survival](09-zombie-survival.md) | Planned | — | No noise, no light, no visibility, no scavenging model. Out of scope for the engine-authority work. |
 | [10 Combat and Stealth](10-combat-and-stealth.md) | Partial | `managers/simulation.py` `_resolve_attack`, `modules/event.py`, `modules/modifier.py` | `ATTACK` is a real action: it resolves through the event/modifier pipeline, applies equipped-weapon damage with jitter, and both "dealt" and "taken" trait/perk reactions actually fire (Small Frame, Gun Slinger). No stealth, no ranged distance/line-of-sight, no armor mitigation yet — this is base damage resolution, not the full document. |
@@ -169,7 +169,13 @@ let the engine track and complete objectives without any LLM verb able to
 force completion, but there is no arc/objective/condition graph and nothing
 reacts to world state on its own — a quest advances only when
 `SimulationCore` notices a specific action matched a specific objective
-string. A real Story Director (document 07) is out of scope here.
+string (`take:`, `reach:`, `discover:`, `defeat:`, `npc_status:`). A real
+Story Director (document 07) is out of scope here. Content now exists:
+`data/quests.py` seeds three starting quests on a new game (and backfills
+them into any save written before this existed, the same way an empty NPC
+roster falls back to `build_starting_npcs()`), and `ContextBuilder` renders
+active quests and their checked-off objectives to the narrator in a
+`[QUESTS]` section, so the LLM has something to narrate progress against.
 
 **Scale is still unaddressed.** Everything above holds at the game's current
 size — four rooms, three NPCs. Documents 05 (world generation), 06

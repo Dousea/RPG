@@ -5,6 +5,7 @@ import config
 from data.locations import build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
 from data.perks import PERKS
+from data.quests import build_starting_quests
 from data.traits import TRAITS
 from managers.relationship import RelationshipManager
 from modules.character.player import PlayerPerk, PlayerTrait
@@ -178,7 +179,9 @@ class GameManager:
         self.npcs = npcs if npcs is not None else build_starting_npcs()
         self.narrative = narrative if narrative is not None else NarrativeState()
         self.memory = memory if memory is not None else MemoryState()
-        self.quests: dict[str, QuestState] = quests if quests is not None else {}
+        self.quests: dict[str, QuestState] = (
+            quests if quests is not None else build_starting_quests()
+        )
         self.event_queue: list[AnyEvent] = []
 
         if relationship_manager is not None:

@@ -130,7 +130,9 @@ class SimulationCore:
     def _resolve_move(self, accepted: Accepted) -> str:
         location = accepted.resolved["location"]
         self.manager.player.current_location_id = location.id
-        return f"Move to {location.name}: succeeded."
+        fact = f"Move to {location.name}: succeeded."
+        quest_note = self._advance_quests(f"reach:{location.id}")
+        return f"{fact} {quest_note}".rstrip() if quest_note else fact
 
     # === Items ===
 
@@ -139,7 +141,9 @@ class SimulationCore:
         manager = self.manager
         manager.current_location.entities.remove(entity)
         manager.player.inventory.append(entity)
-        return f"Take {entity.item.name}: succeeded."
+        fact = f"Take {entity.item.name}: succeeded."
+        quest_note = self._advance_quests(f"take:{entity.item.id}")
+        return f"{fact} {quest_note}".rstrip() if quest_note else fact
 
     def _resolve_drop(self, accepted: Accepted) -> str:
         entity = accepted.resolved["item_entity"]
@@ -373,7 +377,9 @@ class SimulationCore:
         if action.operation == "ADD":
             if action.status not in npc.status:
                 npc.status.append(action.status)
-            return f"{npc.name} is now '{action.status}'."
+            fact = f"{npc.name} is now '{action.status}'."
+            quest_note = self._advance_quests(f"npc_status:{npc.npc_id}:{action.status}")
+            return f"{fact} {quest_note}".rstrip() if quest_note else fact
         npc.status.remove(action.status)
         return f"{npc.name} is no longer '{action.status}'."
 

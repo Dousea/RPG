@@ -56,8 +56,10 @@ def played_game() -> GameManager:
     emma.knowledge.add("secret_bunker_location")
     gm.quests["find_the_bunker"] = QuestState(
         quest_id="find_the_bunker",
+        title="Find the Bunker",
         status=QuestStatus.ACTIVE,
         objectives=["discover:bunker_location", "defeat:npc_marcus"],
+        objective_labels={"discover:bunker_location": "Locate the bunker"},
         completed_objectives=["discover:bunker_location"],
     )
     gm.record_event("Orton entered the office.")
@@ -124,8 +126,12 @@ class RoundTripTests(IsolatedSaveTestCase):
 
     def test_quest_state_round_trips(self):
         quest = self.loaded.quests["find_the_bunker"]
+        self.assertEqual(quest.title, "Find the Bunker")
         self.assertEqual(quest.status, QuestStatus.ACTIVE)
         self.assertEqual(quest.objectives, ["discover:bunker_location", "defeat:npc_marcus"])
+        self.assertEqual(
+            quest.objective_labels, {"discover:bunker_location": "Locate the bunker"}
+        )
         self.assertEqual(quest.completed_objectives, ["discover:bunker_location"])
 
     def test_relationships_keep_their_direction(self):
@@ -193,6 +199,24 @@ class SaveFileTests(IsolatedSaveTestCase):
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         self.assertEqual(data["version"], persistence.SCHEMA_VERSION)
+
+    def test_a_save_with_no_quests_seeds_the_starting_roster(self):
+        # v2 already had a "quests" key before any quest content existed, so
+        # an old save has it present but empty -- that must not leave a
+        # loaded game with no quests forever, same as an empty "npcs" list
+        # falls back to build_starting_npcs().
+        persistence.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["quests"] = {}
+        self.write(data)
+        loaded = persistence.load(self.save_path)
+        self.assertTrue(loaded.quests)
+        self.assertIn("quest_storage_room", loaded.quests)
+
+    def write(self, data: dict) -> None:
+        with open(self.save_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
 
 
 class BadSaveTests(IsolatedSaveTestCase):
