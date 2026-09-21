@@ -115,9 +115,11 @@ NARRATOR_SYSTEM_PROMPT = (
     "[Brief summary for the event log]\n\n"
     "Example:\n"
     "STORY:\n"
-    "You glance at your neighbor Emma as she struggles with groceries. Her smile seems genuine as she notices you watching.\n\n"
+    "A woman about your age is wrestling with an armful of groceries outside the "
+    "door next to yours. She catches you watching and gives an easy, curious "
+    "smile, like she's sizing up the new neighbor.\n\n"
     "EVENT:\n"
-    "Orton observed Emma in the hallway"
+    "Orton crossed paths with a neighbor in the hallway"
 )
 
 SUMMARIZER_SYSTEM_PROMPT = (

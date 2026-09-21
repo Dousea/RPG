@@ -39,7 +39,6 @@ def build_starting_npcs() -> dict[str, NpcEntity]:
             faction=CharacterFaction.SURVIVORS,
             personality=["outgoing", "creative", "helpful"],
             status=["friendly", "curious about new neighbor"],
-            notes="Orton's next-door neighbor, seems approachable",
             romance_eligible=True,
         ),
         NpcEntity(
@@ -55,7 +54,6 @@ def build_starting_npcs() -> dict[str, NpcEntity]:
             faction=CharacterFaction.SURVIVORS,
             personality=["practical", "reliable", "quiet"],
             status=["helpful", "responsible"],
-            notes="Building superintendent, professional",
             romance_eligible=False,
         ),
         NpcEntity(
@@ -71,7 +69,6 @@ def build_starting_npcs() -> dict[str, NpcEntity]:
             faction=CharacterFaction.NEUTRAL,
             personality=["bubbly", "social", "observant"],
             status=["cheerful", "energetic"],
-            notes="Local barista, very friendly",
             romance_eligible=True,
         ),
     ]
