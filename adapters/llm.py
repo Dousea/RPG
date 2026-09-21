@@ -118,18 +118,30 @@ NARRATOR_SYSTEM_PROMPT = (
     "player's own action draws attention to a specific detail. Otherwise, "
     "spend the words on what's new this turn: the outcome, the dialogue, the "
     "character beat.\n\n"
+    "After EVENT, add an OPTIONS section: 2-4 short, concrete things Orton "
+    "could plausibly do next, each on its own line starting with '- '. These "
+    "are only suggestions -- Orton can always ignore them and do something "
+    "else entirely, so never phrase them as the only paths forward. If "
+    "nothing sensible suggests itself (Orton is mid-action, or waiting on "
+    "someone else mid-conversation), write NONE instead of forcing options.\n\n"
     "Your response must follow this EXACT format:\n\n"
     "STORY:\n"
     "[Write the narrative in second-person, addressing Orton directly]\n\n"
     "EVENT:\n"
     "[Brief summary for the event log]\n\n"
+    "OPTIONS:\n"
+    "[2-4 short suggestions, one per line, each starting with '- ', or NONE]\n\n"
     "Example:\n"
     "STORY:\n"
     "A woman about your age is wrestling with an armful of groceries outside the "
     "door next to yours. She catches you watching and gives an easy, curious "
     "smile, like she's sizing up the new neighbor.\n\n"
     "EVENT:\n"
-    "Orton crossed paths with a neighbor in the hallway"
+    "Orton crossed paths with a neighbor in the hallway\n\n"
+    "OPTIONS:\n"
+    "- Offer to help her with the groceries\n"
+    "- Introduce yourself\n"
+    "- Give a polite nod and keep walking"
 )
 
 SUMMARIZER_SYSTEM_PROMPT = (
@@ -216,14 +228,16 @@ def parse_action_response(llm_response_text: str) -> list[str]:
     return [line for line in lines if line.strip()]
 
 
-def parse_narrator_response(llm_response_text: str) -> dict[str, str]:
-    """Split a STORY/EVENT narrator response into its two parts.
+def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]]:
+    """Split a STORY/EVENT/OPTIONS narrator response into its parts.
 
     Section headers are matched line by line rather than by splitting on
-    blank lines, so a story containing blank lines survives intact.
+    blank lines, so a story containing blank lines survives intact. OPTIONS
+    is new and optional: a response with no OPTIONS section (or NONE) simply
+    yields an empty list, so older-style responses still parse cleanly.
     """
-    sections: dict[str, list[str]] = {"story": [], "event": []}
-    headers = {"STORY:": "story", "EVENT:": "event"}
+    sections: dict[str, list[str]] = {"story": [], "event": [], "options": []}
+    headers = {"STORY:": "story", "EVENT:": "event", "OPTIONS:": "options"}
     current: str | None = None
 
     for line in llm_response_text.splitlines():
@@ -242,8 +256,14 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str]:
 
     story = "\n".join(sections["story"]).strip()
     event = "\n".join(sections["event"]).strip()
+    options = [
+        stripped.lstrip("-").strip()
+        for raw_line in sections["options"]
+        if (stripped := raw_line.strip()) and stripped.upper() != "NONE"
+    ]
 
     return {
         "story": story or "The world is silent.",
         "event": event or "Nothing happened.",
+        "options": options,
     }

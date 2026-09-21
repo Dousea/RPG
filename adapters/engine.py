@@ -87,6 +87,7 @@ class GameEngine:
             parsed = llm.parse_narrator_response(raw_response)
             story_text = str(parsed["story"])
             event_text = str(parsed["event"])
+            options = list(parsed["options"])
 
             # 5. Record the event in both memory tiers and reindex.
             manager.record_event(event_text)
@@ -96,7 +97,7 @@ class GameEngine:
             self._run_summarization()
 
             persistence.save(manager)
-            return self._snapshot(story_text=story_text)
+            return self._snapshot(story_text=story_text, options=options)
 
     def _run_summarization(self) -> None:
         """Fold the oldest unsummarized events into a narrative paragraph."""
@@ -152,7 +153,9 @@ class GameEngine:
 
     # === Presentation ===
 
-    def _snapshot(self, story_text: str) -> dict[str, Any]:
+    def _snapshot(
+        self, story_text: str, options: list[str] | None = None
+    ) -> dict[str, Any]:
         """Build the frontend payload. Caller must hold the lock.
 
         Mirrors what `managers/context.py` already tells the narrator about
@@ -163,6 +166,10 @@ class GameEngine:
         (disposition/trust bands, never the raw affinity integer): the
         knowledge-firewall boundary in doc 11 applies to the player's screen
         exactly as much as it applies to a prompt.
+
+        `options` are the narrator's suggested next moves for this turn, if
+        any -- always in addition to free text, never in place of it. Calls
+        that aren't a fresh narrated turn (reset/state/import) pass none.
         """
         manager = self.manager
         player = manager.player
@@ -172,6 +179,7 @@ class GameEngine:
 
         return {
             "story_text": story_text,
+            "options": options or [],
             "current_location": manager.current_location.name,
             "location_description": manager.current_location.description,
             "day": narrative.day,

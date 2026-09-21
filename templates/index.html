@@ -313,6 +313,26 @@
 
         /* === Footer input === */
         footer { flex-shrink: 0; }
+        #choice-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.65rem;
+        }
+        #choice-options:empty { display: none; }
+        .choice-option {
+            font-family: 'Archivo', sans-serif;
+            font-size: 0.85rem;
+            background: var(--panel);
+            color: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 3px;
+            padding: 0.5rem 0.9rem;
+            cursor: pointer;
+            text-align: left;
+        }
+        .choice-option:hover { border-color: var(--ember); color: var(--ember); }
+        .choice-option:disabled { color: var(--paper-dim); cursor: default; }
         #input-form {
             display: flex;
             align-items: center;
@@ -461,6 +481,7 @@
     </main>
 
     <footer>
+        <div id="choice-options"></div>
         <form id="input-form">
             <label for="player-input">&gt;</label>
             <input type="text" id="player-input" autocomplete="off" placeholder="What do you do?">
@@ -488,6 +509,7 @@
     const perkList = document.getElementById('perk-list');
     const npcList = document.getElementById('npc-list');
     const questList = document.getElementById('quest-list');
+    const choiceOptions = document.getElementById('choice-options');
     const inputForm = document.getElementById('input-form');
     const playerInput = document.getElementById('player-input');
     const submitButton = document.getElementById('submit-button');
@@ -713,6 +735,23 @@
         }));
     }
 
+    // Renders the narrator's suggested next moves as buttons, alongside (never
+    // instead of) the free-text input. Picking one just fills the input and
+    // submits it through the normal /play path -- the parser can't tell a
+    // clicked suggestion from something the player typed themselves.
+    function renderChoiceOptions(data) {
+        const options = data.options || [];
+        clearAndFill(choiceOptions, options.map(optionText => {
+            const button = el('button', 'choice-option', optionText);
+            button.type = 'button';
+            button.addEventListener('click', () => {
+                playerInput.value = optionText;
+                inputForm.requestSubmit();
+            });
+            return button;
+        }));
+    }
+
     // Append one story beat. Player input is set as text, never HTML, so a
     // '<' in what the player types cannot break out into markup.
     function appendStory(playerText, storyText) {
@@ -746,6 +785,7 @@
         renderNamedEntries(perkList, data.perks, 'None recorded.');
         renderNpcs(data);
         renderQuests(data);
+        renderChoiceOptions(data);
     }
 
     function updateUI(data, playerText) {
@@ -772,6 +812,7 @@
         playerInput.disabled = true;
         submitButton.disabled = true;
         submitButton.textContent = 'Thinking...';
+        choiceOptions.querySelectorAll('button').forEach(button => { button.disabled = true; });
 
         try {
             const response = await fetch('/play', {
@@ -796,6 +837,10 @@
             playerInput.focus();
             submitButton.disabled = false;
             submitButton.textContent = 'Act';
+            // On success updateUI already re-rendered fresh (enabled) option
+            // buttons; on failure the stale ones from before the click need
+            // re-enabling by hand since nothing replaced them.
+            choiceOptions.querySelectorAll('button').forEach(button => { button.disabled = false; });
         }
     }
 

@@ -93,6 +93,28 @@ class TurnTests(EngineTestCase):
         self.assertIsInstance(result["goals"]["short_term"], list)
         self.assertEqual(result["day"], 1)
 
+    def test_narrator_options_reach_the_snapshot(self):
+        self.llm.story = (
+            "STORY:\nYou walk north.\n\nEVENT:\nOrton entered the office\n\n"
+            "OPTIONS:\n- Check the desk\n- Look out the window"
+        )
+        result = self.engine.play("go north")
+        self.assertEqual(result["options"], ["Check the desk", "Look out the window"])
+
+    def test_no_options_offered_yields_an_empty_list(self):
+        # MOVE_NORTH_STORY has no OPTIONS section at all.
+        result = self.engine.play("go north")
+        self.assertEqual(result["options"], [])
+
+    def test_reset_and_state_snapshots_carry_no_stale_options(self):
+        self.llm.story = (
+            "STORY:\nYou walk north.\n\nEVENT:\nOrton entered the office\n\n"
+            "OPTIONS:\n- Check the desk"
+        )
+        self.engine.play("go north")
+        self.assertEqual(self.engine.state()["options"], [])
+        self.assertEqual(self.engine.reset()["options"], [])
+
     def test_npcs_present_tracks_the_player(self):
         before = self.engine.state()
         self.assertIn("Emma", before["npcs_present"])  # hallway

@@ -81,6 +81,24 @@ class ParseNarratorResponseTests(unittest.TestCase):
         )
         self.assertEqual(parsed["event"], "Orton looked around\n\nACTIONS:\nNONE")
 
+    def test_options_are_extracted_as_a_list_with_dashes_stripped(self):
+        parsed = parse_narrator_response(
+            "STORY:\nYou pause.\n\nEVENT:\nOrton paused\n\n"
+            "OPTIONS:\n- Knock on the door\n- Walk away"
+        )
+        self.assertEqual(parsed["options"], ["Knock on the door", "Walk away"])
+
+    def test_options_none_yields_an_empty_list(self):
+        parsed = parse_narrator_response(
+            "STORY:\nYou pause.\n\nEVENT:\nOrton paused\n\nOPTIONS:\nNONE"
+        )
+        self.assertEqual(parsed["options"], [])
+
+    def test_missing_options_section_yields_an_empty_list(self):
+        # Older-shaped responses (no OPTIONS at all) must still parse cleanly.
+        parsed = parse_narrator_response("STORY:\nYou pause.\n\nEVENT:\nOrton paused")
+        self.assertEqual(parsed["options"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
