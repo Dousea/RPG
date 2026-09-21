@@ -253,7 +253,14 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         # key, just always empty) -- seed the starting roster rather than
         # leaving the player with none, same fallback build_starting_npcs()
         # uses for an empty "npcs" list.
+        #
+        # Unlike that one, seeding here is not stateless: a save from the
+        # middle of a playthrough may already satisfy some objectives, and
+        # they only ever fire on the transition (SimulationCore._resolve_take
+        # and friends). Seeding blind would demand the player drop and retake
+        # a key they are already holding, so reconcile against loaded state.
         quests = build_starting_quests()
+        _reconcile_seeded_quests(quests, player, narrative, npcs)
     else:
         quests = {
             quest_id: QuestState(
@@ -276,6 +283,50 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         memory=memory,
         quests=quests,
     )
+
+
+def _reconcile_seeded_quests(
+    quests: dict[str, QuestState],
+    player: PlayerEntity,
+    narrative: NarrativeState,
+    npcs: dict[str, Any],
+) -> None:
+    """Mark objectives a freshly seeded roster has already satisfied.
+
+    Only for quests seeded into an existing save (see from_dict). Objective
+    keys fire on the transition, not the condition, so state reached before
+    the quest existed would otherwise never tick. This mirrors the checks in
+    SimulationCore -- keep the two in step when adding an objective type.
+    """
+    held = {
+        entity.item.id
+        for entity in [*player.inventory, *player.equipment.values()]
+        if entity is not None
+    }
+
+    def is_satisfied(objective: str) -> bool:
+        kind, _, rest = objective.partition(":")
+        if kind == "take":
+            return rest in held
+        if kind == "reach":
+            return rest == player.current_location_id
+        if kind == "discover":
+            return rest in narrative.discovered_flags
+        if kind == "defeat":
+            npc = npcs.get(rest)
+            return npc is not None and npc.hit_points <= 0
+        if kind == "npc_status":
+            npc_id, _, status = rest.partition(":")
+            npc = npcs.get(npc_id)
+            return npc is not None and status in npc.status
+        return False
+
+    for quest in quests.values():
+        for objective in quest.objectives:
+            if objective not in quest.completed_objectives and is_satisfied(objective):
+                quest.completed_objectives.append(objective)
+        if quest.is_complete():
+            quest.status = QuestStatus.COMPLETED
 
 
 def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> PlayerEntity:

@@ -50,6 +50,7 @@ from modules.modifier import (
     HPModifier,
     ReputationModifier,
 )
+from modules.quest import QuestStatus
 from modules.weapon import MeleeWeaponType
 
 # Fists deal a token amount of damage so an unarmed ATTACK still resolves
@@ -130,9 +131,9 @@ class SimulationCore:
     def _resolve_move(self, accepted: Accepted) -> str:
         location = accepted.resolved["location"]
         self.manager.player.current_location_id = location.id
-        fact = f"Move to {location.name}: succeeded."
-        quest_note = self._advance_quests(f"reach:{location.id}")
-        return f"{fact} {quest_note}".rstrip() if quest_note else fact
+        return self._with_quest_note(
+            f"Move to {location.name}: succeeded.", f"reach:{location.id}"
+        )
 
     # === Items ===
 
@@ -141,9 +142,9 @@ class SimulationCore:
         manager = self.manager
         manager.current_location.entities.remove(entity)
         manager.player.inventory.append(entity)
-        fact = f"Take {entity.item.name}: succeeded."
-        quest_note = self._advance_quests(f"take:{entity.item.id}")
-        return f"{fact} {quest_note}".rstrip() if quest_note else fact
+        return self._with_quest_note(
+            f"Take {entity.item.name}: succeeded.", f"take:{entity.item.id}"
+        )
 
     def _resolve_drop(self, accepted: Accepted) -> str:
         entity = accepted.resolved["item_entity"]
@@ -249,21 +250,31 @@ class SimulationCore:
                 f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, "
                 f"{npc.name} is down."
             )
-            quest_note = self._advance_quests(f"defeat:{npc.npc_id}")
-            return f"{fact} {quest_note}".rstrip() if quest_note else fact
+            return self._with_quest_note(fact, f"defeat:{npc.npc_id}")
         return (
             f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, "
             f"{npc.name} now at {npc.hit_points}/{npc.max_hit_points} HP."
         )
 
+    def _with_quest_note(self, fact: str, objective_key: str) -> str:
+        """Append any quest progress `objective_key` caused to `fact`.
+
+        Called from inside the `_resolve_*` methods, after the state change
+        has actually landed -- a validator rejection never reaches them, so a
+        refused action can't tick an objective.
+        """
+        note = self._advance_quests(objective_key)
+        return f"{fact} {note}" if note else fact
+
     def _advance_quests(self, objective_key: str) -> str:
         """Mark `objective_key` complete on every active quest that has it.
 
-        The only way a quest advances -- there is no LLM verb for it. Called
-        wherever the Simulation Core resolves an action that could complete
-        one (currently: discovering a flag, defeating an NPC)."""
-        from modules.quest import QuestStatus
-
+        The only way a quest advances -- there is no LLM verb for it. Every
+        producer of an objective key lives in this class: taking an item,
+        reaching a location, discovering a flag, defeating an NPC, and adding
+        an NPC status. Removing a status deliberately does not un-complete an
+        objective; quest progress only moves forward.
+        """
         notes: list[str] = []
         for quest in self.manager.quests.values():
             if quest.status != QuestStatus.ACTIVE:
@@ -334,9 +345,10 @@ class SimulationCore:
         action: DiscoverFlagAction = accepted.action
         self.manager.narrative.discovered_flags.add(action.flag_name)
         value = self.manager.narrative.flags.get(action.flag_name)
-        fact = f"Discovered flag '{action.flag_name}' (currently {value})."
-        quest_note = self._advance_quests(f"discover:{action.flag_name}")
-        return f"{fact} {quest_note}".rstrip() if quest_note else fact
+        return self._with_quest_note(
+            f"Discovered flag '{action.flag_name}' (currently {value}).",
+            f"discover:{action.flag_name}",
+        )
 
     def _resolve_update_relationship(self, accepted: Accepted) -> str:
         action: UpdateRelationshipAction = accepted.action
@@ -377,9 +389,11 @@ class SimulationCore:
         if action.operation == "ADD":
             if action.status not in npc.status:
                 npc.status.append(action.status)
-            fact = f"{npc.name} is now '{action.status}'."
-            quest_note = self._advance_quests(f"npc_status:{npc.npc_id}:{action.status}")
-            return f"{fact} {quest_note}".rstrip() if quest_note else fact
+            return self._with_quest_note(
+                f"{npc.name} is now '{action.status}'.",
+                f"npc_status:{npc.npc_id}:{action.status}",
+            )
+        # No quest note on REMOVE: see _advance_quests -- progress is one-way.
         npc.status.remove(action.status)
         return f"{npc.name} is no longer '{action.status}'."
 

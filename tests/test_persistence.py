@@ -214,6 +214,41 @@ class SaveFileTests(IsolatedSaveTestCase):
         self.assertTrue(loaded.quests)
         self.assertIn("quest_storage_room", loaded.quests)
 
+    def test_seeded_quests_reconcile_against_what_the_save_already_achieved(self):
+        # Objectives fire on the transition, not the condition. A save made
+        # mid-playthrough already holds the key and stands in the storage
+        # room, so seeding blind would leave both boxes unchecked forever --
+        # the player would have to drop and retake a key already in hand.
+        gm = GameManager()
+        resolve_actions(
+            gm, MoveAction(destination="north"), TakeAction(item_name="Storage Room Key")
+        )
+        gm.player.current_location_id = "location_id_storage"
+
+        persistence.save(gm, self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["quests"] = {}
+        self.write(data)
+
+        quest = persistence.load(self.save_path).quests["quest_storage_room"]
+        self.assertEqual(
+            sorted(quest.completed_objectives),
+            ["reach:location_id_storage", "take:item_storage_key"],
+        )
+        self.assertEqual(quest.status, QuestStatus.COMPLETED)
+
+    def test_reconciliation_leaves_unachieved_objectives_open(self):
+        persistence.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["quests"] = {}
+        self.write(data)
+
+        quest = persistence.load(self.save_path).quests["quest_storage_room"]
+        self.assertEqual(quest.completed_objectives, [])
+        self.assertEqual(quest.status, QuestStatus.ACTIVE)
+
     def write(self, data: dict) -> None:
         with open(self.save_path, "w", encoding="utf-8") as handle:
             json.dump(data, handle)

@@ -2,8 +2,9 @@
 
 import unittest
 
+from adapters.llm import PARSER_SYSTEM_PROMPT
 from data.items import ITEMS
-from data.quests import build_starting_quests
+from data.quests import NPC_STATUSES, STORY_FLAGS, build_starting_quests
 from managers.game import GameManager
 from modules.action import (
     AttackAction,
@@ -135,6 +136,26 @@ class StartingQuestContentTests(unittest.TestCase):
                 elif objective.startswith("npc_status:"):
                     npc_id = objective.removeprefix("npc_status:").split(":", 1)[0]
                     self.assertIn(npc_id, self.gm.npcs)
+
+    def test_flag_and_status_objectives_reference_the_declared_vocabulary(self):
+        # The one check the id-namespace tests above cannot make for us.
+        # Flag names and NPC statuses come from whatever the parser model
+        # invents, so an objective keyed on a name the parser was never
+        # taught is unwinnable with nothing to catch it -- STORY_FLAGS /
+        # NPC_STATUSES exist to close that namespace, and this asserts the
+        # roster stays inside it.
+        for quest in build_starting_quests().values():
+            for objective in quest.objectives:
+                if objective.startswith("discover:"):
+                    self.assertIn(objective.removeprefix("discover:"), STORY_FLAGS)
+                elif objective.startswith("npc_status:"):
+                    status = objective.removeprefix("npc_status:").split(":", 1)[1]
+                    self.assertIn(status, NPC_STATUSES)
+
+    def test_the_parser_is_taught_every_declared_name(self):
+        # The vocabulary is only useful if it actually reaches the model.
+        for name in (*STORY_FLAGS, *NPC_STATUSES):
+            self.assertIn(name, PARSER_SYSTEM_PROMPT)
 
     def test_a_new_game_starts_with_the_seeded_quests_active(self):
         for quest_id, quest in self.gm.quests.items():

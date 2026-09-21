@@ -11,11 +11,32 @@ the LLM interprets intent and writes prose; it never decides state.
 import requests
 
 import config
+from data.quests import NPC_STATUSES, STORY_FLAGS
 
 LM_STUDIO_URL = config.llm.base_url
 
 # LM Studio serves whatever model is loaded; this value is ignored.
 MODEL_NAME = config.llm.model_name
+
+
+def _vocabulary_lines(vocabulary: dict[str, str]) -> str:
+    return "".join(f"  {name} -- {when}\n" for name, when in sorted(vocabulary.items()))
+
+
+# Built from data/quests.py rather than written out here, so a quest keyed on
+# a story flag can't drift away from the name the parser was taught. These are
+# static names, not game state -- no firewall concern (the parser learns that
+# the flag *exists*, never whether it is set; see ContextBuilder).
+STORY_VOCABULARY = (
+    "STORY VOCABULARY: the game tracks these exact names. When the input "
+    "clearly matches one, use the name spelled exactly as given -- a near "
+    "miss is silently ignored by the engine. Any other name is fine for an "
+    "incidental fact, but these are the ones that matter.\n"
+    "DISCOVER_FLAG names:\n"
+    f"{_vocabulary_lines(STORY_FLAGS)}"
+    "NPC_STATUS names:\n"
+    f"{_vocabulary_lines(NPC_STATUSES)}"
+)
 
 PARSER_SYSTEM_PROMPT = (
     "You are the intent parser for a text-based zombie apocalypse RPG. Orton, "
@@ -45,7 +66,7 @@ PARSER_SYSTEM_PROMPT = (
     "- UPDATE_RELATIONSHIP npc_name affection/trust +/-number\n"
     "- ADD_RELATIONSHIP_NOTE npc_name note_text\n"
     "- SET_FLAG flag_name true/false\n"
-    "- DISCOVER_FLAG flag_name (Orton has just learned this world fact, whatever it is)\n"
+    "- DISCOVER_FLAG flag_name (Orton has just learned this world fact)\n"
     "- UPDATE_INVENTORY item_name ADD/REMOVE/UPDATE_CONDITION/UPDATE_QUANTITY value\n"
     "- NPC_MOVE npc_name TO location_name\n"
     "- NPC_STATUS npc_name ADD/REMOVE status_name\n"
@@ -53,6 +74,7 @@ PARSER_SYSTEM_PROMPT = (
     "Note: there is no action for dealing or taking damage directly, and no "
     "way to set health -- ATTACK is how combat starts; the engine computes "
     "the result.\n\n"
+    f"{STORY_VOCABULARY}\n"
     "Example:\n"
     "Input: 'I pick up the crowbar and head north'\n"
     "ACTIONS:\n"
