@@ -75,7 +75,7 @@ this one.
 | [04 Entity Resolution](04-entity-resolution.md) | Partial | `resolve_npc`, `resolve_location`, `_find_item_entity` | Exact casefold matching on name or id only. No description-based resolution, no ambiguity state, no clarification round trip. |
 | [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Four hand-written rooms (one behind a locked door). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
 | [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are nine of them. Out of scope for the engine-authority work. |
-| [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `data/quests.py`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. |
+| [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `data/quests.py`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. One decided-but-unbuilt change is recorded in that document's *As Implemented* section: `discover:`/`npc_status:` objectives currently depend on names the *parser* invents, and need engine producers instead. |
 | [08 Time and Scheduling](08-time-and-scheduling.md) | Partial | `SimulationCore._advance_one_tick`, `_action_time_advance`, `_sync_world_clock` | Ordinary actions (move, attack) now advance the clock themselves — the engine owns time progression instead of depending on the LLM to remember `TIME_ADVANCE`. Still one coarse clock (four parts of a day), no sub-tick frequencies, no hunger/stamina/weather driven by it. Deeper scheduling is out of scope. |
 | [09 Zombie Survival](09-zombie-survival.md) | Planned | — | No noise, no light, no visibility, no scavenging model. Out of scope for the engine-authority work. |
 | [10 Combat and Stealth](10-combat-and-stealth.md) | Partial | `managers/simulation.py` `_resolve_attack`, `modules/event.py`, `modules/modifier.py` | `ATTACK` is a real action: it resolves through the event/modifier pipeline, applies equipped-weapon damage with jitter, and both "dealt" and "taken" trait/perk reactions actually fire (Small Frame, Gun Slinger). No stealth, no ranged distance/line-of-sight, no armor mitigation yet — this is base damage resolution, not the full document. |
@@ -173,9 +173,30 @@ string (`take:`, `reach:`, `discover:`, `defeat:`, `npc_status:`). A real
 Story Director (document 07) is out of scope here. Content now exists:
 `data/quests.py` seeds three starting quests on a new game (and backfills
 them into any save written before this existed, the same way an empty NPC
-roster falls back to `build_starting_npcs()`), and `ContextBuilder` renders
+roster falls back to `build_starting_npcs()`, reconciling the seeded roster
+against what that save had already achieved), and `ContextBuilder` renders
 active quests and their checked-off objectives to the narrator in a
 `[QUESTS]` section, so the LLM has something to narrate progress against.
+
+The live constraint on writing quests is which namespace an objective key
+bottoms out in. `take:`/`reach:`/`defeat:` reference ids the engine owns and
+enumerates, so a typo is caught by a test. `discover:`/`npc_status:`
+reference names the *parser model invents* from player input, so there is no
+set to check against and a near miss (`outbreak_cause` for
+`apocalypse_cause`) fails silently and permanently. `data/quests.py` closes
+that namespace by hand — declaring `STORY_FLAGS`/`NPC_STATUSES`, with
+`adapters/llm.py` building the parser's vocabulary block from those
+declarations and `tests/test_quests.py` asserting the roster stays inside it
+— so adding such an objective means declaring its name too.
+
+That is a stopgap, and document 07's *As Implemented* section records the
+decision that supersedes it: these flags and statuses need **engine
+producers** (a condition on world state; a `RelationshipManager` trust band
+crossing) rather than a parser instruction, because a flag that gates quest
+progress is state, and per document 01 the LLM never decides state. Until
+that exists, two of the three seeded quests depend on the model spelling a
+name exactly right — which the vocabulary block makes likely and cannot make
+certain.
 
 **Scale is still unaddressed.** Everything above holds at the game's current
 size — four rooms, three NPCs. Documents 05 (world generation), 06
