@@ -227,5 +227,36 @@ class LifecycleTests(EngineTestCase):
         self.assertIn("Crowbar", [e.item.name for e in office.entities])
 
 
+class SaveLoadTests(EngineTestCase):
+    def test_export_round_trips_through_import(self):
+        self.engine.play("go north")
+        exported = self.engine.export_save()
+
+        other = GameEngine()
+        other.memory = FakeMemory()
+        result = other.import_save(exported)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["current_location"], "Office")
+        self.assertIn("Find a weapon", result["goals"]["short_term"])
+
+    def test_import_rejects_a_bad_version(self):
+        exported = self.engine.export_save()
+        exported["version"] = 999
+        self.assertIsNone(self.engine.import_save(exported))
+        # The live game must be untouched by a rejected upload.
+        self.assertEqual(self.engine.manager.player.current_location_id, "location_id_hallway")
+
+    def test_import_persists_the_uploaded_save(self):
+        self.engine.play("go north")  # now at the office
+        exported = self.engine.export_save()
+
+        self.engine.reset()  # back to the hallway; save file now says hallway
+        self.engine.import_save(exported)  # re-import the office save
+
+        reloaded = persistence.load(self.save_path)
+        self.assertEqual(reloaded.player.current_location_id, "location_id_office")
+
+
 if __name__ == "__main__":
     unittest.main()

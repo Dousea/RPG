@@ -478,6 +478,24 @@ def save(manager: GameManager, path: str | None = None) -> None:
     os.replace(temp_path, path)
 
 
+def from_saved_data(data: dict[str, Any]) -> GameManager | None:
+    """Validate parsed save JSON and build a GameManager from it, or None.
+
+    Shared by `load` (reads the autosave off disk) and the `/save/import`
+    route (reads a file the player uploaded) -- both need the same schema
+    check and the same "don't half-load a corrupt save" guard.
+    """
+    version = data.get("version")
+    if version != SCHEMA_VERSION:
+        print(f"[Persistence] Save schema v{version} != v{SCHEMA_VERSION}; rejecting.")
+        return None
+    try:
+        return from_dict(data)
+    except (KeyError, TypeError, ValueError) as exc:
+        print(f"[Persistence] Corrupt save: {exc}.")
+        return None
+
+
 def load(path: str | None = None) -> GameManager | None:
     """Load a saved game, or return None if there is no usable save."""
     path = path or SAVE_FILE
@@ -490,18 +508,7 @@ def load(path: str | None = None) -> GameManager | None:
         print(f"[Persistence] Could not read save at {path}: {exc}")
         return None
 
-    version = data.get("version")
-    if version != SCHEMA_VERSION:
-        print(
-            f"[Persistence] Save schema v{version} != v{SCHEMA_VERSION}; starting fresh."
-        )
-        return None
-
-    try:
-        return from_dict(data)
-    except (KeyError, TypeError, ValueError) as exc:
-        print(f"[Persistence] Corrupt save at {path}: {exc}. Starting fresh.")
-        return None
+    return from_saved_data(data)
 
 
 def delete(path: str | None = None) -> None:

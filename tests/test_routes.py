@@ -1,5 +1,7 @@
 """The Flask routes, driven through Flask's real test client."""
 
+import io
+import json
 import unittest
 
 import adapters.engine as engine_module
@@ -53,10 +55,18 @@ class IndexTests(RouteTestCase):
         for element_id in (
             b'id="story-display"',
             b'id="location-status"',
-            b'id="condition-status"',
+            b'id="vitals"',
             b'id="inventory-list"',
+            b'id="equipment-list"',
             b'id="npc-list"',
             b'id="goal-list"',
+            b'id="quest-list"',
+            b'id="trait-list"',
+            b'id="perk-list"',
+            b'id="attribute-grid"',
+            b'id="save-button"',
+            b'id="load-button"',
+            b'id="load-input"',
         ):
             self.assertIn(element_id, response.data)
 
@@ -115,6 +125,47 @@ class PlayTests(RouteTestCase):
         payload = response.get_json()
         self.assertIn("LM Studio is not running", payload["story_text"])
         self.assertEqual(payload["current_location"], "Hallway")
+
+
+class SaveLoadRouteTests(RouteTestCase):
+    def test_export_downloads_a_save_file(self):
+        response = self.client.get("/save/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment", response.headers.get("Content-Disposition", ""))
+        payload = response.get_json()
+        self.assertEqual(payload["player"]["current_location_id"], "location_id_hallway")
+
+    def test_import_loads_an_exported_save(self):
+        self.client.post("/play", json={"input": "go north"})
+        exported = self.client.get("/save/export").get_json()
+        exported["player"]["current_location_id"] = "location_id_hallway"
+
+        response = self.client.post(
+            "/save/import",
+            data={
+                "save": (
+                    io.BytesIO(json.dumps(exported).encode("utf-8")),
+                    "orton-save.json",
+                )
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["current_location"], "Hallway")
+
+    def test_import_rejects_a_non_json_file(self):
+        response = self.client.post(
+            "/save/import",
+            data={"save": (io.BytesIO(b"not json"), "orton-save.json")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.get_json())
+
+    def test_import_without_a_file_is_rejected(self):
+        response = self.client.post("/save/import", data={}, content_type="multipart/form-data")
+        self.assertEqual(response.status_code, 400)
 
 
 class ResetTests(RouteTestCase):

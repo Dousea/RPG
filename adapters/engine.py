@@ -14,6 +14,7 @@ from adapters.memory import SemanticMemory
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from modules.action import parse_action_plan
+from modules.quest import QuestStatus
 
 
 class GameEngine:
@@ -127,40 +128,131 @@ class GameEngine:
         with self._lock:
             return self._snapshot(story_text="")
 
+    def export_save(self) -> dict[str, Any]:
+        """The current game as a save-file dict, for the player to download."""
+        with self._lock:
+            return persistence.to_dict(self.manager)
+
+    def import_save(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        """Replace the live game with an uploaded save, or reject a bad one.
+
+        Same version/shape validation `persistence.load` applies to the
+        autosave on disk -- a rejected upload leaves the current game running
+        untouched. A save that is accepted becomes the new autosave too, so
+        the next turn continues from it rather than silently reverting.
+        """
+        with self._lock:
+            manager = persistence.from_saved_data(data)
+            if manager is None:
+                return None
+            self.manager = manager
+            self.memory.rebuild(manager.memory.full_event_log)
+            persistence.save(manager)
+            return self._snapshot(story_text="")
+
     # === Presentation ===
 
     def _snapshot(self, story_text: str) -> dict[str, Any]:
-        """Build the frontend payload. Caller must hold the lock."""
+        """Build the frontend payload. Caller must hold the lock.
+
+        Mirrors what `managers/context.py` already tells the narrator about
+        Orton -- quests, conditions, equipment, traits/perks, level, and NPC
+        disposition bands -- so the player can see in the panel what the
+        narrator has been reacting to all along. NPC bands go out the same
+        way `ContextBuilder._npcs_present_section` sends them to the LLM
+        (disposition/trust bands, never the raw affinity integer): the
+        knowledge-firewall boundary in doc 11 applies to the player's screen
+        exactly as much as it applies to a prompt.
+        """
         manager = self.manager
         player = manager.player
         narrative = manager.narrative
 
+        npcs_here = manager.npcs_in_location(player.current_location_id)
+
         return {
             "story_text": story_text,
             "current_location": manager.current_location.name,
+            "location_description": manager.current_location.description,
+            "day": narrative.day,
+            "time_of_day": narrative.time_of_day,
+            "apocalypse_stage": narrative.apocalypse_stage,
+            "vitals": {
+                "health": player.hit_points,
+                "max_health": player.max_hit_points,
+                "hunger": player.hunger,
+                "thirst": player.thirst,
+                "morale": player.morale,
+                "sleep": narrative.conditions.get("sleep", "Rested"),
+                "infection_risk": narrative.conditions.get("infection_risk", "No"),
+            },
+            "level": player.level,
+            "experience_points": player.experience_points,
+            "attributes": {
+                attr.value: value for attr, value in player.attributes.items()
+            },
+            "conditions": [condition.value for condition in player.conditions],
+            "status_effects": list(narrative.player_status),
             # A list, not a string: the frontend iterates this.
             "inventory": [
-                f"{entity.item.name}"
-                f" ({entity.hit_points}/{entity.max_hit_points})"
+                {
+                    "name": entity.item.name,
+                    "condition": f"{entity.hit_points}/{entity.max_hit_points}",
+                }
                 for entity in player.inventory
             ],
-            "condition": (
-                f"Health: {player.hit_points}/{player.max_hit_points}, "
-                f"Hunger: {player.hunger}%, "
-                f"Thirst: {player.thirst}%, "
-                f"Morale: {player.morale}%, "
-                f"Sleep: {narrative.conditions.get('sleep', 'Rested')}, "
-                f"Infection Risk: {narrative.conditions.get('infection_risk', 'No')}"
-            ),
+            "equipment": [
+                {
+                    "slot": slot.value.replace("_", " ").title(),
+                    "item": entity.item.name if entity is not None else None,
+                    "condition": (
+                        f"{entity.hit_points}/{entity.max_hit_points}"
+                        if entity is not None
+                        else None
+                    ),
+                }
+                for slot, entity in player.equipment.items()
+            ],
+            "traits": [
+                {"name": trait.name, "description": trait.description}
+                for trait in player.traits
+            ],
+            "perks": [
+                {"name": perk.name, "description": perk.description}
+                for perk in player.perks
+            ],
             "goals": {
                 "short_term": list(narrative.goals.get("short_term", [])),
                 "long_term": list(narrative.goals.get("long_term", [])),
             },
-            "npcs_present": [
-                npc.name
-                for npc in manager.npcs_in_location(player.current_location_id)
+            "quests": [
+                {
+                    "title": quest.title or quest.quest_id,
+                    "objectives": [
+                        {
+                            "label": quest.objective_labels.get(objective, objective),
+                            "done": objective in quest.completed_objectives,
+                        }
+                        for objective in quest.objectives
+                    ],
+                }
+                for quest in manager.quests.values()
+                if quest.status == QuestStatus.ACTIVE
             ],
-            "day": narrative.day,
-            "time_of_day": narrative.time_of_day,
-            "apocalypse_stage": narrative.apocalypse_stage,
+            # Plain names, kept for callers that only need the roster.
+            "npcs_present": [npc.name for npc in npcs_here],
+            # Same names alongside how each NPC currently regards Orton, as a
+            # disposition/trust band rather than the underlying integer.
+            "npcs": [
+                {
+                    "name": npc.name,
+                    "disposition": manager.relationship_manager.get_disposition(
+                        npc.npc_id, player.entity_id
+                    ).value,
+                    "trust": manager.relationship_manager.get_trust_level(
+                        npc.npc_id, player.entity_id
+                    ).value,
+                }
+                for npc in npcs_here
+            ],
         }

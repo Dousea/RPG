@@ -5,7 +5,9 @@ This module is deliberately thin: it does HTTP and nothing else. A turn is
 index and persistence. Game rules live in `managers/` and `modules/`.
 """
 
-from flask import Flask, jsonify, render_template, request
+import json
+
+from flask import Flask, Response, jsonify, render_template, request
 
 import config
 from adapters.engine import GameEngine
@@ -54,6 +56,35 @@ def reset_game():
     """Deletes the save and starts a fresh game."""
     result = get_engine().reset()
     return jsonify({"message": "Game has been reset.", "state": result})
+
+
+@app.route("/save/export", methods=["GET"])
+def export_save():
+    """Download the current game as a save file."""
+    payload = get_engine().export_save()
+    body = json.dumps(payload, indent=2)
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": "attachment; filename=orton-save.json"},
+    )
+
+
+@app.route("/save/import", methods=["POST"])
+def import_save():
+    """Replace the current game with a save file the player uploads."""
+    upload = request.files.get("save")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "No save file provided."}), 400
+    try:
+        data = json.loads(upload.read().decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return jsonify({"error": "That file isn't valid save data."}), 400
+
+    result = get_engine().import_save(data)
+    if result is None:
+        return jsonify({"error": "That save is missing or from an incompatible version."}), 400
+    return jsonify(result)
 
 
 if __name__ == "__main__":

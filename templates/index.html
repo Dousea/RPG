@@ -4,248 +4,873 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Local LLM RPG</title>
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Simple, old-school terminal font */
-        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        :root {
+            --ink: #1c1a17;
+            --panel: #262320;
+            --panel-raised: #2d2a25;
+            --paper: #e7ddc8;
+            --paper-dim: #9c9382;
+            --ember: #c17a3d;
+            --moss: #7c8c5c;
+            --hazard: #af5347;
+            --line: #3d3830;
+        }
+
+        * { box-sizing: border-box; }
+
         body {
-            font-family: 'VT323', monospace;
-            background-color: #0a0a0a;
-            color: #00ff41;
+            font-family: 'Archivo', sans-serif;
+            background-color: var(--ink);
+            color: var(--paper);
+            margin: 0;
         }
-        /* Custom scrollbar for the story display */
-        #story-display::-webkit-scrollbar {
-            width: 8px;
+
+        h1, h2, h3 { font-family: 'Archivo', sans-serif; font-weight: 600; margin: 0; }
+
+        .page {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 1.25rem 1.5rem;
+            gap: 1rem;
         }
-        #story-display::-webkit-scrollbar-track {
-            background: #1a1a1a;
+
+        /* === Header === */
+        header {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 0.85rem;
         }
-        #story-display::-webkit-scrollbar-thumb {
-            background-color: #00ff41;
+
+        .title-block h1 {
+            font-size: 1.6rem;
+            letter-spacing: 0.01em;
+        }
+
+        .meta-chips {
+            display: flex;
+            gap: 0.4rem;
+            margin-top: 0.4rem;
+        }
+
+        .chip {
+            font-size: 0.82rem;
+            color: var(--paper-dim);
+            border: 1px solid var(--line);
+            border-radius: 3px;
+            padding: 0.15rem 0.5rem;
+        }
+
+        .chip.stage { color: var(--ember); border-color: var(--ember); }
+
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            font-family: 'Archivo', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--paper-dim);
+            padding: 0.4rem 0.85rem;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: border-color 0.15s ease, color 0.15s ease;
+        }
+
+        .btn:hover { color: var(--paper); border-color: var(--paper-dim); }
+        .btn.save { border-color: var(--moss); color: var(--moss); }
+        .btn.save:hover { background: var(--moss); color: var(--ink); }
+        .btn.load { border-color: var(--ember); color: var(--ember); }
+        .btn.load:hover { background: var(--ember); color: var(--ink); }
+        .btn.danger { border-color: var(--hazard); color: var(--hazard); }
+        .btn.danger:hover { background: var(--hazard); color: var(--ink); }
+
+        /* === Main layout === */
+        main {
+            flex-grow: 1;
+            display: flex;
+            gap: 1.25rem;
+            overflow: hidden;
+        }
+
+        /* === Log (left) === */
+        #story-display {
+            width: 62%;
+            background: var(--panel);
+            border: 1px solid var(--line);
             border-radius: 4px;
+            padding: 1.5rem 1.75rem;
+            overflow-y: auto;
+            font-family: 'Spectral', serif;
+            font-size: 1.15rem;
+            line-height: 1.65;
         }
-        /* Blinking cursor effect */
-        .blinking-cursor {
-            animation: blink 1s step-end infinite;
+
+        #story-display::-webkit-scrollbar { width: 8px; }
+        #story-display::-webkit-scrollbar-track { background: var(--panel); }
+        #story-display::-webkit-scrollbar-thumb { background-color: var(--line); border-radius: 4px; }
+
+        #story-display hr {
+            border: none;
+            border-top: 1px solid var(--line);
+            margin: 1.1rem 0;
         }
-        @keyframes blink {
-            50% {
-                opacity: 0;
-            }
+
+        #story-display p { margin: 0; }
+        #story-display .echo { color: var(--ember); font-style: italic; display: block; margin-bottom: 0.4rem; }
+        #story-display .system-error { color: var(--hazard); font-family: 'Archivo', sans-serif; }
+
+        /* === Dossier (right) === */
+        .dossier {
+            width: 38%;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .dossier-location {
+            padding: 1rem 1.25rem 0.85rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .dossier-location h2 { font-size: 1.2rem; }
+        .dossier-location p {
+            margin: 0.3rem 0 0;
+            font-size: 0.9rem;
+            color: var(--paper-dim);
+            font-style: italic;
+            font-family: 'Spectral', serif;
+        }
+
+        .tab-nav {
+            display: flex;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--line);
+            padding: 0 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--paper-dim);
+            font-family: 'Archivo', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 500;
+            padding: 0.6rem 0.6rem;
+            cursor: pointer;
+        }
+
+        .tab-btn:hover { color: var(--paper); }
+        .tab-btn.active { color: var(--ember); border-bottom-color: var(--ember); }
+
+        .tab-panels {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.1rem 1.25rem 1.5rem;
+        }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .section { margin-bottom: 1.5rem; }
+        .section:last-child { margin-bottom: 0; }
+        .section h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--paper);
+            border-left: 2px solid var(--ember);
+            padding-left: 0.55rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .empty-note { color: var(--paper-dim); font-size: 0.9rem; font-style: italic; }
+
+        /* Vitals bars */
+        .stat-row { margin-bottom: 0.7rem; }
+        .stat-row:last-child { margin-bottom: 0; }
+        .stat-row-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.88rem;
+            color: var(--paper-dim);
+            margin-bottom: 0.3rem;
+        }
+        .stat-row-head span:last-child { color: var(--paper); }
+        .stat-bar {
+            height: 7px;
+            background: var(--line);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .stat-bar-fill {
+            height: 100%;
+            background: var(--moss);
+            width: 0%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        .stat-bar-fill.warn { background: var(--ember); }
+        .stat-bar-fill.bad { background: var(--hazard); }
+
+        .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+
+        /* Tags */
+        .tag {
+            display: inline-block;
+            font-size: 0.82rem;
+            border: 1px solid var(--line);
+            color: var(--paper-dim);
+            border-radius: 3px;
+            padding: 0.15rem 0.55rem;
+        }
+        .tag.good { border-color: var(--moss); color: var(--moss); }
+        .tag.bad { border-color: var(--hazard); color: var(--hazard); }
+        .tag.warn { border-color: var(--ember); color: var(--ember); }
+
+        /* Lists (inventory / equipment / attributes) */
+        .row-list { list-style: none; margin: 0; padding: 0; }
+        .row-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 0.5rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--line);
+            font-size: 0.92rem;
+        }
+        .row-item:last-child { border-bottom: none; }
+        .row-item .label { color: var(--paper-dim); }
+        .row-item .value { text-align: right; }
+        .row-item .value.muted { color: var(--paper-dim); }
+
+        .attr-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 1.25rem;
+        }
+        .attr-grid .row-item { grid-column: span 1; }
+
+        /* Traits / perks */
+        .named-entry { margin-bottom: 0.7rem; }
+        .named-entry:last-child { margin-bottom: 0; }
+        .named-entry .name { font-weight: 600; font-size: 0.92rem; }
+        .named-entry .desc { font-size: 0.85rem; color: var(--paper-dim); margin-top: 0.15rem; }
+
+        /* NPCs */
+        .npc-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--line);
+        }
+        .npc-entry:last-child { border-bottom: none; }
+        .npc-entry .name { font-size: 0.95rem; }
+        .npc-entry .trust { font-size: 0.78rem; color: var(--paper-dim); margin-left: 0.5rem; }
+
+        /* Quests */
+        .quest { margin-bottom: 1.1rem; }
+        .quest:last-child { margin-bottom: 0; }
+        .quest-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.4rem; }
+        .quest-objective {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.88rem;
+            color: var(--paper-dim);
+            margin-bottom: 0.25rem;
+        }
+        .quest-objective.done { color: var(--moss); }
+        .quest-objective .glyph { flex-shrink: 0; }
+
+        /* Goals */
+        .goal-group h4 {
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--paper-dim);
+            margin: 0 0 0.4rem;
+        }
+        .goal-group { margin-bottom: 0.9rem; }
+        .goal-group:last-child { margin-bottom: 0; }
+        .goal-group ul { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
+        .goal-group li { margin-bottom: 0.25rem; }
+
+        /* === Footer input === */
+        footer { flex-shrink: 0; }
+        #input-form {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            padding: 0.35rem 0.35rem 0.35rem 1rem;
+        }
+        #input-form label { color: var(--ember); font-family: 'Spectral', serif; font-size: 1.3rem; }
+        #player-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: var(--paper);
+            font-family: 'Spectral', serif;
+            font-size: 1.1rem;
+            padding: 0.6rem 0;
+        }
+        #player-input:focus { outline: none; }
+        #player-input::placeholder { color: var(--paper-dim); }
+        #submit-button {
+            font-family: 'Archivo', sans-serif;
+            font-weight: 600;
+            font-size: 0.9rem;
+            background: var(--ember);
+            color: var(--ink);
+            border: none;
+            padding: 0.65rem 1.4rem;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #submit-button:hover { background: #d4894e; }
+        #submit-button:disabled { background: var(--line); color: var(--paper-dim); cursor: default; }
+
+        @media (max-width: 860px) {
+            main { flex-direction: column; overflow: visible; }
+            .page { height: auto; min-height: 100vh; overflow-y: auto; }
+            #story-display, .dossier { width: 100%; }
+            #story-display { height: 45vh; }
+            .dossier { height: 60vh; }
         }
     </style>
 </head>
-<body class="flex flex-col h-screen p-4 md:p-6 lg:p-8">
+<body>
+<div class="page">
 
-    <header class="flex-shrink-0 flex justify-between items-center border-b-2 border-green-500 pb-2 mb-4">
-        <h1 class="text-3xl md:text-4xl">Local LLM RPG</h1>
-        <button id="reset-button" class="text-sm border border-red-500 text-red-500 px-3 py-1 rounded hover:bg-red-500 hover:text-black transition-colors">
-            Reset Game
-        </button>
+    <header>
+        <div class="title-block">
+            <h1>Orton's Log</h1>
+            <div class="meta-chips" id="meta-chips">
+                <span class="chip">Day &mdash;</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="save-button" class="btn save">Save to file</button>
+            <button id="load-button" class="btn load">Load from file</button>
+            <input type="file" id="load-input" accept="application/json" hidden>
+            <button id="reset-button" class="btn danger">Reset game</button>
+        </div>
     </header>
 
-    <main class="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
-        
-        <!-- Left Panel: Story Display -->
-        <div id="story-display" class="w-full md:w-2/3 h-64 md:h-full bg-black/50 border-2 border-green-700 rounded-lg p-4 overflow-y-auto text-lg leading-relaxed">
-            <p>Welcome, Orton. The adventure begins...</p>
+    <main>
+        <div id="story-display">
+            <p>Welcome, Orton. The adventure begins&hellip;</p>
         </div>
 
-        <!-- Right Panel: Game State -->
-        <div class="w-full md:w-1/3 flex-shrink-0 bg-black/50 border-2 border-green-700 rounded-lg p-4 flex flex-col gap-4 overflow-y-auto">
-            <div>
-                <h2 class="text-2xl border-b border-green-500/50 mb-2">LOCATION</h2>
-                <p id="location-status" class="text-xl">&mdash;</p>
-                <p id="time-status" class="text-lg text-green-300/70">&mdash;</p>
+        <div class="dossier">
+            <div class="dossier-location">
+                <h2 id="location-status">&mdash;</h2>
+                <p id="location-description"></p>
             </div>
-            <div>
-                <h2 class="text-2xl border-b border-green-500/50 mb-2">CONDITION</h2>
-                <p id="condition-status" class="text-lg">&mdash;</p>
-            </div>
-            <div>
-                <h2 class="text-2xl border-b border-green-500/50 mb-2">INVENTORY</h2>
-                <ul id="inventory-list" class="list-disc list-inside text-xl">
-                    <li class="text-green-300/50">(empty)</li>
-                </ul>
-            </div>
-            <div>
-                <h2 class="text-2xl border-b border-green-500/50 mb-2">PRESENT</h2>
-                <ul id="npc-list" class="list-disc list-inside text-xl">
-                    <li class="text-green-300/50">(no one)</li>
-                </ul>
-            </div>
-            <div>
-                <h2 class="text-2xl border-b border-green-500/50 mb-2">GOALS</h2>
-                <ul id="goal-list" class="list-disc list-inside text-lg">
-                    <li class="text-green-300/50">(none)</li>
-                </ul>
+
+            <nav class="tab-nav">
+                <button class="tab-btn active" data-tab="status">Status</button>
+                <button class="tab-btn" data-tab="gear">Gear</button>
+                <button class="tab-btn" data-tab="character">Character</button>
+                <button class="tab-btn" data-tab="people">People</button>
+                <button class="tab-btn" data-tab="quests">Quests</button>
+            </nav>
+
+            <div class="tab-panels">
+
+                <div class="tab-panel active" id="tab-status">
+                    <div class="section">
+                        <h3>Vitals</h3>
+                        <div id="vitals"></div>
+                        <div class="chip-row" id="condition-chips"></div>
+                    </div>
+                    <div class="section">
+                        <h3>Effects</h3>
+                        <div class="chip-row" id="status-tags"></div>
+                    </div>
+                    <div class="section">
+                        <h3>Goals</h3>
+                        <div id="goal-list"></div>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="tab-gear">
+                    <div class="section">
+                        <h3>Equipped</h3>
+                        <ul class="row-list" id="equipment-list"></ul>
+                    </div>
+                    <div class="section">
+                        <h3>Carried</h3>
+                        <ul class="row-list" id="inventory-list"></ul>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="tab-character">
+                    <div class="section">
+                        <h3>Standing</h3>
+                        <ul class="row-list" id="standing-list"></ul>
+                    </div>
+                    <div class="section">
+                        <h3>Attributes</h3>
+                        <div class="attr-grid" id="attribute-grid"></div>
+                    </div>
+                    <div class="section">
+                        <h3>Traits</h3>
+                        <div id="trait-list"></div>
+                    </div>
+                    <div class="section">
+                        <h3>Perks</h3>
+                        <div id="perk-list"></div>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="tab-people">
+                    <div class="section">
+                        <h3>Present</h3>
+                        <div id="npc-list"></div>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="tab-quests">
+                    <div class="section">
+                        <h3>Active</h3>
+                        <div id="quest-list"></div>
+                    </div>
+                </div>
+
             </div>
         </div>
-
     </main>
 
-    <footer class="flex-shrink-0 mt-4">
-        <form id="input-form" class="flex items-center gap-2">
-            <label for="player-input" class="text-2xl">&gt;</label>
-            <input type="text" id="player-input" class="w-full bg-transparent border-b-2 border-green-500 focus:outline-none text-xl p-2" autocomplete="off" placeholder="What do you do?">
-            <button type="submit" id="submit-button" class="bg-green-700 text-black px-6 py-2 rounded-md hover:bg-green-500 transition-colors">
-                SEND
-            </button>
+    <footer>
+        <form id="input-form">
+            <label for="player-input">&gt;</label>
+            <input type="text" id="player-input" autocomplete="off" placeholder="What do you do?">
+            <button type="submit" id="submit-button">Act</button>
         </form>
     </footer>
 
-    <script>
-        // DOM Element References
-        const storyDisplay = document.getElementById('story-display');
-        const locationStatus = document.getElementById('location-status');
-        const timeStatus = document.getElementById('time-status');
-        const conditionStatus = document.getElementById('condition-status');
-        const inventoryList = document.getElementById('inventory-list');
-        const npcList = document.getElementById('npc-list');
-        const goalList = document.getElementById('goal-list');
-        const inputForm = document.getElementById('input-form');
-        const playerInput = document.getElementById('player-input');
-        const submitButton = document.getElementById('submit-button');
-        const resetButton = document.getElementById('reset-button');
+</div>
 
-        // Render a list, falling back to a dimmed placeholder when empty.
-        function renderList(element, items, emptyLabel) {
-            element.innerHTML = '';
-            if (!items || items.length === 0) {
-                const li = document.createElement('li');
-                li.className = 'text-green-300/50 list-none';
-                li.textContent = emptyLabel;
-                element.appendChild(li);
-                return;
-            }
-            items.forEach(item => {
-                const li = document.createElement('li');
-                li.textContent = item;
-                element.appendChild(li);
+<script>
+    // DOM references
+    const storyDisplay = document.getElementById('story-display');
+    const metaChips = document.getElementById('meta-chips');
+    const locationStatus = document.getElementById('location-status');
+    const locationDescription = document.getElementById('location-description');
+    const vitals = document.getElementById('vitals');
+    const conditionChips = document.getElementById('condition-chips');
+    const statusTags = document.getElementById('status-tags');
+    const goalList = document.getElementById('goal-list');
+    const equipmentList = document.getElementById('equipment-list');
+    const inventoryList = document.getElementById('inventory-list');
+    const standingList = document.getElementById('standing-list');
+    const attributeGrid = document.getElementById('attribute-grid');
+    const traitList = document.getElementById('trait-list');
+    const perkList = document.getElementById('perk-list');
+    const npcList = document.getElementById('npc-list');
+    const questList = document.getElementById('quest-list');
+    const inputForm = document.getElementById('input-form');
+    const playerInput = document.getElementById('player-input');
+    const submitButton = document.getElementById('submit-button');
+    const resetButton = document.getElementById('reset-button');
+    const saveButton = document.getElementById('save-button');
+    const loadButton = document.getElementById('load-button');
+    const loadInput = document.getElementById('load-input');
+
+    // Bands a 0-100 stat into a bar color: healthy stays moss, a mid range
+    // warns in ember, and a low value reads as hazard -- the color itself is
+    // the status, not decoration on top of it.
+    function bandClass(percent) {
+        if (percent < 30) return 'bad';
+        if (percent < 60) return 'warn';
+        return '';
+    }
+
+    function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+    }
+
+    function clearAndFill(container, nodes) {
+        container.innerHTML = '';
+        nodes.forEach(node => container.appendChild(node));
+    }
+
+    function emptyNote(text) {
+        return el('p', 'empty-note', text);
+    }
+
+    // === Tab switching ===
+    document.querySelectorAll('.tab-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            button.classList.add('active');
+            document.getElementById(`tab-${button.dataset.tab}`).classList.add('active');
+        });
+    });
+
+    // === Section renderers ===
+
+    function renderMetaChips(data) {
+        const timeLabel = (data.time_of_day || '').replace(/^\w/, c => c.toUpperCase());
+        metaChips.innerHTML = '';
+        metaChips.appendChild(el('span', 'chip', `Day ${data.day}`));
+        metaChips.appendChild(el('span', 'chip', timeLabel));
+        metaChips.appendChild(el('span', 'chip stage', data.apocalypse_stage));
+    }
+
+    function renderVitals(data) {
+        const v = data.vitals || {};
+        const rows = [
+            ['Health', v.health, v.max_health],
+            ['Hunger', v.hunger, 100],
+            ['Thirst', v.thirst, 100],
+            ['Morale', v.morale, 100],
+        ];
+        vitals.innerHTML = '';
+        rows.forEach(([label, value, max]) => {
+            const percent = max ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+            const row = el('div', 'stat-row');
+            const head = el('div', 'stat-row-head');
+            head.appendChild(el('span', null, label));
+            head.appendChild(el('span', null, `${value}${max === 100 ? '%' : `/${max}`}`));
+            const bar = el('div', 'stat-bar');
+            const fill = el('div', `stat-bar-fill ${bandClass(percent)}`.trim());
+            fill.style.width = `${percent}%`;
+            bar.appendChild(fill);
+            row.appendChild(head);
+            row.appendChild(bar);
+            vitals.appendChild(row);
+        });
+
+        conditionChips.innerHTML = '';
+        conditionChips.appendChild(el('span', 'tag', `Sleep: ${v.sleep || 'Rested'}`));
+        const infectionBad = v.infection_risk && v.infection_risk !== 'No';
+        conditionChips.appendChild(
+            el('span', `tag ${infectionBad ? 'bad' : ''}`.trim(), `Infection risk: ${v.infection_risk || 'No'}`)
+        );
+        (data.conditions || []).forEach(condition => {
+            conditionChips.appendChild(el('span', 'tag bad', condition));
+        });
+    }
+
+    function renderStatusEffects(data) {
+        const effects = data.status_effects || [];
+        if (effects.length === 0) {
+            clearAndFill(statusTags, [emptyNote('Nothing notable.')]);
+            return;
+        }
+        clearAndFill(statusTags, effects.map(effect => el('span', 'tag warn', effect)));
+    }
+
+    function renderGoals(data) {
+        const goals = data.goals || { short_term: [], long_term: [] };
+        const groups = [
+            ['Short-term', goals.short_term || []],
+            ['Long-term', goals.long_term || []],
+        ];
+        goalList.innerHTML = '';
+        const anyGoals = groups.some(([, items]) => items.length > 0);
+        if (!anyGoals) {
+            goalList.appendChild(emptyNote('Nothing set yet.'));
+            return;
+        }
+        groups.forEach(([label, items]) => {
+            if (items.length === 0) return;
+            const group = el('div', 'goal-group');
+            group.appendChild(el('h4', null, label));
+            const ul = el('ul');
+            items.forEach(item => ul.appendChild(el('li', null, item)));
+            group.appendChild(ul);
+            goalList.appendChild(group);
+        });
+    }
+
+    function renderInventory(data) {
+        const items = data.inventory || [];
+        if (items.length === 0) {
+            clearAndFill(inventoryList, [emptyNote('Nothing carried.')]);
+            return;
+        }
+        clearAndFill(inventoryList, items.map(item => {
+            const li = el('li', 'row-item');
+            li.appendChild(el('span', null, item.name));
+            li.appendChild(el('span', 'value muted', item.condition));
+            return li;
+        }));
+    }
+
+    function renderEquipment(data) {
+        const slots = data.equipment || [];
+        clearAndFill(equipmentList, slots.map(slot => {
+            const li = el('li', 'row-item');
+            li.appendChild(el('span', 'label', slot.slot));
+            li.appendChild(el('span', slot.item ? 'value' : 'value muted', slot.item ? `${slot.item} (${slot.condition})` : 'Empty'));
+            return li;
+        }));
+    }
+
+    function renderStanding(data) {
+        standingList.innerHTML = '';
+        const level = el('li', 'row-item');
+        level.appendChild(el('span', 'label', 'Level'));
+        level.appendChild(el('span', 'value', String(data.level)));
+        const xp = el('li', 'row-item');
+        xp.appendChild(el('span', 'label', 'Experience'));
+        xp.appendChild(el('span', 'value', String(data.experience_points)));
+        standingList.appendChild(level);
+        standingList.appendChild(xp);
+    }
+
+    function renderAttributes(data) {
+        const attributes = data.attributes || {};
+        attributeGrid.innerHTML = '';
+        Object.entries(attributes).forEach(([name, value]) => {
+            const row = el('div', 'row-item');
+            row.appendChild(el('span', 'label', name.replace(/^\w/, c => c.toUpperCase())));
+            row.appendChild(el('span', 'value', String(value)));
+            attributeGrid.appendChild(row);
+        });
+    }
+
+    function renderNamedEntries(container, entries, emptyLabel) {
+        if (!entries || entries.length === 0) {
+            clearAndFill(container, [emptyNote(emptyLabel)]);
+            return;
+        }
+        clearAndFill(container, entries.map(entry => {
+            const wrapper = el('div', 'named-entry');
+            wrapper.appendChild(el('div', 'name', entry.name));
+            wrapper.appendChild(el('div', 'desc', entry.description));
+            return wrapper;
+        }));
+    }
+
+    // Disposition bands are colored the same way the narrator reads them --
+    // Orton can tell Emma has warmed to him, never the raw affinity number.
+    const DISPOSITION_TONE = {
+        loyal: 'good', friendly: 'good',
+        neutral: '',
+        wary: 'warn', hostile: 'bad', terrified: 'bad', hated: 'bad',
+    };
+
+    function renderNpcs(data) {
+        const npcs = data.npcs || [];
+        if (npcs.length === 0) {
+            clearAndFill(npcList, [emptyNote('No one else is here.')]);
+            return;
+        }
+        clearAndFill(npcList, npcs.map(npc => {
+            const row = el('div', 'npc-entry');
+            const left = el('span');
+            left.appendChild(el('span', 'name', npc.name));
+            left.appendChild(el('span', 'trust', `trust: ${npc.trust}`));
+            const tone = DISPOSITION_TONE[npc.disposition] || '';
+            row.appendChild(left);
+            row.appendChild(el('span', `tag ${tone}`.trim(), npc.disposition));
+            return row;
+        }));
+    }
+
+    function renderQuests(data) {
+        const quests = data.quests || [];
+        if (quests.length === 0) {
+            clearAndFill(questList, [emptyNote('No active quests.')]);
+            return;
+        }
+        clearAndFill(questList, quests.map(quest => {
+            const wrapper = el('div', 'quest');
+            wrapper.appendChild(el('div', 'quest-title', quest.title));
+            (quest.objectives || []).forEach(objective => {
+                const row = el('div', `quest-objective ${objective.done ? 'done' : ''}`.trim());
+                row.appendChild(el('span', 'glyph', objective.done ? '☑' : '☐'));
+                row.appendChild(el('span', null, objective.label));
+                wrapper.appendChild(row);
             });
-        }
+            return wrapper;
+        }));
+    }
 
-        // Append one story beat. Player input is set as text, never HTML, so a
-        // '<' in what the player types cannot break out into markup.
-        function appendStory(playerText, storyText) {
-            const paragraph = document.createElement('p');
-            if (playerText) {
-                const echo = document.createElement('span');
-                echo.className = 'text-green-300/50';
-                echo.textContent = `> ${playerText}`;
-                paragraph.appendChild(echo);
-                paragraph.appendChild(document.createElement('br'));
+    // Append one story beat. Player input is set as text, never HTML, so a
+    // '<' in what the player types cannot break out into markup.
+    function appendStory(playerText, storyText) {
+        const paragraph = document.createElement('p');
+        if (playerText) {
+            const echo = document.createElement('span');
+            echo.className = 'echo';
+            echo.textContent = `> ${playerText}`;
+            paragraph.appendChild(echo);
+        }
+        paragraph.appendChild(document.createTextNode(storyText));
+        paragraph.classList.add('whitespace-pre-wrap');
+        storyDisplay.appendChild(document.createElement('hr'));
+        storyDisplay.appendChild(paragraph);
+        storyDisplay.scrollTop = storyDisplay.scrollHeight;
+    }
+
+    // Refresh the dossier panel from a state payload.
+    function updatePanel(data) {
+        locationStatus.textContent = data.current_location;
+        locationDescription.textContent = data.location_description || '';
+        renderMetaChips(data);
+        renderVitals(data);
+        renderStatusEffects(data);
+        renderGoals(data);
+        renderInventory(data);
+        renderEquipment(data);
+        renderStanding(data);
+        renderAttributes(data);
+        renderNamedEntries(traitList, data.traits, 'None recorded.');
+        renderNamedEntries(perkList, data.perks, 'None recorded.');
+        renderNpcs(data);
+        renderQuests(data);
+    }
+
+    function updateUI(data, playerText) {
+        if (data.story_text) {
+            appendStory(playerText, data.story_text);
+        }
+        updatePanel(data);
+    }
+
+    function showSystemError(message) {
+        const paragraph = document.createElement('p');
+        paragraph.className = 'system-error';
+        paragraph.textContent = `--- SYSTEM ERROR ---\n${message}`;
+        storyDisplay.appendChild(paragraph);
+        storyDisplay.scrollTop = storyDisplay.scrollHeight;
+    }
+
+    // Function to handle form submission
+    async function handleTurn(event) {
+        event.preventDefault();
+        const inputText = playerInput.value.trim();
+        if (!inputText) return;
+
+        playerInput.disabled = true;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Thinking...';
+
+        try {
+            const response = await fetch('/play', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ input: inputText })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server responded with status: ${response.status}`);
             }
-            paragraph.appendChild(document.createTextNode(storyText));
-            paragraph.classList.add('whitespace-pre-wrap');
-            storyDisplay.appendChild(document.createElement('hr'));
-            storyDisplay.appendChild(paragraph);
-            storyDisplay.scrollTop = storyDisplay.scrollHeight;
+
+            const data = await response.json();
+            updateUI(data, inputText);
+
+        } catch (error) {
+            console.error('Error during game turn:', error);
+            showSystemError(error.message);
+        } finally {
+            playerInput.value = '';
+            playerInput.disabled = false;
+            playerInput.focus();
+            submitButton.disabled = false;
+            submitButton.textContent = 'Act';
         }
+    }
 
-        // Refresh the side panel from a state payload.
-        function updatePanel(data) {
-            locationStatus.textContent = data.current_location;
-            timeStatus.textContent =
-                `Day ${data.day} - ${data.time_of_day} - ${data.apocalypse_stage}`;
-            conditionStatus.textContent = data.condition;
-            renderList(inventoryList, data.inventory, '(empty)');
-            renderList(npcList, data.npcs_present, '(no one)');
-
-            const goals = data.goals || { short_term: [], long_term: [] };
-            const labelled = [
-                ...(goals.short_term || []).map(g => `[short] ${g}`),
-                ...(goals.long_term || []).map(g => `[long] ${g}`),
-            ];
-            renderList(goalList, labelled, '(none)');
+    // Function to reset the game
+    async function handleReset() {
+        if (!confirm('Are you sure you want to reset the game? All progress will be lost.')) {
+            return;
         }
-
-        function updateUI(data, playerText) {
-            if (data.story_text) {
-                appendStory(playerText, data.story_text);
-            }
-            updatePanel(data);
+        try {
+            const response = await fetch('/reset', { method: 'POST' });
+            const data = await response.json();
+            alert(data.message);
+            window.location.reload();
+        } catch (error) {
+            console.error('Error resetting game:', error);
+            alert('Failed to reset the game.');
         }
+    }
 
-        // Function to handle form submission
-        async function handleTurn(event) {
-            event.preventDefault();
-            const inputText = playerInput.value.trim();
-            if (!inputText) return;
+    // Downloads the current save as a file; the browser handles the prompt.
+    function handleSave() {
+        window.location.href = '/save/export';
+    }
 
-            // Disable form while waiting for response
-            playerInput.disabled = true;
-            submitButton.disabled = true;
-            submitButton.textContent = 'THINKING...';
+    // Opens the file picker; the actual upload happens in handleLoadFile once
+    // a file is chosen.
+    function handleLoad() {
+        loadInput.value = '';
+        loadInput.click();
+    }
 
-            try {
-                const response = await fetch('/play', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ input: inputText })
-                });
+    async function handleLoadFile() {
+        const file = loadInput.files[0];
+        if (!file) return;
 
-                if (!response.ok) {
-                    throw new Error(`Server responded with status: ${response.status}`);
-                }
+        const formData = new FormData();
+        formData.append('save', file);
 
-                const data = await response.json();
-                updateUI(data, inputText);
-
-            } catch (error) {
-                console.error('Error during game turn:', error);
-                const errorParagraph = document.createElement('p');
-                errorParagraph.className = 'text-red-500';
-                errorParagraph.textContent = `--- SYSTEM ERROR ---\n${error.message}`;
-                storyDisplay.appendChild(errorParagraph);
-                storyDisplay.scrollTop = storyDisplay.scrollHeight;
-            } finally {
-                // Re-enable form
-                playerInput.value = '';
-                playerInput.disabled = false;
-                playerInput.focus();
-                submitButton.disabled = false;
-                submitButton.textContent = 'SEND';
-            }
-        }
-        
-        // Function to reset the game
-        async function handleReset() {
-            if (!confirm("Are you sure you want to reset the game? All progress will be lost.")) {
+        try {
+            const response = await fetch('/save/import', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.error || 'Could not load that save.');
                 return;
             }
-            try {
-                const response = await fetch('/reset', { method: 'POST' });
-                const data = await response.json();
-                alert(data.message);
-                window.location.reload(); // Reload the page to see the fresh state
-            } catch (error) {
-                console.error('Error resetting game:', error);
-                alert('Failed to reset the game.');
-            }
+            storyDisplay.innerHTML = '';
+            appendStory(null, 'Save loaded.');
+            updatePanel(data);
+        } catch (error) {
+            console.error('Error loading save:', error);
+            alert('Failed to load that save file.');
         }
+    }
 
-        // Load the real world state so a reloaded page is not showing defaults.
-        async function loadState() {
-            try {
-                const response = await fetch('/state');
-                if (!response.ok) return;
-                updatePanel(await response.json());
-            } catch (error) {
-                console.error('Could not load game state:', error);
-            }
+    // Load the real world state so a reloaded page is not showing defaults.
+    async function loadState() {
+        try {
+            const response = await fetch('/state');
+            if (!response.ok) return;
+            updatePanel(await response.json());
+        } catch (error) {
+            console.error('Could not load game state:', error);
         }
+    }
 
-        // Event Listeners
-        inputForm.addEventListener('submit', handleTurn);
-        resetButton.addEventListener('click', handleReset);
+    // Event listeners
+    inputForm.addEventListener('submit', handleTurn);
+    resetButton.addEventListener('click', handleReset);
+    saveButton.addEventListener('click', handleSave);
+    loadButton.addEventListener('click', handleLoad);
+    loadInput.addEventListener('change', handleLoadFile);
 
-        loadState();
-
-        // Give focus to the input box on page load
-        playerInput.focus();
-    </script>
+    loadState();
+    playerInput.focus();
+</script>
 
 </body>
 </html>
