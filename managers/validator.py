@@ -15,7 +15,14 @@ re-derive the reason something was legal.
 from dataclasses import dataclass, field
 from typing import Any
 
-from managers.game import BARE_DIRECTIONS, MAX_PLACE_LENGTH, TIMES_OF_DAY, GameManager
+from managers.game import (
+    BARE_DIRECTIONS,
+    CONDITION_LADDERS,
+    GameManager,
+    MAX_PLACE_LENGTH,
+    TIMES_OF_DAY,
+    resolve_condition_value,
+)
 from modules.action import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -249,7 +256,16 @@ class ActionValidator:
 
     def _validate_update_condition(self, action: UpdateConditionAction) -> ValidationResult:
         if action.field_name in NARRATIVE_CONDITION_FIELDS:
-            return Accepted(action, {})
+            ladder = CONDITION_LADDERS[action.field_name]
+            current = self.manager.narrative.conditions.get(action.field_name, ladder[0])
+            rung = resolve_condition_value(action.field_name, action.raw_value, current)
+            if rung is None:
+                return Rejected(
+                    action,
+                    f"'{action.raw_value}' is not a valid {action.field_name}; "
+                    f"expected one of {', '.join(ladder)}.",
+                )
+            return Accepted(action, {"value": rung})
         try:
             int(action.raw_value)
         except ValueError:

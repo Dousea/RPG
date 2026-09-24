@@ -3,12 +3,16 @@
 import unittest
 
 from modules.action import (
+    AddGoalAction,
     AttackAction,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
     ParseFailure,
+    RemoveGoalAction,
+    SetFlagAction,
     TakeAction,
+    TimeAdvanceAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
@@ -61,6 +65,67 @@ class ParseActionLineTests(unittest.TestCase):
     def test_update_relationship_unknown_axis(self):
         result = parse_action_line("UPDATE_RELATIONSHIP Emma loyalty +1")
         self.assertIsInstance(result, ParseFailure)
+
+    def test_update_relationship_affinity_is_an_affection_synonym(self):
+        self.assertEqual(
+            parse_action_line("UPDATE_RELATIONSHIP Emma affinity +5"),
+            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=5),
+        )
+
+    def test_add_goal_normalizes_a_colon_suffixed_horizon(self):
+        self.assertEqual(
+            parse_action_line("ADD_GOAL short_term: Find water"),
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+        )
+
+    def test_add_goal_normalizes_a_two_word_horizon(self):
+        self.assertEqual(
+            parse_action_line("ADD_GOAL Short Term Find water"),
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+        )
+
+    def test_add_goal_normalizes_a_hyphenated_horizon(self):
+        self.assertEqual(
+            parse_action_line("ADD_GOAL short-term Find water"),
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+        )
+
+    def test_remove_goal_normalizes_a_hyphenated_horizon(self):
+        self.assertEqual(
+            parse_action_line("REMOVE_GOAL long-term Leave the city"),
+            RemoveGoalAction(horizon="long_term", goal_text="Leave the city"),
+        )
+
+    def test_add_goal_with_an_unknown_horizon_still_parses(self):
+        # Not a synonym, so it falls through to the normalized first word --
+        # the validator (not the parser) is what rejects "someday" as a
+        # horizon, so ADD_GOAL doesn't ParseFailure here.
+        self.assertEqual(
+            parse_action_line("ADD_GOAL someday Find water"),
+            AddGoalAction(horizon="someday", goal_text="Find water"),
+        )
+
+    def test_set_flag_normalizes_name_and_yes_no_value(self):
+        self.assertEqual(
+            parse_action_line("SET_FLAG Power-Grid yes"),
+            SetFlagAction(flag_name="power_grid", value=True),
+        )
+
+    def test_set_flag_rejects_an_unrecognized_value(self):
+        result = parse_action_line("SET_FLAG x maybe")
+        self.assertIsInstance(result, ParseFailure)
+
+    def test_time_advance_normalizes_case_and_punctuation(self):
+        self.assertEqual(
+            parse_action_line("TIME_ADVANCE Evening."),
+            TimeAdvanceAction(time_of_day="evening"),
+        )
+
+    def test_update_condition_normalizes_field_name_and_strips_punctuation(self):
+        self.assertEqual(
+            parse_action_line("UPDATE_CONDITION Infection_Risk +1."),
+            UpdateConditionAction(field_name="infection_risk", raw_value="+1"),
+        )
 
     def test_update_inventory(self):
         self.assertEqual(

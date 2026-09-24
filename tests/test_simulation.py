@@ -344,5 +344,56 @@ class WorldStateResolutionTests(unittest.TestCase):
         self.assertEqual(gm.player.hunger, 90)
 
 
+class ConditionLadderResolutionTests(unittest.TestCase):
+    """infection_risk starts at 'No', sleep starts at 'Rested' (NarrativeState
+    defaults). A signed value steps the ladder; a rung name or synonym is
+    matched case-insensitively; anything else is Refused and leaves the
+    condition unchanged."""
+
+    def test_signed_step_advances_one_rung(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+1"))
+        self.assertEqual(gm.narrative.conditions["infection_risk"], "Low")
+
+    def test_signed_step_clamps_at_the_top_rung(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+10"))
+        self.assertEqual(gm.narrative.conditions["infection_risk"], "Infected")
+
+    def test_signed_step_clamps_at_the_bottom_rung(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="-1"))
+        self.assertEqual(gm.narrative.conditions["infection_risk"], "No")
+
+    def test_synonym_maps_to_its_rung(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="severe"))
+        self.assertEqual(gm.narrative.conditions["infection_risk"], "High")
+
+    def test_sleep_synonym_maps_to_its_rung(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="sleep", raw_value="fatigued"))
+        self.assertEqual(gm.narrative.conditions["sleep"], "Tired")
+
+    def test_sleep_accepts_a_rung_name_case_insensitively(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="sleep", raw_value="Exhausted"))
+        self.assertEqual(gm.narrative.conditions["sleep"], "Exhausted")
+
+    def test_unrecognized_value_is_refused_and_leaves_the_condition_unchanged(self):
+        gm = GameManager()
+        facts = SimulationCore(gm).resolve(
+            [UpdateConditionAction(field_name="infection_risk", raw_value="banana")]
+        )
+        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertIn("expected one of", facts[0])
+        self.assertEqual(gm.narrative.conditions["infection_risk"], "No")
+
+    def test_the_raw_signed_string_is_never_stored(self):
+        gm = GameManager()
+        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+1"))
+        self.assertNotEqual(gm.narrative.conditions["infection_risk"], "+1")
+
+
 if __name__ == "__main__":
     unittest.main()

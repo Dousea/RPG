@@ -20,6 +20,38 @@ from dataclasses import dataclass
 NARRATIVE_CONDITION_FIELDS = ("sleep", "infection_risk")
 NUMERIC_CONDITION_FIELDS = ("hunger", "thirst", "morale")
 
+# Goal horizons the model writes in place of the two real ones.
+GOAL_HORIZON_SYNONYMS = {
+    "short": "short_term",
+    "shortterm": "short_term",
+    "short_term": "short_term",
+    "long": "long_term",
+    "longterm": "long_term",
+    "long_term": "long_term",
+}
+
+# Truthy/falsy words the model writes instead of a bare true/false.
+_FLAG_VALUES = {
+    "true": True, "yes": True, "1": True, "on": True,
+    "false": False, "no": False, "0": False, "off": False,
+}
+
+
+def normalize_key(raw: str) -> str:
+    """Fold an enum-ish argument into its canonical form.
+
+    The parser LLM writes these as prose -- 'short_term:', 'Short Term',
+    'short-term' -- and a strict match rejects all but one of them, silently
+    dropping the state change while the story carries on as if it happened.
+    """
+    return (
+        raw.strip()
+        .strip(":,.;\"'")
+        .replace("-", "_")
+        .replace(" ", "_")
+        .casefold()
+    )
+
 
 @dataclass
 class MoveAction:
@@ -197,7 +229,7 @@ def _parse_use_item(args: str) -> UseItemAction:
 def _parse_time_advance(args: str) -> TimeAdvanceAction:
     if not args:
         raise _ActionParseError("TIME_ADVANCE needs a time of day.")
-    return TimeAdvanceAction(time_of_day=args)
+    return TimeAdvanceAction(time_of_day=normalize_key(args))
 
 
 def _parse_status_add(args: str) -> StatusAddAction:
@@ -214,8 +246,8 @@ def _parse_status_remove(args: str) -> StatusRemoveAction:
 
 def _parse_update_condition(args: str) -> UpdateConditionAction:
     field_name, _, raw_value = args.partition(" ")
-    field_name = field_name.strip().casefold()
-    raw_value = raw_value.strip()
+    field_name = normalize_key(field_name)
+    raw_value = raw_value.strip().strip(".,;")
     if not field_name or not raw_value:
         raise _ActionParseError("UPDATE_CONDITION needs a field and a value.")
     if field_name == "health":
@@ -228,17 +260,39 @@ def _parse_update_condition(args: str) -> UpdateConditionAction:
     return UpdateConditionAction(field_name=field_name, raw_value=raw_value)
 
 
+def _split_goal(args: str) -> tuple[str, str]:
+    """Split '<horizon> <goal text>' tolerantly.
+
+    The horizon may arrive as 'short_term', 'short-term', 'Short Term' or
+    'short_term:' -- the model uses all of them. 'Short Term' costs a second
+    word, so try the two-word reading before the one-word one. If neither
+    matches a known synonym, fall back to the normalized first word so the
+    validator's "Unknown goal horizon" rejection still fires downstream,
+    instead of this function silently swallowing the whole line.
+    """
+    parts = args.split()
+    if not parts:
+        return "", ""
+    for word_count in (2, 1):
+        if len(parts) < word_count:
+            continue
+        horizon = GOAL_HORIZON_SYNONYMS.get(
+            normalize_key(" ".join(parts[:word_count]))
+        )
+        if horizon is not None:
+            return horizon, " ".join(parts[word_count:]).strip()
+    return normalize_key(parts[0]), " ".join(parts[1:]).strip()
+
+
 def _parse_add_goal(args: str) -> AddGoalAction:
-    horizon, _, goal = args.partition(" ")
-    horizon, goal = horizon.strip().casefold(), goal.strip()
+    horizon, goal = _split_goal(args)
     if not horizon or not goal:
         raise _ActionParseError("ADD_GOAL needs a horizon and goal text.")
     return AddGoalAction(horizon=horizon, goal_text=goal)
 
 
 def _parse_remove_goal(args: str) -> RemoveGoalAction:
-    horizon, _, goal = args.partition(" ")
-    horizon, goal = horizon.strip().casefold(), goal.strip()
+    horizon, goal = _split_goal(args)
     if not horizon or not goal:
         raise _ActionParseError("REMOVE_GOAL needs a horizon and goal text.")
     return RemoveGoalAction(horizon=horizon, goal_text=goal)
@@ -250,7 +304,13 @@ def _parse_update_relationship(args: str) -> UpdateRelationshipAction:
         raise _ActionParseError(
             "UPDATE_RELATIONSHIP needs a name, an axis, and an amount."
         )
-    raw_amount, axis, name = parts[-1], parts[-2].casefold(), " ".join(parts[:-2])
+    raw_amount, axis, name = (
+        parts[-1].strip(".,;"),
+        normalize_key(parts[-2]),
+        " ".join(parts[:-2]),
+    )
+    if axis == "affinity":
+        axis = "affection"
     if not name:
         raise _ActionParseError("UPDATE_RELATIONSHIP needs an NPC name.")
     if axis not in ("affection", "trust"):
@@ -273,19 +333,19 @@ def _parse_add_relationship_note(args: str) -> AddRelationshipNoteAction:
 def _parse_set_flag(args: str) -> SetFlagAction:
     flag, _, raw_value = args.partition(" ")
     flag = flag.strip()
-    raw_value = raw_value.strip().casefold()
-    if not flag or raw_value not in ("true", "false"):
+    value = _FLAG_VALUES.get(normalize_key(raw_value))
+    if not flag or value is None:
         raise _ActionParseError(
-            f"SET_FLAG needs a flag name and true/false, got '{raw_value}'."
+            f"SET_FLAG needs a flag name and true/false, got '{raw_value.strip()}'."
         )
-    return SetFlagAction(flag_name=flag, value=raw_value == "true")
+    return SetFlagAction(flag_name=normalize_key(flag), value=value)
 
 
 def _parse_discover_flag(args: str) -> DiscoverFlagAction:
     flag = args.strip()
     if not flag:
         raise _ActionParseError("DISCOVER_FLAG needs a flag name.")
-    return DiscoverFlagAction(flag_name=flag)
+    return DiscoverFlagAction(flag_name=normalize_key(flag))
 
 
 _INVENTORY_OPERATIONS = ("ADD", "REMOVE", "UPDATE_CONDITION", "UPDATE_QUANTITY")

@@ -8,9 +8,15 @@ Validator and Simulation Core are the only path to mutating state.
 
 import unittest
 
-from managers.game import MAX_RECENT_EVENTS, SUMMARY_THRESHOLD, GameManager
+from managers.game import (
+    CONDITION_LADDERS,
+    GameManager,
+    MAX_RECENT_EVENTS,
+    SUMMARY_THRESHOLD,
+)
 from modules.action import (
     MoveAction,
+    NARRATIVE_CONDITION_FIELDS,
     NpcStatusAction,
     TakeAction,
     UpdateRelationshipAction,
@@ -241,6 +247,15 @@ class KnowledgeFirewallTests(unittest.TestCase):
         self.assertIn(
             "Disposition: hostile (trust: broken)", self.gm.build_narrator_prompt("look")
         )
+
+
+class ConditionLadderDriftTests(unittest.TestCase):
+    def test_ladder_keys_match_the_declared_narrative_fields(self):
+        # modules/action.NARRATIVE_CONDITION_FIELDS gates parsing/validation
+        # of which fields are laddered at all; managers/game.CONDITION_LADDERS
+        # is what they're laddered against. Nothing enforces they agree except
+        # this test -- if they drift, one field silently stops being laddered.
+        self.assertEqual(tuple(CONDITION_LADDERS), NARRATIVE_CONDITION_FIELDS)
 
 
 class MemoryTests(unittest.TestCase):

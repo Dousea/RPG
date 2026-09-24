@@ -11,6 +11,7 @@ from modules.action import (
     NpcStatusAction,
     StatusRemoveAction,
     TakeAction,
+    UpdateConditionAction,
     UseItemAction,
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
@@ -196,6 +197,26 @@ class PlayerStatusValidationTests(unittest.TestCase):
     def test_removing_a_status_the_player_lacks_is_rejected(self):
         result = self.validator.validate(StatusRemoveAction(status="settled in"))
         self.assertIsInstance(result, Rejected)
+
+
+class ConditionLadderValidationTests(unittest.TestCase):
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def test_a_rung_name_is_accepted_with_the_resolved_rung(self):
+        result = self.validator.validate(
+            UpdateConditionAction(field_name="sleep", raw_value="Exhausted")
+        )
+        self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["value"], "Exhausted")
+
+    def test_a_value_off_the_ladder_is_rejected(self):
+        result = self.validator.validate(
+            UpdateConditionAction(field_name="infection_risk", raw_value="banana")
+        )
+        self.assertIsInstance(result, Rejected)
+        self.assertIn("expected one of", result.reason)
 
 
 if __name__ == "__main__":

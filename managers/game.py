@@ -11,6 +11,7 @@ from data.perks import PERKS
 from data.quests import build_starting_quests
 from data.traits import TRAITS
 from managers.relationship import RelationshipManager
+from modules.action import normalize_key
 from modules.character.player import PlayerPerk, PlayerTrait
 from modules.character.state import CharacterCondition
 from modules.effect import (
@@ -97,6 +98,68 @@ BARE_DIRECTIONS = frozenset(
         "upstairs", "downstairs", "onwards", "onward", "further",
     }
 )
+
+# Laddered narrative conditions: rungs the field can hold, worst-to-best order
+# not implied -- position in the tuple is what "+1"/"-1" steps along.
+CONDITION_LADDERS: dict[str, tuple[str, ...]] = {
+    "sleep": ("Rested", "Tired", "Drowsy", "Exhausted"),
+    "infection_risk": ("No", "Low", "Moderate", "High", "Infected"),
+}
+
+# Words the model reaches for that are not rungs. Keys are normalized.
+CONDITION_SYNONYMS: dict[str, dict[str, str]] = {
+    "sleep": {
+        "none": "Rested",
+        "fine": "Rested",
+        "well_rested": "Rested",
+        "rested": "Rested",
+        "fatigued": "Tired",
+        "sleepy": "Drowsy",
+        "tired": "Tired",
+    },
+    "infection_risk": {
+        "none": "No",
+        "no": "No",
+        "safe": "No",
+        "minimal": "Low",
+        "medium": "Moderate",
+        "moderate": "Moderate",
+        "severe": "High",
+        "critical": "High",
+        "infected": "Infected",
+    },
+}
+
+
+def resolve_condition_value(field: str, raw: str, current: str) -> str | None:
+    """Resolve a laddered condition update to its new rung, or None if invalid.
+
+    Pure: no mutation. A signed step ('+1'/'-2') moves `current` along
+    `CONDITION_LADDERS[field]`, clamped to its ends -- unlike the numeric
+    tracks these have no natural arithmetic, but the model writes '+1' at
+    them anyway, so a signed value walks the ladder instead of being stored
+    verbatim, which is how 'Infection Risk: +1' used to reach the UI as
+    literal text. Otherwise the value is matched case-insensitively against a
+    rung name, then a synonym. `ActionValidator` calls this to decide
+    Accepted/Rejected; `SimulationCore` stores whatever it returned.
+    """
+    ladder = CONDITION_LADDERS[field]
+
+    if raw and raw[0] in "+-" and raw[1:].isdigit():
+        try:
+            position = ladder.index(current)
+        except ValueError:
+            position = 0
+        step = int(raw)
+        return ladder[max(0, min(position + step, len(ladder) - 1))]
+
+    needle = normalize_key(raw)
+    for rung in ladder:
+        if needle == rung.casefold():
+            return rung
+
+    return CONDITION_SYNONYMS.get(field, {}).get(needle)
+
 
 # The game has one clock. `NarrativeState.day` and `.time_of_day` are it;
 # `World.time` and `World.date` are a wall-clock rendering of the same instant,

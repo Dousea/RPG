@@ -475,8 +475,9 @@ class SimulationCore:
         action: UpdateConditionAction = accepted.action
         manager = self.manager
         if action.field_name in NARRATIVE_CONDITION_FIELDS:
-            manager.narrative.conditions[action.field_name] = action.raw_value
-            return f"{action.field_name} is now {action.raw_value}."
+            value = accepted.resolved["value"]
+            manager.narrative.conditions[action.field_name] = value
+            return f"{action.field_name} is now {value}."
 
         attribute = action.field_name  # hunger / thirst / morale
         if action.raw_value[0] in "+-":
