@@ -403,6 +403,7 @@
         <div class="dossier">
             <div class="dossier-location">
                 <h2 id="location-status">&mdash;</h2>
+                <p id="location-place" hidden></p>
                 <p id="location-description"></p>
             </div>
 
@@ -496,6 +497,7 @@
     const storyDisplay = document.getElementById('story-display');
     const metaChips = document.getElementById('meta-chips');
     const locationStatus = document.getElementById('location-status');
+    const locationPlace = document.getElementById('location-place');
     const locationDescription = document.getElementById('location-description');
     const vitals = document.getElementById('vitals');
     const conditionChips = document.getElementById('condition-chips');
@@ -772,6 +774,9 @@
     // Refresh the dossier panel from a state payload.
     function updatePanel(data) {
         locationStatus.textContent = data.current_location;
+        // LLM-authored free text -- textContent only, never innerHTML.
+        locationPlace.textContent = data.current_place ? `— ${data.current_place}` : '';
+        locationPlace.hidden = !data.current_place;
         locationDescription.textContent = data.location_description || '';
         renderMetaChips(data);
         renderVitals(data);

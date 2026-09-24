@@ -15,7 +15,7 @@ re-derive the reason something was legal.
 from dataclasses import dataclass, field
 from typing import Any
 
-from managers.game import TIMES_OF_DAY, GameManager
+from managers.game import BARE_DIRECTIONS, MAX_PLACE_LENGTH, TIMES_OF_DAY, GameManager
 from modules.action import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -81,36 +81,79 @@ class ActionValidator:
     # === Movement ===
 
     def _validate_move(self, action: MoveAction) -> ValidationResult:
+        """Decide what a MOVE_TO *means*. This never rejects.
+
+        A named zone is reachable from anywhere by walking the connection
+        graph (`GameManager.zone_path`) -- adjacency is no longer required,
+        the way main's original adjacency-only version required it. A locked
+        door along that walk still stops the player short of the target
+        zone, but the move still resolves to a place (the door), not a
+        refusal: this is the zones-era answer to main's reachability bug (a
+        global name match that let the player teleport past any lock) without
+        reintroducing it -- the walk is still gated hop by hop, it just
+        doesn't dead-end in "you can't do that."
+
+        Anything that isn't a recognized zone, connection, or bare direction
+        becomes a free-text spot inside the zone the player is already in.
+        `resolved["kind"]` tells `SimulationCore._resolve_move` which of the
+        five outcomes (stay/shuffle/spot/zone/blocked) this is.
+        """
         manager = self.manager
-        location = manager.current_location
-        needle = action.destination.strip().casefold()
-        if not needle:
-            return Rejected(action, "MOVE_TO needs a destination.")
+        current = manager.current_location
+        raw = action.destination.strip().strip("\"'.,;:")
+        if not raw:
+            return Accepted(action, {"kind": "stay", "location": current})
 
-        target_id = None
-        for direction, loc_id in location.connections.items():
-            connected = manager.world.locations.get(loc_id)
-            if connected is None:
-                continue
-            if needle in (direction.casefold(), loc_id.casefold(), connected.name.casefold()):
-                target_id = loc_id
-                break
+        folded = raw.casefold()
+        target = manager.resolve_location(raw)
 
-        if target_id is None:
-            # Deliberately does not fall through to a global name match: a
-            # location existing somewhere in the world does not make it
-            # reachable from here. That fallthrough was the reachability bug.
-            return Rejected(
-                action, f"'{action.destination}' is not reachable from {location.name}."
+        if target is None:
+            if folded in BARE_DIRECTIONS:
+                return Accepted(action, {"kind": "shuffle", "location": current, "raw": raw})
+            return Accepted(
+                action,
+                {"kind": "spot", "location": current, "place": raw[:MAX_PLACE_LENGTH]},
             )
 
-        door = self._door_blocking(location, target_id)
-        target = manager.world.locations[target_id]
-        if door is not None and door.state == UnlockableEntityLockState.LOCKED:
-            if not self._has_key(door.key_id):
-                return Rejected(action, f"The way to {target.name} is locked.")
+        # "the pharmacy" and "the kitchen" resolve to a zone via an alias, but
+        # the words themselves are the interesting part -- they are where in
+        # the zone the player actually is. Keep them as the spot unless the
+        # model named the zone itself, or just gave a direction.
+        place = (
+            ""
+            if folded in (target.id.casefold(), target.name.casefold())
+            or folded in BARE_DIRECTIONS
+            else raw[:MAX_PLACE_LENGTH]
+        )
 
-        return Accepted(action, {"location": target, "door": door})
+        if target.id == current.id:
+            return Accepted(action, {"kind": "spot", "location": current, "place": place})
+
+        path = manager.zone_path(current.id, target.id)
+        if path is None:
+            # Disconnected map -- not possible with the shipped content, but
+            # zone_path can express it, so this must not raise or refuse.
+            return Accepted(action, {"kind": "spot", "location": current, "place": place})
+
+        hop_from = current
+        for hop_id in path:
+            door = self._door_blocking(hop_from, hop_id)
+            if door is not None and door.state == UnlockableEntityLockState.LOCKED:
+                if not self._has_key(door.key_id):
+                    hop_to = manager.world.locations[hop_id]
+                    return Accepted(
+                        action,
+                        {
+                            "kind": "blocked",
+                            "location": hop_from,
+                            "place": f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
+                            "target": target,
+                            "door": door,
+                        },
+                    )
+            hop_from = manager.world.locations[hop_id]
+
+        return Accepted(action, {"kind": "zone", "location": target, "place": place})
 
     @staticmethod
     def _door_blocking(location, target_id: str) -> DoorEntity | None:

@@ -54,7 +54,7 @@ PARSER_SYSTEM_PROMPT = (
     "[List any game actions implied by the input, one per line. Available actions:]\n"
     "- TAKE item_name\n"
     "- DROP item_name\n"
-    "- MOVE_TO location_name\n"
+    "- MOVE_TO zone_name, in/out, or a specific spot (e.g. 'the kitchen')\n"
     "- ATTACK target_name\n"
     "- USE_ITEM item_name\n"
     "- TIME_ADVANCE morning/afternoon/evening/night\n"
@@ -68,7 +68,7 @@ PARSER_SYSTEM_PROMPT = (
     "- SET_FLAG flag_name true/false\n"
     "- DISCOVER_FLAG flag_name (Orton has just learned this world fact)\n"
     "- UPDATE_INVENTORY item_name ADD/REMOVE/UPDATE_CONDITION/UPDATE_QUANTITY value\n"
-    "- NPC_MOVE npc_name TO location_name\n"
+    "- NPC_MOVE npc_name TO zone_name\n"
     "- NPC_STATUS npc_name ADD/REMOVE status_name\n"
     "[If no actions are implied, write: NONE]\n\n"
     "Note: there is no action for dealing or taking damage directly, and no "
@@ -76,10 +76,10 @@ PARSER_SYSTEM_PROMPT = (
     "the result.\n\n"
     f"{STORY_VOCABULARY}\n"
     "Example:\n"
-    "Input: 'I pick up the crowbar and head north'\n"
+    "Input: 'I grab the water bottle and head out'\n"
     "ACTIONS:\n"
-    "TAKE Crowbar\n"
-    "MOVE_TO north"
+    "TAKE Water Bottle\n"
+    "MOVE_TO out"
 )
 
 NARRATOR_SYSTEM_PROMPT = (

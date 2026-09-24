@@ -92,6 +92,7 @@ class TurnTests(EngineTestCase):
         self.assertIsInstance(result["npcs_present"], list)
         self.assertIsInstance(result["goals"]["short_term"], list)
         self.assertEqual(result["day"], 1)
+        self.assertIn("current_place", result)
 
     def test_narrator_options_reach_the_snapshot(self):
         self.llm.story = (
@@ -124,7 +125,9 @@ class TurnTests(EngineTestCase):
         self.assertNotIn("Emma", after["npcs_present"])  # on the street
 
     def test_failed_actions_do_not_abort_the_turn(self):
-        self.llm.actions = "ACTIONS:\nMOVE_TO Atlantis\nADD_GOAL short_term Survive"
+        # MOVE_TO Atlantis is no longer a failure (MOVE_TO never fails, Task
+        # 2) -- TAKE Medkit is still a real refusal, and stands in for it here.
+        self.llm.actions = "ACTIONS:\nTAKE Medkit\nADD_GOAL short_term Survive"
         self.llm.story = "STORY:\nYou try.\n\nEVENT:\nOrton tried"
         result = self.engine.play("go somewhere")
         self.assertEqual(result["story_text"], "You try.")

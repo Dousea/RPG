@@ -64,6 +64,26 @@ class ParserPromptFirewallTests(unittest.TestCase):
         self.assertNotIn("Disposition", prompt)
 
 
+class ZoneContextTests(unittest.TestCase):
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def test_parser_prompt_lists_the_zone_roster(self):
+        # The parser can only aim MOVE_TO at a zone it has been told exists.
+        prompt = self.builder.build_parser_prompt("look")
+        self.assertIn("[ZONES]", prompt)
+        for zone in ("Your Apartment", "Your Building", "The Street", "The Neighborhood"):
+            self.assertIn(zone, prompt)
+
+    def test_prompts_carry_the_specific_spot(self):
+        resolve_actions(self.gm, MoveAction(destination="the kitchen"))
+        parser_prompt = self.builder.build_parser_prompt("look")
+        narrator_prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("Specific spot: the kitchen", parser_prompt)
+        self.assertIn("Specific spot: the kitchen", narrator_prompt)
+
+
 class NpcGoalVisibilityTests(unittest.TestCase):
     def setUp(self):
         self.gm = GameManager()

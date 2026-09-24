@@ -37,6 +37,15 @@ class ContextBuilder:
             if loc_id in self.manager.world.locations
         )
 
+    def _zones_section(self) -> str:
+        """The whole zone roster, one line per zone.
+
+        The parser can only aim MOVE_TO at a zone it has been told exists --
+        this is that roster. It lives on the parser prompt (not the
+        narrator's) because the parser is what emits MOVE_TO.
+        """
+        return "\n".join(f" - {location.name}" for location in self.manager.world.locations.values())
+
     def _npcs_present_section(self) -> str:
         """NPCs present, with how each one currently regards the player.
 
@@ -169,9 +178,17 @@ class ContextBuilder:
 
         return f"""[LOCATION]
 {manager.current_location.name}: {manager.current_location.description}
+Specific spot: {player.current_place or '(nowhere in particular)'}
 
 [EXITS]
 {self._nearby_locations_section().rstrip()}
+
+[ZONES]
+(The world is these four zones. MOVE_TO one of these names to change zone.
+MOVE_TO anything else -- a room, a shop, a landmark -- moves Orton to a spot
+inside the zone he is already in, which is normal and expected.)
+
+{self._zones_section().rstrip()}
 
 [ITEMS HERE]
 {self._current_items_section().rstrip()}
@@ -252,6 +269,7 @@ Perks: {perks_str if perks_str else 'None'}
 
         location_context = f"""
 Current Location: {manager.current_location.name}
+Specific spot: {player.current_place or '(nowhere in particular)'}
 Description: {manager.current_location.description}
 Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
 Apocalypse Stage: {narrative.apocalypse_stage}

@@ -181,6 +181,7 @@ class GameEngine:
             "story_text": story_text,
             "options": options or [],
             "current_location": manager.current_location.name,
+            "current_place": player.current_place,
             "location_description": manager.current_location.description,
             "day": narrative.day,
             "time_of_day": narrative.time_of_day,

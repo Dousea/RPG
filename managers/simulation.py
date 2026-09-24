@@ -77,7 +77,10 @@ DAMAGE_JITTER = 0.10
 # (morning/afternoon/evening/night). Ordinary actions no longer depend on the
 # LLM remembering to emit TIME_ADVANCE -- the engine owns the clock outright.
 # A dedicated sub-tick clock is doc 08 territory and out of scope here.
-_TICK_COSTING_ACTIONS = (MoveAction, AttackAction)
+# MoveAction is not here: a zone change costs exactly one tick regardless of
+# how many hops the walk covered, and a spot/shuffle/stay move costs none at
+# all, so `_resolve_move` ticks for itself instead of a blanket per-action rule.
+_TICK_COSTING_ACTIONS = (AttackAction,)
 
 
 class SimulationCore:
@@ -129,11 +132,58 @@ class SimulationCore:
     # === Movement ===
 
     def _resolve_move(self, accepted: Accepted) -> str:
-        location = accepted.resolved["location"]
-        self.manager.player.current_location_id = location.id
-        return self._with_quest_note(
-            f"Move to {location.name}: succeeded.", f"reach:{location.id}"
-        )
+        """Apply whatever `_validate_move` decided MOVE_TO means.
+
+        MOVE_TO never fails (doc 01's inversion applied to movement): the
+        validator has already turned every possible destination into one of
+        five kinds, and this only applies it. `current_place` is set from
+        `resolved["place"]` whenever the validator produced one -- "" clears
+        it (the model named the zone itself), text sets it -- and is left
+        untouched for "shuffle"/"stay", which carry no `place` at all.
+        """
+        resolved = accepted.resolved
+        kind = resolved["kind"]
+        manager = self.manager
+
+        if "place" in resolved:
+            manager.player.current_place = resolved["place"]
+        place = resolved.get("place", "")
+
+        if kind == "zone":
+            location = resolved["location"]
+            manager.player.current_location_id = location.id
+            where = f" ({place})" if place else ""
+            fact = self._with_quest_note(
+                f"Move to {location.name}{where}: succeeded.", f"reach:{location.id}"
+            )
+            self._advance_one_tick()  # one tick per zone change, however many hops
+            return fact
+
+        if kind == "blocked":
+            stop = resolved["location"]
+            target = resolved["target"]
+            fact = (
+                f"Move to {target.name}: blocked -- the door to {target.name} is "
+                f"locked and Orton has no key. Orton is in {stop.name}, {place}."
+            )
+            if stop.id != manager.player.current_location_id:
+                manager.player.current_location_id = stop.id
+                fact = self._with_quest_note(fact, f"reach:{stop.id}")
+                self._advance_one_tick()
+            return fact
+
+        if kind == "spot":
+            zone = resolved["location"]
+            if place:
+                return f"Move within {zone.name} to {place}: succeeded."
+            return f"Already in {zone.name}."
+
+        if kind == "shuffle":
+            zone = resolved["location"]
+            return f"Moved {resolved['raw']} within {zone.name}."
+
+        # kind == "stay"
+        return "MOVE_TO had no destination; Orton stayed put."
 
     # === Items ===
 

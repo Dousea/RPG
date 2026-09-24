@@ -43,12 +43,16 @@ class LiveWorldLockedDoorTests(unittest.TestCase):
         self.assertEqual(gm.player.current_location_id, "zone_home")
 
     def test_the_apartment_is_locked_without_the_key(self):
+        # Rewritten: MOVE_TO never fails (Task 2) -- a locked door soft-lands
+        # the player at it instead of refusing the move.
         gm = GameManager()
         _resolve(gm, MoveAction(destination="out"))
         gm.player.inventory.clear()  # drop the apartment key
         facts = _resolve(gm, MoveAction(destination="in"))
-        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertFalse(facts[0].startswith("Refused:"))
+        self.assertIn("blocked", facts[0])
         self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertEqual(gm.player.current_place, "at the locked door to Your Apartment")
 
     def test_leaving_the_apartment_needs_no_key(self):
         gm = GameManager()
@@ -71,12 +75,87 @@ class MovementResolutionTests(unittest.TestCase):
         _resolve(gm, MoveAction(destination="out"))
         self.assertEqual(gm.narrative.time_of_day, "afternoon")
 
-    def test_rejected_move_does_not_mutate_state_or_advance_time(self):
+    def test_move_to_unknown_becomes_a_spot_in_the_current_zone(self):
+        # Replaces test_rejected_move_does_not_mutate_state_or_advance_time:
+        # rejecting an unmatched name is what let the story and the state
+        # diverge (MOVE_TO never fails, Task 2). Location and clock are
+        # unchanged, but the fact is not a refusal.
         gm = GameManager()
         facts = _resolve(gm, MoveAction(destination="Atlantis"))
         self.assertEqual(gm.player.current_location_id, "zone_home")
+        self.assertEqual(gm.player.current_place, "Atlantis")
         self.assertEqual(gm.narrative.time_of_day, "morning")
-        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertFalse(facts[0].startswith("Refused:"))
+
+    def test_move_by_connection_name_and_id(self):
+        gm = GameManager()
+        _resolve(gm, MoveAction(destination="out"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        _resolve(gm, MoveAction(destination="Your Apartment"))
+        self.assertEqual(gm.player.current_location_id, "zone_home")
+        # Walking through the building to the street, key still held.
+        _resolve(gm, MoveAction(destination="zone_street"))
+        self.assertEqual(gm.player.current_location_id, "zone_street")
+
+    def test_move_by_alias_keeps_the_alias_as_the_spot(self):
+        # "the pharmacy" is the neighborhood as far as the simulation cares,
+        # but the words are where Orton actually is, so they are worth keeping.
+        gm = GameManager()
+        _resolve(gm, MoveAction(destination="the pharmacy"))
+        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
+        self.assertEqual(gm.player.current_place, "the pharmacy")
+
+    def test_naming_the_zone_itself_clears_the_spot(self):
+        gm = GameManager()
+        _resolve(gm, MoveAction(destination="the kitchen"))
+        self.assertEqual(gm.player.current_place, "the kitchen")
+        _resolve(gm, MoveAction(destination="Your Apartment"))
+        self.assertEqual(gm.player.current_place, "")
+
+    def test_bare_directions_are_not_stored_as_a_place(self):
+        # "north" with no exit behind it is a shuffle, not a destination.
+        gm = GameManager()
+        _resolve(gm, MoveAction(destination="north"))
+        self.assertEqual(gm.player.current_place, "")
+
+    def test_move_to_never_fails(self):
+        gm = GameManager()
+        for junk in (
+            "Atlantis", "north", "", "the roof", "???",
+            "a place with a very long name that goes on well past any "
+            "sensible limit for a spot",
+            "Emma's kitchen table", "12345", "MOVE_TO", "back",
+        ):
+            facts = _resolve(gm, MoveAction(destination=junk))
+            self.assertFalse(
+                facts[0].startswith("Refused:"), f"MOVE_TO {junk!r} was refused: {facts[0]}"
+            )
+            # Whatever happened, the world must still be describable.
+            self.assertIn("[SCENE]", gm.build_narrator_prompt("look"))
+        self.assertLessEqual(len(gm.player.current_place), 80)
+
+    def test_spot_move_does_not_advance_the_clock(self):
+        gm = GameManager()
+        self.assertEqual(gm.narrative.time_of_day, "morning")
+        _resolve(gm, MoveAction(destination="Atlantis"))
+        self.assertEqual(gm.narrative.time_of_day, "morning")
+
+    def test_zone_move_advances_one_tick_even_across_several_zones(self):
+        gm = GameManager()
+        self.assertEqual(gm.narrative.time_of_day, "morning")
+        _resolve(gm, MoveAction(destination="The Neighborhood"))
+        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
+        self.assertEqual(gm.narrative.time_of_day, "afternoon")
+
+    def test_locked_door_soft_lands_at_the_door(self):
+        gm = GameManager()
+        gm.player.inventory.clear()  # drop the apartment key
+        _resolve(gm, MoveAction(destination="zone_street"))  # no key needed to leave
+        facts = _resolve(gm, MoveAction(destination="Your Apartment"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertEqual(gm.player.current_place, "at the locked door to Your Apartment")
+        self.assertIn("blocked", facts[0])
+        self.assertFalse(facts[0].startswith("Refused:"))
 
 
 class ItemResolutionTests(unittest.TestCase):
@@ -231,6 +310,22 @@ class WorldStateResolutionTests(unittest.TestCase):
         gm = GameManager()
         _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Your Building"))
         self.assertEqual(gm.resolve_npc("Emma").current_location_id, "zone_building")
+
+    def test_npc_move_accepts_an_alias(self):
+        gm = GameManager()
+        _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Lobby"))
+        self.assertEqual(gm.resolve_npc("Emma").current_location_id, "zone_building")
+
+    def test_npc_move_still_rejects_unknown_zones(self):
+        # MOVE_TO soft-lands an unknown name into the player's free-text
+        # spot, but NPCs have no such field -- if resolution were relaxed for
+        # them too, an invented zone would scatter them somewhere
+        # unreachable. This is the regression test from the zones patch.
+        gm = GameManager()
+        before = gm.resolve_npc("Emma").current_location_id
+        facts = _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Atlantis"))
+        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertEqual(gm.resolve_npc("Emma").current_location_id, before)
 
     def test_npc_status(self):
         gm = GameManager()

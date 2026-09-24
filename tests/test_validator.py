@@ -30,21 +30,31 @@ class MovementValidationTests(unittest.TestCase):
         result = self.validator.validate(MoveAction(destination="Your Building"))
         self.assertIsInstance(result, Accepted)
 
-    def test_non_adjacent_real_location_is_rejected(self):
-        # The Street exists in the world but is not connected directly to
-        # zone_home -- this is the reachability bug `resolve_location`'s
-        # global name match used to let through. Task 2 rewrites this test:
-        # movement semantics stay main's (adjacency-only) for this task.
+    def test_non_adjacent_zone_is_reached_by_walking(self):
+        # Renamed and rewritten from test_non_adjacent_real_location_is_rejected:
+        # zones replace adjacency gating (Task 2) -- The Street is reachable
+        # from zone_home by walking the connection graph through the building,
+        # not directly adjacent, and the validator now says so instead of
+        # rejecting it.
         result = self.validator.validate(MoveAction(destination="The Street"))
-        self.assertIsInstance(result, Rejected)
+        self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["kind"], "zone")
+        self.assertEqual(result.resolved["location"].id, "zone_street")
 
-    def test_nonexistent_location_is_rejected(self):
+    def test_nonexistent_location_becomes_a_spot(self):
+        # Renamed and rewritten from test_nonexistent_location_is_rejected:
+        # MOVE_TO never fails (Task 2) -- an unmatched name soft-lands as a
+        # free-text spot in the current zone instead of being rejected.
         result = self.validator.validate(MoveAction(destination="Atlantis"))
-        self.assertIsInstance(result, Rejected)
+        self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["kind"], "spot")
+        self.assertEqual(result.resolved["place"], "Atlantis")
         # State must not have moved -- validation never mutates.
         self.assertEqual(self.gm.player.current_location_id, "zone_home")
 
     def test_locked_door_blocks_movement_without_the_key(self):
+        # Rewritten: a locked door now soft-lands ("blocked") instead of
+        # rejecting the move outright (Task 2).
         # A generic locked door, distinct from the real apartment_door in
         # data/locations.py (whose key the default player already carries).
         door = DoorEntity(leads_to="zone_building")
@@ -53,10 +63,13 @@ class MovementValidationTests(unittest.TestCase):
         self.gm.current_location.entities.append(door)
 
         result = self.validator.validate(MoveAction(destination="out"))
-        self.assertIsInstance(result, Rejected)
-        self.assertIn("locked", result.reason)
+        self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["kind"], "blocked")
+        self.assertEqual(result.resolved["location"].id, "zone_home")
 
     def test_locked_door_opens_with_the_key_in_inventory(self):
+        # Rewritten: Accepted now carries kind="zone" rather than just being
+        # Accepted (Task 2 adds `resolved["kind"]` to every move outcome).
         from data.items import ITEMS
         from modules.entity.item import ItemEntity
 
@@ -68,6 +81,17 @@ class MovementValidationTests(unittest.TestCase):
 
         result = self.validator.validate(MoveAction(destination="out"))
         self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["kind"], "zone")
+
+    def test_validation_never_mutates(self):
+        # The validator only decides what a move means; it never writes
+        # state. A spot move resolved via the validator alone (SimulationCore
+        # not invoked) must leave current_place untouched.
+        result = self.validator.validate(MoveAction(destination="the pharmacy"))
+        self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["place"], "the pharmacy")
+        self.assertEqual(self.gm.player.current_place, "")
+        self.assertEqual(self.gm.player.current_location_id, "zone_home")
 
 
 class ItemValidationTests(unittest.TestCase):

@@ -19,6 +19,11 @@ class PlayerEntity(BaseEntity):
     # Stable identity for saves and RelationshipManager keys. `BaseEntity.id`
     # is `id(self)` and changes every restart, so it must not be used for either.
     entity_id: str = "player"
+    # Free-text spot inside the current zone ("the kitchen", "the pharmacy
+    # counter"). A zone is deliberately coarse; this is what keeps the prompt
+    # specific without needing a room for every corner. LLM-authored, so it is
+    # capped and rendered as text, never markup.
+    current_place: str = ""
     experience_points: int = 0
     level: int = 1
     max_inventory_size: int = 20

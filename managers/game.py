@@ -1,4 +1,5 @@
 import re
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -81,6 +82,21 @@ TIMES_OF_DAY = ("morning", "afternoon", "evening", "night")
 # (see `resolve_location`) -- otherwise "outside" from the street would match
 # the zone_street alias of the same name instead of following the exit out.
 DIRECTION_SYNONYMS = {"inside": "in", "outside": "out"}
+
+# `current_place` is LLM-authored text that flows into the next prompt and the
+# UI panel, so it is bounded here rather than trusted.
+MAX_PLACE_LENGTH = 80
+
+# Direction words with no destination behind them. If one of these did not
+# match a connection, it describes a shuffle inside the current zone -- it is
+# not the name of a place, so it must not be stored as one.
+BARE_DIRECTIONS = frozenset(
+    {
+        "north", "south", "east", "west", "up", "down", "in", "out",
+        "inside", "outside", "back", "forward", "left", "right",
+        "upstairs", "downstairs", "onwards", "onward", "further",
+    }
+)
 
 # The game has one clock. `NarrativeState.day` and `.time_of_day` are it;
 # `World.time` and `World.date` are a wall-clock rendering of the same instant,
@@ -301,6 +317,34 @@ class GameManager:
                 if best is None or score > best[0]:
                     best = (score, location)
         return best[1] if best else None
+
+    def zone_path(self, start_id: str, target_id: str) -> list[str] | None:
+        """BFS over `Location.connections` from `start_id` to `target_id`.
+
+        Returns the hop list (zone ids), excluding `start_id` itself, so
+        callers can walk it one connection at a time and stop at the first
+        locked door they can't get through. `None` means the two zones are
+        not connected at all -- not reachable with the shipped map, but a
+        possible future one, so `_validate_move` still has to handle it.
+        """
+        if start_id == target_id:
+            return []
+        visited = {start_id}
+        queue: deque[tuple[str, list[str]]] = deque([(start_id, [])])
+        while queue:
+            current_id, path = queue.popleft()
+            location = self.world.locations.get(current_id)
+            if location is None:
+                continue
+            for loc_id in location.connections.values():
+                if loc_id in visited:
+                    continue
+                new_path = path + [loc_id]
+                if loc_id == target_id:
+                    return new_path
+                visited.add(loc_id)
+                queue.append((loc_id, new_path))
+        return None
 
     @staticmethod
     def _find_item_entity(
