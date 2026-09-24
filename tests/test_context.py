@@ -4,7 +4,7 @@ import unittest
 
 from managers.context import ContextBuilder
 from managers.game import GameManager
-from modules.action import DiscoverFlagAction, MoveAction, SetFlagAction, TakeAction
+from modules.action import DiscoverFlagAction, MoveAction, SetFlagAction
 from modules.quest import QuestState
 from tests.support import resolve_actions
 
@@ -67,6 +67,8 @@ class ParserPromptFirewallTests(unittest.TestCase):
 class NpcGoalVisibilityTests(unittest.TestCase):
     def setUp(self):
         self.gm = GameManager()
+        # Orton now starts alone in his apartment; Emma starts in zone_building.
+        self.gm.player.current_location_id = "zone_building"
         self.builder = ContextBuilder(self.gm)
 
     def test_npc_goals_are_shown_as_visible_intent(self):
@@ -105,21 +107,21 @@ class QuestVisibilityTests(unittest.TestCase):
         # (see ContextBuilder._quests_section), so a single-objective quest
         # here would never render its own checkmark to assert on.
         self.gm.quests.clear()
-        self.gm.quests["get_key"] = QuestState(
-            quest_id="get_key",
-            title="Get the Key",
-            objectives=["take:item_storage_key", "reach:location_id_storage"],
+        self.gm.quests["get_gear"] = QuestState(
+            quest_id="get_gear",
+            title="Get Some Gear",
+            objectives=["reach:zone_street", "take:item_crowbar"],
             objective_labels={
-                "take:item_storage_key": "Find the storage key",
-                "reach:location_id_storage": "Get into the storage room",
+                "reach:zone_street": "Get to the street",
+                "take:item_crowbar": "Find something to defend yourself with",
             },
         )
         resolve_actions(
-            self.gm, MoveAction(destination="north"), TakeAction(item_name="Storage Room Key")
+            self.gm, MoveAction(destination="out"), MoveAction(destination="out")
         )
         prompt = self.builder.build_narrator_prompt("look")
-        self.assertIn("[x] Find the storage key", prompt)
-        self.assertIn("[ ] Get into the storage room", prompt)
+        self.assertIn("[x] Get to the street", prompt)
+        self.assertIn("[ ] Find something to defend yourself with", prompt)
 
     def test_a_quest_with_no_label_falls_back_to_its_raw_key(self):
         self.gm.quests.clear()

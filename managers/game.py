@@ -1,8 +1,10 @@
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import config
-from data.locations import build_starting_locations
+from data.items import ITEMS
+from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
@@ -73,6 +75,12 @@ MAX_RECENT_EVENTS = config.game.max_recent_events
 SUMMARY_THRESHOLD = config.game.summary_threshold
 
 TIMES_OF_DAY = ("morning", "afternoon", "evening", "night")
+
+# Words the model reaches for in place of a bare connection direction. Applied
+# only when the mapped direction is actually a connection of the current zone
+# (see `resolve_location`) -- otherwise "outside" from the street would match
+# the zone_street alias of the same name instead of following the exit out.
+DIRECTION_SYNONYMS = {"inside": "in", "outside": "out"}
 
 # The game has one clock. `NarrativeState.day` and `.time_of_day` are it;
 # `World.time` and `World.date` are a wall-clock rendering of the same instant,
@@ -166,7 +174,11 @@ class GameManager:
             if player is not None
             else PlayerEntity(
                 name="Orton",
-                current_location_id="location_id_hallway",
+                current_location_id=STARTING_ZONE_ID,
+                # His own front-door key. Leaving it on the floor of an
+                # apartment he starts locked out of would strand him on turn
+                # one -- see data/locations.py's apartment_door.
+                inventory=[ItemEntity(item=ITEMS["item_apartment_key"])],
                 traits=[
                     TRAITS["TraitID_Hemophobia"],
                     TRAITS["TraitID_SmallFrame"],
@@ -241,21 +253,54 @@ class GameManager:
         return None
 
     def resolve_location(self, name: str) -> Location | None:
-        """Resolve a location by id, display name, or a direction leading out of
-        the player's current location ("north")."""
-        needle = name.strip().casefold()
+        """Resolve a zone by connection direction, id, display name, or alias.
+
+        Returns None when nothing matches. That matters: `NPC_MOVE` resolves
+        through here too, and NPCs have no free-text place to fall back on, so a
+        resolver that always succeeded would scatter them into invented zones.
+        """
+        needle = name.strip().strip("\"'.,;:").casefold()
         if not needle:
             return None
 
-        # A compass direction out of where the player is standing.
+        # A direction out of where the player is standing ("out", "in"), with
+        # DIRECTION_SYNONYMS applied first -- but only ever matches an actual
+        # connection key, so an unmapped synonym simply falls through below.
+        needle_direction = DIRECTION_SYNONYMS.get(needle, needle)
         for direction, loc_id in self.current_location.connections.items():
-            if needle == direction.casefold() and loc_id in self.world.locations:
+            if needle_direction == direction.casefold() and loc_id in self.world.locations:
                 return self.world.locations[loc_id]
 
+        # Zone identity, matched globally. Adjacency is deliberately not
+        # enforced here: resolve_location backs narration and NPC_MOVE, not
+        # player movement legality (that's `ActionValidator._validate_move`).
         for loc_id, location in self.world.locations.items():
             if needle in (loc_id.casefold(), location.name.casefold()):
                 return location
-        return None
+            if any(needle == alias.casefold() for alias in location.aliases):
+                return location
+
+        # Last pass: the model writes "back to my apartment" or "the lobby
+        # downstairs" rather than a bare name. Only whole words count, and only
+        # names long enough not to collide by accident -- a loose substring
+        # match here would quietly send the player to the wrong zone, which is
+        # the failure mode this whole design is meant to avoid.
+        words = set(re.findall(r"[a-z0-9']+", needle))
+        best: tuple[int, Location] | None = None
+        for location in self.world.locations.values():
+            for candidate in (location.name, *location.aliases):
+                folded = candidate.casefold()
+                if len(folded) < 4:
+                    continue
+                candidate_words = re.findall(r"[a-z0-9']+", folded)
+                if not candidate_words or not set(candidate_words) <= words:
+                    continue
+                # Prefer the most specific match: "emma's apartment" over
+                # "apartment" when the model writes both words.
+                score = len(candidate_words)
+                if best is None or score > best[0]:
+                    best = (score, location)
+        return best[1] if best else None
 
     @staticmethod
     def _find_item_entity(

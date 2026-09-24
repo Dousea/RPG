@@ -2,7 +2,9 @@
 
 Ported from the legacy `gamedata/npcs.json`. The legacy free-text locations
 ("Apartment Hallway", "Ground Floor Lobby", "Coffee Shop") have no equivalent in
-`data/locations.py`, so each NPC is placed in the nearest existing location id.
+`data/locations.py`, so each NPC is placed in the zone that covers it: the
+hallway and lobby both fall under `zone_building`, and the coffee shop falls
+under `zone_neighborhood`.
 """
 
 from modules.character.faction import CharacterFaction
@@ -34,7 +36,7 @@ def build_starting_npcs() -> dict[str, NpcEntity]:
                 "hair. She lives in the apartment next door and works as a graphic "
                 "designer."
             ),
-            current_location_id="location_id_hallway",
+            current_location_id="zone_building",
             age=28,
             faction=CharacterFaction.SURVIVORS,
             personality=["outgoing", "creative", "helpful"],
@@ -49,7 +51,7 @@ def build_starting_npcs() -> dict[str, NpcEntity]:
                 "hair and a practical demeanor. He carries a toolbox and seems "
                 "knowledgeable about the building."
             ),
-            current_location_id="location_id_lobby",
+            current_location_id="zone_building",
             age=52,
             faction=CharacterFaction.SURVIVORS,
             personality=["practical", "reliable", "quiet"],
@@ -64,7 +66,7 @@ def build_starting_npcs() -> dict[str, NpcEntity]:
                 "eyes and an infectious smile. She seems to know most of the "
                 "regulars by name."
             ),
-            current_location_id="location_id_office",
+            current_location_id="zone_neighborhood",
             age=23,
             faction=CharacterFaction.NEUTRAL,
             personality=["bubbly", "social", "observant"],

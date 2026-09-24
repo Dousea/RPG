@@ -81,6 +81,55 @@ ITEMS: dict[str, BaseItem] = {
                 amount=10,
             )
         ],
+        nutrition=35,
+        hydration=5,
+    ),
+    "item_water_bottle": ConsumableItem(
+        id="item_water_bottle",
+        name="Water Bottle",
+        description="Half a litre of tap water in a scratched plastic bottle.",
+        max_hit_points=5,
+        tags=["drink", "consumable", "water"],
+        slots=[
+            CharacterHoldableSlot.RIGHT_HAND,
+            CharacterHoldableSlot.LEFT_HAND,
+        ],
+        is_two_handed=False,
+        modifiers=[],
+        nutrition=0,
+        hydration=45,
+    ),
+    "item_granola_bar": ConsumableItem(
+        id="item_granola_bar",
+        name="Granola Bar",
+        description="Oats and syrup, flattened into a brick. Dry going down.",
+        max_hit_points=3,
+        tags=["food", "consumable"],
+        slots=[
+            CharacterHoldableSlot.RIGHT_HAND,
+            CharacterHoldableSlot.LEFT_HAND,
+        ],
+        is_two_handed=False,
+        modifiers=[],
+        nutrition=20,
+        # Dry food costs water. This is the one interaction that makes the
+        # water bottle worth carrying rather than an afterthought.
+        hydration=-5,
+    ),
+    "item_instant_noodles": ConsumableItem(
+        id="item_instant_noodles",
+        name="Instant Noodles",
+        description="A brick of noodles and a foil sachet of salt.",
+        max_hit_points=4,
+        tags=["food", "consumable"],
+        slots=[
+            CharacterHoldableSlot.RIGHT_HAND,
+            CharacterHoldableSlot.LEFT_HAND,
+        ],
+        is_two_handed=False,
+        modifiers=[],
+        nutrition=40,
+        hydration=-10,
     ),
     "item_worn_tshirt": ArmorItem(
         id="item_worn_tshirt",

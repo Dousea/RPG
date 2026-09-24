@@ -22,12 +22,15 @@ class StartingStateTests(unittest.TestCase):
     def setUp(self):
         self.gm = GameManager()
 
-    def test_player_starts_in_the_hallway(self):
-        self.assertEqual(self.gm.player.current_location_id, "location_id_hallway")
+    def test_player_starts_at_home(self):
+        self.assertEqual(self.gm.player.current_location_id, "zone_home")
+        self.assertEqual(
+            [e.item.name for e in self.gm.player.inventory], ["Apartment Key"]
+        )
 
     def test_every_connection_points_at_a_real_location(self):
-        # Regression: the Lobby was keyed 'location_id_hobby' while its id was
-        # 'location_id_lobby', so the hallway's south exit led nowhere.
+        # Regression: a location keyed under the wrong id would leave a
+        # connection pointing nowhere, with nothing to catch it.
         for location in self.gm.world.locations.values():
             for direction, target in location.connections.items():
                 self.assertIn(
@@ -40,6 +43,32 @@ class StartingStateTests(unittest.TestCase):
         for key, location in self.gm.world.locations.items():
             self.assertEqual(key, location.id)
 
+    def test_zone_roster_is_exactly_the_four_zones(self):
+        self.assertEqual(
+            set(self.gm.world.locations.keys()),
+            {"zone_home", "zone_building", "zone_street", "zone_neighborhood"},
+        )
+
+    def test_resolve_location_by_alias(self):
+        self.assertEqual(
+            self.gm.resolve_location("the pharmacy").id, "zone_neighborhood"
+        )
+        self.assertEqual(
+            self.gm.resolve_location("emma's apartment").id, "zone_building"
+        )
+        # Whole-word fallback: "emma's apartment" is a more specific alias of
+        # zone_building, so this must not collide with it.
+        self.assertEqual(
+            self.gm.resolve_location("back to my apartment").id, "zone_home"
+        )
+        self.assertIsNone(self.gm.resolve_location("Atlantis"))
+
+    def test_outside_follows_the_exit_first(self):
+        # "outside" is also a zone_street alias; DIRECTION_SYNONYMS must make
+        # the exit win over the current zone's own alias.
+        self.gm.player.current_location_id = "zone_street"
+        self.assertEqual(self.gm.resolve_location("inside").id, "zone_building")
+
     def test_npc_roster_is_loaded_and_placed(self):
         self.assertEqual(len(self.gm.npcs), 3)
         for npc in self.gm.npcs.values():
@@ -51,7 +80,10 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(
             self.gm.relationship_manager.get_trust("npc_emma", "player"), 5
         )
-        # The prompt shows the band, never the number -- see the firewall tests.
+        # The prompt shows the band, never the number -- see the firewall
+        # tests. Orton now starts alone in his apartment, so move to where
+        # Emma is to see her disposition line.
+        self.gm.player.current_location_id = "zone_building"
         self.assertIn("trust: unformed", self.gm.build_narrator_prompt("look"))
 
     def test_two_games_do_not_share_mutable_state(self):
@@ -60,16 +92,18 @@ class StartingStateTests(unittest.TestCase):
         first = GameManager()
         resolve_actions(
             first,
-            MoveAction(destination="north"),
+            MoveAction(destination="out"),
+            MoveAction(destination="out"),
             TakeAction(item_name="Crowbar"),
             NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
         )
 
         second = GameManager()
-        office = second.world.locations["location_id_office"]
-        self.assertIn("Crowbar", [e.item.name for e in office.entities])
+        street = second.world.locations["zone_street"]
+        self.assertIn("Crowbar", [e.item.name for e in street.entities])
         self.assertEqual(second.resolve_npc("Emma").status, ["friendly", "curious about new neighbor"])
-        self.assertEqual(second.player.inventory, [])
+        # Starting key, not an empty inventory.
+        self.assertEqual([e.item.name for e in second.player.inventory], ["Apartment Key"])
 
 
 class PromptTests(unittest.TestCase):
@@ -110,12 +144,14 @@ class PromptTests(unittest.TestCase):
         self.assertIn("No 'Medkit' here to take.", prompt)
 
     def test_prompt_describes_present_npcs_only(self):
+        # Orton now starts alone in his apartment.
+        self.gm.player.current_location_id = "zone_building"
         prompt = self.gm.build_narrator_prompt("look")
-        self.assertIn("Emma", prompt)  # in the hallway with the player
-        self.assertNotIn("Marcus", prompt)  # in the lobby
+        self.assertIn("Emma", prompt)  # in the building with the player
+        self.assertNotIn("Jen", prompt)  # in the neighborhood
 
     def test_prompt_lists_exits_by_direction(self):
-        self.assertIn("North: Office", self.gm.build_narrator_prompt("look"))
+        self.assertIn("Out: Your Building", self.gm.build_narrator_prompt("look"))
 
     def test_prompt_reflects_recent_events_and_summaries(self):
         self.assertIn("(No recent events)", self.gm.build_narrator_prompt("look"))
@@ -152,6 +188,8 @@ class ParserPromptTests(unittest.TestCase):
             self.assertNotIn(section, prompt)
 
     def test_parser_prompt_lists_present_npcs_by_name_only(self):
+        # Orton now starts alone in his apartment.
+        self.gm.player.current_location_id = "zone_building"
         prompt = self.gm.build_parser_prompt("look")
         self.assertIn("Emma", prompt)
         self.assertNotIn("Disposition", prompt)
@@ -162,6 +200,8 @@ class KnowledgeFirewallTests(unittest.TestCase):
 
     def setUp(self):
         self.gm = GameManager()
+        # Orton now starts alone in his apartment; Emma starts in zone_building.
+        self.gm.player.current_location_id = "zone_building"
 
     def _npcs_section(self) -> str:
         prompt = self.gm.build_narrator_prompt("look")

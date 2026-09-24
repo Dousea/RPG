@@ -8,10 +8,13 @@ class Location:
     id: str
     name: str
     description: str
-    connections: dict[str, str]  # e.g., {"north": "location_id_hallway"}
+    connections: dict[str, str]  # e.g., {"out": "zone_building"}
     entities: list[BaseEntity] = field(
         default_factory=list[BaseEntity]
     )  # For players, items, doors, terminals, etc.
+    # Other names the game master calls this place. A zone stands in for many
+    # rooms, so "hallway", "lobby" and "stairwell" all resolve to the building.
+    aliases: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -29,4 +32,4 @@ class World:
     date: str = "2023-10-01"
     locations: dict[str, Location] = field(
         default_factory=dict[str, Location]
-    )  # e.g., {"location_id_town_square": Location(...)}
+    )  # e.g., {"zone_home": Location(...)}

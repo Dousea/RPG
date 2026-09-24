@@ -1,4 +1,20 @@
-"""Starting world map.
+"""Starting world map, as zones rather than rooms.
+
+A zone is a coarse container the game master narrates freely inside: "Your
+Apartment" covers the kitchen, the bedroom and the bathroom, and the player's
+position within it is the free-text `PlayerEntity.current_place`.
+
+This is deliberate. The previous map was three rooms -- Hallway, Office, Lobby --
+while the system prompt opened on Orton's apartment and the item catalogue held a
+key to "apartment 3B". The game master narrated its way into rooms that did not
+exist, every `MOVE_TO` at them failed, and the simulated world silently fell out
+of step with the story being told. Enumerating every room the story might reach is
+unbounded work; four zones plus a free-text spot is not.
+
+`aliases` is what makes that work in practice: the model says "the lobby" or "the
+pharmacy", and those resolve to the building and the neighborhood rather than
+failing. The lists are deliberately over-broad -- a missed alias is a silent
+desync, an extra one is harmless.
 
 Exposed as a builder rather than a module-level dict: `Location.entities` is
 mutable game state, so a shared dict would leak one game's dropped items into
@@ -10,53 +26,87 @@ from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.location import Location
 
+# The zone the player starts in, and the fallback for a save that names a zone
+# this build no longer has.
+STARTING_ZONE_ID = "zone_home"
+
 
 def build_starting_locations() -> dict[str, Location]:
     """Build a fresh map with its starting ground items."""
     locations = {
-        "location_id_hallway": Location(
-            id="location_id_hallway",
-            name="Hallway",
-            description="A long, narrow corridor with doors on either side.",
-            connections={
-                "north": "location_id_office",
-                "south": "location_id_lobby",
-            },
+        "zone_home": Location(
+            id="zone_home",
+            name="Your Apartment",
+            description=(
+                "Apartment 3B. A one-bedroom you moved into a few weeks ago and "
+                "still have not finished unpacking. A kitchenette, a bathroom, a "
+                "bedroom, a window over the street, and a door with a deadbolt."
+            ),
+            connections={"out": "zone_building"},
+            aliases=[
+                "apartment", "apartment 3b", "3b", "my apartment", "your apartment",
+                "home", "flat", "bedroom", "kitchen", "kitchenette", "bathroom",
+                "living room", "my place", "inside", "my room", "back inside",
+            ],
         ),
-        "location_id_office": Location(
-            id="location_id_office",
-            name="Office",
-            description="A small office with a desk and a computer.",
-            connections={"south": "location_id_hallway"},
+        "zone_building": Location(
+            id="zone_building",
+            name="Your Building",
+            description=(
+                "The shared parts of the building: the third-floor hallway, the "
+                "stairwell, the elevator, the ground-floor lobby and its mailboxes, "
+                "the laundry room in the basement, and your neighbours' doors."
+            ),
+            connections={"in": "zone_home", "out": "zone_street"},
+            aliases=[
+                "hallway", "corridor", "stairwell", "stairs", "elevator", "lobby",
+                "foyer", "entrance", "laundry room", "basement", "mailroom",
+                "emma's apartment", "3a", "the building", "building", "downstairs",
+                "upstairs", "next door", "office",
+                "storage room", "storage",
+            ],
         ),
-        "location_id_lobby": Location(
-            id="location_id_lobby",
-            name="Lobby",
-            description="A spacious lobby with a reception desk.",
-            connections={
-                "north": "location_id_hallway",
-                "south": "location_id_storage",
-            },
+        "zone_street": Location(
+            id="zone_street",
+            name="The Street",
+            description=(
+                "The block outside: the sidewalk, parked cars, the bodega on the "
+                "corner, the alley behind the building, a bus stop."
+            ),
+            connections={"in": "zone_building", "out": "zone_neighborhood"},
+            aliases=[
+                "street", "outside", "sidewalk", "road", "alley", "bodega",
+                "corner store", "bus stop", "parking lot", "my car", "the block",
+                "front steps", "out front",
+            ],
         ),
-        "location_id_storage": Location(
-            id="location_id_storage",
-            name="Storage Room",
-            description="A cramped storage room behind the lobby, shelves half-emptied.",
-            connections={"north": "location_id_lobby"},
+        "zone_neighborhood": Location(
+            id="zone_neighborhood",
+            name="The Neighborhood",
+            description=(
+                "The wider few blocks: a coffee shop, the pharmacy, a supermarket, "
+                "a walk-in clinic, the subway entrance, the park."
+            ),
+            connections={"in": "zone_street"},
+            aliases=[
+                "neighborhood", "neighbourhood", "coffee shop", "cafe", "pharmacy",
+                "drugstore", "supermarket", "grocery store", "store", "shops",
+                "clinic", "hospital", "subway", "station", "park", "downtown",
+                "the city", "town",
+            ],
         ),
     }
 
-    # Locked from the lobby side only: leaving the storage room needs no key,
-    # matching how a real door lock works (see managers/validator.py, which
-    # checks the current location's entities for a blocking DoorEntity).
-    storage_door = DoorEntity(leads_to="location_id_storage")
-    storage_door.state = UnlockableEntityLockState.LOCKED
-    storage_door.key_id = "item_storage_key"
-    locations["location_id_lobby"].entities.append(storage_door)
+    # Locked from the building side only: leaving the apartment needs no key.
+    apartment_door = DoorEntity(leads_to="zone_home")
+    apartment_door.state = UnlockableEntityLockState.LOCKED
+    apartment_door.key_id = "item_apartment_key"
+    locations["zone_building"].entities.append(apartment_door)
 
     starting_ground_items = {
-        "location_id_office": ["item_crowbar", "item_canned_beans", "item_storage_key"],
-        "location_id_lobby": ["item_first_aid_kit"],
+        "zone_home": ["item_canned_beans", "item_water_bottle"],
+        "zone_building": ["item_first_aid_kit"],
+        "zone_street": ["item_crowbar"],
     }
     for location_id, item_ids in starting_ground_items.items():
         locations[location_id].entities.extend(

@@ -64,6 +64,11 @@ class HoldableItem(EquippableItem):
 @dataclass
 class ConsumableItem(HoldableItem):
     modifiers: list[AnyModifier]
+    # How far this refills the survival tracks, as percentage points. Dry food
+    # may carry a negative `hydration`, which is what makes water scarce rather
+    # than incidental.
+    nutrition: int = 0
+    hydration: int = 0
 
 
 # Appliable is a type of Holdable that can apply effects when used.

@@ -31,61 +31,50 @@ def _resolve(gm: GameManager, *actions, rng=None) -> list[str]:
 
 
 class LiveWorldLockedDoorTests(unittest.TestCase):
-    """The starting map's real locked door (data/locations.py), not a
-    manually-constructed one -- proves the exit-requirement wiring is
-    actually live in the shipped game, not just exercised in isolation."""
+    """The starting map's real locked door (data/locations.py) -- Orton's own
+    apartment door, locked from the building side only -- not a manually
+    constructed one, proves the exit-requirement wiring is actually live in
+    the shipped game, not just exercised in isolation."""
 
-    def test_storage_room_is_locked_without_the_key(self):
+    def test_leaving_and_returning_succeeds_with_the_key(self):
+        gm = GameManager()  # starts holding item_apartment_key
+        facts = _resolve(gm, MoveAction(destination="out"), MoveAction(destination="in"))
+        self.assertFalse(any(f.startswith("Refused:") for f in facts))
+        self.assertEqual(gm.player.current_location_id, "zone_home")
+
+    def test_the_apartment_is_locked_without_the_key(self):
         gm = GameManager()
-        _resolve(gm, MoveAction(destination="south"))  # hallway -> lobby
-        facts = _resolve(gm, MoveAction(destination="south"))  # lobby -> storage
+        _resolve(gm, MoveAction(destination="out"))
+        gm.player.inventory.clear()  # drop the apartment key
+        facts = _resolve(gm, MoveAction(destination="in"))
         self.assertTrue(facts[0].startswith("Refused:"))
-        self.assertEqual(gm.player.current_location_id, "location_id_lobby")
+        self.assertEqual(gm.player.current_location_id, "zone_building")
 
-    def test_the_key_found_in_the_office_opens_it(self):
+    def test_leaving_the_apartment_needs_no_key(self):
         gm = GameManager()
-        _resolve(
-            gm,
-            MoveAction(destination="north"),  # hallway -> office
-            TakeAction(item_name="Storage Room Key"),
-            MoveAction(destination="south"),  # office -> hallway
-            MoveAction(destination="south"),  # hallway -> lobby
-            MoveAction(destination="south"),  # lobby -> storage
-        )
-        self.assertEqual(gm.player.current_location_id, "location_id_storage")
-
-    def test_leaving_the_storage_room_needs_no_key(self):
-        gm = GameManager()
-        _resolve(
-            gm,
-            MoveAction(destination="north"),
-            TakeAction(item_name="Storage Room Key"),
-            MoveAction(destination="south"),
-            MoveAction(destination="south"),
-            MoveAction(destination="south"),
-        )
-        facts = _resolve(gm, MoveAction(destination="north"))
+        gm.player.inventory.clear()  # no apartment key
+        facts = _resolve(gm, MoveAction(destination="out"))
         self.assertFalse(facts[0].startswith("Refused:"))
-        self.assertEqual(gm.player.current_location_id, "location_id_lobby")
+        self.assertEqual(gm.player.current_location_id, "zone_building")
 
 
 class MovementResolutionTests(unittest.TestCase):
     def test_move_mutates_player_location(self):
         gm = GameManager()
-        facts = _resolve(gm, MoveAction(destination="north"))
-        self.assertEqual(gm.player.current_location_id, "location_id_office")
+        facts = _resolve(gm, MoveAction(destination="out"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
         self.assertIn("succeeded", facts[0])
 
     def test_move_advances_the_clock_by_one_tick(self):
         gm = GameManager()
         self.assertEqual(gm.narrative.time_of_day, "morning")
-        _resolve(gm, MoveAction(destination="north"))
+        _resolve(gm, MoveAction(destination="out"))
         self.assertEqual(gm.narrative.time_of_day, "afternoon")
 
     def test_rejected_move_does_not_mutate_state_or_advance_time(self):
         gm = GameManager()
         facts = _resolve(gm, MoveAction(destination="Atlantis"))
-        self.assertEqual(gm.player.current_location_id, "location_id_hallway")
+        self.assertEqual(gm.player.current_location_id, "zone_home")
         self.assertEqual(gm.narrative.time_of_day, "morning")
         self.assertTrue(facts[0].startswith("Refused:"))
 
@@ -93,7 +82,8 @@ class MovementResolutionTests(unittest.TestCase):
 class ItemResolutionTests(unittest.TestCase):
     def test_take_and_drop(self):
         gm = GameManager()
-        gm.player.current_location_id = "location_id_office"
+        gm.player.current_location_id = "zone_street"
+        gm.player.inventory.clear()  # drop the starting apartment key
         _resolve(gm, TakeAction(item_name="Crowbar"))
         self.assertEqual([e.item.name for e in gm.player.inventory], ["Crowbar"])
         _resolve(gm, DropAction(item_name="Crowbar"))
@@ -102,6 +92,7 @@ class ItemResolutionTests(unittest.TestCase):
     def test_use_consumable_heals_and_is_consumed(self):
         gm = GameManager()
         gm.player.hit_points = 50
+        gm.player.inventory.clear()  # drop the starting apartment key
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         facts = _resolve(gm, UseItemAction(item_name="Canned Beans"))
         self.assertEqual(gm.player.hit_points, 60)  # HPModifier(amount=10)
@@ -111,6 +102,7 @@ class ItemResolutionTests(unittest.TestCase):
     def test_use_appliable_heals_and_is_kept(self):
         gm = GameManager()
         gm.player.hit_points = 50
+        gm.player.inventory.clear()  # drop the starting apartment key
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
         _resolve(gm, UseItemAction(item_name="First Aid Kit"))
         self.assertEqual(gm.player.hit_points, 70)  # HPModifier(amount=20)
@@ -123,6 +115,16 @@ class ItemResolutionTests(unittest.TestCase):
         _resolve(gm, UseItemAction(item_name="Canned Beans"))
         self.assertEqual(gm.player.hit_points, gm.player.max_hit_points)
 
+    def test_eating_refills_hunger_and_thirst(self):
+        gm = GameManager()
+        gm.player.hunger = 50
+        gm.player.thirst = 50
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_granola_bar"]))
+        facts = _resolve(gm, UseItemAction(item_name="Granola Bar"))
+        self.assertEqual(gm.player.hunger, 70)
+        self.assertEqual(gm.player.thirst, 45)
+        self.assertIn("hunger 70, thirst 45", facts[0])
+
 
 class CombatResolutionTests(unittest.TestCase):
     def _fixed_rng(self) -> random.Random:
@@ -133,6 +135,7 @@ class CombatResolutionTests(unittest.TestCase):
 
     def test_unarmed_attack_deals_damage_and_reports_it(self):
         gm = GameManager()
+        gm.player.current_location_id = "zone_building"  # Emma starts here
         emma = gm.resolve_npc("Emma")
         before = emma.hit_points
         facts = _resolve(gm, AttackAction(target_name="Emma"), rng=self._fixed_rng())
@@ -141,11 +144,13 @@ class CombatResolutionTests(unittest.TestCase):
 
     def test_attack_advances_the_clock(self):
         gm = GameManager()
+        gm.player.current_location_id = "zone_building"  # Emma starts here
         _resolve(gm, AttackAction(target_name="Emma"), rng=self._fixed_rng())
         self.assertEqual(gm.narrative.time_of_day, "afternoon")
 
     def test_equipped_weapon_deals_its_damage(self):
         gm = GameManager()
+        gm.player.current_location_id = "zone_building"  # Emma starts here
         crowbar = ItemEntity(item=ITEMS["item_crowbar"])
         gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = crowbar
         emma = gm.resolve_npc("Emma")
@@ -161,6 +166,7 @@ class CombatResolutionTests(unittest.TestCase):
         # The pistol's damage (10) is used rather than the crowbar's (5) so
         # the 10% bump survives int() truncation in the assertion below.
         gm = GameManager()
+        gm.player.current_location_id = "zone_building"  # Emma starts here
         gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
             item=ITEMS["item_pistol"]
         )
@@ -187,6 +193,7 @@ class CombatResolutionTests(unittest.TestCase):
 
     def test_gun_slinger_deals_more_and_takes_less_ranged_damage(self):
         gm = GameManager()
+        gm.player.current_location_id = "zone_building"  # Emma starts here
         gm.player.perks = [PERKS["PerkID_GunSlinger"]]
         gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
             item=ITEMS["item_pistol"]
@@ -222,8 +229,8 @@ class WorldStateResolutionTests(unittest.TestCase):
 
     def test_npc_move(self):
         gm = GameManager()
-        _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Lobby"))
-        self.assertEqual(gm.resolve_npc("Emma").current_location_id, "location_id_lobby")
+        _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Your Building"))
+        self.assertEqual(gm.resolve_npc("Emma").current_location_id, "zone_building")
 
     def test_npc_status(self):
         gm = GameManager()

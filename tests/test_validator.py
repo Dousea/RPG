@@ -22,35 +22,37 @@ class MovementValidationTests(unittest.TestCase):
         self.validator = ActionValidator(self.gm)
 
     def test_adjacent_move_by_direction_is_accepted(self):
-        result = self.validator.validate(MoveAction(destination="north"))
+        result = self.validator.validate(MoveAction(destination="out"))
         self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["location"].id, "location_id_office")
+        self.assertEqual(result.resolved["location"].id, "zone_building")
 
     def test_adjacent_move_by_name_is_accepted(self):
-        result = self.validator.validate(MoveAction(destination="Office"))
+        result = self.validator.validate(MoveAction(destination="Your Building"))
         self.assertIsInstance(result, Accepted)
 
     def test_non_adjacent_real_location_is_rejected(self):
-        # Office exists in the world but is not connected to the hallway's
-        # south neighbor (the lobby) directly -- this is the reachability bug
-        # `resolve_location`'s global name match used to let through.
-        self.gm.player.current_location_id = "location_id_lobby"
-        result = self.validator.validate(MoveAction(destination="Office"))
+        # The Street exists in the world but is not connected directly to
+        # zone_home -- this is the reachability bug `resolve_location`'s
+        # global name match used to let through. Task 2 rewrites this test:
+        # movement semantics stay main's (adjacency-only) for this task.
+        result = self.validator.validate(MoveAction(destination="The Street"))
         self.assertIsInstance(result, Rejected)
 
     def test_nonexistent_location_is_rejected(self):
         result = self.validator.validate(MoveAction(destination="Atlantis"))
         self.assertIsInstance(result, Rejected)
         # State must not have moved -- validation never mutates.
-        self.assertEqual(self.gm.player.current_location_id, "location_id_hallway")
+        self.assertEqual(self.gm.player.current_location_id, "zone_home")
 
     def test_locked_door_blocks_movement_without_the_key(self):
-        door = DoorEntity(leads_to="location_id_office")
+        # A generic locked door, distinct from the real apartment_door in
+        # data/locations.py (whose key the default player already carries).
+        door = DoorEntity(leads_to="zone_building")
         door.state = UnlockableEntityLockState.LOCKED
-        door.key_id = "item_apartment_key"
+        door.key_id = "item_storage_key"
         self.gm.current_location.entities.append(door)
 
-        result = self.validator.validate(MoveAction(destination="north"))
+        result = self.validator.validate(MoveAction(destination="out"))
         self.assertIsInstance(result, Rejected)
         self.assertIn("locked", result.reason)
 
@@ -58,13 +60,13 @@ class MovementValidationTests(unittest.TestCase):
         from data.items import ITEMS
         from modules.entity.item import ItemEntity
 
-        door = DoorEntity(leads_to="location_id_office")
+        door = DoorEntity(leads_to="zone_building")
         door.state = UnlockableEntityLockState.LOCKED
-        door.key_id = "item_apartment_key"
+        door.key_id = "item_storage_key"
         self.gm.current_location.entities.append(door)
-        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
 
-        result = self.validator.validate(MoveAction(destination="north"))
+        result = self.validator.validate(MoveAction(destination="out"))
         self.assertIsInstance(result, Accepted)
 
 
@@ -78,13 +80,13 @@ class ItemValidationTests(unittest.TestCase):
         self.assertIsInstance(result, Rejected)
 
     def test_take_present_item_is_accepted(self):
-        self.gm.player.current_location_id = "location_id_office"
+        self.gm.player.current_location_id = "zone_street"
         result = self.validator.validate(TakeAction(item_name="Crowbar"))
         self.assertIsInstance(result, Accepted)
         self.assertEqual(result.resolved["item_entity"].item.name, "Crowbar")
 
     def test_take_rejected_when_inventory_full(self):
-        self.gm.player.current_location_id = "location_id_office"
+        self.gm.player.current_location_id = "zone_street"
         self.gm.player.max_inventory_size = 0
         result = self.validator.validate(TakeAction(item_name="Crowbar"))
         self.assertIsInstance(result, Rejected)
@@ -117,6 +119,8 @@ class ItemValidationTests(unittest.TestCase):
 class CombatValidationTests(unittest.TestCase):
     def setUp(self):
         self.gm = GameManager()
+        # Orton now starts alone in his apartment; Emma starts in zone_building.
+        self.gm.player.current_location_id = "zone_building"
         self.validator = ActionValidator(self.gm)
 
     def test_attack_present_npc_is_accepted(self):
@@ -125,7 +129,9 @@ class CombatValidationTests(unittest.TestCase):
         self.assertEqual(result.resolved["npc"].npc_id, "npc_emma")
 
     def test_attack_absent_npc_is_rejected(self):
-        result = self.validator.validate(AttackAction(target_name="Marcus"))
+        # Jen is in zone_neighborhood, not zone_building -- Marcus moved
+        # there too and would now be (wrongly) co-located with the player.
+        result = self.validator.validate(AttackAction(target_name="Jen"))
         self.assertIsInstance(result, Rejected)
 
     def test_attack_downed_npc_is_rejected(self):

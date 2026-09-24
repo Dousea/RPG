@@ -30,7 +30,8 @@ def played_game() -> GameManager:
     gm = GameManager()
     resolve_actions(
         gm,
-        MoveAction(destination="north"),
+        MoveAction(destination="out"),
+        MoveAction(destination="out"),
         TakeAction(item_name="Crowbar"),
         UpdateConditionAction(field_name="hunger", raw_value="70"),
         UpdateConditionAction(field_name="sleep", raw_value="Exhausted"),
@@ -43,7 +44,7 @@ def played_game() -> GameManager:
         DiscoverFlagAction(flag_name="power_grid_stable"),
         TimeAdvanceAction(time_of_day="evening"),
         StatusAddAction(status="panic"),
-        NpcMoveAction(npc_name="Emma", destination="Lobby"),
+        NpcMoveAction(npc_name="Emma", destination="Your Building"),
         NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
         UpdateInventoryAction(item_name="First Aid Kit", operation="ADD", value="1"),
     )
@@ -78,7 +79,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.loaded = loaded
 
     def test_player_position_and_condition(self):
-        self.assertEqual(self.loaded.player.current_location_id, "location_id_office")
+        self.assertEqual(self.loaded.player.current_location_id, "zone_street")
         self.assertEqual(self.loaded.player.hit_points, 55)
         self.assertEqual(self.loaded.player.hunger, 70)
 
@@ -94,10 +95,12 @@ class RoundTripTests(IsolatedSaveTestCase):
         )
 
     def test_ground_items_move_with_the_world(self):
-        office = self.loaded.world.locations["location_id_office"]
-        # The crowbar was picked up, so it is no longer on the office floor.
-        self.assertNotIn("Crowbar", [e.item.name for e in office.entities])
-        self.assertIn("Canned Beans", [e.item.name for e in office.entities])
+        street = self.loaded.world.locations["zone_street"]
+        home = self.loaded.world.locations["zone_home"]
+        # The crowbar was picked up, so it is no longer on the street.
+        self.assertNotIn("Crowbar", [e.item.name for e in street.entities])
+        # The canned beans were never touched.
+        self.assertIn("Canned Beans", [e.item.name for e in home.entities])
 
     def test_traits_and_perks_resolve_by_id(self):
         self.assertEqual(
@@ -115,7 +118,7 @@ class RoundTripTests(IsolatedSaveTestCase):
 
     def test_npc_state(self):
         emma = self.loaded.resolve_npc("Emma")
-        self.assertEqual(emma.current_location_id, "location_id_lobby")
+        self.assertEqual(emma.current_location_id, "zone_building")
         self.assertIn("frightened", emma.status)
         self.assertIn("Seemed shaken", emma.notes)
 
@@ -176,9 +179,9 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(self.loaded.memory.summaries, self.original.memory.summaries)
 
     def test_the_loaded_game_is_still_playable(self):
-        facts = resolve_actions(self.loaded, MoveAction(destination="south"))
+        facts = resolve_actions(self.loaded, MoveAction(destination="in"))
         self.assertFalse(facts[0].startswith("Refused:"), facts[0])
-        self.assertEqual(self.loaded.player.current_location_id, "location_id_hallway")
+        self.assertEqual(self.loaded.player.current_location_id, "zone_building")
 
 
 class SaveFileTests(IsolatedSaveTestCase):
@@ -212,18 +215,21 @@ class SaveFileTests(IsolatedSaveTestCase):
         self.write(data)
         loaded = persistence.load(self.save_path)
         self.assertTrue(loaded.quests)
-        self.assertIn("quest_storage_room", loaded.quests)
+        self.assertIn("quest_supply_run", loaded.quests)
 
     def test_seeded_quests_reconcile_against_what_the_save_already_achieved(self):
         # Objectives fire on the transition, not the condition. A save made
-        # mid-playthrough already holds the key and stands in the storage
-        # room, so seeding blind would leave both boxes unchecked forever --
-        # the player would have to drop and retake a key already in hand.
+        # mid-playthrough already holds the crowbar and stands in the
+        # neighborhood, so seeding blind would leave both boxes unchecked
+        # forever -- the player would have to drop the crowbar and walk back.
         gm = GameManager()
         resolve_actions(
-            gm, MoveAction(destination="north"), TakeAction(item_name="Storage Room Key")
+            gm,
+            MoveAction(destination="out"),  # zone_home -> zone_building
+            MoveAction(destination="out"),  # zone_building -> zone_street
+            TakeAction(item_name="Crowbar"),
+            MoveAction(destination="out"),  # zone_street -> zone_neighborhood
         )
-        gm.player.current_location_id = "location_id_storage"
 
         persistence.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
@@ -231,10 +237,10 @@ class SaveFileTests(IsolatedSaveTestCase):
         data["quests"] = {}
         self.write(data)
 
-        quest = persistence.load(self.save_path).quests["quest_storage_room"]
+        quest = persistence.load(self.save_path).quests["quest_supply_run"]
         self.assertEqual(
             sorted(quest.completed_objectives),
-            ["reach:location_id_storage", "take:item_storage_key"],
+            ["reach:zone_neighborhood", "take:item_crowbar"],
         )
         self.assertEqual(quest.status, QuestStatus.COMPLETED)
 
@@ -245,7 +251,7 @@ class SaveFileTests(IsolatedSaveTestCase):
         data["quests"] = {}
         self.write(data)
 
-        quest = persistence.load(self.save_path).quests["quest_storage_room"]
+        quest = persistence.load(self.save_path).quests["quest_supply_run"]
         self.assertEqual(quest.completed_objectives, [])
         self.assertEqual(quest.status, QuestStatus.ACTIVE)
 

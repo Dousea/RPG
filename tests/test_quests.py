@@ -50,16 +50,21 @@ class QuestAdvancementTests(unittest.TestCase):
         gm.quests["get_crowbar"] = QuestState(
             quest_id="get_crowbar", objectives=["take:item_crowbar"]
         )
-        resolve_actions(gm, MoveAction(destination="north"), TakeAction(item_name="Crowbar"))
+        resolve_actions(
+            gm,
+            MoveAction(destination="out"),
+            MoveAction(destination="out"),
+            TakeAction(item_name="Crowbar"),
+        )
         self.assertEqual(gm.quests["get_crowbar"].status, QuestStatus.COMPLETED)
 
     def test_moving_into_a_location_completes_a_matching_objective(self):
         gm = GameManager()
-        gm.quests["reach_office"] = QuestState(
-            quest_id="reach_office", objectives=["reach:location_id_office"]
+        gm.quests["reach_building"] = QuestState(
+            quest_id="reach_building", objectives=["reach:zone_building"]
         )
-        resolve_actions(gm, MoveAction(destination="north"))
-        self.assertEqual(gm.quests["reach_office"].status, QuestStatus.COMPLETED)
+        resolve_actions(gm, MoveAction(destination="out"))
+        self.assertEqual(gm.quests["reach_building"].status, QuestStatus.COMPLETED)
 
     def test_an_npc_status_completes_a_matching_objective(self):
         gm = GameManager()

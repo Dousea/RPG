@@ -15,7 +15,7 @@ from typing import Any
 
 import config
 from data.items import ITEMS
-from data.locations import build_starting_locations
+from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
@@ -330,10 +330,10 @@ def _reconcile_seeded_quests(
 
 
 def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> PlayerEntity:
-    location_id = data.get("current_location_id", "location_id_hallway")
+    location_id = data.get("current_location_id", STARTING_ZONE_ID)
     if location_id not in locations:
-        print(f"[Persistence] Unknown player location '{location_id}'; using hallway.")
-        location_id = "location_id_hallway"
+        print(f"[Persistence] Unknown player location '{location_id}'; using {STARTING_ZONE_ID}.")
+        location_id = STARTING_ZONE_ID
 
     attributes = {}
     for name, value in data.get("attributes", {}).items():
@@ -416,7 +416,7 @@ def _npcs_from_dict(entries: list[dict[str, Any]]) -> dict[str, NpcEntity]:
             npc_id=entry["npc_id"],
             name=entry.get("name", entry["npc_id"]),
             description=entry.get("description", ""),
-            current_location_id=entry.get("current_location_id", "location_id_hallway"),
+            current_location_id=entry.get("current_location_id", "zone_building"),
             age=entry.get("age"),
             faction=faction,
             personality=entry.get("personality", []),

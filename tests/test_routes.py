@@ -10,8 +10,8 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
-ACTIONS = "ACTIONS:\nMOVE_TO north\nADD_GOAL short_term Find a weapon"
-STORY = "STORY:\nYou walk north into the office.\n\nEVENT:\nOrton entered the office"
+ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
+STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
 
 
 class RouteTestCase(IsolatedSaveTestCase):
@@ -73,8 +73,11 @@ class IndexTests(RouteTestCase):
 
 class StateTests(RouteTestCase):
     def test_state_reports_the_starting_world(self):
+        # Orton now starts alone in his apartment; move to the building to
+        # exercise the NPC-presence check below.
+        self.engine.manager.player.current_location_id = "zone_building"
         payload = self.client.get("/state").get_json()
-        self.assertEqual(payload["current_location"], "Hallway")
+        self.assertEqual(payload["current_location"], "Your Building")
         self.assertEqual(payload["day"], 1)
         self.assertIn("Emma", payload["npcs_present"])
         self.assertEqual(payload["story_text"], "")
@@ -87,11 +90,11 @@ class StateTests(RouteTestCase):
 
 class PlayTests(RouteTestCase):
     def test_play_runs_a_turn(self):
-        response = self.client.post("/play", json={"input": "go north"})
+        response = self.client.post("/play", json={"input": "go out"})
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
-        self.assertEqual(payload["story_text"], "You walk north into the office.")
-        self.assertEqual(payload["current_location"], "Office")
+        self.assertEqual(payload["story_text"], "You walk out into the building.")
+        self.assertEqual(payload["current_location"], "Your Building")
         self.assertIn("Find a weapon", payload["goals"]["short_term"])
 
     def test_player_input_reaches_the_prompt(self):
@@ -99,9 +102,9 @@ class PlayTests(RouteTestCase):
         self.assertIn("peer down the corridor", self.llm.prompts[-1])
 
     def test_state_reflects_the_turn_afterwards(self):
-        self.client.post("/play", json={"input": "go north"})
+        self.client.post("/play", json={"input": "go out"})
         payload = self.client.get("/state").get_json()
-        self.assertEqual(payload["current_location"], "Office")
+        self.assertEqual(payload["current_location"], "Your Building")
 
     def test_missing_input_is_rejected(self):
         response = self.client.post("/play", json={})
@@ -124,7 +127,7 @@ class PlayTests(RouteTestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertIn("LM Studio is not running", payload["story_text"])
-        self.assertEqual(payload["current_location"], "Hallway")
+        self.assertEqual(payload["current_location"], "Your Apartment")
 
 
 class SaveLoadRouteTests(RouteTestCase):
@@ -133,12 +136,12 @@ class SaveLoadRouteTests(RouteTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("attachment", response.headers.get("Content-Disposition", ""))
         payload = response.get_json()
-        self.assertEqual(payload["player"]["current_location_id"], "location_id_hallway")
+        self.assertEqual(payload["player"]["current_location_id"], "zone_home")
 
     def test_import_loads_an_exported_save(self):
-        self.client.post("/play", json={"input": "go north"})
+        self.client.post("/play", json={"input": "go out"})
         exported = self.client.get("/save/export").get_json()
-        exported["player"]["current_location_id"] = "location_id_hallway"
+        exported["player"]["current_location_id"] = "zone_building"
 
         response = self.client.post(
             "/save/import",
@@ -152,7 +155,7 @@ class SaveLoadRouteTests(RouteTestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
-        self.assertEqual(payload["current_location"], "Hallway")
+        self.assertEqual(payload["current_location"], "Your Building")
 
     def test_import_rejects_a_non_json_file(self):
         response = self.client.post(
@@ -170,19 +173,19 @@ class SaveLoadRouteTests(RouteTestCase):
 
 class ResetTests(RouteTestCase):
     def test_reset_starts_over(self):
-        self.client.post("/play", json={"input": "go north"})
+        self.client.post("/play", json={"input": "go out"})
         response = self.client.post("/reset")
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["message"], "Game has been reset.")
-        self.assertEqual(payload["state"]["current_location"], "Hallway")
+        self.assertEqual(payload["state"]["current_location"], "Your Apartment")
         self.assertEqual(payload["state"]["goals"]["short_term"], [])
 
     def test_state_after_reset_is_fresh(self):
-        self.client.post("/play", json={"input": "go north"})
+        self.client.post("/play", json={"input": "go out"})
         self.client.post("/reset")
         payload = self.client.get("/state").get_json()
-        self.assertEqual(payload["current_location"], "Hallway")
+        self.assertEqual(payload["current_location"], "Your Apartment")
 
 
 class LazyEngineTests(IsolatedSaveTestCase):

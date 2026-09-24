@@ -165,9 +165,14 @@ class SimulationCore:
         for modifier in item.modifiers:
             self._apply_modifier(player, modifier)
 
+        survival_note = ""
         if isinstance(item, ConsumableItem):
             event = ConsumeItemEvent(source=player, item=item)
             manager.player.inventory.remove(entity)
+            if item.nutrition or item.hydration:
+                player.hunger = max(0, min(player.hunger + item.nutrition, 100))
+                player.thirst = max(0, min(player.thirst + item.hydration, 100))
+                survival_note = f", hunger {player.hunger}, thirst {player.thirst}"
         else:
             event = ApplyItemEvent(source=player, item=item, target=player)
 
@@ -176,7 +181,7 @@ class SimulationCore:
 
         return (
             f"Use {item.name}: succeeded, "
-            f"Orton now at {player.hit_points}/{player.max_hit_points} HP."
+            f"Orton now at {player.hit_points}/{player.max_hit_points} HP{survival_note}."
         )
 
     def _resolve_update_inventory(self, accepted: Accepted) -> str:
