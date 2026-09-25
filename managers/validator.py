@@ -80,6 +80,13 @@ class ActionValidator:
         return [self.validate(action) for action in actions]
 
     def validate(self, action: AnyAction) -> ValidationResult:
+        if self.manager.narrative.game_over:
+            # The one sanctioned exception to "MOVE_TO never fails" (and
+            # every other action): once Orton is dead nothing more can
+            # happen, so every action this turn and beyond is refused rather
+            # than dispatched. SimulationCore._check_player_death is the only
+            # place that sets this flag; the LLM cannot trigger it.
+            return Rejected(action, "Orton is dead; nothing more can happen.")
         handler = self._VALIDATORS.get(type(action))
         if handler is None:
             return Rejected(action, f"No validator registered for {type(action).__name__}.")

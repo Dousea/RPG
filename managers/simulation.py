@@ -121,7 +121,23 @@ class SimulationCore:
         fact = handler(self, accepted)
         if type(accepted.action) in _TICK_COSTING_ACTIONS:
             self._advance_one_tick()
-        return fact
+        return self._check_player_death(fact)
+
+    def _check_player_death(self, fact: str) -> str:
+        """End the game the moment Orton's HP reaches zero.
+
+        Player HP only ever moves through combat and item effects (main's
+        rule, unchanged here), so this is the only producer of `game_over` --
+        the LLM narrating a death never makes it real, only this check does.
+        Sticky within the session: once set, later turns leave it alone
+        rather than re-triggering off a fact that already carries "died".
+        """
+        narrative = self.manager.narrative
+        if narrative.game_over or self.manager.player.hit_points > 0:
+            return fact
+        narrative.game_over = True
+        narrative.death_cause = fact[:200]
+        return f"{fact} Orton has died. The game is over."
 
     def _advance_one_tick(self) -> None:
         from managers.game import TIMES_OF_DAY

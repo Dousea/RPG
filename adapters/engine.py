@@ -38,6 +38,18 @@ class GameEngine:
         with self._lock:
             manager = self.manager
 
+            if manager.narrative.game_over:
+                # Orton is already dead -- no parser, no narrator, no save.
+                # The turn that killed him already recorded and persisted
+                # everything there was to record; nothing after that is a
+                # real turn anymore.
+                return self._snapshot(
+                    story_text=(
+                        f"Orton is dead. {manager.narrative.death_cause}\n"
+                        "Start a new game to play again."
+                    )
+                )
+
             # 1. Recall semantically relevant past events (for the narrator).
             indices = self.memory.search(player_input)
             deep_memories = [
@@ -182,6 +194,8 @@ class GameEngine:
             "options": options or [],
             "current_location": manager.current_location.name,
             "current_place": player.current_place,
+            "game_over": narrative.game_over,
+            "death_cause": narrative.death_cause,
             "location_description": manager.current_location.description,
             "day": narrative.day,
             "time_of_day": narrative.time_of_day,

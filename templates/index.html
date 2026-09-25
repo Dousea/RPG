@@ -133,6 +133,17 @@
         #story-display .echo { color: var(--ember); font-style: italic; display: block; margin-bottom: 0.4rem; }
         #story-display .system-error { color: var(--hazard); font-family: 'Archivo', sans-serif; }
 
+        /* === Death banner === */
+        #death-banner {
+            flex-shrink: 0;
+            background: var(--hazard);
+            color: var(--paper);
+            font-family: 'Archivo', sans-serif;
+            font-weight: 600;
+            border-radius: 4px;
+            padding: 0.65rem 1rem;
+        }
+
         /* === Dossier (right) === */
         .dossier {
             width: 38%;
@@ -395,6 +406,8 @@
         </div>
     </header>
 
+    <p id="death-banner" hidden></p>
+
     <main>
         <div id="story-display">
             <p>Welcome, Orton. The adventure begins&hellip;</p>
@@ -498,6 +511,7 @@
     const metaChips = document.getElementById('meta-chips');
     const locationStatus = document.getElementById('location-status');
     const locationPlace = document.getElementById('location-place');
+    const deathBanner = document.getElementById('death-banner');
     const locationDescription = document.getElementById('location-description');
     const vitals = document.getElementById('vitals');
     const conditionChips = document.getElementById('condition-chips');
@@ -519,6 +533,11 @@
     const saveButton = document.getElementById('save-button');
     const loadButton = document.getElementById('load-button');
     const loadInput = document.getElementById('load-input');
+
+    // Tracked outside applyGameOverState so handleTurn's `finally` block
+    // (which otherwise unconditionally re-enables input after every turn)
+    // knows not to revive a dead game.
+    let isGameOver = false;
 
     // Bands a 0-100 stat into a bar color: healthy stays moss, a mid range
     // warns in ember, and a low value reads as hazard -- the color itself is
@@ -771,6 +790,24 @@
         storyDisplay.scrollTop = storyDisplay.scrollHeight;
     }
 
+    // Shows/hides the death banner and locks down input once Orton is dead.
+    // Nothing re-enables these here -- the reset flow reloads the page,
+    // which is what actually clears this state.
+    function applyGameOverState(data) {
+        isGameOver = !!data.game_over;
+        // LLM-adjacent text (the fact that killed Orton) -- textContent
+        // only, never innerHTML.
+        deathBanner.textContent = isGameOver
+            ? `Orton has died. ${data.death_cause || ''}`.trim()
+            : '';
+        deathBanner.hidden = !isGameOver;
+        playerInput.disabled = isGameOver;
+        submitButton.disabled = isGameOver;
+        choiceOptions.querySelectorAll('button').forEach(button => {
+            button.disabled = isGameOver;
+        });
+    }
+
     // Refresh the dossier panel from a state payload.
     function updatePanel(data) {
         locationStatus.textContent = data.current_location;
@@ -791,6 +828,7 @@
         renderNpcs(data);
         renderQuests(data);
         renderChoiceOptions(data);
+        applyGameOverState(data);
     }
 
     function updateUI(data, playerText) {
@@ -838,14 +876,18 @@
             showSystemError(error.message);
         } finally {
             playerInput.value = '';
-            playerInput.disabled = false;
-            playerInput.focus();
-            submitButton.disabled = false;
             submitButton.textContent = 'Act';
-            // On success updateUI already re-rendered fresh (enabled) option
-            // buttons; on failure the stale ones from before the click need
-            // re-enabling by hand since nothing replaced them.
-            choiceOptions.querySelectorAll('button').forEach(button => { button.disabled = false; });
+            // A dead game stays locked down -- updateUI already applied that
+            // via applyGameOverState, so this must not undo it.
+            if (!isGameOver) {
+                playerInput.disabled = false;
+                playerInput.focus();
+                submitButton.disabled = false;
+                // On success updateUI already re-rendered fresh (enabled)
+                // option buttons; on failure the stale ones from before the
+                // click need re-enabling by hand since nothing replaced them.
+                choiceOptions.querySelectorAll('button').forEach(button => { button.disabled = false; });
+            }
         }
     }
 

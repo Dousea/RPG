@@ -94,6 +94,16 @@ class ParseNarratorResponseTests(unittest.TestCase):
         )
         self.assertEqual(parsed["options"], [])
 
+    def test_options_none_on_the_header_line_yields_an_empty_list(self):
+        # The death-narration instruction (adapters/llm.py's
+        # NARRATOR_SYSTEM_PROMPT) tells the model to write "OPTIONS: NONE" on
+        # one line rather than the header and NONE on separate lines -- make
+        # sure that shape parses to no options too, not a stray "NONE" entry.
+        parsed = parse_narrator_response(
+            "STORY:\nOrton is dead.\n\nEVENT:\nOrton died\n\nOPTIONS: NONE"
+        )
+        self.assertEqual(parsed["options"], [])
+
     def test_missing_options_section_yields_an_empty_list(self):
         # Older-shaped responses (no OPTIONS at all) must still parse cleanly.
         parsed = parse_narrator_response("STORY:\nYou pause.\n\nEVENT:\nOrton paused")

@@ -213,6 +213,10 @@ class NarrativeState:
     # engine never finished deciding what happened. Kept as a list (not
     # retired outright) so that escape hatch still has somewhere to go.
     pending_corrections: list[str] = field(default_factory=list[str])
+    # Set once Orton dies. The turn that kills him is still recorded and saved,
+    # so reloading the page does not quietly resurrect him.
+    game_over: bool = False
+    death_cause: str = ""
 
 
 @dataclass

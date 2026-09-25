@@ -94,6 +94,11 @@ class TurnTests(EngineTestCase):
         self.assertEqual(result["day"], 1)
         self.assertIn("current_place", result)
 
+    def test_snapshot_has_game_over_false_by_default(self):
+        result = self.engine.state()
+        self.assertIs(result["game_over"], False)
+        self.assertEqual(result["death_cause"], "")
+
     def test_narrator_options_reach_the_snapshot(self):
         self.llm.story = (
             "STORY:\nYou walk out.\n\nEVENT:\nOrton entered the building\n\n"
@@ -154,6 +159,29 @@ class TurnTests(EngineTestCase):
         result = self.engine.play("do something weird")
         self.assertIn("Survive", result["goals"]["short_term"])
         self.assertIn("Refused:", self.llm.narrator_prompts[-1])
+
+
+class DeathTests(EngineTestCase):
+    def test_dead_game_makes_no_llm_calls(self):
+        self.engine.manager.narrative.game_over = True
+        self.engine.manager.narrative.death_cause = "Use Suspicious Vial: succeeded."
+        result = self.engine.play("get up")
+        self.assertEqual(self.llm.prompts, [])
+        self.assertEqual(self.llm.narrator_prompts, [])
+        self.assertIn("Use Suspicious Vial", result["story_text"])
+        self.assertIn("new game", result["story_text"].lower())
+
+    def test_reset_revives(self):
+        self.engine.manager.narrative.game_over = True
+        self.engine.manager.narrative.death_cause = "Orton starved."
+        result = self.engine.reset()
+        self.assertIs(result["game_over"], False)
+        self.assertEqual(result["death_cause"], "")
+        self.assertFalse(self.engine.manager.narrative.game_over)
+        # A revived game plays turns normally again.
+        played = self.engine.play("go out")
+        self.assertEqual(len(self.llm.prompts), 1)
+        self.assertEqual(played["current_location"], "Your Building")
 
 
 class SummarizationTests(EngineTestCase):

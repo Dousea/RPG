@@ -24,6 +24,22 @@ from modules.action import (
 )
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
+from modules.item import ConsumableItem
+from modules.modifier import HPModifier
+
+# A test-local lethal item, not part of data/items.py: -500 HP guarantees
+# Orton's hit points hit zero regardless of his current/max HP, without
+# reaching into a real item's numbers that another test might change.
+LETHAL_ITEM = ConsumableItem(
+    id="item_test_poison",
+    name="Suspicious Vial",
+    description="Definitely not safe to drink.",
+    max_hit_points=1,
+    tags=["consumable"],
+    slots=[CharacterHoldableSlot.RIGHT_HAND],
+    is_two_handed=False,
+    modifiers=[HPModifier(amount=-500)],
+)
 
 
 def _resolve(gm: GameManager, *actions, rng=None) -> list[str]:
@@ -393,6 +409,45 @@ class ConditionLadderResolutionTests(unittest.TestCase):
         gm = GameManager()
         _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+1"))
         self.assertNotEqual(gm.narrative.conditions["infection_risk"], "+1")
+
+
+class PlayerDeathResolutionTests(unittest.TestCase):
+    """SimulationCore._check_player_death is the only producer of
+    NarrativeState.game_over/death_cause -- player HP only moves through
+    combat and item effects, so the LLM can never kill Orton by declaration."""
+
+    def test_lethal_item_ends_the_game(self):
+        gm = GameManager()
+        gm.player.inventory.clear()
+        gm.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
+        facts = _resolve(gm, UseItemAction(item_name="Suspicious Vial"))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertIn("Suspicious Vial", gm.narrative.death_cause)
+        self.assertIn("Orton has died", facts[0])
+        self.assertEqual(gm.player.hit_points, 0)
+
+    def test_actions_after_death_are_refused(self):
+        gm = GameManager()
+        gm.player.inventory.clear()
+        gm.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
+        facts = _resolve(
+            gm,
+            UseItemAction(item_name="Suspicious Vial"),
+            AddGoalAction(horizon="short_term", goal_text="Survive"),
+        )
+        self.assertIn("Orton has died", facts[0])
+        self.assertTrue(facts[1].startswith("Refused:"))
+        self.assertNotIn("Survive", gm.narrative.goals["short_term"])
+
+    def test_surviving_hp_does_not_end_the_game(self):
+        gm = GameManager()
+        gm.player.hit_points = 50
+        gm.player.inventory.clear()  # drop the starting apartment key
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        facts = _resolve(gm, UseItemAction(item_name="Canned Beans"))
+        self.assertFalse(gm.narrative.game_over)
+        self.assertEqual(gm.narrative.death_cause, "")
+        self.assertNotIn("Orton has died", facts[0])
 
 
 if __name__ == "__main__":
