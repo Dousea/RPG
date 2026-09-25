@@ -94,18 +94,28 @@ atomically (temp file + replace) after every turn.
 
 Only *dynamic* state is saved. Static definitions -- item stats, location names
 and connections, trait and perk effects -- stay in `data/` and are looked up by
-id on load, so content can be rebalanced without invalidating saves. A save
-whose `version` does not match `SCHEMA_VERSION` is discarded rather than loaded
-half-understood, and unknown ids (a deleted item, a renamed location) are
-dropped with a log line instead of crashing the load.
+id on load, so content can be rebalanced without invalidating saves. `SCHEMA_VERSION`
+is 3. A v2 save (from before the zone map) is migrated on load rather than
+discarded: `adapters/persistence.migrate_v2_to_v3` remaps each of the four old
+rooms to `zone_building` (the old room name becomes the player's or NPC's
+`current_place`), merges their ground items onto `zone_building`, seeds the
+other three zones with their normal starting items minus anything the save
+already holds anywhere, grants the apartment key if it isn't already held,
+normalizes flag/discovered-flag keys, remaps `reach:<old room id>` quest
+objectives, and replaces `quest_storage_room` with `quest_supply_run`. A save
+whose `version` is anything else -- v1 included -- is still discarded rather
+than loaded half-understood, and unknown ids (a deleted item, a renamed
+location) are dropped with a log line instead of crashing the load.
 
-Persisted: player (position, condition, inventory, equipment, traits, perks),
-NPCs (position, status, notes, condition, goals, knowledge), relationships
-(affinity, trust, reputation), narrative state (day, time of day, goals,
-flags, discovered flags, apocalypse stage, pending corrections), quest state
-(`GameManager.quests`) and all three memory tiers. The world clock
-(`World.time`, `World.date`) is written too, but it is derived from the
-narrative day and time of day and recomputed on load.
+Persisted: player (position, `current_place`, condition, inventory, equipment,
+traits, perks), NPCs (position, status, notes, condition, goals, knowledge),
+relationships (affinity, trust, reputation), narrative state (day, time of
+day, goals, flags, discovered flags, apocalypse stage, pending corrections,
+`game_over`, `death_cause`), quest state (`GameManager.quests`) and all three
+memory tiers. The world clock (`World.time`, `World.date`) is written too, but
+it is derived from the narrative day and time of day and recomputed on load.
+Door lock state (e.g. the apartment door) is *not* persisted -- doors are
+part of the static map and always rebuild locked.
 
 > The older per-file `gamedata/*.json` (`character.json`, `world.json`,
 > `npcs.json`, ...) belonged to the previous engine and are no longer read or
@@ -124,7 +134,7 @@ never gets ahead of what the engine actually decided.
 
 ```
 TAKE <item>                          DROP <item>
-MOVE_TO <location|direction>         ATTACK <target>
+MOVE_TO <zone|in|out|spot>           ATTACK <target>
 USE_ITEM <item>                      TIME_ADVANCE morning|afternoon|evening|night
 STATUS_ADD <status>                  STATUS_REMOVE <status>
 UPDATE_CONDITION <field> <value>     SET_FLAG <flag> true|false
@@ -133,19 +143,32 @@ ADD_GOAL short_term|long_term <t>    REMOVE_GOAL short_term|long_term <t>
 UPDATE_RELATIONSHIP <npc> affection|trust <+/-N>
 ADD_RELATIONSHIP_NOTE <npc> <text>
 UPDATE_INVENTORY <item> ADD|REMOVE|UPDATE_CONDITION|UPDATE_QUANTITY <value>
-NPC_MOVE <npc> TO <location>         NPC_STATUS <npc> ADD|REMOVE <status>
+NPC_MOVE <npc> TO <zone>             NPC_STATUS <npc> ADD|REMOVE <status>
 ```
 
 `UPDATE_CONDITION` accepts `hunger`, `thirst`, `morale` (numeric; a leading
-`+`/`-` adjusts, a bare number sets) and `sleep`, `infection_risk` (free
-text) -- **not** `health`: player HP is never LLM-declarable (see
-docs/01-engine-authority.md). It only changes through `ATTACK` (resolved by
+`+`/`-` adjusts, a bare number sets) and `sleep`, `infection_risk` -- **not**
+`health`: player HP is never LLM-declarable (see docs/01-engine-authority.md).
+`sleep` and `infection_risk` are laddered, not free text
+(`managers/game.CONDITION_LADDERS`): a signed step (`+1`/`-1`) moves one rung
+from the current value (`sleep`: Rested/Tired/Drowsy/Exhausted;
+`infection_risk`: No/Low/Moderate/High/Infected), and a bare word sets it
+directly, matched through `CONDITION_SYNONYMS` where the model's wording
+isn't already a rung name. HP only changes through `ATTACK` (resolved by
 the Simulation Core against equipped-weapon damage, with trait/perk
 reactions) or `USE_ITEM` (applies the item's own modifiers, e.g. a medkit's
-`HPModifier`). `MOVE_TO` accepts a location id, a display name, or a compass
-direction out of the current room, and only succeeds if the destination is
-actually reachable from there -- a locked door (`DoorEntity`) blocks it
-unless the matching key is in inventory. `SET_FLAG` sets the engine's ground
+`HPModifier`) -- nothing in normal play currently drives it down on its own,
+so `game_over` is reachable only through those two paths. `MOVE_TO` resolves
+its destination against a zone id, display name, alias, or `in`/`out`
+connection out of the current zone (`GameManager.resolve_location`); a zone
+that isn't directly adjacent is reached by walking the connection graph
+(`GameManager.zone_path`). It never refuses: anything that doesn't resolve
+to a zone becomes a free-text spot inside the zone the player is already in.
+A locked door (`DoorEntity`) along the walk stops the player at the door
+rather than refusing the move outright, unless the matching key is in
+inventory. A spot move is free; a zone change costs one tick regardless of
+how many hops it took. `NPC_MOVE` is unaffected by any of this -- it still
+resolves strictly and can fail. `SET_FLAG` sets the engine's ground
 truth for a world fact; `DISCOVER_FLAG` separately marks that the player has
 learned it, which is what makes it visible in the narrator's prompt (doc 11's
 knowledge firewall applied to world flags, not just relationship scores).
@@ -200,7 +223,7 @@ rather than your real save.
 | --- | --- |
 | `tests/test_action.py` | ACTIONS-line parsing into typed `AnyAction`/`ParseFailure` |
 | `tests/test_validator.py` | Action Validator: preconditions only, no mutation |
-| `tests/test_simulation.py` | Simulation Core: outcome resolution, combat, item effects, the live locked door |
+| `tests/test_simulation.py` | Simulation Core: outcome resolution, combat, item effects, the apartment door |
 | `tests/test_context.py` | ContextBuilder: the knowledge firewall (world flags, NPC goals vs. knowledge) |
 | `tests/test_quests.py` | Quest state: engine-only completion |
 | `tests/test_game_manager.py` | Starting state, prompt assembly, memory tiers |
@@ -249,7 +272,7 @@ $env:RPG_TEST_EMBEDDINGS="1"; .venv\Scripts\python -m unittest discover -s tests
   Story Director reacting to arbitrary world state (docs/07-story-architecture.md).
 - No seeded randomness: combat damage jitter and the LLM itself are both
   unseeded (docs/16-determinism-and-versioning.md is out of scope).
-- The map is four hand-written rooms. No procedural generation, no
+- The map is four hand-written zones. No procedural generation, no
   simulation level-of-detail for distant NPCs (docs/05, 06 are out of scope).
 - `adapters/memory.py` imports `sentence_transformers` at module scope, which
   contacts the Hugging Face Hub on import even when no embedding is needed.
