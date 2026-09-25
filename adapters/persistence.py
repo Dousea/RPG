@@ -22,7 +22,13 @@ from data.npcs import build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
 from data.traits import TRAITS
-from managers.game import MAX_PLACE_LENGTH, GameManager, MemoryState, NarrativeState
+from managers.game import (
+    DEATH_CAUSE_MAX_LENGTH,
+    MAX_PLACE_LENGTH,
+    GameManager,
+    MemoryState,
+    NarrativeState,
+)
 from managers.relationship import RelationshipManager
 from modules.action import normalize_key
 from modules.character.equipment import (
@@ -41,11 +47,6 @@ from modules.quest import QuestState, QuestStatus
 
 SCHEMA_VERSION = 3
 
-# Same cap SimulationCore._check_player_death applies to a fresh death_cause;
-# repeated here because a save can be hand-edited or migrated, not just
-# produced by that one call site.
-_DEATH_CAUSE_MAX_LENGTH = 200
-
 GAME_DATA_DIR = config.persistence.game_data_dir
 SAVE_FILE = os.path.join(GAME_DATA_DIR, config.persistence.save_file_name)
 
@@ -61,6 +62,57 @@ def _slot_from_value(value: str):
         except ValueError:
             continue
     return None
+
+
+def _as_bool(value: Any) -> bool:
+    """Coerce a hand-editable value to bool, without Python's `bool("false")`
+    footgun -- a JSON string "false" (or any other truthy junk) must not
+    read as a permanent death. A real bool passes through; "true"/"false"
+    (case-insensitive, whitespace-stripped) map accordingly; anything else
+    is False, same as a value that was never set.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        folded = value.strip().casefold()
+        if folded == "true":
+            return True
+        if folded == "false":
+            return False
+    return False
+
+
+def _as_text(value: Any, cap: int) -> str:
+    """Coerce a hand-editable value to capped text. `None` -> "", not the
+    literal string "None" that a bare `str(None)` would produce.
+    """
+    if value is None:
+        return ""
+    return str(value)[:cap]
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    """A save can be hand-edited to hold the wrong container type for any
+    field; treat anything that isn't actually a dict as empty rather than
+    crashing on the first `.items()`/`.get()` call."""
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    """As `_as_dict`, for fields that should be a list."""
+    return value if isinstance(value, list) else []
+
+
+def _ensure_dict(container: dict[str, Any], key: str) -> dict[str, Any]:
+    """Like `dict.setdefault(key, {})`, but also replaces a present-but-wrong
+    value (e.g. an explicit `null`) -- `setdefault` only fills in a *missing*
+    key, so a save with `"player": null` would otherwise pass `None` through
+    untouched."""
+    value = container.get(key)
+    if not isinstance(value, dict):
+        value = {}
+        container[key] = value
+    return value
 
 
 def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
@@ -248,8 +300,8 @@ def from_dict(data: dict[str, Any]) -> GameManager:
             **narrative_data.get("conditions", {}),
         },
         pending_corrections=narrative_data.get("pending_corrections", []),
-        game_over=bool(narrative_data.get("game_over", False)),
-        death_cause=str(narrative_data.get("death_cause", ""))[:_DEATH_CAUSE_MAX_LENGTH],
+        game_over=_as_bool(narrative_data.get("game_over", False)),
+        death_cause=_as_text(narrative_data.get("death_cause", ""), DEATH_CAUSE_MAX_LENGTH),
     )
 
     memory_data = data.get("memory", {})
@@ -317,7 +369,7 @@ def _reconcile_seeded_quests(
 
 
 def _quests_from_dict(
-    quest_entries: dict[str, Any],
+    quest_entries: Any,
     player: PlayerEntity,
     narrative: NarrativeState,
     npcs: dict[str, Any],
@@ -333,18 +385,22 @@ def _quests_from_dict(
     seeded ones are reconciled against loaded state (see
     _reconcile_seeded_quests), never one the save already has its own
     completed_objectives for.
+
+    `quest_entries` is `Any`, not `dict`, on purpose: a hand-edited save can
+    hold `"quests": null` or `"quests": []`, which must seed the whole
+    roster exactly like a missing key, not crash on `.items()`.
     """
-    quests = {
-        quest_id: QuestState(
+    quests: dict[str, QuestState] = {}
+    for quest_id, raw in _as_dict(quest_entries).items():
+        quest_data = _as_dict(raw)
+        quests[quest_id] = QuestState(
             quest_id=quest_id,
             title=quest_data.get("title", ""),
             status=QuestStatus(quest_data.get("status", "active")),
-            objectives=quest_data.get("objectives", []),
-            objective_labels=quest_data.get("objective_labels", {}),
-            completed_objectives=quest_data.get("completed_objectives", []),
+            objectives=list(quest_data.get("objectives") or []),
+            objective_labels=_as_dict(quest_data.get("objective_labels")),
+            completed_objectives=list(quest_data.get("completed_objectives") or []),
         )
-        for quest_id, quest_data in quest_entries.items()
-    }
     missing = {
         quest_id: quest
         for quest_id, quest in build_starting_quests().items()
@@ -391,7 +447,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
     player = PlayerEntity(
         name=data.get("name", "Orton"),
         current_location_id=location_id,
-        current_place=str(data.get("current_place", ""))[:MAX_PLACE_LENGTH],
+        current_place=_as_text(data.get("current_place", ""), MAX_PLACE_LENGTH),
         entity_id=data.get("entity_id", "player"),
         experience_points=data.get("experience_points", 0),
         level=data.get("level", 1),
@@ -510,60 +566,81 @@ _V2_ROOM_PLACES = {
 # The quest roster changed between v2 and v3; this one no longer exists.
 _V2_RETIRED_QUEST_ID = "quest_storage_room"
 
+# The only location ids that survive from_dict's location lookup after
+# migration. Used to decide whether a ground item (or, via the same remap,
+# an NPC's position) will actually still exist once loading finishes --
+# counting one that from_dict is about to drop anyway would only suppress a
+# new zone's own starting copy of it for nothing.
+_V3_ZONE_IDS = frozenset({"zone_home", "zone_building", "zone_street", "zone_neighborhood"})
 
-def _v2_remap_location(location_id: str) -> str:
+
+def _v2_remap_location(location_id: Any) -> Any:
     return _V2_LOCATION_IDS.get(location_id, location_id)
 
 
 def _v2_items_present_anywhere(data: dict[str, Any]) -> set[str]:
-    """Every item id the v2 save already accounts for, wherever it is.
-
-    Decides which starting items a newly-created zone (`_migrate_v2_ground_items`)
-    actually needs, and whether the player already holds an apartment key
-    (`_migrate_v2_apartment_key`) -- adding either blind would duplicate an
-    item the save already has.
+    """Every item id the v2 save already accounts for -- but only counting
+    an item where it will actually survive loading. An item under a ground
+    location id that maps to nothing real, or in an equipment slot name
+    `_slot_from_value` can't resolve, is dropped by `from_dict` regardless
+    of what this function says; counting it here would suppress a new
+    zone's starting copy of an item the save is about to lose anyway (see
+    `_migrate_v2_ground_items`, `_migrate_v2_apartment_key`).
     """
     ids: set[str] = set()
-    player = data.get("player", {})
-    for entry in player.get("inventory", []) or []:
-        ids.add(entry.get("item_id"))
-    for entry in (player.get("equipment", {}) or {}).values():
-        if entry:
+    player = _as_dict(data.get("player"))
+    for entry in _as_list(player.get("inventory")):
+        if isinstance(entry, dict):
             ids.add(entry.get("item_id"))
-    for npc in data.get("npcs", []) or []:
-        for entry in npc.get("inventory", []) or []:
+    for slot_name, entry in _as_dict(player.get("equipment")).items():
+        if isinstance(entry, dict) and _slot_from_value(slot_name) is not None:
             ids.add(entry.get("item_id"))
-    for items in (data.get("world", {}).get("ground_items") or {}).values():
-        for entry in items:
-            ids.add(entry.get("item_id"))
+    for npc in _as_list(data.get("npcs")):
+        for entry in _as_list(_as_dict(npc).get("inventory")):
+            if isinstance(entry, dict):
+                ids.add(entry.get("item_id"))
+    ground_items = _as_dict(_as_dict(data.get("world")).get("ground_items"))
+    for location_id, items in ground_items.items():
+        if _v2_remap_location(location_id) not in _V3_ZONE_IDS:
+            continue
+        for entry in _as_list(items):
+            if isinstance(entry, dict):
+                ids.add(entry.get("item_id"))
     ids.discard(None)
     return ids
 
 
 def _migrate_v2_player_location(data: dict[str, Any]) -> None:
-    player = data.setdefault("player", {})
+    player = _ensure_dict(data, "player")
     old_id = player.get("current_location_id", STARTING_ZONE_ID)
     player["current_location_id"] = _v2_remap_location(old_id)
-    # A v2 save has no current_place at all; a room id becomes the player's
-    # spot inside the zone it collapsed into, anything else clears it.
-    player["current_place"] = _V2_ROOM_PLACES.get(old_id, "")
+    # A v2 room id becomes the player's spot inside the zone it collapsed
+    # into. Anything else -- no current_location_id at all, or (the
+    # zones-branch v2 saves parked as out of scope, see task-5-fix-round-1.md
+    # P2) an id that is already a zone -- is left as whatever current_place
+    # the save already carried, not overwritten with "".
+    if old_id in _V2_ROOM_PLACES:
+        player["current_place"] = _V2_ROOM_PLACES[old_id]
+    else:
+        player["current_place"] = _as_text(player.get("current_place"), MAX_PLACE_LENGTH)
 
 
 def _migrate_v2_npc_locations(data: dict[str, Any]) -> None:
-    for npc in data.get("npcs", []) or []:
-        npc["current_location_id"] = _v2_remap_location(npc.get("current_location_id", ""))
+    for npc in _as_list(data.get("npcs")):
+        if isinstance(npc, dict):
+            npc["current_location_id"] = _v2_remap_location(npc.get("current_location_id", ""))
 
 
 def _migrate_v2_ground_items(data: dict[str, Any], items_elsewhere: set[str]) -> None:
-    world = data.setdefault("world", {})
-    old_ground = world.get("ground_items") or {}
+    world = _ensure_dict(data, "world")
+    old_ground = _as_dict(world.get("ground_items"))
 
     # v2's rooms were all parts of one building, so their items accumulate
     # onto zone_building rather than overwrite -- a plain remap would keep
     # only whichever room was written last.
     merged: dict[str, list[Any]] = {}
     for location_id, items in old_ground.items():
-        merged.setdefault(_v2_remap_location(location_id), []).extend(items)
+        merged.setdefault(_v2_remap_location(location_id), []).extend(_as_list(items))
 
     # zone_home, zone_street and zone_neighborhood did not exist in v2, so
     # they never had a ground_items entry -- give them their normal starting
@@ -589,8 +666,11 @@ def _migrate_v2_ground_items(data: dict[str, Any], items_elsewhere: set[str]) ->
 def _migrate_v2_apartment_key(data: dict[str, Any], items_elsewhere: set[str]) -> None:
     if "item_apartment_key" in items_elsewhere:
         return
-    player = data.setdefault("player", {})
-    inventory = player.setdefault("inventory", [])
+    player = _ensure_dict(data, "player")
+    # Not setdefault: an explicit `"inventory": null` must still end up a
+    # list, not be left as None for `.append` to crash on.
+    inventory = player.get("inventory") or []
+    player["inventory"] = inventory
     # Added even if the inventory is already at max_inventory_size: a key
     # must not be lost to a capacity rule, or a migrated player is locked out
     # of his own home forever (see data/locations.py's apartment_door).
@@ -598,51 +678,61 @@ def _migrate_v2_apartment_key(data: dict[str, Any], items_elsewhere: set[str]) -
 
 
 def _migrate_v2_narrative(data: dict[str, Any]) -> None:
-    narrative = data.setdefault("narrative", {})
+    narrative = _ensure_dict(data, "narrative")
     # v2 predates both fields.
     narrative.setdefault("game_over", False)
     narrative.setdefault("death_cause", "")
 
     # Task 3 made SET_FLAG/DISCOVER_FLAG normalize flag names; a v2 save's
-    # "PowerGrid" would otherwise sit beside a new "powergrid".
+    # "PowerGrid" would otherwise sit beside a new "powergrid". Coerced to
+    # str first: a discovered_flags entry is player-writable content
+    # (SET_FLAG/DISCOVER_FLAG arguments) that a hand-edited save could hold
+    # as a non-string (e.g. a bare number), and normalize_key() calls
+    # .strip() -- an AttributeError, not a clean "unknown flag".
     normalized_flags: dict[str, bool] = {}
-    for key, value in (narrative.get("flags") or {}).items():
-        normalized_flags[normalize_key(key)] = value  # later value wins on collision
+    for key, value in _as_dict(narrative.get("flags")).items():
+        normalized_flags[normalize_key(str(key))] = value  # later value wins on collision
     narrative["flags"] = normalized_flags
     narrative["discovered_flags"] = sorted(
-        {normalize_key(flag) for flag in narrative.get("discovered_flags") or []}
+        {normalize_key(str(flag)) for flag in _as_list(narrative.get("discovered_flags"))}
     )
 
 
-def _v2_remap_reach_objective(key: str) -> str:
+def _v2_remap_reach_objective(key: Any) -> Any:
+    if not isinstance(key, str):
+        return key
     kind, sep, rest = key.partition(":")
     if kind == "reach" and sep:
         return f"reach:{_v2_remap_location(rest)}"
     return key
 
 
+def _remap_objective_keys(values: Any) -> list[Any]:
+    """Remap and dedupe an objectives/completed_objectives list, null-safe."""
+    return list(dict.fromkeys(_v2_remap_reach_objective(v) for v in values or []))
+
+
 def _migrate_v2_quests(data: dict[str, Any]) -> None:
     quests = data.get("quests")
-    if not quests:
+    if not isinstance(quests, dict):
         return
     quests.pop(_V2_RETIRED_QUEST_ID, None)
 
     for quest in quests.values():
-        quest["objectives"] = list(
-            dict.fromkeys(
-                _v2_remap_reach_objective(o) for o in quest.get("objectives", [])
-            )
-        )
-        quest["completed_objectives"] = list(
-            dict.fromkeys(
-                _v2_remap_reach_objective(o)
-                for o in quest.get("completed_objectives", [])
-            )
-        )
+        if not isinstance(quest, dict):
+            continue
+        quest["objectives"] = _remap_objective_keys(quest.get("objectives"))
+        quest["completed_objectives"] = _remap_objective_keys(quest.get("completed_objectives"))
         quest["objective_labels"] = {
             _v2_remap_reach_objective(key): label
-            for key, label in quest.get("objective_labels", {}).items()
+            for key, label in _as_dict(quest.get("objective_labels")).items()
         }
+        # Remapping can collapse two distinct reach objectives onto the same
+        # zone (e.g. reach:location_id_hallway and reach:location_id_office
+        # both -> reach:zone_building) where one was already completed --
+        # without this the quest is done but stuck ACTIVE forever.
+        if all(o in quest["completed_objectives"] for o in quest["objectives"]):
+            quest["status"] = "completed"
     # Any roster quest still missing (quest_supply_run, at minimum -- v2
     # predates the current roster) is left out here on purpose: from_dict's
     # _quests_from_dict seeds and reconciles whatever roster quest a save
@@ -694,17 +784,25 @@ def from_saved_data(data: dict[str, Any]) -> GameManager | None:
     route (reads a file the player uploaded) -- both need the same schema
     check and the same "don't half-load a corrupt save" guard.
     """
-    version = data.get("version")
-    if version == 2:
-        print("[Persistence] Migrating save v2 -> v3 (rooms became zones).")
-        data = migrate_v2_to_v3(data)
-        version = data.get("version")
-    if version != SCHEMA_VERSION:
-        print(f"[Persistence] Save schema v{version} != v{SCHEMA_VERSION}; rejecting.")
-        return None
+    # Migration runs inside the same guarded region as the rest of loading:
+    # a malformed v2 save (a null where a list or dict was expected, an
+    # unhashable id, ...) must degrade to "corrupt save -> None" the same
+    # way a malformed v3 save already does, not crash GameEngine.__init__ or
+    # the /save/import route out from under the caller. AttributeError is
+    # caught alongside the pre-existing KeyError/TypeError/ValueError
+    # because it's the shape a `None.strip()`/`None.partition()` failure
+    # takes when a hand-edited field holds the wrong type.
     try:
+        version = data.get("version")
+        if version == 2:
+            print("[Persistence] Migrating save v2 -> v3 (rooms became zones).")
+            data = migrate_v2_to_v3(data)
+            version = data.get("version")
+        if version != SCHEMA_VERSION:
+            print(f"[Persistence] Save schema v{version} != v{SCHEMA_VERSION}; rejecting.")
+            return None
         return from_dict(data)
-    except (KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
         print(f"[Persistence] Corrupt save: {exc}.")
         return None
 

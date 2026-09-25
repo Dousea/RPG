@@ -605,5 +605,144 @@ class MigrationTests(IsolatedSaveTestCase):
         self.assertIn("take:item_crowbar", quest.completed_objectives)
 
 
+class MigrationHardeningTests(unittest.TestCase):
+    """Fix round 1 (task-5-fix-round-1.md, F1-F9): malformed saves must
+    degrade to loading, or a clean None, but never raise -- and a few
+    migration correctness bugs the review found along the way."""
+
+    # F1: five malformed v2 saves that used to raise uncaught inside
+    # GameEngine.__init__/the /save/import route. Each is a mutation of the
+    # V2_SAVE fixture; every one of them now loads cleanly rather than just
+    # "doesn't crash", because the individual migration helpers were made
+    # tolerant (see F2/F3 below), not only wrapped in a wider try/except.
+    def test_malformed_v2_fields_degrade_to_loading_not_crash(self):
+        cases = {
+            "ground_items entry is null": lambda d: d["world"]["ground_items"].update(
+                {"location_id_office": None}
+            ),
+            "a quest's objectives is null": lambda d: d.update(
+                {"quests": {"q": {"objectives": None}}}
+            ),
+            "a quest's objective_labels is null": lambda d: d["quests"][
+                "quest_custom_errand"
+            ].update({"objective_labels": None}),
+            "a discovered flag is not a string": lambda d: d["narrative"].update(
+                {"discovered_flags": [5]}
+            ),
+            "flags is a list, not a dict": lambda d: d["narrative"].update({"flags": []}),
+        }
+        for description, mutate in cases.items():
+            with self.subTest(description):
+                data = copy.deepcopy(V2_SAVE)
+                mutate(data)
+                result = persistence.from_saved_data(data)  # must not raise
+                self.assertIsInstance(result, GameManager)
+
+    # F2: a non-dict "quests" (v2 or v3) must be treated as empty -- seed
+    # and reconcile the whole roster, same as a missing key.
+    def test_null_quests_seeds_the_roster(self):
+        data = copy.deepcopy(V2_SAVE)
+        data["quests"] = None
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        for quest_id in ("quest_supply_run", "quest_marcus_trust", "quest_understand_the_crisis"):
+            self.assertIn(quest_id, loaded.quests)
+
+    def test_quests_as_a_list_seeds_the_roster(self):
+        data = copy.deepcopy(V2_SAVE)
+        data["quests"] = []
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        for quest_id in ("quest_supply_run", "quest_marcus_trust", "quest_understand_the_crisis"):
+            self.assertIn(quest_id, loaded.quests)
+
+    # F3: player.inventory: null must not crash the apartment-key grant.
+    def test_null_player_inventory_still_grants_the_apartment_key(self):
+        data = copy.deepcopy(V2_SAVE)
+        data["player"]["inventory"] = None
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        self.assertIn("item_apartment_key", [e.item.id for e in loaded.player.inventory])
+
+    # F4: remapping can collapse two reach objectives onto one already-done
+    # zone; the quest must not be left ACTIVE forever.
+    def test_deduplicated_reach_objectives_completes_the_quest(self):
+        data = copy.deepcopy(V2_SAVE)
+        data["quests"] = {
+            "quest_two_room_errand": {
+                "title": "Check Both Rooms",
+                "status": "active",
+                "objectives": ["reach:location_id_office", "reach:location_id_lobby"],
+                "objective_labels": {
+                    "reach:location_id_office": "Check the office",
+                    "reach:location_id_lobby": "Check the lobby",
+                },
+                "completed_objectives": ["reach:location_id_office"],
+            }
+        }
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        quest = loaded.quests["quest_two_room_errand"]
+        self.assertEqual(quest.objectives, ["reach:zone_building"])
+        self.assertEqual(quest.status, QuestStatus.COMPLETED)
+
+    # F5: an item under a location id that won't survive migration (not a
+    # v2 room, not already a v3 zone) must not suppress a new zone's own
+    # starting copy of it -- the original is dropped by from_dict either way.
+    def test_item_under_an_unmapped_location_does_not_suppress_a_new_zones_item(self):
+        data = copy.deepcopy(V2_SAVE_NO_EXTRA_ITEMS)
+        data["world"]["ground_items"] = {
+            "location_id_attic": [{"item_id": "item_crowbar", "hit_points": 50}]
+        }
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        street_names = [
+            e.item.name
+            for e in loaded.world.locations["zone_street"].entities
+            if isinstance(e, ItemEntity)
+        ]
+        self.assertIn("Crowbar", street_names)
+        crowbar_count = sum(
+            1
+            for location in loaded.world.locations.values()
+            for e in location.entities
+            if isinstance(e, ItemEntity) and e.item.id == "item_crowbar"
+        )
+        self.assertEqual(crowbar_count, 1)
+
+    # F6: current_place must only be overwritten from a v2 room id; a
+    # non-room current_location_id keeps whatever current_place it already had.
+    def test_current_place_is_kept_for_a_non_room_location(self):
+        data = copy.deepcopy(V2_SAVE)
+        data["player"]["current_location_id"] = "zone_street"
+        data["player"]["current_place"] = "by the bus stop"
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.player.current_location_id, "zone_street")
+        self.assertEqual(loaded.player.current_place, "by the bus stop")
+
+    # F7: bool()/str() are the wrong coercions for hand-edited values.
+    def test_game_over_string_false_is_not_true(self):
+        data = persistence.to_dict(GameManager())
+        data["narrative"]["game_over"] = "false"
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        self.assertFalse(loaded.narrative.game_over)
+
+    def test_null_death_cause_becomes_empty_string(self):
+        data = persistence.to_dict(GameManager())
+        data["narrative"]["death_cause"] = None
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.narrative.death_cause, "")
+
+    def test_null_current_place_becomes_empty_string(self):
+        data = persistence.to_dict(GameManager())
+        data["player"]["current_place"] = None
+        loaded = persistence.from_saved_data(data)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.player.current_place, "")
+
+
 if __name__ == "__main__":
     unittest.main()

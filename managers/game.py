@@ -88,6 +88,13 @@ DIRECTION_SYNONYMS = {"inside": "in", "outside": "out"}
 # UI panel, so it is bounded here rather than trusted.
 MAX_PLACE_LENGTH = 80
 
+# `death_cause` is an outcome-fact string (LLM-adjacent, via narration of
+# engine-decided events), bounded the same way. Shared by
+# SimulationCore._check_player_death (the sole producer) and
+# adapters/persistence.py (which must apply the same cap to a hand-edited or
+# migrated save).
+DEATH_CAUSE_MAX_LENGTH = 200
+
 # Direction words with no destination behind them. If one of these did not
 # match a connection, it describes a shuffle inside the current zone -- it is
 # not the name of a place, so it must not be stored as one.

@@ -15,7 +15,7 @@ this list; it only puts prose around facts the engine already decided.
 
 import random
 
-from managers.game import GameManager
+from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action import (
     NARRATIVE_CONDITION_FIELDS,
@@ -136,7 +136,7 @@ class SimulationCore:
         if narrative.game_over or self.manager.player.hit_points > 0:
             return fact
         narrative.game_over = True
-        narrative.death_cause = fact[:200]
+        narrative.death_cause = fact[:DEATH_CAUSE_MAX_LENGTH]
         return f"{fact} Orton has died. The game is over."
 
     def _advance_one_tick(self) -> None:
