@@ -5,13 +5,17 @@ Two LLM calls per turn now, not one: the parser proposes actions (script via
 narrator describes what already happened (script via `ScriptedLLM(story=...)`).
 """
 
+import copy
 import unittest
 
 import adapters.engine as engine_module
 from adapters import persistence
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
+from modules.entity.item import ItemEntity
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
+from tests.test_persistence import V2_SAVE
+from tests.test_simulation import LETHAL_ITEM
 
 MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nUPDATE_RELATIONSHIP Emma affection +12\nADD_GOAL short_term Find a weapon"
 MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
@@ -316,6 +320,43 @@ class SaveLoadTests(EngineTestCase):
 
         reloaded = persistence.load(self.save_path)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
+
+    def test_import_route_migrates_a_v2_upload(self):
+        # GameEngine.import_save calls persistence.from_saved_data directly,
+        # so the /save/import route gets v2 -> v3 migration for free.
+        result = self.engine.import_save(copy.deepcopy(V2_SAVE))
+        self.assertIsNotNone(result)
+        self.assertEqual(result["current_location"], "Your Building")
+        self.assertEqual(result["current_place"], "the lobby")
+
+
+class DeathPersistenceTests(EngineTestCase):
+    """Task 4 added game_over/death_cause but left persisting them to us."""
+
+    def test_death_survives_a_reload_through_the_engine(self):
+        self.engine.manager.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
+        self.llm.actions = "ACTIONS:\nUSE_ITEM Suspicious Vial"
+
+        self.engine.play("drink the vial")
+        self.assertTrue(self.engine.manager.narrative.game_over)
+        original_cause = self.engine.manager.narrative.death_cause
+        self.assertTrue(original_cause)
+
+        prompts_before = len(self.llm.prompts)
+        narrator_prompts_before = len(self.llm.narrator_prompts)
+
+        # A fresh engine, reading the same (redirected) save file, must come
+        # back up already dead -- not resurrect Orton for one more turn.
+        reloaded = GameEngine()
+        reloaded.memory = FakeMemory()
+        self.assertTrue(reloaded.manager.narrative.game_over)
+        self.assertEqual(reloaded.manager.narrative.death_cause, original_cause)
+
+        result = reloaded.play("try again")
+        self.assertIn("Orton is dead", result["story_text"])
+        # No parser/narrator call for a turn that can't happen anymore.
+        self.assertEqual(len(self.llm.prompts), prompts_before)
+        self.assertEqual(len(self.llm.narrator_prompts), narrator_prompts_before)
 
 
 if __name__ == "__main__":
