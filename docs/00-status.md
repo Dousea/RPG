@@ -61,7 +61,7 @@ simulation level-of-detail for distant NPCs, and no Story Director reacting
 to arbitrary world state (documents 05, 06, 07 — see below). The event/effect/
 modifier pipeline (document 23) is real now for combat and item use, but only
 for the two event families that exist; it is not a general-purpose bus other
-subsystems publish to. Closing *that* gap — scaling past a handful of rooms —
+subsystems publish to. Closing *that* gap — scaling past a handful of zones —
 is still the rewrite documents 05/06/07 describe, not an increment on top of
 this one.
 

@@ -84,10 +84,13 @@ it.
 
 Three rules, in order of severity:
 
-**Schema mismatch discards the save.** `SCHEMA_VERSION` is written into every
-save. On load, a `version` that does not match causes the save to be dropped and
-a new game started, with a log line. A half-understood save is worse than a
-fresh one; there is no migration path and no partial load.
+**Schema mismatch discards the save — except v2.** `SCHEMA_VERSION` (now 3)
+is written into every save. On load, a v2 save is first upgraded by
+`migrate_v2_to_v3` (old rooms remapped onto zones; see
+[Implementation Status](00-status.md) for exactly what it rewrites). Any other
+`version` that does not match causes the save to be dropped and a new game
+started, with a log line. A half-understood save is worse than a fresh one;
+v2→v3 is the only migration path, and there is no partial load.
 
 **Unknown ids are dropped, not fatal.** An item id, location id, trait or perk
 id in the save that no longer exists in `data/` is skipped with a log line. A

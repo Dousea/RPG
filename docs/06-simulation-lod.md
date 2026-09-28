@@ -1,6 +1,6 @@
 # Simulation Level of Detail
 
-> **Status: Planned.** Every location and NPC is always live in memory. There are nine of them. See [Implementation Status](00-status.md).
+> **Status: Planned.** Every location and NPC is always live in memory. There are seven of them (four zones, three NPCs). See [Implementation Status](00-status.md).
 
 A large world needs different simulation resolutions.
 

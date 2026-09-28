@@ -273,7 +273,7 @@ World(time, date, locations: dict[str, Location])
 `connections` itself still maps a direction to a bare destination id with no
 requirements field — but a requirement can now sit *alongside* it: a
 `DoorEntity` placed in `Location.entities` (see `data/locations.py`'s
-lobby-to-storage-room door) carries `leads_to`, `state`
+apartment door, on `zone_building` leading into `zone_home`) carries `leads_to`, `state`
 (`UnlockableEntityLockState.LOCKED`/`UNLOCKED`) and `key_id`, and
 `managers/validator.py`'s `ActionValidator` checks for one blocking a
 `MOVE_TO` before accepting it. This is exits-as-structured-data for the one
