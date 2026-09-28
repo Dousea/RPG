@@ -161,6 +161,39 @@ class StartingStateTests(unittest.TestCase):
             "zone_street",
         )
 
+    def test_exit_phrase_tolerates_trailing_words_and_punctuation(self):
+        # The zone noun only has to start the phrase's object; the model
+        # rarely stops at the bare noun.
+        self.gm.player.current_location_id = "zone_building"
+        for phrase in (
+            "leave the building!",
+            "leave the building?",
+            "leave the building now",
+            "out of the building and onto the street",
+            "exit the building to the street",
+            "leave the apartment building",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(self.gm.resolve_location(phrase).id, "zone_street")
+
+        self.gm.player.current_location_id = "zone_home"
+        for phrase in ("leave the apartment now", "leave the apartment!"):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(self.gm.resolve_location(phrase).id, "zone_building")
+
+    def test_exit_phrase_naming_another_zone_never_walks_back_into_it(self):
+        # Said on the street, "exit the building" names a zone Orton isn't
+        # in; whatever follows the noun decides, not the building.
+        self.gm.player.current_location_id = "zone_street"
+        for phrase in (
+            "exit the building to the street",
+            "leave the building for the street",
+            "out of the building and onto the street",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(self.gm.resolve_location(phrase).id, "zone_street")
+        self.assertIsNone(self.gm.resolve_location("leave the building"))
+
     def test_npc_roster_is_loaded_and_placed(self):
         self.assertEqual(len(self.gm.npcs), 3)
         for npc in self.gm.npcs.values():

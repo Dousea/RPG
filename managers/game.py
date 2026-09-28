@@ -152,6 +152,22 @@ def _first_contiguous_match(haystack: list[str], needle: list[str]) -> int | Non
     return None
 
 
+def _exit_noun_prefix(words: list[str]) -> tuple[str, int] | None:
+    """The zone whose ZONE_EXIT_NOUNS entry starts `words`, with that noun's
+    word count, or None. The longest noun wins, so "apartment building" is the
+    building rather than "apartment" (home) followed by a stray word.
+    """
+    best: tuple[str, int] | None = None
+    for zone_id, nouns in ZONE_EXIT_NOUNS.items():
+        for noun in nouns:
+            noun_words = noun.split()
+            if words[: len(noun_words)] == noun_words and (
+                best is None or len(noun_words) > best[1]
+            ):
+                best = (zone_id, len(noun_words))
+    return best
+
+
 def resolve_condition_value(field: str, raw: str, current: str) -> str | None:
     """Resolve a laddered condition update to its new rung, or None if invalid.
 
@@ -363,7 +379,7 @@ class GameManager:
         through here too, and NPCs have no free-text place to fall back on, so a
         resolver that always succeeded would scatter them into invented zones.
         """
-        needle = name.strip().strip("\"'.,;:").casefold()
+        needle = name.strip().strip("\"'.,;:!?").casefold()
         if not needle:
             return None
 
@@ -395,18 +411,30 @@ class GameManager:
         # landmark itself. This runs before that fallback (an exit phrase is
         # never itself a landmark name) and is keyed off the *current* zone,
         # not whatever the fallback would have matched.
+        #
+        # The zone noun only has to *start* the object, so trailing words
+        # ("leave the building now", "exit the building to the street") still
+        # count. An exit phrase naming some *other* zone ("exit the building
+        # to the street" said on the street) can't be walked out of from here,
+        # so that zone must not win; whatever follows the noun decides, and
+        # nothing following means a spot where Orton already is.
         exit_match = re.match(
             r"^(?:outside(?: of)?|out of|leaving|leave|exiting|exit)\s+"
             r"(?:(?:the|my|your|this|orton's)\s+)?(.+)$",
             needle,
         )
         if exit_match:
-            exit_object = exit_match.group(1).strip()
-            if exit_object in ZONE_EXIT_NOUNS.get(self.current_location.id, ()):
-                out_id = self.current_location.connections.get("out")
-                if out_id is not None and out_id in self.world.locations:
-                    return self.world.locations[out_id]
-                return self.current_location
+            exit_words = re.findall(r"[a-z0-9']+", exit_match.group(1))
+            named = _exit_noun_prefix(exit_words)
+            if named is not None:
+                zone_id, noun_length = named
+                if zone_id == self.current_location.id:
+                    out_id = self.current_location.connections.get("out")
+                    if out_id is not None and out_id in self.world.locations:
+                        return self.world.locations[out_id]
+                    return self.current_location
+                rest = " ".join(exit_words[noun_length:])
+                return self.resolve_location(rest) if rest else None
 
         # Last pass: the model writes "back to my apartment" or "the lobby
         # downstairs" rather than a bare name. Only whole words count, and only

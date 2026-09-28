@@ -40,7 +40,7 @@ STARTING_ZONE_ID = "zone_home"
 # *current* zone instead of a global alias lookup.
 ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_home": ("apartment", "apartment 3b", "3b", "flat", "home", "place"),
-    "zone_building": ("building",),
+    "zone_building": ("building", "apartment building"),
     "zone_street": ("street", "block"),
     "zone_neighborhood": ("neighborhood", "neighbourhood"),
 }
