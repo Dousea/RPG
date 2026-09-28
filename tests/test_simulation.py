@@ -235,6 +235,37 @@ class FinalFixWaveMoveRoutingTests(unittest.TestCase):
         self.assertEqual(gm.player.current_place, "")
 
 
+class ResidualFixExitPhraseTests(unittest.TestCase):
+    """RES2: the exit rule fires only when the phrase's object names the
+    zone itself, never a landmark inside it (residual-fix.md)."""
+
+    def test_outside_the_bodega_stays_on_the_street_as_a_spot(self):
+        # bodega is a zone_street landmark, not the zone -- must not exit
+        # into the neighborhood. A spot, not a zone change: no tick.
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        before_tick = gm.narrative.time_of_day
+        facts = _resolve(gm, MoveAction(destination="outside the bodega"))
+        self.assertEqual(gm.player.current_location_id, "zone_street")
+        self.assertEqual(gm.narrative.time_of_day, before_tick)
+        self.assertFalse(facts[0].startswith("Refused:"))
+
+    def test_leave_the_apartment_reaches_the_building_unlocked_from_inside(self):
+        gm = GameManager()  # starts holding item_apartment_key
+        facts = _resolve(gm, MoveAction(destination="leave the apartment"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertFalse(facts[0].startswith("Refused:"))
+
+    def test_exit_my_flat_reaches_the_building_even_without_the_key(self):
+        # The apartment door is locked from the building side only -- leaving
+        # needs no key.
+        gm = GameManager()
+        gm.player.inventory.clear()  # drop the apartment key
+        facts = _resolve(gm, MoveAction(destination="exit my flat"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertFalse(facts[0].startswith("Refused:"))
+
+
 class ItemResolutionTests(unittest.TestCase):
     def test_take_and_drop(self):
         gm = GameManager()

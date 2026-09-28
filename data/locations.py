@@ -30,6 +30,21 @@ from modules.location import Location
 # this build no longer has.
 STARTING_ZONE_ID = "zone_home"
 
+# RES2: nouns that mean the *whole zone* when they follow an exit verb
+# ("leave the apartment", "outside the building") -- kept separate from
+# `aliases` because the bare words here (apartment, building, street,
+# neighborhood, ...) were deliberately removed as *global* aliases (FW1),
+# where they would have matched anywhere in the map. "leave the apartment"
+# still has to mean walk out of home no matter where Orton says it from being
+# home, so `resolve_location`'s exit-phrase check keys off this table and the
+# *current* zone instead of a global alias lookup.
+ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
+    "zone_home": ("apartment", "apartment 3b", "3b", "flat", "home", "place"),
+    "zone_building": ("building",),
+    "zone_street": ("street", "block"),
+    "zone_neighborhood": ("neighborhood", "neighbourhood"),
+}
+
 
 def build_starting_locations() -> dict[str, Location]:
     """Build a fresh map with its starting ground items."""

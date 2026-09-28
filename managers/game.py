@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 import config
 from data.items import ITEMS
-from data.locations import STARTING_ZONE_ID, build_starting_locations
+from data.locations import STARTING_ZONE_ID, ZONE_EXIT_NOUNS, build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
@@ -384,6 +384,30 @@ class GameManager:
             if any(needle == alias.casefold() for alias in location.aliases):
                 return location
 
+        # RES2: exit phrases ("outside the building", "out of the building",
+        # "leave the apartment", "exit my flat") mean walk *out* of the zone
+        # Orton is standing in right now -- but only when the phrase's object
+        # names the zone itself (ZONE_EXIT_NOUNS), never a landmark inside it.
+        # "outside the bodega" while already on the street must not walk him
+        # into the neighborhood, and "outside Emma's apartment" while in the
+        # building must not walk him onto the street -- both fall through to
+        # the whole-word fallback below instead, which lands him on the
+        # landmark itself. This runs before that fallback (an exit phrase is
+        # never itself a landmark name) and is keyed off the *current* zone,
+        # not whatever the fallback would have matched.
+        exit_match = re.match(
+            r"^(?:outside(?: of)?|out of|leaving|leave|exiting|exit)\s+"
+            r"(?:(?:the|my|your|this|orton's)\s+)?(.+)$",
+            needle,
+        )
+        if exit_match:
+            exit_object = exit_match.group(1).strip()
+            if exit_object in ZONE_EXIT_NOUNS.get(self.current_location.id, ()):
+                out_id = self.current_location.connections.get("out")
+                if out_id is not None and out_id in self.world.locations:
+                    return self.world.locations[out_id]
+                return self.current_location
+
         # Last pass: the model writes "back to my apartment" or "the lobby
         # downstairs" rather than a bare name. Only whole words count, and only
         # names long enough not to collide by accident -- a loose substring
@@ -429,22 +453,7 @@ class GameManager:
                 if best is None or score < best[0]:
                     best = (score, location)
 
-        if best is None:
-            return None
-        matched = best[1]
-
-        # Exit phrases: "outside the building"/"out of the building"/"leave
-        # the building"/"exit the building" mean walk *out* of the zone just
-        # matched, not stand inside it -- but only when that zone is the one
-        # Orton is already in (an exit phrase naming some other zone has
-        # nothing to walk out of here).
-        if matched.id == self.current_location.id and re.match(
-            r"^(outside|out of|leaving|leave|exiting|exit)\b", needle
-        ):
-            out_id = matched.connections.get("out")
-            if out_id is not None and out_id in self.world.locations:
-                return self.world.locations[out_id]
-        return matched
+        return best[1] if best is not None else None
 
     def resolve_zone_exact(self, name: str) -> Location | None:
         """Resolve a zone strictly: id, display name, or an exact global

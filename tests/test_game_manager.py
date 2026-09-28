@@ -121,6 +121,46 @@ class StartingStateTests(unittest.TestCase):
             self.gm.resolve_location("the lobby downstairs").id, "zone_building"
         )
 
+    def test_exit_phrase_fires_only_on_the_zone_itself(self):
+        # RES2: the exit rule used to fire whenever the *matched* zone was
+        # the current one, so "outside the bodega" while already on the
+        # street (bodega is a zone_street landmark, not the zone) wrongly
+        # walked Orton into the neighborhood, and "outside Emma's apartment"
+        # while in the building wrongly walked him onto the street. It must
+        # now fire only when the phrase names the zone itself
+        # (ZONE_EXIT_NOUNS), keyed off the current zone.
+        self.gm.player.current_location_id = "zone_street"
+        self.assertEqual(self.gm.resolve_location("outside the bodega").id, "zone_street")
+
+        self.gm.player.current_location_id = "zone_building"
+        self.assertEqual(
+            self.gm.resolve_location("outside Emma's apartment").id, "zone_building"
+        )
+        self.assertEqual(
+            self.gm.resolve_location("leave the elevator").id, "zone_building"
+        )
+
+        # R4 must stay green: "outside the building"/"out of the building"
+        # from zone_building still reach zone_street.
+        self.assertEqual(
+            self.gm.resolve_location("outside the building").id, "zone_street"
+        )
+        self.assertEqual(
+            self.gm.resolve_location("out of the building").id, "zone_street"
+        )
+
+        self.gm.player.current_location_id = "zone_home"
+        self.assertEqual(
+            self.gm.resolve_location("leave the apartment").id, "zone_building"
+        )
+        self.assertEqual(self.gm.resolve_location("exit my flat").id, "zone_building")
+
+        # Doesn't start with an exit word -- this is the RES1 path, not RES2.
+        self.assertEqual(
+            self.gm.resolve_location("the street outside my apartment").id,
+            "zone_street",
+        )
+
     def test_npc_roster_is_loaded_and_placed(self):
         self.assertEqual(len(self.gm.npcs), 3)
         for npc in self.gm.npcs.values():
