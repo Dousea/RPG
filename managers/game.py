@@ -375,22 +375,80 @@ class GameManager:
         # names long enough not to collide by accident -- a loose substring
         # match here would quietly send the player to the wrong zone, which is
         # the failure mode this whole design is meant to avoid.
-        words = set(re.findall(r"[a-z0-9']+", needle))
-        best: tuple[int, Location] | None = None
+        #
+        # FW2: a trailing possessive 's is stripped from every token before
+        # matching ("clinic's" -> "clinic"), and the winning candidate is
+        # chosen by the earliest position in the phrase of its *first* word --
+        # not by which candidate has the most words. "the street outside my
+        # apartment" must resolve to "street" (word 1) over "my apartment"
+        # (word 3), which the old most-words-wins rule got backwards. Ties
+        # break by more words, then by the current zone.
+        phrase_words = [
+            word[:-2] if word.endswith("'s") else word
+            for word in re.findall(r"[a-z0-9']+", needle)
+        ]
+        word_positions: dict[str, int] = {}
+        for index, word in enumerate(phrase_words):
+            word_positions.setdefault(word, index)
+        word_set = set(phrase_words)
+
+        best: tuple[tuple[int, int, int], Location] | None = None
         for location in self.world.locations.values():
             for candidate in (location.name, *location.aliases):
                 folded = candidate.casefold()
                 if len(folded) < 4:
                     continue
-                candidate_words = re.findall(r"[a-z0-9']+", folded)
-                if not candidate_words or not set(candidate_words) <= words:
+                candidate_words = [
+                    word[:-2] if word.endswith("'s") else word
+                    for word in re.findall(r"[a-z0-9']+", folded)
+                ]
+                if not candidate_words or not set(candidate_words) <= word_set:
                     continue
-                # Prefer the most specific match: "emma's apartment" over
-                # "apartment" when the model writes both words.
-                score = len(candidate_words)
-                if best is None or score > best[0]:
+                position = word_positions.get(candidate_words[0])
+                if position is None:
+                    continue
+                is_current_zone = 0 if location.id == self.current_location.id else 1
+                score = (position, -len(candidate_words), is_current_zone)
+                if best is None or score < best[0]:
                     best = (score, location)
-        return best[1] if best else None
+
+        if best is None:
+            return None
+        matched = best[1]
+
+        # Exit phrases: "outside the building"/"out of the building"/"leave
+        # the building"/"exit the building" mean walk *out* of the zone just
+        # matched, not stand inside it -- but only when that zone is the one
+        # Orton is already in (an exit phrase naming some other zone has
+        # nothing to walk out of here).
+        if matched.id == self.current_location.id and re.match(
+            r"^(outside|out of|leaving|leave|exiting|exit)\b", needle
+        ):
+            out_id = matched.connections.get("out")
+            if out_id is not None and out_id in self.world.locations:
+                return self.world.locations[out_id]
+        return matched
+
+    def resolve_zone_exact(self, name: str) -> Location | None:
+        """Resolve a zone strictly: id, display name, or an exact global
+        alias only, casefolded and stripped.
+
+        FW4: `NPC_MOVE` uses this instead of `resolve_location`. NPCs have no
+        free-text spot to fall back on, so the player's forgiving resolution
+        -- connection directions, the whole-word fallback, exit phrases -- is
+        deliberately not available here: it exists to turn a vague phrase
+        into *somewhere* for prose to keep going, which is the wrong
+        trade-off for an engine-issued NPC placement.
+        """
+        needle = name.strip().strip("\"'.,;:").casefold()
+        if not needle:
+            return None
+        for location in self.world.locations.values():
+            if needle in (location.id.casefold(), location.name.casefold()):
+                return location
+            if any(needle == alias.casefold() for alias in location.aliases):
+                return location
+        return None
 
     def zone_path(self, start_id: str, target_id: str) -> list[str] | None:
         """BFS over `Location.connections` from `start_id` to `target_id`.

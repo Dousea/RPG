@@ -69,9 +69,20 @@ class StartingStateTests(unittest.TestCase):
         )
         self.assertIsNone(self.gm.resolve_location("Atlantis"))
 
+    def test_resolve_zone_exact_matches_id_name_and_alias_only(self):
+        # FW4: no connection directions, no whole-word fallback -- strictly
+        # id/name/alias, exact and casefolded.
+        self.assertEqual(self.gm.resolve_zone_exact("Lobby").id, "zone_building")
+        self.assertEqual(self.gm.resolve_zone_exact("zone_street").id, "zone_street")
+        self.assertEqual(self.gm.resolve_zone_exact("The Street").id, "zone_street")
+        self.assertIsNone(self.gm.resolve_zone_exact("out"))
+        self.assertIsNone(self.gm.resolve_zone_exact("her apartment"))
+        self.assertIsNone(self.gm.resolve_zone_exact("the street outside my apartment"))
+
     def test_outside_follows_the_exit_first(self):
-        # "outside" is also a zone_street alias; DIRECTION_SYNONYMS must make
-        # the exit win over the current zone's own alias.
+        # FW1: "outside" is no longer a zone_street alias at all (too
+        # generic); DIRECTION_SYNONYMS resolves it to the zone's "out"
+        # connection regardless.
         self.gm.player.current_location_id = "zone_street"
         self.assertEqual(self.gm.resolve_location("inside").id, "zone_building")
 

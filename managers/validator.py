@@ -18,6 +18,7 @@ from typing import Any
 from managers.game import (
     BARE_DIRECTIONS,
     CONDITION_LADDERS,
+    DIRECTION_SYNONYMS,
     GameManager,
     MAX_PLACE_LENGTH,
     TIMES_OF_DAY,
@@ -119,11 +120,25 @@ class ActionValidator:
             return Accepted(action, {"kind": "stay", "location": current})
 
         folded = raw.casefold()
-        target = manager.resolve_location(raw)
 
-        if target is None:
+        # FW3 order: (1) a direction synonym that names a real connection of
+        # the current zone wins outright; (2) otherwise a bare direction with
+        # no destination behind it is a shuffle, checked before the alias/
+        # whole-word resolution below can accidentally claim it (e.g. a zone
+        # whose alias list happens to contain a direction word); (3)
+        # otherwise fall through to full resolution.
+        needle_direction = DIRECTION_SYNONYMS.get(folded, folded)
+        target = None
+        for direction, loc_id in current.connections.items():
+            if needle_direction == direction.casefold() and loc_id in manager.world.locations:
+                target = manager.world.locations[loc_id]
+                break
+        else:
             if folded in BARE_DIRECTIONS:
                 return Accepted(action, {"kind": "shuffle", "location": current, "raw": raw})
+            target = manager.resolve_location(raw)
+
+        if target is None:
             return Accepted(
                 action,
                 {"kind": "spot", "location": current, "place": raw[:MAX_PLACE_LENGTH]},
@@ -200,7 +215,21 @@ class ActionValidator:
         )
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to drop.")
+        if self._is_door_key(entity.item.id):
+            return Rejected(action, "Orton keeps his keys on him.")
         return Accepted(action, {"item_entity": entity})
+
+    def _is_door_key(self, item_id: str) -> bool:
+        """Whether `item_id` is the `key_id` of any `DoorEntity` anywhere in
+        the world -- engine-owned, not hard-coded to `item_apartment_key`
+        (FW5). Dropping (or conjuring a duplicate of) his own key used to be
+        able to strand Orton outside his own apartment forever, since the
+        door rebuilds LOCKED on every load (see data/locations.py)."""
+        for location in self.manager.world.locations.values():
+            for entity in location.entities:
+                if isinstance(entity, DoorEntity) and entity.key_id == item_id:
+                    return True
+        return False
 
     def _validate_use_item(self, action: UseItemAction) -> ValidationResult:
         entity = self.manager._find_item_entity(
@@ -218,6 +247,8 @@ class ActionValidator:
             item = find_item_by_name(action.item_name)
             if item is None:
                 return Rejected(action, f"Unknown item: '{action.item_name}'.")
+            if self._is_door_key(item.id):
+                return Rejected(action, "Orton can't conjure a key; it has to be found.")
             if len(manager.player.inventory) >= manager.player.max_inventory_size:
                 return Rejected(action, "Inventory is full.")
             return Accepted(action, {"item": item})
@@ -331,9 +362,21 @@ class ActionValidator:
         npc = manager.resolve_npc(action.npc_name)
         if npc is None:
             return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        location = manager.resolve_location(action.destination)
+        # FW4: strict resolution only -- no connection directions, no
+        # whole-word fallback. NPCs have no free-text spot for a vague phrase
+        # to soft-land in, unlike the player's MOVE_TO.
+        location = manager.resolve_zone_exact(action.destination)
         if location is None:
             return Rejected(action, f"Unknown location: '{action.destination}'.")
+        # Orton's apartment door is locked from the building side (see
+        # data/locations.py); nobody else has a key. An NPC can only be
+        # placed there while Orton himself is home to let them in.
+        if location.id == "zone_home" and manager.player.current_location_id != "zone_home":
+            return Rejected(
+                action,
+                "Orton's apartment is locked; nobody gets in unless he's "
+                "there to let them in.",
+            )
         return Accepted(action, {"npc": npc, "location": location})
 
     def _validate_npc_status(self, action: NpcStatusAction) -> ValidationResult:

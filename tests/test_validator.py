@@ -84,6 +84,17 @@ class MovementValidationTests(unittest.TestCase):
         self.assertIsInstance(result, Accepted)
         self.assertEqual(result.resolved["kind"], "zone")
 
+    def test_bare_direction_wins_over_a_colliding_alias(self):
+        # FW3: BARE_DIRECTIONS is checked before resolve_location's whole-word
+        # fallback, so a bare direction word is always a shuffle even if some
+        # zone's alias list happens to contain it too (content bug, but the
+        # validator must not let it silently turn a shuffle into a teleport).
+        self.gm.current_location.aliases.append("north")
+        result = self.validator.validate(MoveAction(destination="north"))
+        self.assertIsInstance(result, Accepted)
+        self.assertEqual(result.resolved["kind"], "shuffle")
+        self.assertEqual(result.resolved["location"].id, "zone_home")
+
     def test_validation_never_mutates(self):
         # The validator only decides what a move means; it never writes
         # state. A spot move resolved via the validator alone (SimulationCore
@@ -139,6 +150,69 @@ class ItemValidationTests(unittest.TestCase):
     def test_use_item_not_in_inventory_is_rejected(self):
         result = self.validator.validate(UseItemAction(item_name="First Aid Kit"))
         self.assertIsInstance(result, Rejected)
+
+
+class DoorKeyValidationTests(unittest.TestCase):
+    """FW5: door keys are engine-owned. A "door key" is any item id that is
+    the `key_id` of a DoorEntity anywhere in the world -- not hard-coded to
+    item_apartment_key. Dropping or conjuring one used to be able to strand
+    Orton outside his own apartment forever, since the door rebuilds LOCKED
+    on every load."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def test_dropping_the_apartment_key_is_rejected(self):
+        result = self.validator.validate(DropAction(item_name="Apartment Key"))
+        self.assertIsInstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton keeps his keys on him.")
+        # Still in inventory -- rejection must not have mutated anything.
+        self.assertEqual(
+            [e.item.name for e in self.gm.player.inventory], ["Apartment Key"]
+        )
+
+    def test_conjuring_the_apartment_key_is_rejected(self):
+        from modules.action import UpdateInventoryAction
+
+        self.gm.player.inventory.clear()
+        result = self.validator.validate(
+            UpdateInventoryAction(item_name="Apartment Key", operation="ADD", value="")
+        )
+        self.assertIsInstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton can't conjure a key; it has to be found.")
+        self.assertEqual(self.gm.player.inventory, [])
+
+    def test_any_door_key_is_protected_not_just_the_apartment_one(self):
+        # A second, test-local locked door with its own key -- the rule must
+        # not be hard-coded to item_apartment_key.
+        from data.items import ITEMS
+        from modules.entity.item import ItemEntity
+        from modules.entity.object import DoorEntity, UnlockableEntityLockState
+
+        door = DoorEntity(leads_to="zone_home")
+        door.state = UnlockableEntityLockState.LOCKED
+        door.key_id = "item_storage_key"
+        self.gm.current_location.entities.append(door)
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
+
+        result = self.validator.validate(DropAction(item_name="Storage Room Key"))
+        self.assertIsInstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton keeps his keys on him.")
+
+    def test_a_non_key_item_still_drops_and_adds_normally(self):
+        from data.items import ITEMS
+        from modules.action import UpdateInventoryAction
+        from modules.entity.item import ItemEntity
+
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        drop_result = self.validator.validate(DropAction(item_name="Canned Beans"))
+        self.assertIsInstance(drop_result, Accepted)
+
+        add_result = self.validator.validate(
+            UpdateInventoryAction(item_name="Canned Beans", operation="ADD", value="")
+        )
+        self.assertIsInstance(add_result, Accepted)
 
 
 class CombatValidationTests(unittest.TestCase):

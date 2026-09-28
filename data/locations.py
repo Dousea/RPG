@@ -43,10 +43,17 @@ def build_starting_locations() -> dict[str, Location]:
                 "bedroom, a window over the street, and a door with a deadbolt."
             ),
             connections={"out": "zone_building"},
+            # FW1: generic room nouns (bedroom, kitchen, bathroom, ...) and
+            # direction words (inside, back inside) are not global aliases --
+            # a story that mentions "the kitchen" almost never means Orton's
+            # kitchen specifically, and a global alias here would silently
+            # teleport him home. Removed ones become a spot in whatever zone
+            # he's already standing in via `_validate_move`'s unresolved path
+            # instead. Only names that unambiguously mean *this* apartment
+            # survive.
             aliases=[
-                "apartment", "apartment 3b", "3b", "my apartment", "your apartment",
-                "home", "flat", "bedroom", "kitchen", "kitchenette", "bathroom",
-                "living room", "my place", "inside", "my room", "back inside",
+                "apartment 3b", "3b", "my apartment", "your apartment",
+                "home", "my flat", "my place", "my room",
             ],
         ),
         "zone_building": Location(
@@ -58,12 +65,17 @@ def build_starting_locations() -> dict[str, Location]:
                 "the laundry room in the basement, and your neighbours' doors."
             ),
             connections={"in": "zone_home", "out": "zone_street"},
+            # FW1: upstairs/downstairs/office/entrance are generic enough to
+            # mean anywhere, so they are no longer global aliases -- they
+            # become a spot in the current zone instead. "storage room" stays
+            # because v2 saves could have a player standing there
+            # (`adapters/persistence._V2_ROOM_PLACES`).
             aliases=[
                 "hallway", "corridor", "stairwell", "stairs", "elevator", "lobby",
-                "foyer", "entrance", "laundry room", "basement", "mailroom",
-                "emma's apartment", "3a", "the building", "building", "downstairs",
-                "upstairs", "next door", "office",
-                "storage room", "storage",
+                "foyer", "laundry room", "basement", "mailroom",
+                "emma's apartment", "3a", "the building", "building",
+                "next door",
+                "storage room",
             ],
         ),
         "zone_street": Location(
@@ -74,8 +86,11 @@ def build_starting_locations() -> dict[str, Location]:
                 "corner, the alley behind the building, a bus stop."
             ),
             connections={"in": "zone_building", "out": "zone_neighborhood"},
+            # FW1: "outside" removed as a global alias -- it collided with
+            # zone_building's own "outside the building" and is handled as a
+            # direction synonym (`DIRECTION_SYNONYMS`) instead.
             aliases=[
-                "street", "outside", "sidewalk", "road", "alley", "bodega",
+                "street", "sidewalk", "road", "alley", "bodega",
                 "corner store", "bus stop", "parking lot", "my car", "the block",
                 "front steps", "out front",
             ],
@@ -88,9 +103,11 @@ def build_starting_locations() -> dict[str, Location]:
                 "a walk-in clinic, the subway entrance, the park."
             ),
             connections={"in": "zone_street"},
+            # FW1: bare "store" removed -- too generic (any shop). "grocery
+            # store" and "corner store" (zone_street) stay, being specific.
             aliases=[
                 "neighborhood", "neighbourhood", "coffee shop", "cafe", "pharmacy",
-                "drugstore", "supermarket", "grocery store", "store", "shops",
+                "drugstore", "supermarket", "grocery store", "shops",
                 "clinic", "hospital", "subway", "station", "park", "downtown",
                 "the city", "town",
             ],
