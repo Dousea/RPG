@@ -38,13 +38,19 @@ class ContextBuilder:
         )
 
     def _zones_section(self) -> str:
-        """The whole zone roster, one line per zone.
+        """The whole zone roster, one line per zone with its aliases.
 
         The parser can only aim MOVE_TO at a zone it has been told exists --
         this is that roster. It lives on the parser prompt (not the
-        narrator's) because the parser is what emits MOVE_TO.
+        narrator's) because the parser is what emits MOVE_TO. FW6: aliases
+        are listed too, since naming a landmark (not just the zone's own
+        name) is how the model actually reaches a zone in practice.
         """
-        return "\n".join(f" - {location.name}" for location in self.manager.world.locations.values())
+        lines = []
+        for location in self.manager.world.locations.values():
+            aliases = ", ".join(location.aliases) if location.aliases else "none"
+            lines.append(f" - {location.name} (aliases: {aliases})")
+        return "\n".join(lines)
 
     def _npcs_present_section(self) -> str:
         """NPCs present, with how each one currently regards the player.
@@ -184,9 +190,12 @@ Specific spot: {player.current_place or '(nowhere in particular)'}
 {self._nearby_locations_section().rstrip()}
 
 [ZONES]
-(The world is these four zones. MOVE_TO one of these names to change zone.
-MOVE_TO anything else -- a room, a shop, a landmark -- moves Orton to a spot
-inside the zone he is already in, which is normal and expected.)
+(The world is these {len(manager.world.locations)} zones, each listed below
+with its aliases. Naming a zone or one of its listed aliases/landmarks moves
+Orton there, walking through connecting zones as needed. `in`/`out` follow
+the zone's own exits. Anything not listed here is a spot inside the zone he
+is already in, which is normal and expected. A locked door stops him at the
+door rather than refusing the move.)
 
 {self._zones_section().rstrip()}
 

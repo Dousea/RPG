@@ -76,6 +76,21 @@ class ZoneContextTests(unittest.TestCase):
         for zone in ("Your Apartment", "Your Building", "The Street", "The Neighborhood"):
             self.assertIn(zone, prompt)
 
+    def test_parser_prompt_zone_count_is_derived_not_hard_coded(self):
+        # FW6: the roster's zone count comes from the world, not a literal
+        # "four" that would silently go stale if a zone were added or
+        # removed.
+        prompt = self.builder.build_parser_prompt("look")
+        self.assertIn(f"{len(self.gm.world.locations)} zones", prompt)
+
+    def test_parser_prompt_lists_at_least_one_alias_per_zone(self):
+        # FW6: naming a listed landmark, not just the zone's own name, moves
+        # Orton there -- the roster must actually show that.
+        prompt = self.builder.build_parser_prompt("look")
+        for location in self.gm.world.locations.values():
+            self.assertTrue(location.aliases, f"{location.id} has no aliases to list")
+            self.assertIn(location.aliases[0], prompt)
+
     def test_prompts_carry_the_specific_spot(self):
         resolve_actions(self.gm, MoveAction(destination="the kitchen"))
         parser_prompt = self.builder.build_parser_prompt("look")
