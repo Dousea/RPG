@@ -571,7 +571,11 @@ _V2_RETIRED_QUEST_ID = "quest_storage_room"
 # an NPC's position) will actually still exist once loading finishes --
 # counting one that from_dict is about to drop anyway would only suppress a
 # new zone's own starting copy of it for nothing.
-_V3_ZONE_IDS = frozenset({"zone_home", "zone_building", "zone_street", "zone_neighborhood"})
+#
+# FW7: derived from the world rather than a hard-coded literal, so adding,
+# renaming, or removing a zone in data/locations.py can't silently desync
+# this set from the actual map.
+_V3_ZONE_IDS = frozenset(build_starting_locations().keys())
 
 
 def _v2_remap_location(location_id: Any) -> Any:
@@ -642,17 +646,22 @@ def _migrate_v2_ground_items(data: dict[str, Any], items_elsewhere: set[str]) ->
     for location_id, items in old_ground.items():
         merged.setdefault(_v2_remap_location(location_id), []).extend(_as_list(items))
 
-    # zone_home, zone_street and zone_neighborhood did not exist in v2, so
-    # they never had a ground_items entry -- give them their normal starting
-    # items, except whatever the save already accounts for elsewhere (a room,
-    # the player, or an NPC); otherwise e.g. the street's crowbar would
-    # duplicate one the player is already carrying. zone_building is
-    # deliberately excluded from this loop: it gets only the items
-    # accumulated above, not a fresh starting First Aid Kit too -- the v2
-    # building already had one, or the player already took it, either way
-    # it's already accounted for by the accumulation.
+    # The zones that did not exist in v2 (i.e. everything except
+    # zone_building, per _V2_LOCATION_IDS) never had a ground_items entry --
+    # give them their normal starting items, except whatever the save
+    # already accounts for elsewhere (a room, the player, or an NPC);
+    # otherwise e.g. the street's crowbar would duplicate one the player is
+    # already carrying. zone_building is deliberately excluded from this
+    # loop: it gets only the items accumulated above, not a fresh starting
+    # First Aid Kit too -- the v2 building already had one, or the player
+    # already took it, either way it's already accounted for by the
+    # accumulation. FW7: derived from _V3_ZONE_IDS minus the v2 rooms'
+    # targets, rather than a hard-coded tuple of the three names.
     starting = build_starting_locations()
-    for zone_id in ("zone_home", "zone_street", "zone_neighborhood"):
+    new_zone_ids = [
+        zone_id for zone_id in starting if zone_id not in _V2_LOCATION_IDS.values()
+    ]
+    for zone_id in new_zone_ids:
         fresh = [
             _item_entity_to_dict(entity)
             for entity in starting[zone_id].entities

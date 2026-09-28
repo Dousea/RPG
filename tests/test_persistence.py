@@ -604,6 +604,16 @@ class MigrationTests(IsolatedSaveTestCase):
         quest = loaded.quests["quest_supply_run"]
         self.assertIn("take:item_crowbar", quest.completed_objectives)
 
+    def test_v3_zone_ids_are_derived_from_the_world_not_hard_coded(self):
+        # FW7: `_V3_ZONE_IDS` must come from `build_starting_locations()`
+        # rather than a literal set that would silently go stale if a zone
+        # were added, renamed, or removed.
+        from data.locations import build_starting_locations
+
+        self.assertEqual(
+            persistence._V3_ZONE_IDS, frozenset(build_starting_locations().keys())
+        )
+
 
 class MigrationHardeningTests(unittest.TestCase):
     """Fix round 1 (task-5-fix-round-1.md, F1-F9): malformed saves must
