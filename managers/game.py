@@ -138,6 +138,20 @@ CONDITION_SYNONYMS: dict[str, dict[str, str]] = {
 }
 
 
+def _first_contiguous_match(haystack: list[str], needle: list[str]) -> int | None:
+    """The index in `haystack` where `needle` first appears as a contiguous,
+    in-order run, or None. Used by `GameManager.resolve_location`'s
+    whole-word fallback (RES1) -- a subset test (`set(needle) <= set(haystack)`)
+    let "the street" and "the building" both claim position 0 of any phrase
+    starting with "the", regardless of where their real words actually sat.
+    """
+    span = len(needle)
+    for start in range(len(haystack) - span + 1):
+        if haystack[start : start + span] == needle:
+            return start
+    return None
+
+
 def resolve_condition_value(field: str, raw: str, current: str) -> str | None:
     """Resolve a laddered condition update to its new rung, or None if invalid.
 
@@ -376,21 +390,22 @@ class GameManager:
         # match here would quietly send the player to the wrong zone, which is
         # the failure mode this whole design is meant to avoid.
         #
-        # FW2: a trailing possessive 's is stripped from every token before
-        # matching ("clinic's" -> "clinic"), and the winning candidate is
-        # chosen by the earliest position in the phrase of its *first* word --
-        # not by which candidate has the most words. "the street outside my
-        # apartment" must resolve to "street" (word 1) over "my apartment"
-        # (word 3), which the old most-words-wins rule got backwards. Ties
-        # break by more words, then by the current zone.
+        # FW2/RES1: a trailing possessive 's is stripped from every token
+        # before matching ("clinic's" -> "clinic"), and a leading "the" is
+        # dropped from the candidate's own words (so "the street" matches as
+        # "street"). The candidate must then appear as a contiguous, in-order
+        # run of words in the phrase -- a subset test used to let "the
+        # street" and "the building" both claim position 0 of any phrase
+        # starting with "the", regardless of where their real words actually
+        # sat ("the street outside the building" wrongly went to the
+        # building). The winning candidate is the one whose run starts
+        # earliest in the phrase. "the street outside my apartment" must
+        # resolve to "street" (starts at word 1) over "my apartment" (starts
+        # at word 3). Ties break by more words, then by the current zone.
         phrase_words = [
             word[:-2] if word.endswith("'s") else word
             for word in re.findall(r"[a-z0-9']+", needle)
         ]
-        word_positions: dict[str, int] = {}
-        for index, word in enumerate(phrase_words):
-            word_positions.setdefault(word, index)
-        word_set = set(phrase_words)
 
         best: tuple[tuple[int, int, int], Location] | None = None
         for location in self.world.locations.values():
@@ -402,9 +417,11 @@ class GameManager:
                     word[:-2] if word.endswith("'s") else word
                     for word in re.findall(r"[a-z0-9']+", folded)
                 ]
-                if not candidate_words or not set(candidate_words) <= word_set:
+                if candidate_words and candidate_words[0] == "the":
+                    candidate_words = candidate_words[1:]
+                if not candidate_words:
                     continue
-                position = word_positions.get(candidate_words[0])
+                position = _first_contiguous_match(phrase_words, candidate_words)
                 if position is None:
                     continue
                 is_current_zone = 0 if location.id == self.current_location.id else 1

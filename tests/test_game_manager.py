@@ -86,6 +86,41 @@ class StartingStateTests(unittest.TestCase):
         self.gm.player.current_location_id = "zone_street"
         self.assertEqual(self.gm.resolve_location("inside").id, "zone_building")
 
+    def test_fallback_resolver_matches_contiguously_not_by_first_word(self):
+        # RES1: the old fallback scored a candidate by the position of its
+        # *first word* anywhere in the phrase, so "the street" and "the
+        # building" -- both starting with "the" -- tied for position 0 no
+        # matter where their real words actually sat. The candidate must now
+        # match as a contiguous, in-order run of words.
+        self.gm.player.current_location_id = "zone_home"
+        self.assertEqual(
+            self.gm.resolve_location("the street outside the building").id,
+            "zone_street",
+        )
+        self.assertEqual(
+            self.gm.resolve_location("the alley behind the building").id,
+            "zone_street",
+        )
+        self.assertEqual(
+            self.gm.resolve_location(
+                "the corner store across from the city"
+            ).id,
+            "zone_street",
+        )
+
+        # R3 must stay unchanged: from zone_street, "the street" (position 1)
+        # still beats "my apartment" (position 3).
+        self.gm.player.current_location_id = "zone_street"
+        self.assertEqual(
+            self.gm.resolve_location("the street outside my apartment").id,
+            "zone_street",
+        )
+
+        self.gm.player.current_location_id = "zone_building"
+        self.assertEqual(
+            self.gm.resolve_location("the lobby downstairs").id, "zone_building"
+        )
+
     def test_npc_roster_is_loaded_and_placed(self):
         self.assertEqual(len(self.gm.npcs), 3)
         for npc in self.gm.npcs.values():
