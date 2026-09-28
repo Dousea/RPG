@@ -104,6 +104,15 @@ class ParseNarratorResponseTests(unittest.TestCase):
         )
         self.assertEqual(parsed["options"], [])
 
+    def test_options_none_with_trailing_punctuation_yields_an_empty_list(self):
+        # FW8: the model sometimes punctuates "NONE" (a period, an
+        # exclamation mark, a semicolon, a colon) -- strip it before the
+        # comparison rather than treating it as a stray option.
+        parsed = parse_narrator_response(
+            "STORY:\nYou pause.\n\nEVENT:\nOrton paused\n\nOPTIONS: NONE."
+        )
+        self.assertEqual(parsed["options"], [])
+
     def test_missing_options_section_yields_an_empty_list(self):
         # Older-shaped responses (no OPTIONS at all) must still parse cleanly.
         parsed = parse_narrator_response("STORY:\nYou pause.\n\nEVENT:\nOrton paused")

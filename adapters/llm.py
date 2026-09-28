@@ -107,7 +107,7 @@ NARRATOR_SYSTEM_PROMPT = (
     "labeled 'Refused' as having succeeded -- write around it instead. If "
     "[OUTCOMES] says Orton has died, narrate his death as final -- this is "
     "the end of the story, not a setback he recovers from -- and write "
-    "OPTIONS: NONE.\n\n"
+    "OPTIONS: NONE\n\n"
     "[QUESTS] lists what Orton is currently working toward. Use it for "
     "motivation and flavor -- you may not declare a quest objective complete "
     "yourself; that only happens through [OUTCOMES].\n\n"
@@ -259,10 +259,13 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
 
     story = "\n".join(sections["story"]).strip()
     event = "\n".join(sections["event"]).strip()
+    # FW8: the model sometimes punctuates "NONE" (a period, an exclamation
+    # mark, a semicolon, a colon) -- strip that before comparing, or it reads
+    # as a stray one-item options list instead of "no options".
     options = [
         stripped.lstrip("-").strip()
         for raw_line in sections["options"]
-        if (stripped := raw_line.strip()) and stripped.upper() != "NONE"
+        if (stripped := raw_line.strip()) and stripped.upper().rstrip(".!;:") != "NONE"
     ]
 
     return {
