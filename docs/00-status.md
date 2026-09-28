@@ -185,10 +185,12 @@ vague phrase to soft-land in. It is also refused into `zone_home` unless
 Orton himself is already there: his apartment door is locked from the
 building side and nobody else holds a key. Separately, any item that is the
 `key_id` of a `DoorEntity` anywhere in the world (not hard-coded to the
-apartment key specifically) can be neither `DROP`ped nor conjured back via
-`UPDATE_INVENTORY ... ADD` — both are rejected, closing the soft-lock where
-discarding his own key stranded Orton outside his apartment forever (the
-door rebuilds `LOCKED` on every load).
+apartment key specifically) can be neither `DROP`ped, `REMOVE`d, conjured
+back via `UPDATE_INVENTORY ... ADD`, nor moved off a quantity of one via
+`UPDATE_QUANTITY` — all are rejected, closing the soft-lock where discarding,
+deleting, or duplicating his own key stranded Orton outside his apartment
+forever (the door rebuilds `LOCKED` on every load). `UPDATE_CONDITION` stays
+allowed, since it never removes an item.
 
 **`ADD_GOAL short_term:`/`short-term` no longer get dropped.** The horizon
 token arrived from the parser model as `short_term`, `Short Term`,

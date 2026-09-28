@@ -258,11 +258,28 @@ class ActionValidator:
             return Rejected(action, f"No '{action.item_name}' in inventory.")
         if action.operation not in ("REMOVE", "UPDATE_CONDITION", "UPDATE_QUANTITY"):
             return Rejected(action, f"Unknown inventory operation: '{action.operation}'.")
+
+        # RES3: REMOVE and UPDATE_QUANTITY are the other two ways an item can
+        # leave (or multiply in) the inventory besides DROP/ADD -- REMOVE
+        # deletes the entity outright (simulation.py), and UPDATE_QUANTITY 0
+        # deletes it the same way while UPDATE_QUANTITY >1 duplicates it. A
+        # door key must be as protected from these as it already is from
+        # DROP/ADD. UPDATE_CONDITION never removes an item, so it stays
+        # unprotected.
+        if action.operation == "REMOVE" and self._is_door_key(entity.item.id):
+            return Rejected(action, "Orton keeps his keys on him.")
         if action.operation in ("UPDATE_CONDITION", "UPDATE_QUANTITY"):
             try:
-                int(action.value)
+                value = int(action.value)
             except ValueError:
                 return Rejected(action, f"'{action.value}' is not a number.")
+            if action.operation == "UPDATE_QUANTITY" and self._is_door_key(entity.item.id):
+                if value < 1:
+                    return Rejected(action, "Orton keeps his keys on him.")
+                if value > 1:
+                    return Rejected(
+                        action, "Orton can't conjure a key; it has to be found."
+                    )
         return Accepted(action, {"item_entity": entity})
 
     # === Combat ===

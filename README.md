@@ -185,9 +185,11 @@ in particular for `zone_home` unless Orton is already there himself (his
 apartment door is locked from the building side and nobody else has a key).
 Separately, any item that is the `key_id` of a `DoorEntity` anywhere in the
 world -- not just the apartment key, whichever it is -- can neither be
-`DROP`ped nor `UPDATE_INVENTORY ... ADD`ed back into existence: both are
-rejected, so Orton can't lock himself out of his own home by discarding or
-duplicating his key (the door rebuilds `LOCKED` on every load). `SET_FLAG`
+`DROP`ped, `UPDATE_INVENTORY ... REMOVE`d, `UPDATE_INVENTORY ... ADD`ed back
+into existence, nor `UPDATE_QUANTITY`'d away from exactly one: all are
+rejected, so Orton can't lock himself out of his own home by discarding,
+deleting, or duplicating his key (the door rebuilds `LOCKED` on every load).
+`UPDATE_CONDITION` is unaffected, since it never removes an item. `SET_FLAG`
 sets the engine's ground truth for a world fact; `DISCOVER_FLAG` separately
 marks that the player has learned it, which is what makes it visible in the
 narrator's prompt (doc 11's knowledge firewall applied to world flags, not

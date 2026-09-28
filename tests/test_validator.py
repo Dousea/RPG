@@ -214,6 +214,84 @@ class DoorKeyValidationTests(unittest.TestCase):
         )
         self.assertIsInstance(add_result, Accepted)
 
+    def test_removing_the_apartment_key_is_rejected(self):
+        # RES3: REMOVE deletes the entity outright (simulation.py), same as
+        # DROP -- must be protected the same way.
+        from modules.action import UpdateInventoryAction
+
+        result = self.validator.validate(
+            UpdateInventoryAction(item_name="Apartment Key", operation="REMOVE", value="")
+        )
+        self.assertIsInstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton keeps his keys on him.")
+        self.assertEqual(
+            [e.item.name for e in self.gm.player.inventory], ["Apartment Key"]
+        )
+
+    def test_quantity_zero_on_the_apartment_key_is_rejected(self):
+        # RES3: UPDATE_QUANTITY 0 deletes the entity just like REMOVE.
+        from modules.action import UpdateInventoryAction
+
+        result = self.validator.validate(
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="0"
+            )
+        )
+        self.assertIsInstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton keeps his keys on him.")
+        self.assertEqual(
+            [e.item.name for e in self.gm.player.inventory], ["Apartment Key"]
+        )
+
+    def test_quantity_two_on_the_apartment_key_is_rejected(self):
+        # RES3: UPDATE_QUANTITY 2 duplicates the key.
+        from modules.action import UpdateInventoryAction
+
+        result = self.validator.validate(
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="2"
+            )
+        )
+        self.assertIsInstance(result, Rejected)
+        self.assertEqual(
+            result.reason, "Orton can't conjure a key; it has to be found."
+        )
+        self.assertEqual(
+            [e.item.name for e in self.gm.player.inventory], ["Apartment Key"]
+        )
+
+    def test_quantity_one_on_the_apartment_key_is_accepted_as_a_no_op(self):
+        from modules.action import UpdateInventoryAction
+
+        result = self.validator.validate(
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="1"
+            )
+        )
+        self.assertIsInstance(result, Accepted)
+
+    def test_update_condition_on_the_apartment_key_is_still_allowed(self):
+        # Condition never removes an item, so it stays unprotected.
+        from modules.action import UpdateInventoryAction
+
+        result = self.validator.validate(
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_CONDITION", value="5"
+            )
+        )
+        self.assertIsInstance(result, Accepted)
+
+    def test_removing_a_non_key_item_still_works(self):
+        from data.items import ITEMS
+        from modules.action import UpdateInventoryAction
+        from modules.entity.item import ItemEntity
+
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        result = self.validator.validate(
+            UpdateInventoryAction(item_name="Canned Beans", operation="REMOVE", value="")
+        )
+        self.assertIsInstance(result, Accepted)
+
 
 class CombatValidationTests(unittest.TestCase):
     def setUp(self):

@@ -19,6 +19,7 @@ from modules.action import (
     TakeAction,
     TimeAdvanceAction,
     UpdateConditionAction,
+    UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
 )
@@ -311,6 +312,28 @@ class ItemResolutionTests(unittest.TestCase):
         self.assertEqual(gm.player.hunger, 70)
         self.assertEqual(gm.player.thirst, 45)
         self.assertIn("hunger 70, thirst 45", facts[0])
+
+    def test_removing_or_reconjuring_the_apartment_key_is_refused(self):
+        # RES3: REMOVE, UPDATE_QUANTITY 0 and UPDATE_QUANTITY 2 on a door key
+        # must all be refused before SimulationCore ever mutates state --
+        # the key count must stay exactly 1 throughout.
+        gm = GameManager()  # starts holding item_apartment_key
+        facts = _resolve(
+            gm,
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="REMOVE", value=""
+            ),
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="0"
+            ),
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="2"
+            ),
+        )
+        self.assertTrue(all(f.startswith("Refused:") for f in facts))
+        self.assertEqual(
+            [e.item.name for e in gm.player.inventory], ["Apartment Key"]
+        )
 
 
 class CombatResolutionTests(unittest.TestCase):
