@@ -215,6 +215,37 @@ its OpenAI-compatible API enabled.
 
 ## Setup
 
+The project uses [mise](https://mise.jdx.dev/) on every OS. `mise.toml` pins
+Python 3.13 and uv, creates `.venv` with uv, and activates it whenever you are
+inside the project directory.
+
+```bash
+mise trust
+mise install
+mise run install    # uv pip install -r requirements.txt
+mise run dev        # python app.py
+```
+
+Auto-activation needs mise's shell hook (`mise activate zsh`/`bash`, or
+`mise activate pwsh | Out-String | Invoke-Expression` in your PowerShell
+`$PROFILE` on Windows). Without it, `mise run` and `mise exec -- python ...`
+still use `.venv`.
+
+On Linux, `sentence-transformers` pulls in the multi-GB CUDA build of PyTorch
+by default. The embedding model runs fine on CPU; install the CPU-only build
+first to skip that download:
+
+```bash
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+mise run install
+```
+
+`.venv` is gitignored.
+
+### Without mise
+
+Windows:
+
 ```powershell
 py -3.13 -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -222,19 +253,31 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-`.venv` is gitignored. To skip activation, call the interpreter directly:
-`.venv\Scripts\python -m pip install -r requirements.txt`, then
-`.venv\Scripts\python app.py`.
+Linux / macOS:
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python app.py
+```
 
 Then open <http://localhost:5000>.
+
+If LM Studio runs on another machine, point `llm.base_url` in `config.yml` at
+it (e.g. `http://192.168.0.231:1234/v1/chat/completions`) and enable *Serve on
+Local Network* in LM Studio's server settings.
 
 `/reset` deletes the save and starts a fresh game.
 
 ## Tests
 
-```powershell
-.venv\Scripts\python -m unittest discover -s tests -t . -b
+```bash
+mise run test
 ```
+
+Without mise, run `python -m unittest discover -s tests -t . -b` from the
+activated venv.
 
 `-b` buffers stdout so the engine's per-turn logging only appears for failing
 tests. The suite is offline and takes a few seconds: the LLM and the embedding
@@ -258,8 +301,12 @@ rather than your real save.
 `tests/test_memory.py` exercises real FAISS and a real embedding model, so it is
 skipped unless you opt in — the first run downloads `all-MiniLM-L6-v2`:
 
+```bash
+RPG_TEST_EMBEDDINGS=1 mise run test
+```
+
 ```powershell
-$env:RPG_TEST_EMBEDDINGS="1"; .venv\Scripts\python -m unittest discover -s tests -t . -b
+$env:RPG_TEST_EMBEDDINGS="1"; mise run test
 ```
 
 ## Endpoints

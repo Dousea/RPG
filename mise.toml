@@ -1,0 +1,18 @@
+[tools]
+python = "3.13"
+uv = "latest"
+
+[settings]
+python.uv_venv_auto = true
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.install]
+run = "uv pip install -r requirements.txt"
+
+[tasks.dev]
+run = "python app.py"
+
+[tasks.test]
+run = "python -m unittest discover -s tests -t . -b"
