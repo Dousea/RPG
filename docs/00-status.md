@@ -92,7 +92,7 @@ this one.
 | [21 Final Architecture](21-final-architecture.md) | Planned | — | The summary diagram of the design target. |
 | [22 Relationships](22-relationships.md) | Implemented | `managers/relationship.py` | — |
 | [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
-| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | Schema is now v3, for `current_place`, `game_over` and `death_cause`. Unlike the earlier v1→v2 bump, a v2 save is not discarded: `migrate_v2_to_v3` remaps each of the four old rooms to `zone_building` (keeping the old room name as the player's/NPC's `current_place`), merges their ground items onto `zone_building`, seeds the other three zones with their normal starting items minus anything the save already holds anywhere, grants the apartment key if it's not already held, normalizes flag/discovered-flag keys, remaps `reach:<old room id>` quest objective keys, and replaces `quest_storage_room` with `quest_supply_run`. v1 saves and any other mismatched version are still discarded and a new game starts — that policy is unchanged for everything except v2. |
+| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | Schema is now v3, for `current_place`, `game_over` and `death_cause`. Unlike the earlier v1→v2 bump, a v2 save is not discarded: `migrate_v2_to_v3` remaps each of the four old rooms to `zone_building` (keeping the old room name as the *player's* `current_place` only — NPCs have no `current_place` field, so their position is just the remapped zone id), merges their ground items onto `zone_building`, seeds the other three zones with their normal starting items minus anything the save already holds anywhere, grants the apartment key if it's not already held, normalizes flag/discovered-flag keys, remaps `reach:<old room id>` quest objective keys, and replaces `quest_storage_room` with `quest_supply_run`. v1 saves and any other mismatched version are still discarded and a new game starts — that policy is unchanged for everything except v2. |
 
 ## Known issues
 
@@ -169,6 +169,27 @@ can't resolve to a zone becomes a free-text spot inside the zone the player
 is already standing in (`ActionValidator._validate_move`). See doc 05's row
 above for the current map.
 
+**Generic room nouns are spots, not zone aliases.** A word like "kitchen",
+"bathroom", "office", or "upstairs" almost never names one particular zone,
+so `data/locations.py`'s `aliases` lists no longer carry them at all —
+naming one now lands Orton on a free-text spot in whatever zone he's already
+in, instead of silently teleporting him to whichever zone happened to claim
+that word globally. Only names that unambiguously mean one specific zone
+(e.g. `"my apartment"`, `"Lobby"`, `"the pharmacy"`) remain real aliases.
+
+**`NPC_MOVE` resolves strictly and can be refused.** Unlike the player's
+forgiving `MOVE_TO`, `NPC_MOVE` goes through `GameManager.resolve_zone_exact`
+— id, display name, or an exact alias only, with no connection directions
+and no whole-word fallback — because an NPC has no free-text spot for a
+vague phrase to soft-land in. It is also refused into `zone_home` unless
+Orton himself is already there: his apartment door is locked from the
+building side and nobody else holds a key. Separately, any item that is the
+`key_id` of a `DoorEntity` anywhere in the world (not hard-coded to the
+apartment key specifically) can be neither `DROP`ped nor conjured back via
+`UPDATE_INVENTORY ... ADD` — both are rejected, closing the soft-lock where
+discarding his own key stranded Orton outside his apartment forever (the
+door rebuilds `LOCKED` on every load).
+
 **`ADD_GOAL short_term:`/`short-term` no longer get dropped.** The horizon
 token arrived from the parser model as `short_term`, `Short Term`,
 `short-term`, or with a trailing colon, and only the first form matched; the
@@ -239,13 +260,16 @@ prior session. Harmless today — the only lock in the game is Orton's own
 apartment door, and he starts holding its key — but it would misbehave the
 moment a second, player-unlockable door existed.
 
-**Nothing in normal play drives the player's HP down yet.** `game_over` is
-real and persisted (`managers/simulation.py` `_check_player_death`), but its
-only producers are combat (`ATTACK`, via equipped-weapon damage) and item
-effects (`USE_ITEM`, via a modifier like a `HPModifier`) — main's existing
-rule, unchanged. There is currently no NPC aggression, hazard, or
-environmental system that damages Orton on its own, so `game_over` is
-reachable only through those two paths.
+**`game_over` is not reachable in normal play.** It is real and persisted
+(`managers/simulation.py` `_check_player_death`), and it is checked every
+turn, but nothing in the shipped content can actually drive Orton's HP to
+zero: `ATTACK` only ever damages the *target* NPC, never the player who
+issued it, and every item's `HPModifier` in `data/items.py` is positive
+(healing). There is no NPC aggression, hazard, or environmental system that
+damages Orton at all. The only ways to reach `game_over` today are a
+test-local item (see `tests/test_simulation.py`'s `LETHAL_ITEM`, used only
+to exercise the death path in isolation) or a hand-edited/malformed save
+that sets HP to zero directly.
 
 **`item_storage_key` is unplaced.** The item is still defined in
 `data/items.py`, a holdover from the old storage-room map, but nothing in

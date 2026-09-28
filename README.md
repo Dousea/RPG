@@ -97,8 +97,9 @@ and connections, trait and perk effects -- stay in `data/` and are looked up by
 id on load, so content can be rebalanced without invalidating saves. `SCHEMA_VERSION`
 is 3. A v2 save (from before the zone map) is migrated on load rather than
 discarded: `adapters/persistence.migrate_v2_to_v3` remaps each of the four old
-rooms to `zone_building` (the old room name becomes the player's or NPC's
-`current_place`), merges their ground items onto `zone_building`, seeds the
+rooms to `zone_building` (the old room name becomes the *player's*
+`current_place` only -- NPCs have no such field, so their position is just
+the remapped zone id), merges their ground items onto `zone_building`, seeds the
 other three zones with their normal starting items minus anything the save
 already holds anywhere, grants the apartment key if it isn't already held,
 normalizes flag/discovered-flag keys, remaps `reach:<old room id>` quest
@@ -154,24 +155,43 @@ NPC_MOVE <npc> TO <zone>             NPC_STATUS <npc> ADD|REMOVE <status>
 from the current value (`sleep`: Rested/Tired/Drowsy/Exhausted;
 `infection_risk`: No/Low/Moderate/High/Infected), and a bare word sets it
 directly, matched through `CONDITION_SYNONYMS` where the model's wording
-isn't already a rung name. HP only changes through `ATTACK` (resolved by
-the Simulation Core against equipped-weapon damage, with trait/perk
+isn't already a rung name. Player HP only changes through `ATTACK` (resolved
+by the Simulation Core against equipped-weapon damage, with trait/perk
 reactions) or `USE_ITEM` (applies the item's own modifiers, e.g. a medkit's
-`HPModifier`) -- nothing in normal play currently drives it down on its own,
-so `game_over` is reachable only through those two paths. `MOVE_TO` resolves
-its destination against a zone id, display name, alias, or `in`/`out`
-connection out of the current zone (`GameManager.resolve_location`); a zone
-that isn't directly adjacent is reached by walking the connection graph
-(`GameManager.zone_path`). It never refuses: anything that doesn't resolve
-to a zone becomes a free-text spot inside the zone the player is already in.
-A locked door (`DoorEntity`) along the walk stops the player at the door
-rather than refusing the move outright, unless the matching key is in
-inventory. A spot move is free; a zone change costs one tick regardless of
-how many hops it took. `NPC_MOVE` is unaffected by any of this -- it still
-resolves strictly and can fail. `SET_FLAG` sets the engine's ground
-truth for a world fact; `DISCOVER_FLAG` separately marks that the player has
-learned it, which is what makes it visible in the narrator's prompt (doc 11's
-knowledge firewall applied to world flags, not just relationship scores).
+`HPModifier`). In practice `game_over` is **not reachable in normal play**:
+`ATTACK` only ever damages the *target* NPC, never the player who issued it,
+and every item's `HPModifier` in `data/items.py` is positive (healing).
+Nothing in the shipped content lowers Orton's own HP. `_check_player_death`
+(`managers/simulation.py`) is real and still checked every turn, but it can
+currently only fire via a test-local item (see `tests/test_simulation.py`'s
+`LETHAL_ITEM`) or a hand-edited/malformed save. `MOVE_TO` resolves its
+destination against a zone id, display name, alias, or `in`/`out` connection
+out of the current zone (`GameManager.resolve_location`); a zone that isn't
+directly adjacent is reached by walking the connection graph
+(`GameManager.zone_path`). Generic room nouns ("kitchen", "bathroom",
+"office", "upstairs", ...) are deliberately *not* global aliases -- only
+names that unambiguously mean one particular zone are (see
+`data/locations.py`'s `aliases` lists); anything else, including a
+now-unaliased room word, becomes a free-text spot inside the zone the player
+is already in rather than teleporting him. `MOVE_TO` never refuses. A locked
+door (`DoorEntity`) along the walk stops the player at the door rather than
+refusing the move outright, unless the matching key is in inventory. A spot
+move is free; a zone change costs one tick regardless of how many hops it
+took. `NPC_MOVE` is unaffected by any of this and resolves strictly, via
+`GameManager.resolve_zone_exact` (id, display name, or an exact alias only --
+no connection directions, no whole-word fallback, so a phrase that would
+soft-land for `MOVE_TO` is simply unknown here): it can fail, and it fails
+in particular for `zone_home` unless Orton is already there himself (his
+apartment door is locked from the building side and nobody else has a key).
+Separately, any item that is the `key_id` of a `DoorEntity` anywhere in the
+world -- not just the apartment key, whichever it is -- can neither be
+`DROP`ped nor `UPDATE_INVENTORY ... ADD`ed back into existence: both are
+rejected, so Orton can't lock himself out of his own home by discarding or
+duplicating his key (the door rebuilds `LOCKED` on every load). `SET_FLAG`
+sets the engine's ground truth for a world fact; `DISCOVER_FLAG` separately
+marks that the player has learned it, which is what makes it visible in the
+narrator's prompt (doc 11's knowledge firewall applied to world flags, not
+just relationship scores).
 
 Relationships are directional and stored source -> target. Everything that reads
 them asks how the **NPC** regards the **player**, so that is the direction
