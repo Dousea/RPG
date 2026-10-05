@@ -6,6 +6,7 @@ index and persistence. Game rules live in `managers/` and `modules/`.
 """
 
 import json
+import logging
 
 from flask import Flask, Response, jsonify, render_template, request
 
@@ -13,6 +14,7 @@ import config
 from adapters.engine import GameEngine
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 
 # The engine is built on first use rather than at import time: constructing it
 # loads the save and can pull in the sentence-transformer model, which would
@@ -88,9 +90,13 @@ def import_save():
 
 
 if __name__ == "__main__":
-    print("Starting RPG server...")
+    logging.basicConfig(
+        level=logging.DEBUG if config.server.debug else logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    logger.info("Starting RPG server...")
     # Build the engine up front so a slow save load or model warm-up happens
     # before the first request rather than during it.
     get_engine()
-    print(f"Server ready at http://{config.server.host}:{config.server.port}")
+    logger.info(f"Server ready at http://{config.server.host}:{config.server.port}")
     app.run(debug=config.server.debug, host=config.server.host, port=config.server.port)

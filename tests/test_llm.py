@@ -28,8 +28,7 @@ class ParseActionResponseTests(unittest.TestCase):
         self.assertEqual(parse_action_response("actions:\nTAKE Crowbar"), ["TAKE Crowbar"])
 
     def test_missing_header_falls_back_to_every_line(self):
-        # A small local model asked for one section sometimes drops the
-        # header it used to need to disambiguate from STORY/EVENT.
+        # A small local model asked for one section sometimes drops the header.
         self.assertEqual(
             parse_action_response("MOVE_TO north\nTAKE Crowbar"), ["MOVE_TO north", "TAKE Crowbar"]
         )
@@ -109,7 +108,7 @@ class ParseNarratorResponseTests(unittest.TestCase):
         self.assertEqual(parsed["options"], [])
 
     def test_options_none_with_trailing_punctuation_yields_an_empty_list(self):
-        # FW8: the model sometimes punctuates "NONE" (a period, an
+        # The model sometimes punctuates "NONE" (a period, an
         # exclamation mark, a semicolon, a colon) -- strip it before the
         # comparison rather than treating it as a stray option.
         parsed = parse_narrator_response(

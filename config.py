@@ -4,10 +4,13 @@ Every value has a hardcoded fallback here, so a missing file or a missing key
 degrades to the old built-in defaults rather than crashing.
 """
 
+import logging
 import os
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yml")
 
@@ -71,7 +74,7 @@ def _load() -> dict[str, Any]:
         with open(CONFIG_PATH, encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
     except (OSError, yaml.YAMLError) as exc:
-        print(f"[Config] Could not read {CONFIG_PATH}: {exc}. Using defaults.")
+        logger.warning(f"Could not read {CONFIG_PATH}: {exc}. Using defaults.")
         data = {}
     return _merge(_DEFAULTS, data)
 

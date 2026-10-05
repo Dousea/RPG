@@ -4,9 +4,9 @@ Validates each action (via `managers/validator.py`) and decides what actually
 happens -- HP, inventory, position, the clock -- before any prose exists.
 Movement, inventory, and world-state actions are direct field mutations;
 combat and item use additionally build real events and run them through the
-event/effect/modifier pipeline in `managers/game.py` (already built,
-previously never invoked -- see `GameManager._broadcast_event`), so trait/perk
-reactions in `data/traits.py`/`data/perks.py` actually fire.
+event/effect/modifier pipeline in `managers/game.py` (see
+`GameManager._broadcast_event`), so trait/perk reactions in `data/traits.py`
+and `data/perks.py` fire.
 
 `resolve()` returns one outcome-fact string per action -- what the narrator
 prompt describes. The narrator is never the source of truth for anything in
@@ -79,8 +79,8 @@ UNARMED_WEAPON = MeleeWeaponItem(
 DAMAGE_JITTER = 0.10
 
 # Action types whose resolution costs the next tick of the coarse clock
-# (morning/afternoon/evening/night). Ordinary actions no longer depend on the
-# LLM remembering to emit TIME_ADVANCE -- the engine owns the clock outright.
+# (morning/afternoon/evening/night). Ordinary actions don't depend on the
+# LLM emitting TIME_ADVANCE -- the engine owns the clock outright.
 # A dedicated sub-tick clock is doc 08 territory and out of scope here.
 # MoveAction is not here: a zone change costs exactly one tick regardless of
 # how many hops the walk covered, and a spot/shuffle/stay move costs none at

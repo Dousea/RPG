@@ -15,16 +15,18 @@ re-derive the reason something was legal.
 from dataclasses import dataclass, field
 from typing import Any
 
+from data.items import find_item_by_name
 from managers.game import (
     BARE_DIRECTIONS,
     CONDITION_LADDERS,
     DIRECTION_SYNONYMS,
-    GameManager,
     MAX_PLACE_LENGTH,
     TIMES_OF_DAY,
+    GameManager,
     resolve_condition_value,
 )
 from modules.action import (
+    NARRATIVE_CONDITION_FIELDS,
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
@@ -32,7 +34,6 @@ from modules.action import (
     DiscoverFlagAction,
     DropAction,
     MoveAction,
-    NARRATIVE_CONDITION_FIELDS,
     NpcMoveAction,
     NpcStatusAction,
     RemoveGoalAction,
@@ -48,7 +49,6 @@ from modules.action import (
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ConsumableItem
-from data.items import find_item_by_name
 
 GOAL_HORIZONS = ("short_term", "long_term")
 
@@ -99,14 +99,11 @@ class ActionValidator:
         """Decide what a MOVE_TO *means*. This never rejects.
 
         A named zone is reachable from anywhere by walking the connection
-        graph (`GameManager.zone_path`) -- adjacency is no longer required,
-        the way main's original adjacency-only version required it. A locked
-        door along that walk still stops the player short of the target
-        zone, but the move still resolves to a place (the door), not a
-        refusal: this is the zones-era answer to main's reachability bug (a
-        global name match that let the player teleport past any lock) without
-        reintroducing it -- the walk is still gated hop by hop, it just
-        doesn't dead-end in "you can't do that."
+        graph (`GameManager.zone_path`); adjacency is not required. A locked
+        door along that walk stops the player short of the target zone, but
+        the move still resolves to a place (the door), not a refusal -- the
+        walk is gated hop by hop so a lock can't be skipped, yet it never
+        dead-ends in "you can't do that."
 
         Anything that isn't a recognized zone, connection, or bare direction
         becomes a free-text spot inside the zone the player is already in.
@@ -121,7 +118,7 @@ class ActionValidator:
 
         folded = raw.casefold()
 
-        # FW3 order: (1) a direction synonym that names a real connection of
+        # Order: (1) a direction synonym that names a real connection of
         # the current zone wins outright; (2) otherwise a bare direction with
         # no destination behind it is a shuffle, checked before the alias/
         # whole-word resolution below can accidentally claim it (e.g. a zone
@@ -166,19 +163,22 @@ class ActionValidator:
         hop_from = current
         for hop_id in path:
             door = self._door_blocking(hop_from, hop_id)
-            if door is not None and door.state == UnlockableEntityLockState.LOCKED:
-                if not self._has_key(door.key_id):
-                    hop_to = manager.world.locations[hop_id]
-                    return Accepted(
-                        action,
-                        {
-                            "kind": "blocked",
-                            "location": hop_from,
-                            "place": f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
-                            "target": target,
-                            "door": door,
-                        },
-                    )
+            if (
+                door is not None
+                and door.state == UnlockableEntityLockState.LOCKED
+                and not self._has_key(door.key_id)
+            ):
+                hop_to = manager.world.locations[hop_id]
+                return Accepted(
+                    action,
+                    {
+                        "kind": "blocked",
+                        "location": hop_from,
+                        "place": f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
+                        "target": target,
+                        "door": door,
+                    },
+                )
             hop_from = manager.world.locations[hop_id]
 
         return Accepted(action, {"kind": "zone", "location": target, "place": place})
@@ -216,10 +216,10 @@ class ActionValidator:
 
     def _is_door_key(self, item_id: str) -> bool:
         """Whether `item_id` is the `key_id` of any `DoorEntity` anywhere in
-        the world -- engine-owned, not hard-coded to `item_apartment_key`
-        (FW5). Dropping (or conjuring a duplicate of) his own key used to be
-        able to strand Orton outside his own apartment forever, since the
-        door rebuilds LOCKED on every load (see data/locations.py)."""
+        the world -- engine-owned, not hard-coded to `item_apartment_key`.
+        Dropping (or duplicating) the key could strand Orton outside his own
+        apartment, since the door rebuilds LOCKED on every load (see
+        data/locations.py)."""
         for location in self.manager.world.locations.values():
             for entity in location.entities:
                 if isinstance(entity, DoorEntity) and entity.key_id == item_id:
@@ -252,7 +252,7 @@ class ActionValidator:
         if action.operation not in ("REMOVE", "UPDATE_CONDITION", "UPDATE_QUANTITY"):
             return Rejected(action, f"Unknown inventory operation: '{action.operation}'.")
 
-        # RES3: REMOVE and UPDATE_QUANTITY are the other two ways an item can
+        # REMOVE and UPDATE_QUANTITY are the other two ways an item can
         # leave (or multiply in) the inventory besides DROP/ADD -- REMOVE
         # deletes the entity outright (simulation.py), and UPDATE_QUANTITY 0
         # deletes it the same way while UPDATE_QUANTITY >1 duplicates it. A
@@ -370,7 +370,7 @@ class ActionValidator:
         npc = manager.resolve_npc(action.npc_name)
         if npc is None:
             return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        # FW4: strict resolution only -- no connection directions, no
+        # Strict resolution only -- no connection directions, no
         # whole-word fallback. NPCs have no free-text spot for a vague phrase
         # to soft-land in, unlike the player's MOVE_TO.
         location = manager.resolve_zone_exact(action.destination)

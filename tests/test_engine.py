@@ -132,8 +132,7 @@ class TurnTests(EngineTestCase):
         self.assertNotIn("Emma", after["npcs_present"])  # on the street
 
     def test_failed_actions_do_not_abort_the_turn(self):
-        # MOVE_TO Atlantis is no longer a failure (MOVE_TO never fails, Task
-        # 2) -- TAKE Medkit is still a real refusal, and stands in for it here.
+        # MOVE_TO never fails, so TAKE Medkit stands in as the real refusal.
         self.llm.actions = "ACTIONS:\nTAKE Medkit\nADD_GOAL short_term Survive"
         self.llm.story = "STORY:\nYou try.\n\nEVENT:\nOrton tried"
         result = self.engine.play("go somewhere")
@@ -327,7 +326,7 @@ class SaveLoadTests(EngineTestCase):
 
 
 class DeathPersistenceTests(EngineTestCase):
-    """Task 4 added game_over/death_cause but left persisting them to us."""
+    """game_over/death_cause survive a save and reload through the engine."""
 
     def test_death_survives_a_reload_through_the_engine(self):
         self.engine.manager.player.inventory.append(ItemEntity(item=LETHAL_ITEM))

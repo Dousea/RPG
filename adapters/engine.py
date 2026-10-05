@@ -6,6 +6,7 @@ does the narrator describe what already happened. See
 docs/01-engine-authority.md.
 """
 
+import logging
 import threading
 from typing import Any
 
@@ -15,6 +16,8 @@ from managers.game import GameManager
 from managers.simulation import SimulationCore
 from modules.action import parse_action_plan
 from modules.quest import QuestStatus
+
+logger = logging.getLogger(__name__)
 
 
 class GameEngine:
@@ -57,7 +60,7 @@ class GameEngine:
                 for i in indices
                 if i < len(manager.memory.full_event_log)
             ]
-            print(f"[Engine] Recalled {len(deep_memories)} deep memories.")
+            logger.debug(f"Recalled {len(deep_memories)} deep memories.")
 
             # 2. Ask the parser what Orton is trying to do. No prose exists yet.
             parser_prompt = manager.build_parser_prompt(player_input)
@@ -74,7 +77,7 @@ class GameEngine:
             # writes a single word about it.
             outcome_facts = SimulationCore(manager).resolve(actions)
             for failure in parse_failures:
-                print(f"[Engine] Unparseable action '{failure.raw}': {failure.reason}")
+                logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
                 outcome_facts.append(f"Refused: '{failure.raw}' -- {failure.reason}")
 
             # 4. Ask the narrator to describe what already happened.
@@ -120,10 +123,10 @@ class GameEngine:
             summary = llm.query_summary("\n".join(pending))
         except llm.LLMError as exc:
             # Not fatal: the turn stands, we just try again next turn.
-            print(f"[Engine] Summarization skipped: {exc}")
+            logger.warning(f"Summarization skipped: {exc}")
             return
         self.manager.memory.summaries.append(summary)
-        print(f"[Engine] Added summary #{len(self.manager.memory.summaries)}.")
+        logger.info(f"Added summary #{len(self.manager.memory.summaries)}.")
 
     # === Lifecycle ===
 

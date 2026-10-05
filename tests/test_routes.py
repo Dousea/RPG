@@ -83,7 +83,7 @@ class StateTests(RouteTestCase):
         self.assertEqual(payload["story_text"], "")
 
     def test_inventory_is_a_list(self):
-        # The frontend iterates this; it used to be handed a string.
+        # The frontend iterates this.
         payload = self.client.get("/state").get_json()
         self.assertIsInstance(payload["inventory"], list)
 

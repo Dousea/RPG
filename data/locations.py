@@ -30,10 +30,10 @@ from modules.location import Location
 # this build no longer has.
 STARTING_ZONE_ID = "zone_home"
 
-# RES2: nouns that mean the *whole zone* when they follow an exit verb
+# Nouns that mean the *whole zone* when they follow an exit verb
 # ("leave the apartment", "outside the building") -- kept separate from
 # `aliases` because the bare words here (apartment, building, street,
-# neighborhood, ...) were deliberately removed as *global* aliases (FW1),
+# neighborhood, ...) are deliberately not *global* aliases,
 # where they would have matched anywhere in the map. "leave the apartment"
 # still has to mean walk out of home no matter where Orton says it from being
 # home, so `resolve_location`'s exit-phrase check keys off this table and the
@@ -58,7 +58,7 @@ def build_starting_locations() -> dict[str, Location]:
                 "bedroom, a window over the street, and a door with a deadbolt."
             ),
             connections={"out": "zone_building"},
-            # FW1: generic room nouns (bedroom, kitchen, bathroom, ...) and
+            # Generic room nouns (bedroom, kitchen, bathroom, ...) and
             # direction words (inside, back inside) are not global aliases --
             # a story that mentions "the kitchen" almost never means Orton's
             # kitchen specifically, and a global alias here would silently
@@ -86,9 +86,9 @@ def build_starting_locations() -> dict[str, Location]:
                 "the laundry room in the basement, and your neighbours' doors."
             ),
             connections={"in": "zone_home", "out": "zone_street"},
-            # FW1: upstairs/downstairs/office/entrance are generic enough to
-            # mean anywhere, so they are no longer global aliases -- they
-            # become a spot in the current zone instead. "storage room" stays
+            # upstairs/downstairs/office/entrance are generic enough to
+            # mean anywhere, so they are not global aliases -- they become a
+            # spot in the current zone instead. "storage room" stays
             # because v2 saves could have a player standing there
             # (`adapters/persistence._V2_ROOM_PLACES`).
             aliases=[
@@ -118,7 +118,7 @@ def build_starting_locations() -> dict[str, Location]:
                 "corner, the alley behind the building, a bus stop."
             ),
             connections={"in": "zone_building", "out": "zone_neighborhood"},
-            # FW1: "outside" removed as a global alias -- it collided with
+            # "outside" is not a global alias -- it collides with
             # zone_building's own "outside the building" and is handled as a
             # direction synonym (`DIRECTION_SYNONYMS`) instead.
             aliases=[
@@ -144,7 +144,7 @@ def build_starting_locations() -> dict[str, Location]:
                 "a walk-in clinic, the subway entrance, the park."
             ),
             connections={"in": "zone_street"},
-            # FW1: bare "store" removed -- too generic (any shop). "grocery
+            # Bare "store" is not an alias -- too generic (any shop). "grocery
             # store" and "corner store" (zone_street) stay, being specific.
             aliases=[
                 "neighborhood",

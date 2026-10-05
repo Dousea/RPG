@@ -14,9 +14,8 @@ from modules.action import AnyAction
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     """Validate and resolve actions directly, bypassing the LLM turn loop.
 
-    `GameManager.apply_action`/`_ACTION_HANDLERS` no longer exist -- the
-    Action Validator and Simulation Core (managers/validator.py,
-    managers/simulation.py) are the only path to mutating state now. Tests
+    The Action Validator and Simulation Core (managers/validator.py,
+    managers/simulation.py) are the only path to mutating state. Tests
     that need to set up state (rather than test the pipeline itself) go
     through this helper instead of poking fields directly, so fixtures stay
     honest about what the engine actually allows. Actions are resolved one at
@@ -25,7 +24,7 @@ def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     take) within the same call.
     """
     facts = SimulationCore(gm).resolve(list(actions))
-    for action, fact in zip(actions, facts):
+    for action, fact in zip(actions, facts, strict=False):
         assert not fact.startswith("Refused:"), f"setup action {action!r} failed: {fact}"
     return facts
 

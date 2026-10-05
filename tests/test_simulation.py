@@ -60,8 +60,7 @@ class LiveWorldLockedDoorTests(unittest.TestCase):
         self.assertEqual(gm.player.current_location_id, "zone_home")
 
     def test_the_apartment_is_locked_without_the_key(self):
-        # Rewritten: MOVE_TO never fails (Task 2) -- a locked door soft-lands
-        # the player at it instead of refusing the move.
+        # MOVE_TO never fails -- a locked door soft-lands the player at it.
         gm = GameManager()
         _resolve(gm, MoveAction(destination="out"))
         gm.player.inventory.clear()  # drop the apartment key
@@ -93,10 +92,9 @@ class MovementResolutionTests(unittest.TestCase):
         self.assertEqual(gm.narrative.time_of_day, "afternoon")
 
     def test_move_to_unknown_becomes_a_spot_in_the_current_zone(self):
-        # Replaces test_rejected_move_does_not_mutate_state_or_advance_time:
-        # rejecting an unmatched name is what let the story and the state
-        # diverge (MOVE_TO never fails, Task 2). Location and clock are
-        # unchanged, but the fact is not a refusal.
+        # Rejecting an unmatched name would let the story and the state
+        # diverge (MOVE_TO never fails). Location and clock are unchanged,
+        # but the fact is not a refusal.
         gm = GameManager()
         facts = _resolve(gm, MoveAction(destination="Atlantis"))
         self.assertEqual(gm.player.current_location_id, "zone_home")
@@ -243,8 +241,8 @@ class FinalFixWaveMoveRoutingTests(unittest.TestCase):
 
 
 class ResidualFixExitPhraseTests(unittest.TestCase):
-    """RES2: the exit rule fires only when the phrase's object names the
-    zone itself, never a landmark inside it (residual-fix.md)."""
+    """The exit rule fires only when the phrase's object names the zone
+    itself, never a landmark inside it."""
 
     def test_outside_the_bodega_stays_on_the_street_as_a_spot(self):
         # bodega is a zone_street landmark, not the zone -- must not exit
@@ -320,7 +318,7 @@ class ItemResolutionTests(unittest.TestCase):
         self.assertIn("hunger 70, thirst 45", facts[0])
 
     def test_removing_or_reconjuring_the_apartment_key_is_refused(self):
-        # RES3: REMOVE, UPDATE_QUANTITY 0 and UPDATE_QUANTITY 2 on a door key
+        # REMOVE, UPDATE_QUANTITY 0 and UPDATE_QUANTITY 2 on a door key
         # must all be refused before SimulationCore ever mutates state --
         # the key count must stay exactly 1 throughout.
         gm = GameManager()  # starts holding item_apartment_key
@@ -371,10 +369,8 @@ class CombatResolutionTests(unittest.TestCase):
         self.assertEqual(before - emma.hit_points, ITEMS["item_crowbar"].damage)
 
     def test_small_frame_takes_more_damage_than_an_unmodified_defender(self):
-        # This is the regression test for the _event_matches_effect_handler
-        # fix: TraitID_SmallFrame's WeaponDamageTakenEffect (+10% damage
-        # taken) has never once fired before this stage, because the old
-        # string-prefix matcher could never match any event to any handler.
+        # TraitID_SmallFrame's WeaponDamageTakenEffect (+10% damage taken)
+        # must reach its handler through _event_matches_effect_handler.
         # The pistol's damage (10) is used rather than the crowbar's (5) so
         # the 10% bump survives int() truncation in the assertion below.
         gm = GameManager()
@@ -453,7 +449,7 @@ class WorldStateResolutionTests(unittest.TestCase):
         # MOVE_TO soft-lands an unknown name into the player's free-text
         # spot, but NPCs have no such field -- if resolution were relaxed for
         # them too, an invented zone would scatter them somewhere
-        # unreachable. This is the regression test from the zones patch.
+        # unreachable.
         gm = GameManager()
         before = gm.resolve_npc("Emma").current_location_id
         facts = _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Atlantis"))
@@ -461,7 +457,7 @@ class WorldStateResolutionTests(unittest.TestCase):
         self.assertEqual(gm.resolve_npc("Emma").current_location_id, before)
 
     def test_npc_move_rejects_her_apartment_as_an_unknown_location(self):
-        # FW4: NPC_MOVE resolves strictly via resolve_zone_exact -- no
+        # NPC_MOVE resolves strictly via resolve_zone_exact -- no
         # whole-word fallback -- so a phrase that only MOVE_TO could ever
         # soft-land is simply unknown here.
         gm = GameManager()
@@ -469,14 +465,14 @@ class WorldStateResolutionTests(unittest.TestCase):
         self.assertTrue(facts[0].startswith("Refused:"))
 
     def test_npc_move_rejects_a_bare_out_direction(self):
-        # FW4: resolve_zone_exact does no connection directions either --
+        # resolve_zone_exact does no connection directions either --
         # NPC_MOVE is strict, not the player's forgiving MOVE_TO.
         gm = GameManager()
         facts = _resolve(gm, NpcMoveAction(npc_name="Jen", destination="out"))
         self.assertTrue(facts[0].startswith("Refused:"))
 
     def test_npc_move_into_home_is_refused_while_player_is_elsewhere(self):
-        # FW4: Orton's apartment is locked; nobody gets in unless he's there
+        # Orton's apartment is locked; nobody gets in unless he's there
         # to let them in.
         gm = GameManager()
         gm.player.current_location_id = "zone_building"

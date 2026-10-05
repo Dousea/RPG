@@ -1,22 +1,20 @@
 """GameManager: starting state, prompt assembly, memory tiers.
 
-Action-verb behavior (what's legal, what it does) now lives in
-tests/test_validator.py and tests/test_simulation.py -- there is no
-`apply_action`/`_ACTION_HANDLERS` on GameManager anymore; the Action
-Validator and Simulation Core are the only path to mutating state.
+Action-verb behavior (what's legal, what it does) lives in
+tests/test_validator.py and tests/test_simulation.py.
 """
 
 import unittest
 
 from managers.game import (
     CONDITION_LADDERS,
-    GameManager,
     MAX_RECENT_EVENTS,
     SUMMARY_THRESHOLD,
+    GameManager,
 )
 from modules.action import (
-    MoveAction,
     NARRATIVE_CONDITION_FIELDS,
+    MoveAction,
     NpcStatusAction,
     TakeAction,
     UpdateRelationshipAction,
@@ -62,7 +60,7 @@ class StartingStateTests(unittest.TestCase):
         self.assertIsNone(self.gm.resolve_location("Atlantis"))
 
     def test_resolve_zone_exact_matches_id_name_and_alias_only(self):
-        # FW4: no connection directions, no whole-word fallback -- strictly
+        # No connection directions, no whole-word fallback -- strictly
         # id/name/alias, exact and casefolded.
         self.assertEqual(self.gm.resolve_zone_exact("Lobby").id, "zone_building")
         self.assertEqual(self.gm.resolve_zone_exact("zone_street").id, "zone_street")
@@ -72,18 +70,15 @@ class StartingStateTests(unittest.TestCase):
         self.assertIsNone(self.gm.resolve_zone_exact("the street outside my apartment"))
 
     def test_outside_follows_the_exit_first(self):
-        # FW1: "outside" is no longer a zone_street alias at all (too
-        # generic); DIRECTION_SYNONYMS resolves it to the zone's "out"
-        # connection regardless.
+        # "outside" is not a zone_street alias (too generic); DIRECTION_SYNONYMS
+        # resolves it to the zone's "out" connection regardless.
         self.gm.player.current_location_id = "zone_street"
         self.assertEqual(self.gm.resolve_location("inside").id, "zone_building")
 
     def test_fallback_resolver_matches_contiguously_not_by_first_word(self):
-        # RES1: the old fallback scored a candidate by the position of its
-        # *first word* anywhere in the phrase, so "the street" and "the
-        # building" -- both starting with "the" -- tied for position 0 no
-        # matter where their real words actually sat. The candidate must now
-        # match as a contiguous, in-order run of words.
+        # A candidate must match as a contiguous, in-order run of words; "the
+        # street" and "the building" must not tie just because both start
+        # with "the".
         self.gm.player.current_location_id = "zone_home"
         self.assertEqual(
             self.gm.resolve_location("the street outside the building").id,
@@ -110,12 +105,9 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(self.gm.resolve_location("the lobby downstairs").id, "zone_building")
 
     def test_exit_phrase_fires_only_on_the_zone_itself(self):
-        # RES2: the exit rule used to fire whenever the *matched* zone was
-        # the current one, so "outside the bodega" while already on the
-        # street (bodega is a zone_street landmark, not the zone) wrongly
-        # walked Orton into the neighborhood, and "outside Emma's apartment"
-        # while in the building wrongly walked him onto the street. It must
-        # now fire only when the phrase names the zone itself
+        # "outside the bodega" on the street (a landmark, not the zone) and
+        # "outside Emma's apartment" in the building must not exit the zone.
+        # The exit rule fires only when the phrase names the zone itself
         # (ZONE_EXIT_NOUNS), keyed off the current zone.
         self.gm.player.current_location_id = "zone_street"
         self.assertEqual(self.gm.resolve_location("outside the bodega").id, "zone_street")
@@ -124,8 +116,8 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(self.gm.resolve_location("outside Emma's apartment").id, "zone_building")
         self.assertEqual(self.gm.resolve_location("leave the elevator").id, "zone_building")
 
-        # R4 must stay green: "outside the building"/"out of the building"
-        # from zone_building still reach zone_street.
+        # "outside the building"/"out of the building" from zone_building
+        # still reach zone_street.
         self.assertEqual(self.gm.resolve_location("outside the building").id, "zone_street")
         self.assertEqual(self.gm.resolve_location("out of the building").id, "zone_street")
 
@@ -133,7 +125,7 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(self.gm.resolve_location("leave the apartment").id, "zone_building")
         self.assertEqual(self.gm.resolve_location("exit my flat").id, "zone_building")
 
-        # Doesn't start with an exit word -- this is the RES1 path, not RES2.
+        # Doesn't start with an exit word -- this is the contiguous-match path, not the exit rule.
         self.assertEqual(
             self.gm.resolve_location("the street outside my apartment").id,
             "zone_street",
@@ -188,8 +180,8 @@ class StartingStateTests(unittest.TestCase):
         self.assertIn("trust: unformed", self.gm.build_narrator_prompt("look"))
 
     def test_two_games_do_not_share_mutable_state(self):
-        # Locations and NPCs used to be module-level singletons, so a dropped
-        # item or an NPC's status leaked into the next game after a reset.
+        # Locations and NPCs are per-game, so a dropped item or an NPC's status
+        # must not leak into the next game.
         first = GameManager()
         resolve_actions(
             first,

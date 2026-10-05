@@ -1,9 +1,12 @@
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 from modules.character.faction import CharacterFaction
 from modules.character.state import CharacterDisposition, CharacterTrust
 from modules.modifier import AffinityModifier, ReputationModifier
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,7 +42,7 @@ class RelationshipManager:
         source_trust = self.trusts.setdefault(source_id, {})
         new_trust = max(-100, min(source_trust.get(target_id, 0) + amount, 100))
         source_trust[target_id] = new_trust
-        print(f"[Relationship] Trust of '{source_id}' towards '{target_id}' is now {new_trust}.")
+        logger.debug(f"Trust of '{source_id}' towards '{target_id}' is now {new_trust}.")
         return new_trust
 
     def get_affinity(self, source_id: str, target_id: str) -> int:
@@ -76,8 +79,8 @@ class RelationshipManager:
         clamped_affinity = max(min_affinity, min(new_affinity, max_affinity))
 
         source_opinions[mod.target_id] = clamped_affinity
-        print(
-            f"[Relationship] Affinity of '{mod.source_id}' towards '{mod.target_id}' is now {clamped_affinity}."
+        logger.debug(
+            f"Affinity of '{mod.source_id}' towards '{mod.target_id}' is now {clamped_affinity}."
         )
 
     def apply_reputation_modifier(self, mod: ReputationModifier):
@@ -96,8 +99,8 @@ class RelationshipManager:
         clamped_reputation = max(min_reputation, min(new_reputation, max_reputation))
 
         source_faction_opinions[mod.target_faction] = clamped_reputation
-        print(
-            f"[Relationship] Reputation of Faction '{mod.source_faction}' towards '{mod.target_faction}' is now {clamped_reputation}."
+        logger.debug(
+            f"Reputation of Faction '{mod.source_faction}' towards '{mod.target_faction}' is now {clamped_reputation}."
         )
 
     def get_disposition_from_affinity(self, affinity: int) -> CharacterDisposition:

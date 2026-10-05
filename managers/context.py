@@ -42,9 +42,9 @@ class ContextBuilder:
 
         The parser can only aim MOVE_TO at a zone it has been told exists --
         this is that roster. It lives on the parser prompt (not the
-        narrator's) because the parser is what emits MOVE_TO. FW6: aliases
-        are listed too, since naming a landmark (not just the zone's own
-        name) is how the model actually reaches a zone in practice.
+        narrator's) because the parser is what emits MOVE_TO. Aliases are
+        listed too, since naming a landmark (not just the zone's own name)
+        is how the model actually reaches a zone in practice.
         """
         lines = []
         for location in self.manager.world.locations.values():

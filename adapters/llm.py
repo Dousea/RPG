@@ -8,10 +8,14 @@ already-decided outcome facts into STORY/EVENT prose. Per docs/01-engine-authori
 the LLM interprets intent and writes prose; it never decides state.
 """
 
+import logging
+
 import requests
 
 import config
 from data.quests import NPC_STATUSES, STORY_FLAGS
+
+logger = logging.getLogger(__name__)
 
 LM_STUDIO_URL = config.llm.base_url
 
@@ -187,18 +191,14 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
 def query_parser(prompt_text: str) -> str:
     """Ask the intent parser what actions player input implies. Raises LLMError on failure."""
     raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature=config.llm.parser_temperature)
-    print("--- Parser Raw Response ---")
-    print(raw)
-    print("---------------------------")
+    logger.debug("Parser raw response:\n%s", raw)
     return raw
 
 
 def query_narrator(prompt_text: str) -> str:
     """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure."""
     raw = _chat(NARRATOR_SYSTEM_PROMPT, prompt_text, temperature=config.llm.narrator_temperature)
-    print("--- Narrator Raw Response ---")
-    print(raw)
-    print("-----------------------------")
+    logger.debug("Narrator raw response:\n%s", raw)
     return raw
 
 
@@ -257,7 +257,7 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
 
     story = "\n".join(sections["story"]).strip()
     event = "\n".join(sections["event"]).strip()
-    # FW8: the model sometimes punctuates "NONE" (a period, an exclamation
+    # The model sometimes punctuates "NONE" (a period, an exclamation
     # mark, a semicolon, a colon) -- strip that before comparing, or it reads
     # as a stray one-item options list instead of "no options".
     options = [

@@ -77,14 +77,14 @@ class ZoneContextTests(unittest.TestCase):
             self.assertIn(zone, prompt)
 
     def test_parser_prompt_zone_count_is_derived_not_hard_coded(self):
-        # FW6: the roster's zone count comes from the world, not a literal
+        # The roster's zone count comes from the world, not a literal
         # "four" that would silently go stale if a zone were added or
         # removed.
         prompt = self.builder.build_parser_prompt("look")
         self.assertIn(f"{len(self.gm.world.locations)} zones", prompt)
 
     def test_parser_prompt_lists_at_least_one_alias_per_zone(self):
-        # FW6: naming a listed landmark, not just the zone's own name, moves
+        # Naming a listed landmark, not just the zone's own name, moves
         # Orton there -- the roster must actually show that.
         prompt = self.builder.build_parser_prompt("look")
         for location in self.gm.world.locations.values():

@@ -5,11 +5,15 @@ module must stay cheap so that `flask --app app` and the test suite do not pay
 for a model load they may never need.
 """
 
+import logging
+
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 import config
+
+logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL_NAME = config.memory.embedding_model_name
 EMBEDDING_DIMENSION = config.memory.embedding_dimension
@@ -29,7 +33,7 @@ class SemanticMemory:
     @property
     def model(self) -> SentenceTransformer:
         if self._model is None:
-            print(f"[Memory] Loading sentence transformer '{EMBEDDING_MODEL_NAME}'...")
+            logger.info(f"Loading sentence transformer '{EMBEDDING_MODEL_NAME}'...")
             self._model = SentenceTransformer(EMBEDDING_MODEL_NAME)
         return self._model
 
@@ -48,7 +52,7 @@ class SemanticMemory:
         index = faiss.IndexFlatIP(EMBEDDING_DIMENSION)
         index.add(embeddings)
         self._index = index
-        print(f"[Memory] Indexed {len(events)} events.")
+        logger.info(f"Indexed {len(events)} events.")
 
     def search(self, query_text: str, k: int = DEFAULT_RECALL) -> list[int]:
         """Return indices into the event log of the k most similar past events."""

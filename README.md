@@ -222,7 +222,7 @@ inside the project directory.
 ```bash
 mise trust
 mise install
-mise run install    # uv pip install -r requirements.txt
+mise run install    # uv pip install -r requirements.txt -r requirements-dev.txt
 mise run dev        # python app.py
 ```
 
@@ -279,8 +279,21 @@ mise run test
 Without mise, run `python -m unittest discover -s tests -t . -b` from the
 activated venv.
 
-`-b` buffers stdout so the engine's per-turn logging only appears for failing
-tests. The suite is offline and takes a few seconds: the LLM and the embedding
+Code checks, configured in `pyproject.toml`:
+
+```bash
+mise run fmt        # ruff format + autofix
+mise run lint       # ruff, format check, import-linter layer contracts
+mise run typecheck  # basedpyright; errors already in .basedpyright/baseline.json are tolerated
+mise run check      # lint + typecheck + test
+```
+
+`import-linter` enforces the [layering](#architecture): `modules/` and `data/`
+import nothing from the layers above them, and no game-logic package imports
+Flask, requests, FAISS or YAML. Project conventions for the code (randomness,
+time, constants, logging) are in [AGENTS.md](AGENTS.md).
+
+`-b` buffers output so the engine's log lines only appear for failing tests. The suite is offline and takes a few seconds: the LLM and the embedding
 model are stubbed, and every test that persists writes to a temp directory
 rather than your real save.
 

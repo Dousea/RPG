@@ -1,10 +1,7 @@
 """Starting NPC roster.
 
-Ported from the legacy `gamedata/npcs.json`. The legacy free-text locations
-("Apartment Hallway", "Ground Floor Lobby", "Coffee Shop") have no equivalent in
-`data/locations.py`, so each NPC is placed in the zone that covers it: the
-hallway and lobby both fall under `zone_building`, and the coffee shop falls
-under `zone_neighborhood`.
+Each NPC is placed in the zone that covers their spot: the hallway and lobby
+both fall under `zone_building`, and the coffee shop under `zone_neighborhood`.
 """
 
 from modules.character.faction import CharacterFaction

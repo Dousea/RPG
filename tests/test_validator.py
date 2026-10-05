@@ -32,20 +32,16 @@ class MovementValidationTests(unittest.TestCase):
         self.assertIsInstance(result, Accepted)
 
     def test_non_adjacent_zone_is_reached_by_walking(self):
-        # Renamed and rewritten from test_non_adjacent_real_location_is_rejected:
-        # zones replace adjacency gating (Task 2) -- The Street is reachable
-        # from zone_home by walking the connection graph through the building,
-        # not directly adjacent, and the validator now says so instead of
-        # rejecting it.
+        # The Street is reachable from zone_home by walking the connection
+        # graph through the building, though not directly adjacent.
         result = self.validator.validate(MoveAction(destination="The Street"))
         self.assertIsInstance(result, Accepted)
         self.assertEqual(result.resolved["kind"], "zone")
         self.assertEqual(result.resolved["location"].id, "zone_street")
 
     def test_nonexistent_location_becomes_a_spot(self):
-        # Renamed and rewritten from test_nonexistent_location_is_rejected:
-        # MOVE_TO never fails (Task 2) -- an unmatched name soft-lands as a
-        # free-text spot in the current zone instead of being rejected.
+        # MOVE_TO never fails -- an unmatched name soft-lands as a free-text
+        # spot in the current zone.
         result = self.validator.validate(MoveAction(destination="Atlantis"))
         self.assertIsInstance(result, Accepted)
         self.assertEqual(result.resolved["kind"], "spot")
@@ -54,8 +50,7 @@ class MovementValidationTests(unittest.TestCase):
         self.assertEqual(self.gm.player.current_location_id, "zone_home")
 
     def test_locked_door_blocks_movement_without_the_key(self):
-        # Rewritten: a locked door now soft-lands ("blocked") instead of
-        # rejecting the move outright (Task 2).
+        # A locked door soft-lands ("blocked") rather than rejecting the move.
         # A generic locked door, distinct from the real apartment_door in
         # data/locations.py (whose key the default player already carries).
         door = DoorEntity(leads_to="zone_building")
@@ -69,8 +64,7 @@ class MovementValidationTests(unittest.TestCase):
         self.assertEqual(result.resolved["location"].id, "zone_home")
 
     def test_locked_door_opens_with_the_key_in_inventory(self):
-        # Rewritten: Accepted now carries kind="zone" rather than just being
-        # Accepted (Task 2 adds `resolved["kind"]` to every move outcome).
+        # Accepted carries kind="zone".
         from data.items import ITEMS
         from modules.entity.item import ItemEntity
 
@@ -85,7 +79,7 @@ class MovementValidationTests(unittest.TestCase):
         self.assertEqual(result.resolved["kind"], "zone")
 
     def test_bare_direction_wins_over_a_colliding_alias(self):
-        # FW3: BARE_DIRECTIONS is checked before resolve_location's whole-word
+        # BARE_DIRECTIONS is checked before resolve_location's whole-word
         # fallback, so a bare direction word is always a shuffle even if some
         # zone's alias list happens to contain it too (content bug, but the
         # validator must not let it silently turn a shuffle into a teleport).
@@ -153,11 +147,10 @@ class ItemValidationTests(unittest.TestCase):
 
 
 class DoorKeyValidationTests(unittest.TestCase):
-    """FW5: door keys are engine-owned. A "door key" is any item id that is
-    the `key_id` of a DoorEntity anywhere in the world -- not hard-coded to
-    item_apartment_key. Dropping or conjuring one used to be able to strand
-    Orton outside his own apartment forever, since the door rebuilds LOCKED
-    on every load."""
+    """Door keys are engine-owned. A "door key" is any item id that is the
+    `key_id` of a DoorEntity anywhere in the world -- not hard-coded to
+    item_apartment_key. Dropping or conjuring one could strand Orton outside
+    his own apartment, since the door rebuilds LOCKED on every load."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -213,7 +206,7 @@ class DoorKeyValidationTests(unittest.TestCase):
         self.assertIsInstance(add_result, Accepted)
 
     def test_removing_the_apartment_key_is_rejected(self):
-        # RES3: REMOVE deletes the entity outright (simulation.py), same as
+        # REMOVE deletes the entity outright (simulation.py), same as
         # DROP -- must be protected the same way.
         from modules.action import UpdateInventoryAction
 
@@ -225,7 +218,7 @@ class DoorKeyValidationTests(unittest.TestCase):
         self.assertEqual([e.item.name for e in self.gm.player.inventory], ["Apartment Key"])
 
     def test_quantity_zero_on_the_apartment_key_is_rejected(self):
-        # RES3: UPDATE_QUANTITY 0 deletes the entity just like REMOVE.
+        # UPDATE_QUANTITY 0 deletes the entity just like REMOVE.
         from modules.action import UpdateInventoryAction
 
         result = self.validator.validate(
@@ -236,7 +229,7 @@ class DoorKeyValidationTests(unittest.TestCase):
         self.assertEqual([e.item.name for e in self.gm.player.inventory], ["Apartment Key"])
 
     def test_quantity_two_on_the_apartment_key_is_rejected(self):
-        # RES3: UPDATE_QUANTITY 2 duplicates the key.
+        # UPDATE_QUANTITY 2 duplicates the key.
         from modules.action import UpdateInventoryAction
 
         result = self.validator.validate(

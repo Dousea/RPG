@@ -9,10 +9,26 @@ python.uv_venv_auto = true
 _.python.venv = { path = ".venv", create = true }
 
 [tasks.install]
-run = "uv pip install -r requirements.txt"
+run = "uv pip install -r requirements.txt -r requirements-dev.txt"
 
 [tasks.dev]
 run = "python app.py"
 
 [tasks.test]
 run = "python -m unittest discover -s tests -t . -b"
+
+[tasks.fmt]
+description = "Format and auto-fix lint"
+run = ["ruff format .", "ruff check --fix ."]
+
+[tasks.lint]
+description = "Lint, format check, and layer contracts"
+run = ["ruff check .", "ruff format --check .", "lint-imports"]
+
+[tasks.typecheck]
+description = "Type check (only errors beyond .basedpyright/baseline.json fail)"
+run = "basedpyright"
+
+[tasks.check]
+description = "Everything CI would run"
+depends = ["lint", "typecheck", "test"]

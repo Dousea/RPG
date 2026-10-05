@@ -12,6 +12,7 @@ started, rather than being loaded half-understood.
 
 import copy
 import json
+import logging
 import os
 from typing import Any
 
@@ -44,6 +45,8 @@ from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 3
 
@@ -122,7 +125,7 @@ def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
 def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
     item = ITEMS.get(data.get("item_id", ""))
     if item is None:
-        print(f"[Persistence] Dropping unknown item id '{data.get('item_id')}'.")
+        logger.warning(f"Dropping unknown item id '{data.get('item_id')}'.")
         return None
     entity = ItemEntity(item=item)
     # __post_init__ sets full health; restore the saved condition over it.
@@ -259,7 +262,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
     for location_id, items in world_data.get("ground_items", {}).items():
         location = locations.get(location_id)
         if location is None:
-            print(f"[Persistence] Dropping items for unknown location '{location_id}'.")
+            logger.warning(f"Dropping items for unknown location '{location_id}'.")
             continue
         for item_data in items:
             entity = _item_entity_from_dict(item_data)
@@ -410,7 +413,7 @@ def _quests_from_dict(
 def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> PlayerEntity:
     location_id = data.get("current_location_id", STARTING_ZONE_ID)
     if location_id not in locations:
-        print(f"[Persistence] Unknown player location '{location_id}'; using {STARTING_ZONE_ID}.")
+        logger.warning(f"Unknown player location '{location_id}'; using {STARTING_ZONE_ID}.")
         location_id = STARTING_ZONE_ID
 
     attributes = {}
@@ -418,7 +421,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         try:
             attributes[PlayerAttribute(name)] = int(value)
         except ValueError:
-            print(f"[Persistence] Dropping unknown attribute '{name}'.")
+            logger.warning(f"Dropping unknown attribute '{name}'.")
 
     equipment: dict[Any, ItemEntity | None] = {
         **{slot: None for slot in CharacterHoldableSlot},
@@ -428,7 +431,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
     for slot_name, item_data in data.get("equipment", {}).items():
         slot = _slot_from_value(slot_name)
         if slot is None:
-            print(f"[Persistence] Dropping unknown equipment slot '{slot_name}'.")
+            logger.warning(f"Dropping unknown equipment slot '{slot_name}'.")
             continue
         equipment[slot] = _item_entity_from_dict(item_data) if item_data else None
 
@@ -437,7 +440,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         try:
             conditions.append(CharacterCondition(name))
         except ValueError:
-            print(f"[Persistence] Dropping unknown condition '{name}'.")
+            logger.warning(f"Dropping unknown condition '{name}'.")
 
     player = PlayerEntity(
         name=data.get("name", "Orton"),
@@ -478,7 +481,7 @@ def _npcs_from_dict(entries: list[dict[str, Any]]) -> dict[str, NpcEntity]:
             try:
                 conditions.append(CharacterCondition(name))
             except ValueError:
-                print(f"[Persistence] Dropping unknown NPC condition '{name}'.")
+                logger.warning(f"Dropping unknown NPC condition '{name}'.")
 
         try:
             faction = CharacterFaction(entry.get("faction", "neutral"))
@@ -550,7 +553,7 @@ _V2_ROOM_PLACES = {
     "location_id_storage": "the storage room",
 }
 
-# The quest roster changed between v2 and v3; this one no longer exists.
+# A v2 quest that v3's roster does not include.
 _V2_RETIRED_QUEST_ID = "quest_storage_room"
 
 # The only location ids that survive from_dict's location lookup after
@@ -559,7 +562,7 @@ _V2_RETIRED_QUEST_ID = "quest_storage_room"
 # counting one that from_dict is about to drop anyway would only suppress a
 # new zone's own starting copy of it for nothing.
 #
-# FW7: derived from the world rather than a hard-coded literal, so adding,
+# Derived from the world rather than a hard-coded literal, so adding,
 # renaming, or removing a zone in data/locations.py can't silently desync
 # this set from the actual map.
 _V3_ZONE_IDS = frozenset(build_starting_locations().keys())
@@ -642,7 +645,7 @@ def _migrate_v2_ground_items(data: dict[str, Any], items_elsewhere: set[str]) ->
     # loop: it gets only the items accumulated above, not a fresh starting
     # First Aid Kit too -- the v2 building already had one, or the player
     # already took it, either way it's already accounted for by the
-    # accumulation. FW7: derived from _V3_ZONE_IDS minus the v2 rooms'
+    # accumulation. Derived from _V3_ZONE_IDS minus the v2 rooms'
     # targets, rather than a hard-coded tuple of the three names.
     starting = build_starting_locations()
     new_zone_ids = [zone_id for zone_id in starting if zone_id not in _V2_LOCATION_IDS.values()]
@@ -677,7 +680,7 @@ def _migrate_v2_narrative(data: dict[str, Any]) -> None:
     narrative.setdefault("game_over", False)
     narrative.setdefault("death_cause", "")
 
-    # Task 3 made SET_FLAG/DISCOVER_FLAG normalize flag names; a v2 save's
+    # SET_FLAG/DISCOVER_FLAG normalize flag names; a v2 save's
     # "PowerGrid" would otherwise sit beside a new "powergrid". Coerced to
     # str first: a discovered_flags entry is player-writable content
     # (SET_FLAG/DISCOVER_FLAG arguments) that a hand-edited save could hold
@@ -789,15 +792,15 @@ def from_saved_data(data: dict[str, Any]) -> GameManager | None:
     try:
         version = data.get("version")
         if version == 2:
-            print("[Persistence] Migrating save v2 -> v3 (rooms became zones).")
+            logger.info("Migrating save v2 -> v3 (rooms became zones).")
             data = migrate_v2_to_v3(data)
             version = data.get("version")
         if version != SCHEMA_VERSION:
-            print(f"[Persistence] Save schema v{version} != v{SCHEMA_VERSION}; rejecting.")
+            logger.warning(f"Save schema v{version} != v{SCHEMA_VERSION}; rejecting.")
             return None
         return from_dict(data)
     except (AttributeError, KeyError, TypeError, ValueError) as exc:
-        print(f"[Persistence] Corrupt save: {exc}.")
+        logger.warning(f"Corrupt save: {exc}.")
         return None
 
 
@@ -810,7 +813,7 @@ def load(path: str | None = None) -> GameManager | None:
         with open(path, encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"[Persistence] Could not read save at {path}: {exc}")
+        logger.warning(f"Could not read save at {path}: {exc}")
         return None
 
     return from_saved_data(data)

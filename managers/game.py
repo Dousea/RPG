@@ -1,3 +1,4 @@
+import logging
 import re
 from collections import deque
 from dataclasses import dataclass, field
@@ -44,6 +45,8 @@ from modules.modifier import (
     ReputationModifier,
 )
 from modules.quest import QuestState
+
+logger = logging.getLogger(__name__)
 
 # Which effect-handler classes react to which event classes. Used to be a
 # `handler_name.startswith(event_name)` string comparison, which never once
@@ -157,7 +160,7 @@ CONDITION_SYNONYMS: dict[str, dict[str, str]] = {
 def _first_contiguous_match(haystack: list[str], needle: list[str]) -> int | None:
     """The index in `haystack` where `needle` first appears as a contiguous,
     in-order run, or None. Used by `GameManager.resolve_location`'s
-    whole-word fallback (RES1) -- a subset test (`set(needle) <= set(haystack)`)
+    whole-word fallback -- a subset test (`set(needle) <= set(haystack)`)
     let "the street" and "the building" both claim position 0 of any phrase
     starting with "the", regardless of where their real words actually sat.
     """
@@ -191,8 +194,8 @@ def resolve_condition_value(field: str, raw: str, current: str) -> str | None:
     `CONDITION_LADDERS[field]`, clamped to its ends -- unlike the numeric
     tracks these have no natural arithmetic, but the model writes '+1' at
     them anyway, so a signed value walks the ladder instead of being stored
-    verbatim, which is how 'Infection Risk: +1' used to reach the UI as
-    literal text. Otherwise the value is matched case-insensitively against a
+    verbatim (so 'Infection Risk: +1' never reaches the UI as literal
+    text). Otherwise the value is matched case-insensitively against a
     rung name, then a synonym. `ActionValidator` calls this to decide
     Accepted/Rejected; `SimulationCore` stores whatever it returned.
     """
@@ -216,9 +219,7 @@ def resolve_condition_value(field: str, raw: str, current: str) -> str | None:
 
 # The game has one clock. `NarrativeState.day` and `.time_of_day` are it;
 # `World.time` and `World.date` are a wall-clock rendering of the same instant,
-# derived by `_sync_world_clock`. They used to be independent, and since nothing
-# ever wrote them the game master was told it was noon on 1 October 2023 for the
-# entire game while the narrative clock moved underneath.
+# derived by `_sync_world_clock`, so the game master never sees a stale time.
 CLOCK_BY_TIME_OF_DAY = {
     "morning": "08:00 AM",
     "afternoon": "01:00 PM",
@@ -253,16 +254,11 @@ class NarrativeState:
     conditions: dict[str, str] = field(
         default_factory=lambda: {"sleep": "Rested", "infection_risk": "No"}
     )
-    # Defensive fallback only, never the normal path: actions are now
-    # validated and simulated *before* narration (see managers/validator.py,
-    # managers/simulation.py, and the [OUTCOMES] section in
-    # managers/context.py), so a refusal is already surfaced to the narrator
-    # the same turn it happens. `GameEngine.play` no longer writes to this
-    # field at all. It exists for the one case that can still slip past
-    # pre-narration validation: an unexpected exception inside the Simulation
-    # Core itself, which no [OUTCOMES] fact could describe because the
-    # engine never finished deciding what happened. Kept as a list (not
-    # retired outright) so that escape hatch still has somewhere to go.
+    # Defensive fallback only, never the normal path: actions are validated
+    # and simulated *before* narration, so a refusal already reaches the
+    # narrator as an [OUTCOMES] fact (managers/context.py). This holds the one
+    # case that can slip past: an unexpected exception inside the Simulation
+    # Core itself, which no [OUTCOMES] fact could describe.
     pending_corrections: list[str] = field(default_factory=list[str])
     # Set once Orton dies. The turn that kills him is still recorded and saved,
     # so reloading the page does not quietly resurrect him.
@@ -406,7 +402,7 @@ class GameManager:
             if any(needle == alias.casefold() for alias in location.aliases):
                 return location
 
-        # RES2: exit phrases ("outside the building", "out of the building",
+        # Exit phrases ("outside the building", "out of the building",
         # "leave the apartment", "exit my flat") mean walk *out* of the zone
         # Orton is standing in right now -- but only when the phrase's object
         # names the zone itself (ZONE_EXIT_NOUNS), never a landmark inside it.
@@ -448,15 +444,14 @@ class GameManager:
         # match here would quietly send the player to the wrong zone, which is
         # the failure mode this whole design is meant to avoid.
         #
-        # FW2/RES1: a trailing possessive 's is stripped from every token
+        # A trailing possessive 's is stripped from every token
         # before matching ("clinic's" -> "clinic"), and a leading "the" is
         # dropped from the candidate's own words (so "the street" matches as
         # "street"). The candidate must then appear as a contiguous, in-order
-        # run of words in the phrase -- a subset test used to let "the
+        # run of words in the phrase -- a subset test would let "the
         # street" and "the building" both claim position 0 of any phrase
-        # starting with "the", regardless of where their real words actually
-        # sat ("the street outside the building" wrongly went to the
-        # building). The winning candidate is the one whose run starts
+        # starting with "the" ("the street outside the building" must not go
+        # to the building). The winning candidate is the one whose run starts
         # earliest in the phrase. "the street outside my apartment" must
         # resolve to "street" (starts at word 1) over "my apartment" (starts
         # at word 3). Ties break by more words, then by the current zone.
@@ -492,7 +487,7 @@ class GameManager:
         """Resolve a zone strictly: id, display name, or an exact global
         alias only, casefolded and stripped.
 
-        FW4: `NPC_MOVE` uses this instead of `resolve_location`. NPCs have no
+        `NPC_MOVE` uses this instead of `resolve_location`. NPCs have no
         free-text spot to fall back on, so the player's forgiving resolution
         -- connection directions, the whole-word fallback, exit phrases -- is
         deliberately not available here: it exists to turn a vague phrase
@@ -637,7 +632,7 @@ class GameManager:
         modifiers the world's traits and perks produce in response."""
         while self.event_queue:
             current_event = self.event_queue.pop(0)
-            print(f"[GameManager] Processing Event: {type(current_event).__name__}")
+            logger.debug(f"Processing Event: {type(current_event).__name__}")
 
             all_modifiers = self._broadcast_event(current_event)
             self._apply_modifiers(current_event, all_modifiers)
@@ -691,8 +686,8 @@ class GameManager:
                     if not isinstance(mod, AnyModifier):
                         continue
 
-                    print(
-                        f"[GameManager] Effect '{trait_or_perk.name}' on entity #'{entity.id}' ({role}) generated modifier: {type(mod).__name__}"
+                    logger.debug(
+                        f"Effect '{trait_or_perk.name}' on entity #'{entity.id}' ({role}) generated modifier: {type(mod).__name__}"
                     )
                     collected_modifiers.append(mod)
 
@@ -717,14 +712,14 @@ class GameManager:
             final_damage = int(base_damage * damage_multiplier)
 
             if not isinstance(event.target, BaseEntity):
-                print(
-                    f"[GameManager] Event target is not an Entity: {event.target}. Cannot apply damage."
+                logger.warning(
+                    f"Event target is not an Entity: {event.target}. Cannot apply damage."
                 )
                 return
 
             event.target.hit_points -= final_damage
-            print(
-                f"[GameManager] Applied {final_damage} damage to #'{event.target.id}'. HP is now {event.target.hit_points}."
+            logger.debug(
+                f"Applied {final_damage} damage to #'{event.target.id}'. HP is now {event.target.hit_points}."
             )
 
         # Every other modifier type applies to the event's target (falling
