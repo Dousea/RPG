@@ -78,8 +78,7 @@ class ContextBuilder:
                 npc.npc_id, manager.player.entity_id
             )
             lines.append(
-                f" - {npc.name}"
-                f"{f' ({npc.age})' if npc.age is not None else ''}: {npc.description}"
+                f" - {npc.name}{f' ({npc.age})' if npc.age is not None else ''}: {npc.description}"
             )
             lines.append(f"   Disposition: {disposition} (trust: {trust_level})")
             if npc.status:
@@ -145,9 +144,7 @@ class ContextBuilder:
         narrator about one that's done.
         """
         active = [
-            quest
-            for quest in self.manager.quests.values()
-            if quest.status == QuestStatus.ACTIVE
+            quest for quest in self.manager.quests.values() if quest.status == QuestStatus.ACTIVE
         ]
         if not active:
             return "None"
@@ -174,9 +171,7 @@ class ContextBuilder:
         inventory_str = (
             "\n".join(f" - {entity.item.name}" for entity in player.inventory) or "Empty"
         )
-        equipped = [
-            entity.item.name for entity in player.equipment.values() if entity is not None
-        ]
+        equipped = [entity.item.name for entity in player.equipment.values() if entity is not None]
         equipped_str = ", ".join(equipped) if equipped else "Nothing"
         npc_names = ", ".join(
             npc.name for npc in manager.npcs_in_location(player.current_location_id)
@@ -184,7 +179,7 @@ class ContextBuilder:
 
         return f"""[LOCATION]
 {manager.current_location.name}: {manager.current_location.description}
-Specific spot: {player.current_place or '(nowhere in particular)'}
+Specific spot: {player.current_place or "(nowhere in particular)"}
 
 [EXITS]
 {self._nearby_locations_section().rstrip()}
@@ -245,9 +240,7 @@ door rather than refusing the move.)
             f" - {slot.name}: {f'{entity.item.name} (condition: {entity.hit_points}/{entity.max_hit_points})' if entity else 'None'}"
             for slot, entity in player.equipment.items()
         )
-        traits_str = "\n".join(
-            f" - {trait.name}: {trait.description}" for trait in player.traits
-        )
+        traits_str = "\n".join(f" - {trait.name}: {trait.description}" for trait in player.traits)
         perks_str = "\n".join(f" - {perk.name}: {perk.description}" for perk in player.perks)
         conditions_str = ", ".join(condition.name for condition in player.conditions)
 
@@ -264,21 +257,21 @@ Health: {player.hit_points}/{player.max_hit_points}
 Hunger: {player.hunger}%
 Thirst: {player.thirst}%
 Morale: {player.morale}%
-Sleep: {narrative.conditions.get('sleep', 'Rested')}
-Infection Risk: {narrative.conditions.get('infection_risk', 'No')}
-Conditions: {conditions_str if conditions_str else 'None'}
-Status: {', '.join(narrative.player_status) if narrative.player_status else 'None'}
-Goals: {goals_str if goals_str else 'None'}
-Inventory: {inventory_str if inventory_str else 'Empty'}
-Attributes: {attributes_str if attributes_str else 'None'}
-Equipment: {equipment_str if equipment_str else 'None'}
-Traits: {traits_str if traits_str else 'None'}
-Perks: {perks_str if perks_str else 'None'}
+Sleep: {narrative.conditions.get("sleep", "Rested")}
+Infection Risk: {narrative.conditions.get("infection_risk", "No")}
+Conditions: {conditions_str if conditions_str else "None"}
+Status: {", ".join(narrative.player_status) if narrative.player_status else "None"}
+Goals: {goals_str if goals_str else "None"}
+Inventory: {inventory_str if inventory_str else "Empty"}
+Attributes: {attributes_str if attributes_str else "None"}
+Equipment: {equipment_str if equipment_str else "None"}
+Traits: {traits_str if traits_str else "None"}
+Perks: {perks_str if perks_str else "None"}
 """
 
         location_context = f"""
 Current Location: {manager.current_location.name}
-Specific spot: {player.current_place or '(nowhere in particular)'}
+Specific spot: {player.current_place or "(nowhere in particular)"}
 Description: {manager.current_location.description}
 Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
 Apocalypse Stage: {narrative.apocalypse_stage}

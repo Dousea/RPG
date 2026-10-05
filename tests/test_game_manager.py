@@ -30,9 +30,7 @@ class StartingStateTests(unittest.TestCase):
 
     def test_player_starts_at_home(self):
         self.assertEqual(self.gm.player.current_location_id, "zone_home")
-        self.assertEqual(
-            [e.item.name for e in self.gm.player.inventory], ["Apartment Key"]
-        )
+        self.assertEqual([e.item.name for e in self.gm.player.inventory], ["Apartment Key"])
 
     def test_every_connection_points_at_a_real_location(self):
         # Regression: a location keyed under the wrong id would leave a
@@ -56,17 +54,11 @@ class StartingStateTests(unittest.TestCase):
         )
 
     def test_resolve_location_by_alias(self):
-        self.assertEqual(
-            self.gm.resolve_location("the pharmacy").id, "zone_neighborhood"
-        )
-        self.assertEqual(
-            self.gm.resolve_location("emma's apartment").id, "zone_building"
-        )
+        self.assertEqual(self.gm.resolve_location("the pharmacy").id, "zone_neighborhood")
+        self.assertEqual(self.gm.resolve_location("emma's apartment").id, "zone_building")
         # Whole-word fallback: "emma's apartment" is a more specific alias of
         # zone_building, so this must not collide with it.
-        self.assertEqual(
-            self.gm.resolve_location("back to my apartment").id, "zone_home"
-        )
+        self.assertEqual(self.gm.resolve_location("back to my apartment").id, "zone_home")
         self.assertIsNone(self.gm.resolve_location("Atlantis"))
 
     def test_resolve_zone_exact_matches_id_name_and_alias_only(self):
@@ -102,9 +94,7 @@ class StartingStateTests(unittest.TestCase):
             "zone_street",
         )
         self.assertEqual(
-            self.gm.resolve_location(
-                "the corner store across from the city"
-            ).id,
+            self.gm.resolve_location("the corner store across from the city").id,
             "zone_street",
         )
 
@@ -117,9 +107,7 @@ class StartingStateTests(unittest.TestCase):
         )
 
         self.gm.player.current_location_id = "zone_building"
-        self.assertEqual(
-            self.gm.resolve_location("the lobby downstairs").id, "zone_building"
-        )
+        self.assertEqual(self.gm.resolve_location("the lobby downstairs").id, "zone_building")
 
     def test_exit_phrase_fires_only_on_the_zone_itself(self):
         # RES2: the exit rule used to fire whenever the *matched* zone was
@@ -133,26 +121,16 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(self.gm.resolve_location("outside the bodega").id, "zone_street")
 
         self.gm.player.current_location_id = "zone_building"
-        self.assertEqual(
-            self.gm.resolve_location("outside Emma's apartment").id, "zone_building"
-        )
-        self.assertEqual(
-            self.gm.resolve_location("leave the elevator").id, "zone_building"
-        )
+        self.assertEqual(self.gm.resolve_location("outside Emma's apartment").id, "zone_building")
+        self.assertEqual(self.gm.resolve_location("leave the elevator").id, "zone_building")
 
         # R4 must stay green: "outside the building"/"out of the building"
         # from zone_building still reach zone_street.
-        self.assertEqual(
-            self.gm.resolve_location("outside the building").id, "zone_street"
-        )
-        self.assertEqual(
-            self.gm.resolve_location("out of the building").id, "zone_street"
-        )
+        self.assertEqual(self.gm.resolve_location("outside the building").id, "zone_street")
+        self.assertEqual(self.gm.resolve_location("out of the building").id, "zone_street")
 
         self.gm.player.current_location_id = "zone_home"
-        self.assertEqual(
-            self.gm.resolve_location("leave the apartment").id, "zone_building"
-        )
+        self.assertEqual(self.gm.resolve_location("leave the apartment").id, "zone_building")
         self.assertEqual(self.gm.resolve_location("exit my flat").id, "zone_building")
 
         # Doesn't start with an exit word -- this is the RES1 path, not RES2.
@@ -202,9 +180,7 @@ class StartingStateTests(unittest.TestCase):
     def test_starting_relationships_are_npc_towards_player(self):
         # Direction matters: every reader asks how the NPC regards the player,
         # so seeding the other way round would leave the values unreachable.
-        self.assertEqual(
-            self.gm.relationship_manager.get_trust("npc_emma", "player"), 5
-        )
+        self.assertEqual(self.gm.relationship_manager.get_trust("npc_emma", "player"), 5)
         # The prompt shows the band, never the number -- see the firewall
         # tests. Orton now starts alone in his apartment, so move to where
         # Emma is to see her disposition line.
@@ -226,7 +202,9 @@ class StartingStateTests(unittest.TestCase):
         second = GameManager()
         street = second.world.locations["zone_street"]
         self.assertIn("Crowbar", [e.item.name for e in street.entities])
-        self.assertEqual(second.resolve_npc("Emma").status, ["friendly", "curious about new neighbor"])
+        self.assertEqual(
+            second.resolve_npc("Emma").status, ["friendly", "curious about new neighbor"]
+        )
         # Starting key, not an empty inventory.
         self.assertEqual([e.item.name for e in second.player.inventory], ["Apartment Key"])
 
@@ -350,9 +328,7 @@ class KnowledgeFirewallTests(unittest.TestCase):
             UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=50),
             UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=45),
         )
-        self.assertIn(
-            "Disposition: friendly (trust: solid)", self.gm.build_narrator_prompt("look")
-        )
+        self.assertIn("Disposition: friendly (trust: solid)", self.gm.build_narrator_prompt("look"))
 
     def test_bands_move_with_the_underlying_scores(self):
         self.assertIn(
@@ -363,9 +339,7 @@ class KnowledgeFirewallTests(unittest.TestCase):
             UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=-50),
             UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-45),
         )
-        self.assertIn(
-            "Disposition: hostile (trust: broken)", self.gm.build_narrator_prompt("look")
-        )
+        self.assertIn("Disposition: hostile (trust: broken)", self.gm.build_narrator_prompt("look"))
 
 
 class ConditionLadderDriftTests(unittest.TestCase):

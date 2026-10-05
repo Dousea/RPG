@@ -19,6 +19,4 @@ class CharacterAccessorySlot(StrEnum):
     ACCESSORY_2 = "accessory_2"
 
 
-AnyCharacterEquipmentSlot = (
-    CharacterHoldableSlot | CharacterArmorSlot | CharacterAccessorySlot
-)
+AnyCharacterEquipmentSlot = CharacterHoldableSlot | CharacterArmorSlot | CharacterAccessorySlot

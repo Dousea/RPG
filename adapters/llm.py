@@ -245,9 +245,7 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
 
     for line in llm_response_text.splitlines():
         stripped = line.strip()
-        matched_header = next(
-            (key for key in headers if stripped.upper().startswith(key)), None
-        )
+        matched_header = next((key for key in headers if stripped.upper().startswith(key)), None)
         if matched_header:
             current = headers[matched_header]
             remainder = stripped[len(matched_header) :].strip()

@@ -50,9 +50,7 @@ class PlayerEntity(BaseEntity):
     )
     traits: list[PlayerTrait] = field(default_factory=list[PlayerTrait])
     perks: list[PlayerPerk] = field(default_factory=list[PlayerPerk])
-    conditions: list[CharacterCondition] = field(
-        default_factory=list[CharacterCondition]
-    )
+    conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
 
     @property
     def max_hit_points(self) -> int:

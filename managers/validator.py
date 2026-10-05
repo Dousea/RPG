@@ -150,8 +150,7 @@ class ActionValidator:
         # model named the zone itself, or just gave a direction.
         place = (
             ""
-            if folded in (target.id.casefold(), target.name.casefold())
-            or folded in BARE_DIRECTIONS
+            if folded in (target.id.casefold(), target.name.casefold()) or folded in BARE_DIRECTIONS
             else raw[:MAX_PLACE_LENGTH]
         )
 
@@ -194,9 +193,7 @@ class ActionValidator:
     def _has_key(self, key_id: str | None) -> bool:
         if key_id is None:
             return True
-        return any(
-            entity.item.id == key_id for entity in self.manager.player.inventory
-        )
+        return any(entity.item.id == key_id for entity in self.manager.player.inventory)
 
     # === Items ===
 
@@ -210,9 +207,7 @@ class ActionValidator:
         return Accepted(action, {"item_entity": entity})
 
     def _validate_drop(self, action: DropAction) -> ValidationResult:
-        entity = self.manager._find_item_entity(
-            self.manager.player.inventory, action.item_name
-        )
+        entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to drop.")
         if self._is_door_key(entity.item.id):
@@ -232,9 +227,7 @@ class ActionValidator:
         return False
 
     def _validate_use_item(self, action: UseItemAction) -> ValidationResult:
-        entity = self.manager._find_item_entity(
-            self.manager.player.inventory, action.item_name
-        )
+        entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to use.")
         if not isinstance(entity.item, (ConsumableItem, AppliableItem)):
@@ -277,9 +270,7 @@ class ActionValidator:
                 if value < 1:
                     return Rejected(action, "Orton keeps his keys on him.")
                 if value > 1:
-                    return Rejected(
-                        action, "Orton can't conjure a key; it has to be found."
-                    )
+                    return Rejected(action, "Orton can't conjure a key; it has to be found.")
         return Accepted(action, {"item_entity": entity})
 
     # === Combat ===
@@ -391,8 +382,7 @@ class ActionValidator:
         if location.id == "zone_home" and manager.player.current_location_id != "zone_home":
             return Rejected(
                 action,
-                "Orton's apartment is locked; nobody gets in unless he's "
-                "there to let them in.",
+                "Orton's apartment is locked; nobody gets in unless he's there to let them in.",
             )
         return Accepted(action, {"npc": npc, "location": location})
 

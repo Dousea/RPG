@@ -246,9 +246,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(quest.title, "Find the Bunker")
         self.assertEqual(quest.status, QuestStatus.ACTIVE)
         self.assertEqual(quest.objectives, ["discover:bunker_location", "defeat:npc_marcus"])
-        self.assertEqual(
-            quest.objective_labels, {"discover:bunker_location": "Locate the bunker"}
-        )
+        self.assertEqual(quest.objective_labels, {"discover:bunker_location": "Locate the bunker"})
         self.assertEqual(quest.completed_objectives, ["discover:bunker_location"])
 
     def test_relationships_keep_their_direction(self):
@@ -286,9 +284,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(rebuilt.world.date, "2023-10-04")
 
     def test_memory_tiers(self):
-        self.assertEqual(
-            self.loaded.memory.full_event_log, self.original.memory.full_event_log
-        )
+        self.assertEqual(self.loaded.memory.full_event_log, self.original.memory.full_event_log)
         self.assertEqual(self.loaded.memory.recent_events, self.original.memory.recent_events)
         self.assertEqual(self.loaded.memory.summaries, self.original.memory.summaries)
 
@@ -497,9 +493,7 @@ class MigrationTests(IsolatedSaveTestCase):
             for entity in loaded.world.locations["zone_building"].entities
             if isinstance(entity, ItemEntity)
         )
-        self.assertEqual(
-            names, ["Canned Beans", "Crowbar", "First Aid Kit", "Storage Room Key"]
-        )
+        self.assertEqual(names, ["Canned Beans", "Crowbar", "First Aid Kit", "Storage Room Key"])
 
     def test_npcs_are_remapped_too(self):
         loaded = persistence.load(self.save_path)
@@ -610,9 +604,7 @@ class MigrationTests(IsolatedSaveTestCase):
         # were added, renamed, or removed.
         from data.locations import build_starting_locations
 
-        self.assertEqual(
-            persistence._V3_ZONE_IDS, frozenset(build_starting_locations().keys())
-        )
+        self.assertEqual(persistence._V3_ZONE_IDS, frozenset(build_starting_locations().keys()))
 
 
 class MigrationHardeningTests(unittest.TestCase):

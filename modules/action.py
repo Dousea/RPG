@@ -32,8 +32,14 @@ GOAL_HORIZON_SYNONYMS = {
 
 # Truthy/falsy words the model writes instead of a bare true/false.
 _FLAG_VALUES = {
-    "true": True, "yes": True, "1": True, "on": True,
-    "false": False, "no": False, "0": False, "off": False,
+    "true": True,
+    "yes": True,
+    "1": True,
+    "on": True,
+    "false": False,
+    "no": False,
+    "0": False,
+    "off": False,
 }
 
 
@@ -44,13 +50,7 @@ def normalize_key(raw: str) -> str:
     'short-term' -- and a strict match rejects all but one of them, silently
     dropping the state change while the story carries on as if it happened.
     """
-    return (
-        raw.strip()
-        .strip(":,.;\"'")
-        .replace("-", "_")
-        .replace(" ", "_")
-        .casefold()
-    )
+    return raw.strip().strip(":,.;\"'").replace("-", "_").replace(" ", "_").casefold()
 
 
 @dataclass
@@ -276,9 +276,7 @@ def _split_goal(args: str) -> tuple[str, str]:
     for word_count in (2, 1):
         if len(parts) < word_count:
             continue
-        horizon = GOAL_HORIZON_SYNONYMS.get(
-            normalize_key(" ".join(parts[:word_count]))
-        )
+        horizon = GOAL_HORIZON_SYNONYMS.get(normalize_key(" ".join(parts[:word_count])))
         if horizon is not None:
             return horizon, " ".join(parts[word_count:]).strip()
     return normalize_key(parts[0]), " ".join(parts[1:]).strip()
@@ -301,9 +299,7 @@ def _parse_remove_goal(args: str) -> RemoveGoalAction:
 def _parse_update_relationship(args: str) -> UpdateRelationshipAction:
     parts = args.split()
     if len(parts) < 3:
-        raise _ActionParseError(
-            "UPDATE_RELATIONSHIP needs a name, an axis, and an amount."
-        )
+        raise _ActionParseError("UPDATE_RELATIONSHIP needs a name, an axis, and an amount.")
     raw_amount, axis, name = (
         parts[-1].strip(".,;"),
         normalize_key(parts[-2]),

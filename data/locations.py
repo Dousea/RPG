@@ -67,8 +67,14 @@ def build_starting_locations() -> dict[str, Location]:
             # instead. Only names that unambiguously mean *this* apartment
             # survive.
             aliases=[
-                "apartment 3b", "3b", "my apartment", "your apartment",
-                "home", "my flat", "my place", "my room",
+                "apartment 3b",
+                "3b",
+                "my apartment",
+                "your apartment",
+                "home",
+                "my flat",
+                "my place",
+                "my room",
             ],
         ),
         "zone_building": Location(
@@ -86,9 +92,20 @@ def build_starting_locations() -> dict[str, Location]:
             # because v2 saves could have a player standing there
             # (`adapters/persistence._V2_ROOM_PLACES`).
             aliases=[
-                "hallway", "corridor", "stairwell", "stairs", "elevator", "lobby",
-                "foyer", "laundry room", "basement", "mailroom",
-                "emma's apartment", "3a", "the building", "building",
+                "hallway",
+                "corridor",
+                "stairwell",
+                "stairs",
+                "elevator",
+                "lobby",
+                "foyer",
+                "laundry room",
+                "basement",
+                "mailroom",
+                "emma's apartment",
+                "3a",
+                "the building",
+                "building",
                 "next door",
                 "storage room",
             ],
@@ -105,9 +122,18 @@ def build_starting_locations() -> dict[str, Location]:
             # zone_building's own "outside the building" and is handled as a
             # direction synonym (`DIRECTION_SYNONYMS`) instead.
             aliases=[
-                "street", "sidewalk", "road", "alley", "bodega",
-                "corner store", "bus stop", "parking lot", "my car", "the block",
-                "front steps", "out front",
+                "street",
+                "sidewalk",
+                "road",
+                "alley",
+                "bodega",
+                "corner store",
+                "bus stop",
+                "parking lot",
+                "my car",
+                "the block",
+                "front steps",
+                "out front",
             ],
         ),
         "zone_neighborhood": Location(
@@ -121,10 +147,23 @@ def build_starting_locations() -> dict[str, Location]:
             # FW1: bare "store" removed -- too generic (any shop). "grocery
             # store" and "corner store" (zone_street) stay, being specific.
             aliases=[
-                "neighborhood", "neighbourhood", "coffee shop", "cafe", "pharmacy",
-                "drugstore", "supermarket", "grocery store", "shops",
-                "clinic", "hospital", "subway", "station", "park", "downtown",
-                "the city", "town",
+                "neighborhood",
+                "neighbourhood",
+                "coffee shop",
+                "cafe",
+                "pharmacy",
+                "drugstore",
+                "supermarket",
+                "grocery store",
+                "shops",
+                "clinic",
+                "hospital",
+                "subway",
+                "station",
+                "park",
+                "downtown",
+                "the city",
+                "town",
             ],
         ),
     }

@@ -19,9 +19,7 @@ class State:
     disposition: CharacterDisposition = (
         CharacterDisposition.NEUTRAL
     )  # Their current emotional state towards the player
-    short_term_goal: str = (
-        "assess the situation"  # What they are trying to achieve right now
-    )
+    short_term_goal: str = "assess the situation"  # What they are trying to achieve right now
 
     # Social State
     faction_standing: dict[CharacterFaction, int] = field(

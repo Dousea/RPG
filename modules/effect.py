@@ -22,9 +22,7 @@ class OnceEffect:
 @dataclass
 class QuestCompletedEffect:
     effect: Callable[[QuestCompletionEvent], AnyModifier | None]
-    condition: Callable[[QuestCompletionEvent], bool] = (
-        lambda _: True
-    )  # Default to always true
+    condition: Callable[[QuestCompletionEvent], bool] = lambda _: True  # Default to always true
 
 
 @dataclass

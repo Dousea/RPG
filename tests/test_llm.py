@@ -7,7 +7,9 @@ from adapters.llm import parse_action_response, parse_narrator_response
 
 class ParseActionResponseTests(unittest.TestCase):
     def test_well_formed_response(self):
-        lines = parse_action_response("ACTIONS:\nMOVE_TO hallway\nUPDATE_RELATIONSHIP Emma affection +1")
+        lines = parse_action_response(
+            "ACTIONS:\nMOVE_TO hallway\nUPDATE_RELATIONSHIP Emma affection +1"
+        )
         self.assertEqual(lines, ["MOVE_TO hallway", "UPDATE_RELATIONSHIP Emma affection +1"])
 
     def test_none_is_kept_as_a_line(self):
@@ -28,7 +30,9 @@ class ParseActionResponseTests(unittest.TestCase):
     def test_missing_header_falls_back_to_every_line(self):
         # A small local model asked for one section sometimes drops the
         # header it used to need to disambiguate from STORY/EVENT.
-        self.assertEqual(parse_action_response("MOVE_TO north\nTAKE Crowbar"), ["MOVE_TO north", "TAKE Crowbar"])
+        self.assertEqual(
+            parse_action_response("MOVE_TO north\nTAKE Crowbar"), ["MOVE_TO north", "TAKE Crowbar"]
+        )
 
     def test_blank_lines_are_dropped(self):
         lines = parse_action_response("ACTIONS:\nTAKE Crowbar\n\n   \nDROP Crowbar")

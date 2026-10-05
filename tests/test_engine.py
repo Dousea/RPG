@@ -86,9 +86,7 @@ class TurnTests(EngineTestCase):
         self.assertIsNotNone(reloaded)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
         self.assertIn("Find a weapon", reloaded.narrative.goals["short_term"])
-        self.assertEqual(
-            reloaded.relationship_manager.get_affinity("npc_emma", "player"), 12
-        )
+        self.assertEqual(reloaded.relationship_manager.get_affinity("npc_emma", "player"), 12)
 
     def test_snapshot_shape(self):
         result = self.engine.play("go out")
@@ -285,9 +283,7 @@ class LifecycleTests(EngineTestCase):
         self.engine.play("take the first aid kit")
         self.engine.reset()
         building = self.engine.manager.world.locations["zone_building"]
-        item_names = [
-            e.item.name for e in building.entities if isinstance(e, ItemEntity)
-        ]
+        item_names = [e.item.name for e in building.entities if isinstance(e, ItemEntity)]
         self.assertIn("First Aid Kit", item_names)
 
 

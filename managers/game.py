@@ -100,9 +100,25 @@ DEATH_CAUSE_MAX_LENGTH = 200
 # not the name of a place, so it must not be stored as one.
 BARE_DIRECTIONS = frozenset(
     {
-        "north", "south", "east", "west", "up", "down", "in", "out",
-        "inside", "outside", "back", "forward", "left", "right",
-        "upstairs", "downstairs", "onwards", "onward", "further",
+        "north",
+        "south",
+        "east",
+        "west",
+        "up",
+        "down",
+        "in",
+        "out",
+        "inside",
+        "outside",
+        "back",
+        "forward",
+        "left",
+        "right",
+        "upstairs",
+        "downstairs",
+        "onwards",
+        "onward",
+        "further",
     }
 )
 
@@ -226,9 +242,7 @@ class NarrativeState:
     day: int = 1
     time_of_day: str = "morning"
     apocalypse_stage: str = "Normal"
-    goals: dict[str, list[str]] = field(
-        default_factory=lambda: {"short_term": [], "long_term": []}
-    )
+    goals: dict[str, list[str]] = field(default_factory=lambda: {"short_term": [], "long_term": []})
     flags: dict[str, bool] = field(default_factory=dict[str, bool])
     # Flags the player has actually learned in the story, as opposed to ones
     # that are merely true in the simulation. Only these render in the
@@ -284,11 +298,7 @@ class GameManager:
         """Build a manager. Every component defaults to its new-game value, so
         `GameManager()` starts a fresh game and the persistence layer can
         reconstruct a saved one by passing components in."""
-        self.world = (
-            world
-            if world is not None
-            else World(locations=build_starting_locations())
-        )
+        self.world = world if world is not None else World(locations=build_starting_locations())
         self.player = (
             player
             if player is not None
@@ -358,11 +368,7 @@ class GameManager:
         return self.world.locations[self.player.current_location_id]
 
     def npcs_in_location(self, location_id: str) -> list[NpcEntity]:
-        return [
-            npc
-            for npc in self.npcs.values()
-            if npc.current_location_id == location_id
-        ]
+        return [npc for npc in self.npcs.values() if npc.current_location_id == location_id]
 
     def resolve_npc(self, name: str) -> NpcEntity | None:
         """Resolve an NPC by display name or id, case-insensitively."""
@@ -455,8 +461,7 @@ class GameManager:
         # resolve to "street" (starts at word 1) over "my apartment" (starts
         # at word 3). Ties break by more words, then by the current zone.
         phrase_words = [
-            word[:-2] if word.endswith("'s") else word
-            for word in re.findall(r"[a-z0-9']+", needle)
+            word[:-2] if word.endswith("'s") else word for word in re.findall(r"[a-z0-9']+", needle)
         ]
 
         best: tuple[tuple[int, int, int], Location] | None = None
@@ -533,9 +538,7 @@ class GameManager:
         return None
 
     @staticmethod
-    def _find_item_entity(
-        entities: list[ItemEntity], name: str
-    ) -> ItemEntity | None:
+    def _find_item_entity(entities: list[ItemEntity], name: str) -> ItemEntity | None:
         needle = name.strip().casefold()
         for entity in entities:
             if needle in (entity.item.name.casefold(), entity.item.id.casefold()):
@@ -544,9 +547,7 @@ class GameManager:
 
     def _ground_items(self) -> list[ItemEntity]:
         return [
-            entity
-            for entity in self.current_location.entities
-            if isinstance(entity, ItemEntity)
+            entity for entity in self.current_location.entities if isinstance(entity, ItemEntity)
         ]
 
     # === Prompt building ===
@@ -609,9 +610,7 @@ class GameManager:
         # Rolling *backwards* past night means a new day began. Strictly
         # backwards: re-declaring the part of the day we are already in is a
         # no-op, not midnight.
-        if TIMES_OF_DAY.index(target) < TIMES_OF_DAY.index(
-            self.narrative.time_of_day
-        ):
+        if TIMES_OF_DAY.index(target) < TIMES_OF_DAY.index(self.narrative.time_of_day):
             self.narrative.day += 1
         self.narrative.time_of_day = target
         self._sync_world_clock()
@@ -757,9 +756,7 @@ class GameManager:
             # yet -- a real Story Director is doc 07, out of scope here) and
             # are intentionally left unhandled rather than guessed at.
 
-    def _event_matches_effect_handler(
-        self, event: AnyEvent, handler: AnyEffect, role: str
-    ) -> bool:
+    def _event_matches_effect_handler(self, event: AnyEvent, handler: AnyEffect, role: str) -> bool:
         """Whether an effect handler (from a trait's or perk's `.effects`)
         reacts to this event's type when held by the entity occupying `role`
         ("source" or "target"), via the explicit EVENT_TO_EFFECT_TYPES and

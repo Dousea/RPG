@@ -34,9 +34,7 @@ class NpcEntity(BaseEntity):
     # to gate what an NPC can truthfully say (a future dialogue system's
     # job), not to be read out directly.
     knowledge: set[str] = field(default_factory=set[str])
-    conditions: list[CharacterCondition] = field(
-        default_factory=list[CharacterCondition]
-    )
+    conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     base_max_hit_points: int = 100
 

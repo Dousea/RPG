@@ -72,14 +72,14 @@ class QuestAdvancementTests(unittest.TestCase):
             quest_id="marcus_likes_me",
             objectives=["npc_status:npc_marcus:trusts_orton"],
         )
-        resolve_actions(gm, NpcStatusAction(npc_name="Marcus", operation="ADD", status="trusts_orton"))
+        resolve_actions(
+            gm, NpcStatusAction(npc_name="Marcus", operation="ADD", status="trusts_orton")
+        )
         self.assertEqual(gm.quests["marcus_likes_me"].status, QuestStatus.COMPLETED)
 
     def test_a_quest_with_multiple_objectives_needs_all_of_them(self):
         gm = GameManager()
-        gm.quests["multi"] = QuestState(
-            quest_id="multi", objectives=["discover:a", "discover:b"]
-        )
+        gm.quests["multi"] = QuestState(quest_id="multi", objectives=["discover:a", "discover:b"])
         resolve_actions(gm, DiscoverFlagAction(flag_name="a"))
         self.assertEqual(gm.quests["multi"].status, QuestStatus.ACTIVE)
 
@@ -115,9 +115,7 @@ class StartingQuestContentTests(unittest.TestCase):
     def test_every_starting_quest_has_a_label_for_each_objective(self):
         for quest in build_starting_quests().values():
             for objective in quest.objectives:
-                self.assertIn(
-                    objective, quest.objective_labels, f"{quest.quest_id}: {objective}"
-                )
+                self.assertIn(objective, quest.objective_labels, f"{quest.quest_id}: {objective}")
 
     def test_take_objectives_reference_real_items(self):
         for quest in build_starting_quests().values():
@@ -129,9 +127,7 @@ class StartingQuestContentTests(unittest.TestCase):
         for quest in build_starting_quests().values():
             for objective in quest.objectives:
                 if objective.startswith("reach:"):
-                    self.assertIn(
-                        objective.removeprefix("reach:"), self.gm.world.locations
-                    )
+                    self.assertIn(objective.removeprefix("reach:"), self.gm.world.locations)
 
     def test_npc_status_and_defeat_objectives_reference_real_npcs(self):
         for quest in build_starting_quests().values():

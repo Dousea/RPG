@@ -166,8 +166,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "thirst": player.thirst,
             "morale": player.morale,
             "attributes": {
-                attribute.value: value
-                for attribute, value in player.attributes.items()
+                attribute.value: value for attribute, value in player.attributes.items()
             },
             "inventory": [_item_entity_to_dict(e) for e in player.inventory],
             "equipment": {
@@ -209,9 +208,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 for source, targets in manager.relationship_manager.trusts.items()
             },
             "reputations": {
-                source.value: {
-                    target.value: score for target, score in targets.items()
-                }
+                source.value: {target.value: score for target, score in targets.items()}
                 for source, targets in manager.relationship_manager.reputations.items()
             },
         },
@@ -257,9 +254,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
     # save simply keeps nothing, not its starting items.
     for location in locations.values():
         location.entities = [
-            entity
-            for entity in location.entities
-            if not isinstance(entity, ItemEntity)
+            entity for entity in location.entities if not isinstance(entity, ItemEntity)
         ]
     for location_id, items in world_data.get("ground_items", {}).items():
         location = locations.get(location_id)
@@ -454,20 +449,14 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         max_inventory_size=data.get("max_inventory_size", 20),
         inventory=[
             entity
-            for entity in (
-                _item_entity_from_dict(i) for i in data.get("inventory", [])
-            )
+            for entity in (_item_entity_from_dict(i) for i in data.get("inventory", []))
             if entity is not None
         ],
         hunger=data.get("hunger", 100),
         thirst=data.get("thirst", 100),
         morale=data.get("morale", 100),
-        traits=[
-            TRAITS[trait_id] for trait_id in data.get("trait_ids", []) if trait_id in TRAITS
-        ],
-        perks=[
-            PERKS[perk_id] for perk_id in data.get("perk_ids", []) if perk_id in PERKS
-        ],
+        traits=[TRAITS[trait_id] for trait_id in data.get("trait_ids", []) if trait_id in TRAITS],
+        perks=[PERKS[perk_id] for perk_id in data.get("perk_ids", []) if perk_id in PERKS],
         conditions=conditions,
     )
     if attributes:
@@ -510,9 +499,7 @@ def _npcs_from_dict(entries: list[dict[str, Any]]) -> dict[str, NpcEntity]:
             conditions=conditions,
             inventory=[
                 e
-                for e in (
-                    _item_entity_from_dict(i) for i in entry.get("inventory", [])
-                )
+                for e in (_item_entity_from_dict(i) for i in entry.get("inventory", []))
                 if e is not None
             ],
             base_max_hit_points=entry.get("base_max_hit_points", 100),
@@ -658,9 +645,7 @@ def _migrate_v2_ground_items(data: dict[str, Any], items_elsewhere: set[str]) ->
     # accumulation. FW7: derived from _V3_ZONE_IDS minus the v2 rooms'
     # targets, rather than a hard-coded tuple of the three names.
     starting = build_starting_locations()
-    new_zone_ids = [
-        zone_id for zone_id in starting if zone_id not in _V2_LOCATION_IDS.values()
-    ]
+    new_zone_ids = [zone_id for zone_id in starting if zone_id not in _V2_LOCATION_IDS.values()]
     for zone_id in new_zone_ids:
         fresh = [
             _item_entity_to_dict(entity)

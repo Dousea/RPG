@@ -165,9 +165,7 @@ class GameEngine:
 
     # === Presentation ===
 
-    def _snapshot(
-        self, story_text: str, options: list[str] | None = None
-    ) -> dict[str, Any]:
+    def _snapshot(self, story_text: str, options: list[str] | None = None) -> dict[str, Any]:
         """Build the frontend payload. Caller must hold the lock.
 
         Mirrors what `managers/context.py` already tells the narrator about
@@ -211,9 +209,7 @@ class GameEngine:
             },
             "level": player.level,
             "experience_points": player.experience_points,
-            "attributes": {
-                attr.value: value for attr, value in player.attributes.items()
-            },
+            "attributes": {attr.value: value for attr, value in player.attributes.items()},
             "conditions": [condition.value for condition in player.conditions],
             "status_effects": list(narrative.player_status),
             # A list, not a string: the frontend iterates this.
@@ -237,12 +233,10 @@ class GameEngine:
                 for slot, entity in player.equipment.items()
             ],
             "traits": [
-                {"name": trait.name, "description": trait.description}
-                for trait in player.traits
+                {"name": trait.name, "description": trait.description} for trait in player.traits
             ],
             "perks": [
-                {"name": perk.name, "description": perk.description}
-                for perk in player.perks
+                {"name": perk.name, "description": perk.description} for perk in player.perks
             ],
             "goals": {
                 "short_term": list(narrative.goals.get("short_term", [])),

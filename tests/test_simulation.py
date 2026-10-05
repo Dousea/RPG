@@ -138,10 +138,16 @@ class MovementResolutionTests(unittest.TestCase):
     def test_move_to_never_fails(self):
         gm = GameManager()
         for junk in (
-            "Atlantis", "north", "", "the roof", "???",
-            "a place with a very long name that goes on well past any "
-            "sensible limit for a spot",
-            "Emma's kitchen table", "12345", "MOVE_TO", "back",
+            "Atlantis",
+            "north",
+            "",
+            "the roof",
+            "???",
+            "a place with a very long name that goes on well past any sensible limit for a spot",
+            "Emma's kitchen table",
+            "12345",
+            "MOVE_TO",
+            "back",
         ):
             facts = _resolve(gm, MoveAction(destination=junk))
             self.assertFalse(
@@ -320,9 +326,7 @@ class ItemResolutionTests(unittest.TestCase):
         gm = GameManager()  # starts holding item_apartment_key
         facts = _resolve(
             gm,
-            UpdateInventoryAction(
-                item_name="Apartment Key", operation="REMOVE", value=""
-            ),
+            UpdateInventoryAction(item_name="Apartment Key", operation="REMOVE", value=""),
             UpdateInventoryAction(
                 item_name="Apartment Key", operation="UPDATE_QUANTITY", value="0"
             ),
@@ -331,9 +335,7 @@ class ItemResolutionTests(unittest.TestCase):
             ),
         )
         self.assertTrue(all(f.startswith("Refused:") for f in facts))
-        self.assertEqual(
-            [e.item.name for e in gm.player.inventory], ["Apartment Key"]
-        )
+        self.assertEqual([e.item.name for e in gm.player.inventory], ["Apartment Key"])
 
 
 class CombatResolutionTests(unittest.TestCase):
@@ -481,8 +483,7 @@ class WorldStateResolutionTests(unittest.TestCase):
         facts = _resolve(gm, NpcMoveAction(npc_name="Emma", destination="Your Apartment"))
         self.assertTrue(facts[0].startswith("Refused:"))
         self.assertIn(
-            "Orton's apartment is locked; nobody gets in unless he's there to "
-            "let them in.",
+            "Orton's apartment is locked; nobody gets in unless he's there to let them in.",
             facts[0],
         )
 

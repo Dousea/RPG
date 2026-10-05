@@ -30,9 +30,7 @@ class ParseActionLineTests(unittest.TestCase):
         self.assertEqual(parse_action_line("TAKE Crowbar"), TakeAction(item_name="Crowbar"))
 
     def test_attack_is_a_new_verb(self):
-        self.assertEqual(
-            parse_action_line("ATTACK Zombie"), AttackAction(target_name="Zombie")
-        )
+        self.assertEqual(parse_action_line("ATTACK Zombie"), AttackAction(target_name="Zombie"))
 
     def test_use_item_is_a_new_verb(self):
         self.assertEqual(
@@ -130,9 +128,7 @@ class ParseActionLineTests(unittest.TestCase):
     def test_update_inventory(self):
         self.assertEqual(
             parse_action_line("UPDATE_INVENTORY Canned Beans UPDATE_QUANTITY 3"),
-            UpdateInventoryAction(
-                item_name="Canned Beans", operation="UPDATE_QUANTITY", value="3"
-            ),
+            UpdateInventoryAction(item_name="Canned Beans", operation="UPDATE_QUANTITY", value="3"),
         )
 
     def test_npc_move_needs_the_to_separator(self):
@@ -176,9 +172,7 @@ class ParseActionPlanTests(unittest.TestCase):
         self.assertEqual(failures, [])
 
     def test_mixed_valid_and_invalid_lines(self):
-        actions, failures = parse_action_plan(
-            ["MOVE_TO north", "FROBNICATE x", "TAKE Crowbar"]
-        )
+        actions, failures = parse_action_plan(["MOVE_TO north", "FROBNICATE x", "TAKE Crowbar"])
         self.assertEqual(
             actions, [MoveAction(destination="north"), TakeAction(item_name="Crowbar")]
         )

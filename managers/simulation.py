@@ -41,7 +41,12 @@ from modules.action import (
 )
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
-from modules.event import ApplyItemEvent, ConsumeItemEvent, WeaponDealDamageEvent, WeaponTakeDamageEvent
+from modules.event import (
+    ApplyItemEvent,
+    ConsumeItemEvent,
+    WeaponDealDamageEvent,
+    WeaponTakeDamageEvent,
+)
 from modules.item import ConsumableItem, MeleeWeaponItem, RangedWeaponItem
 from modules.modifier import (
     AffinityModifier,
@@ -318,8 +323,7 @@ class SimulationCore:
 
         if npc.hit_points <= 0:
             fact = (
-                f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, "
-                f"{npc.name} is down."
+                f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, {npc.name} is down."
             )
             return self._with_quest_note(fact, f"defeat:{npc.npc_id}")
         return (
@@ -433,9 +437,7 @@ class SimulationCore:
                     amount=action.amount,
                 )
             )
-            score = manager.relationship_manager.get_affinity(
-                npc.npc_id, manager.player.entity_id
-            )
+            score = manager.relationship_manager.get_affinity(npc.npc_id, manager.player.entity_id)
         else:
             score = manager.relationship_manager.adjust_trust(
                 npc.npc_id, manager.player.entity_id, action.amount
