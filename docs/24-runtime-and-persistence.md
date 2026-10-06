@@ -112,4 +112,4 @@ All dynamic state lives in one file, `gamedata/engine_state.json`.
 
 ---
 
-[← Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) · [Index](README.md)
+[← Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) · [Index](README.md) · [UI Layout →](25-ui-layout.md)

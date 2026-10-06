@@ -7,7 +7,7 @@ large-scale, text-based zombie action-adventure RPG powered by local LLMs. Most
 of it is not built. Each document carries a status banner saying how much of it
 exists.
 
-**Documents 22–24 describe the code as it runs today**, covering subsystems the
+**Documents 22–25 describe the code as it runs today**, covering subsystems the
 design set never anticipated.
 
 **Start at [00 — Implementation Status](00-status.md).** It maps every document
@@ -58,11 +58,12 @@ costs.
 20. **[Architectural Principles](20-principles.md)** — *Partial*
 21. **[Final Architecture](21-final-architecture.md)** — final architecture, conclusion — *Planned*
 
-### As built (22–24)
+### As built (22–25)
 
 22. **[Relationships, Trust, and Disposition](22-relationships.md)** — directional affinity and trust, derived disposition, faction reputation — *Implemented*
 23. **[Traits, Perks, Effects, and Modifiers](23-traits-perks-modifiers.md)** — the event → effect → modifier chain — *Implemented, unreachable*
 24. **[Runtime, Configuration, and Persistence](24-runtime-and-persistence.md)** — turn serialization, config loading, save compatibility policy — *Implemented*
+25. **[UI Layout](25-ui-layout.md)** — read-only responsive screens, where each snapshot field is shown, words not numbers — *Partial*
 
 For setup, the action verb reference and the test suite, see the root
 [`README.md`](../README.md).
