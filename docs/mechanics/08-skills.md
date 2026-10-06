@@ -92,13 +92,13 @@ Fitness has dropped to level 4." One gain across two levels gives two facts.
 
 | Source | Rule | Status |
 | --- | --- | --- |
-| Melee hit on an NPC, per `ATTACK` | Fitness +1 if endurance is above 0.5; Strength +1; each of the weapon's skills +min(3, 0.9 × the weapon's mean damage) | Now |
+| Melee hit on an NPC, per `ATTACK` | Fitness +1 if endurance is above 0.5; Strength +1 | Now |
+| Melee hit on a zombie | See [Melee Combat](11-melee-combat.md#xp) | Now |
 | Exhausted and not walking | Fitness +6 on each 10-minute boundary where endurance is below 0.25 and the player isn't walking (36 XP per game hour) | Now |
 | Exercise | See [Exercise](#exercise) | Now |
 
 Bare hands train only Fitness and Strength. A ranged hit trains nothing yet.
-Against NPCs the category XP reads the weapon's `xp_damage`, the mean of its
-damage range (the crowbar's is 0.875, and it trains Long Blunt). Other sources
+A hit on an NPC trains no weapon skill. Other sources
 (wounds, first aid, sneaking, barricades, weapon upkeep, firearms, reading,
 crafting, foraging, animals, vehicles) join with their mechanics.
 

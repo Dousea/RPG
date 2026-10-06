@@ -360,14 +360,13 @@ def _crowbar_game() -> GameManager:
 class MeleeHitXpTests(unittest.TestCase):
     """Spec 08, Where XP comes from: a melee hit against an NPC."""
 
-    def test_a_crowbar_hit_trains_fitness_strength_and_long_blunt(self):
+    def test_a_crowbar_hit_on_an_npc_trains_fitness_and_strength_only(self):
         gm = _crowbar_game()
         simulate(gm, AttackAction(target_name="Emma"))
         skills = gm.player.skills
         self.assertAlmostEqual(skills["fitness"].xp, 37501)
         self.assertAlmostEqual(skills["strength"].xp, 37501)
-        # min(3, 0.9 x 0.875) = 0.7875, times 0.25 for no boost and 1.3 for Fast Learner
-        self.assertAlmostEqual(skills["long_blunt"].xp, 0.2559375)
+        self.assertEqual(skills["long_blunt"].xp, 0)
 
     def test_bare_hands_train_only_fitness_and_strength(self):
         gm = GameManager()
@@ -700,6 +699,10 @@ class ZombieAttackActionTests(unittest.TestCase):
     """Spec 09, Zombies going down: ATTACK on a zombie, approach minutes and removal."""
 
     def attack(self, gm: GameManager, target: str, seed: int = 1) -> tuple[int, list[str]]:
+        if gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] is None:
+            crowbar = ItemEntity(item=ITEMS["item_crowbar"])
+            gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = crowbar
+            gm.player.equipment[CharacterHoldableSlot.LEFT_HAND] = crowbar
         before = gm.narrative.minutes
         facts = simulate(gm, AttackAction(target_name=target), rng=random.Random(seed))
         return gm.narrative.minutes - before, facts
@@ -731,10 +734,10 @@ class ZombieAttackActionTests(unittest.TestCase):
 
     def test_a_zombie_at_zero_health_is_removed_and_stays_gone(self):
         gm = zombie_game()
-        zombie = add_zombie(gm, gap=1, health=0.4)
+        zombie = add_zombie(gm, gap=1, health=0.05)
         _, facts = self.attack(gm, zombie.zombie_id)
         self.assertNotIn(zombie.zombie_id, gm.world.zombies)
-        self.assertTrue(any("down" in fact for fact in facts))
+        self.assertTrue(any("goes still" in fact for fact in facts))
         simulate(gm, WaitAction(duration=Duration(minutes=60)))
         self.assertNotIn(zombie.zombie_id, gm.world.zombies)
 
@@ -899,8 +902,11 @@ class ZombieFollowUpTests(unittest.TestCase):
 
     def test_being_hit_sets_has_chased(self):
         gm = zombie_game()
+        gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
+            item=ITEMS["item_crowbar"]
+        )
         zombie = add_zombie(gm, gap=1, health=3.0, state=ZombieState.ATTACKING)
-        self.loop(gm)._swing(PlayerMinute(swing_target=zombie.zombie_id), MinuteReport())
+        self.loop(gm)._swing(0, PlayerMinute(swing_target=zombie.zombie_id), MinuteReport())
         self.assertLess(zombie.health, 3.0)
         self.assertTrue(zombie.has_chased)
 

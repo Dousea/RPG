@@ -141,6 +141,26 @@ class TurnTests(EngineTestCase):
         slots = [entry["slot"] for entry in self.engine.state()["equipment"]]
         self.assertEqual(slots, ["Right Hand", "Left Hand", "Shoulders"])
 
+    def test_snapshot_carries_the_held_item_and_kills(self):
+        from data.items import ITEMS
+        from modules.character.equipment import CharacterHoldableSlot
+        from modules.entity.item import ItemEntity
+
+        state = self.engine.state()
+        self.assertIsNone(state["held"])
+        self.assertEqual(state["zombie_kills"], 0)
+        manager = self.engine.game
+        crowbar = ItemEntity(item=ITEMS["item_crowbar"])
+        crowbar.condition = 5
+        manager.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = crowbar
+        manager.player.equipment[CharacterHoldableSlot.LEFT_HAND] = crowbar
+        manager.player.zombie_kills = 3
+        state = self.engine.state()
+        self.assertEqual(state["held"], {"name": "Crowbar", "condition_word": "badly worn"})
+        self.assertEqual(state["zombie_kills"], 3)
+        right = next(e for e in state["equipment"] if e["slot"] == "Right Hand")
+        self.assertEqual(right["condition"], "badly worn")
+
     def test_snapshot_has_game_over_false_by_default(self):
         result = self.engine.state()
         self.assertIs(result["game_over"], False)

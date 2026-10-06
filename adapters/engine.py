@@ -13,12 +13,13 @@ from typing import Any
 from adapters import llm
 from adapters.memory import SemanticMemory
 from adapters.save import codec, files
-from data.items import wetness_word
+from data.items import item_condition_word, wetness_word
 from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
 from data.traits import TRAITS
 from managers import creation
 from managers.climate import weather_summary
+from managers.combat import held_entity
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -31,6 +32,7 @@ from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
+from modules.item import MeleeWeaponItem
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
@@ -258,6 +260,7 @@ class GameEngine:
                 {"name": entity.item.name, "condition": _condition(entity)}
                 for entity in player.inventory
             ],
+            "held": _held(player),
             "equipment": _equipment(player),
             "worn": _worn(player),
             "traits": _trait_entries(player),
@@ -278,6 +281,7 @@ class GameEngine:
                 for view in threat_views(manager)
             ],
             "sneaking": player.sneaking,
+            "zombie_kills": player.zombie_kills,
         }
 
 
@@ -344,7 +348,16 @@ def _status_effects(player: PlayerEntity) -> list[dict[str, Any]]:
 
 
 def _condition(entity: ItemEntity) -> str:
+    if isinstance(entity.item, MeleeWeaponItem):
+        return item_condition_word(entity)
     return f"{entity.hit_points}/{entity.max_hit_points}"
+
+
+def _held(player: PlayerEntity) -> dict[str, str] | None:
+    entity = held_entity(player)
+    if entity is None:
+        return None
+    return {"name": entity.item.name, "condition_word": item_condition_word(entity)}
 
 
 def _equipment(player: PlayerEntity) -> list[dict[str, Any]]:

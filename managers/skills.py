@@ -3,6 +3,7 @@
 import math
 from collections.abc import Mapping
 
+from data import melee as melee_k
 from data import skills as k
 from modules.character.skills import SkillState
 from modules.entity.player import PlayerEntity
@@ -149,13 +150,15 @@ class SkillEngine:
         player.loss_timers[skill_id] = timer
         return facts
 
-    def hit_xp(self, player: PlayerEntity, weapon: MeleeWeaponItem) -> list[str]:
-        """XP for one melee hit on one target: Fitness, Strength and the weapon's categories."""
+    def hit_xp(
+        self, player: PlayerEntity, weapon: MeleeWeaponItem, split: float, hit_count: int
+    ) -> list[str]:
+        """XP for one melee hit: Fitness, Strength by the swing's hit count, and the categories."""
         facts: list[str] = []
         if player.stats.get(CharacterStat.ENDURANCE) > k.HIT_FITNESS_ENDURANCE_ABOVE:
             facts.extend(self.add_xp(player, k.FITNESS, k.HIT_FITNESS_XP))
-        facts.extend(self.add_xp(player, k.STRENGTH, k.HIT_STRENGTH_XP_PER_TARGET))
-        category_xp = min(k.HIT_XP_CAP, k.HIT_XP_DAMAGE_FACTOR * weapon.xp_damage)
-        for skill_id in weapon.skill_categories:
-            facts.extend(self.add_xp(player, skill_id, category_xp))
+        facts.extend(self.add_xp(player, k.STRENGTH, hit_count))
+        category_xp = min(melee_k.HIT_XP_CATEGORY_CAP, melee_k.HIT_XP_SPLIT_FACTOR * split)
+        for category in weapon.categories:
+            facts.extend(self.add_xp(player, melee_k.CATEGORY_SKILL[category], category_xp))
         return facts

@@ -40,7 +40,8 @@ A `ClothingItem` holds:
 | `stomp_power` | multiplier, default 1 (trainers 1.8) |
 | `hearing_modifier` | multiplier, default 1.0 |
 
-The defence, stomp and hearing fields are stored and not yet read.
+The defence and hearing fields are stored and not yet read. Stomp power scales
+stomps ([Melee Combat](11-melee-combat.md#damage)).
 
 Wetness is 0 to 100 and belongs to the carried or worn item, not to the catalog
 entry, so it lives on the item entity. It is saved and clamped to 0 to 100 on load. Nothing changes it yet.

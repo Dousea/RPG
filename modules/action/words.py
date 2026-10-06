@@ -6,14 +6,17 @@ from modules.action.types import (
     AnyAction,
     AttackAction,
     DropAction,
+    EquipAction,
     ExerciseAction,
     MoveAction,
     RemoveGoalAction,
     ShoutAction,
+    ShoveAction,
     SleepAction,
     StanceAction,
     TakeAction,
     TakeOffAction,
+    UnequipAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -40,6 +43,12 @@ def describe_action(action: AnyAction) -> str:
             return f"use the {name}"
         case AttackAction(target_name=name):
             return f"attack {name}"
+        case ShoveAction(target_name=name):
+            return f"shove {name}"
+        case EquipAction(item_name=name):
+            return f"take the {name} in hand"
+        case UnequipAction(item_name=name):
+            return f"put the {name} away"
         case WaitAction():
             return "wait"
         case SleepAction():

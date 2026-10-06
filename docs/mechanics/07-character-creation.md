@@ -144,6 +144,7 @@ traits from `StatContext.traits`, a set of ids, not from the player.
 
 Every other trait is **recorded but dormant**: it is on the character and the
 narrator sees it, but it changes no number until the system it touches exists.
+Asthmatic is live: it raises melee endurance loss ([Melee Combat](11-melee-combat.md#endurance)).
 
 ## Point pool
 

@@ -19,7 +19,7 @@ from modules.item import ClothingItem, MeleeWeaponItem, RangedWeaponItem
 from modules.stats import CharacterStat, Stats, StatusEffect
 from modules.thermal import ThermalState
 from modules.units import real_frames_per_minute
-from modules.weapon import MeleeWeaponType, RangedWeaponType
+from modules.weapon import RangedWeaponType
 
 logger = logging.getLogger(__name__)
 
@@ -432,7 +432,7 @@ def attack_metabolic(weapon: MeleeWeaponItem | RangedWeaponItem | None) -> k.Met
         return k.Metabolic.MEDIUM_WORK
     if weapon.is_two_handed:
         return k.Metabolic.HEAVY_WORK
-    if weapon.type is MeleeWeaponType.BLADE:
+    if weapon.is_stab:
         return k.Metabolic.LIGHT_WORK
     return k.Metabolic.MEDIUM_WORK
 

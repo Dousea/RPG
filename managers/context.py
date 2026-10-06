@@ -22,6 +22,7 @@ from data.social import TALK_APPROACHES
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from data.traits import TRAITS
 from managers.climate import describe_weather
+from managers.combat import held_entity
 from managers.game import GameManager
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
@@ -168,7 +169,11 @@ class ContextBuilder:
             parts.append("sneaking")
         if narrator:
             parts.extend(condition.value for condition in player.conditions)
-        return ", ".join(parts) or "Fine"
+        line = ", ".join(parts) or "Fine"
+        held = held_entity(player)
+        if held is not None:
+            line += f"\nHolding: {held.item.name.lower()} ({item_condition_word(held)})"
+        return line
 
     def _threats_section(self) -> str:
         """The zombies the player perceives, by id, distance and what they are doing."""
@@ -298,6 +303,8 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("items_here")
         if player.inventory:
             keys.add("carried")
+        if held_entity(player) is not None:
+            keys.add("held")
         if any(isinstance(entity.item, ClothingItem) for entity in player.inventory):
             keys.add("wearable_carried")
         if self._worn_section() != "Nothing":
@@ -399,9 +406,11 @@ reach {looks.object}, though {looks.subject} can still hear them.)
         """
         manager = self.manager
         player = manager.player
-        inventory_str = (
-            "\n".join(f" - {entity.item.name}" for entity in player.inventory) or "Empty"
-        )
+        held = held_entity(player)
+        carried = [f" - {entity.item.name}{_marks(entity)}" for entity in player.inventory]
+        if held is not None:
+            carried.insert(0, f" - {held.item.name} (in hands)")
+        inventory_str = "\n".join(carried) or "Empty"
         looks = player.appearance
         return f"""[CHARACTER]
 {player.name} ({looks.subject}/{looks.object}). Say "{looks.subject}" and "{looks.object}", never "they", for this character.
@@ -541,6 +550,10 @@ engine could not decide at all -- treat it the same as [OUTCOMES].)
 
 def _lines(lines: Iterable[str]) -> str:
     return "\n".join(lines)
+
+
+def _marks(entity: ItemEntity) -> str:
+    return " (broken)" if entity.broken else ""
 
 
 def _with_condition(entity: ItemEntity) -> str:

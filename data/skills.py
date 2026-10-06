@@ -97,11 +97,8 @@ RELUCTANT_FIGHTER_SKILLS = (  # spec 08
     "aiming",
 )
 
-HIT_XP_DAMAGE_FACTOR = 0.9  # spec 08
-HIT_XP_CAP = 3.0  # spec 08: XP per hit
 HIT_FITNESS_XP = 1.0  # spec 08: XP per hit
 HIT_FITNESS_ENDURANCE_ABOVE = 0.5  # spec 08: endurance
-HIT_STRENGTH_XP_PER_TARGET = 1.0  # spec 08: XP per target hit
 EXHAUSTION_FITNESS_XP_PER_TICK = 6.0  # spec 08: 36 XP per game hour in 10-minute ticks
 EXHAUSTION_ENDURANCE_BELOW = 0.25  # spec 08: endurance
 

@@ -9,16 +9,16 @@ from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
 from data.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
-from managers.combat import UNARMED_WEAPON, equipped_weapon
 from managers.game import GameManager
 from managers.locations import zone_path
+from managers.melee import MeleeEngine
 from managers.noise import Sound, footstep_emit_chance, footstep_sound, perk_level, sneak_spot_mod
 from managers.skills import SkillEngine
 from managers.zombie_attack import AttackOutcome, resolve_attack
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.entity.player import PlayerEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
-from modules.item import ClothingItem, MeleeWeaponItem
+from modules.item import ClothingItem
 from modules.location import Location, World
 from modules.pace import Pace
 from modules.stats import CharacterStat
@@ -423,6 +423,7 @@ class PlayerMinute:
     asleep: bool = False
     approach_target: str | None = None
     swing_target: str | None = None
+    shove: bool = False
 
 
 @dataclass
@@ -444,6 +445,7 @@ class ZombieLoop:
         self._manager = manager
         self._rng = rng
         self._skills = skills
+        self._melee = MeleeEngine(rng, skills)
         self._visible: set[str] | None = None
 
     def forget_visible(self) -> None:
@@ -468,13 +470,14 @@ class ZombieLoop:
         if self._visible is None:
             self._visible = self._visible_ids(light)
         self._redistribute_if_due(now)
-        self._swing(minute, report)
-        self._hear(minute, extra_sounds, sample)
-        self._move(minute)
+        swing_sounds = self._swing(now, minute, report)
+        self._hear(minute, [*extra_sounds, *swing_sounds], sample)
+        self._move(now, minute)
         spotted = self._spot(minute, sample, light, report)
         self._remember()
         reached = self._report_reach(minute)
-        self._attack(minute, report)
+        self._attack(now, minute, report)
+        self._clear_staggered()
         if spotted:
             report.interrupted = True
             report.interruption_fact = k.SPOTTED_FACT
@@ -485,26 +488,19 @@ class ZombieLoop:
         report.new_seen = new
         return report
 
-    def _swing(self, minute: PlayerMinute, report: MinuteReport) -> None:
-        """Step 0: the player's swing connects with its target."""
+    def _swing(self, now: int, minute: PlayerMinute, report: MinuteReport) -> list[Sound]:
+        """Step 0: the player's swing connects; returns the sounds its hits make."""
         manager = self._manager
-        world, player = manager.world, manager.player
-        zombie = world.zombies.get(minute.swing_target or "")
-        if zombie is None:
-            return
-        weapon = equipped_weapon(player) or UNARMED_WEAPON
-        zombie.health -= k.STAND_IN_SWING_DAMAGE
-        if isinstance(weapon, MeleeWeaponItem):
-            report.facts.extend(self._skills.hit_xp(player, weapon))
-        if zombie.health <= 0:
-            kill_zombie(world, zombie.zombie_id)
-            report.facts.append(k.SWING_KILL_FACT.format(weapon=weapon.name))
-            return
-        if zombie.state not in _HUNTING:
-            zombie.state = ZombieState.CHASING
-        zombie.time_since_seen = 0.0
-        zombie.has_chased = True
-        report.facts.append(k.SWING_HIT_FACT.format(weapon=weapon.name))
+        world = manager.world
+        if minute.swing_target not in world.zombies:
+            return []
+        result = self._melee.swing(
+            manager.player, world, now, minute.swing_target, shove=minute.shove
+        )
+        for zombie_id in result.killed:
+            kill_zombie(world, zombie_id)
+        report.facts.extend(result.facts)
+        return result.sounds
 
     def _visible_ids(self, light: float) -> set[str]:
         manager = self._manager
@@ -564,13 +560,15 @@ class ZombieLoop:
                 zombie.state = ZombieState.ALERTED
                 zombie.sound_gap = distance
 
-    def _move(self, minute: PlayerMinute) -> None:
+    def _move(self, now: int, minute: PlayerMinute) -> None:
         manager = self._manager
         world, player = manager.world, manager.player
         player_zone = player.current_location_id
         size = world.locations[player_zone].size_tiles
         opens = k.PACE_SPEED_TILES_PER_MIN[minute.pace] if minute.approach_target is None else 0
         for zombie in _by_id(world.zombies.values()):
+            if zombie.is_down(now):
+                continue
             if zombie.state in _HUNTING:
                 self._chase(zombie, opens, size)
             elif zombie.state == ZombieState.ALERTED:
@@ -687,12 +685,18 @@ class ZombieLoop:
                 zombie.side = None
         return reached
 
-    def _attack(self, minute: PlayerMinute, report: MinuteReport) -> None:
-        """Step 6: every zombie in reach attacks once."""
+    def _clear_staggered(self) -> None:
+        for zombie in self._manager.world.zombies.values():
+            zombie.staggered = False
+
+    def _attack(self, now: int, minute: PlayerMinute, report: MinuteReport) -> None:
+        """Step 6: every zombie in reach attacks once, unless it is down or staggered."""
         manager = self._manager
         player = manager.player
         attackers = [
-            z for z in _by_id(manager.world.zombies.values()) if z.state == ZombieState.ATTACKING
+            z
+            for z in _by_id(manager.world.zombies.values())
+            if z.state == ZombieState.ATTACKING and not z.is_down(now) and not z.staggered
         ]
         if not attackers:
             return
@@ -705,7 +709,10 @@ class ZombieLoop:
         if player.asleep:
             player.asleep = False
         name = player.appearance.forename
-        fighting = minute.swing_target is not None or minute.approach_target is not None
+        fighting = minute.swing_target is not None or (
+            minute.approach_target is not None
+            and all(z.zombie_id == minute.approach_target for z in attackers)
+        )
         hurt = False
         for zombie in attackers:
             assert zombie.side is not None
@@ -759,7 +766,9 @@ def _distance_word(gap: float) -> str:
     return k.DISTANCE_WORD_FAR
 
 
-def _state_word(zombie: ZombieEntity) -> str:
+def _state_word(zombie: ZombieEntity, now: int) -> str:
+    if zombie.is_down(now):
+        return k.STATE_WORD_DOWN
     if zombie.state == ZombieState.ATTACKING and zombie.side == AttackSide.BEHIND:
         return k.STATE_WORD_BEHIND
     if zombie.lunger and zombie.has_chased:
@@ -774,7 +783,11 @@ def threat_views(manager: GameManager) -> list[ThreatView]:
         zombie = seen.zombie
         if seen.seen:
             views.append(
-                ThreatView(zombie.zombie_id, _distance_word(zombie.gap), _state_word(zombie))
+                ThreatView(
+                    zombie.zombie_id,
+                    _distance_word(zombie.gap),
+                    _state_word(zombie, manager.narrative.minutes),
+                )
             )
         else:
             hunting = zombie.state in _HUNTING

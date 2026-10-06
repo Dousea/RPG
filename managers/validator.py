@@ -27,6 +27,7 @@ from data.clock import (
 )
 from data.items import ITEMS
 from data.topics import TOPICS
+from managers.combat import held_entity, held_slots
 from managers.exercise import endurance_level
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
@@ -43,23 +44,26 @@ from modules.action.types import (
     AttackAction,
     DropAction,
     Duration,
+    EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
     RemoveGoalAction,
     ShoutAction,
+    ShoveAction,
     SleepAction,
     StanceAction,
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnequipAction,
     UseItemAction,
     WaitAction,
     WearAction,
 )
 from modules.entity.npc import NpcEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
-from modules.item import AppliableItem, ClothingItem, ConsumableItem
+from modules.item import AppliableItem, ClothingItem, ConsumableItem, HoldableItem
 from modules.pace import Pace
 from modules.resolution import (
     ExercisePlan,
@@ -319,6 +323,34 @@ class ActionValidator:
             return Rejected(action, f"{entity.item.name} cannot be used this way.")
         return Accepted(action, HeldItem(entity))
 
+    def _validate_equip(self, action: EquipAction) -> ValidationResult:
+        player = self.manager.player
+        entity = self.manager._find_item_entity(player.inventory, action.item_name)
+        if entity is None:
+            return Rejected(action, f"No '{action.item_name}' in inventory to hold.")
+        item = entity.item
+        if not isinstance(item, HoldableItem):
+            return Rejected(action, f"{item.name} cannot be held.")
+        if entity.broken:
+            return Rejected(action, f"The {item.name} is broken.")
+        for slot in held_slots(item):
+            occupant = player.equipment.get(slot)
+            if occupant is not None:
+                return Rejected(
+                    action, f"{self._name} is already holding the {occupant.item.name}."
+                )
+        return Accepted(action, HeldItem(entity))
+
+    def _validate_unequip(self, action: UnequipAction) -> ValidationResult:
+        player = self.manager.player
+        held = held_entity(player)
+        needle = action.item_name.strip().casefold()
+        if held is None or needle not in (held.item.name.casefold(), held.item.id.casefold()):
+            return Rejected(action, f"{self._name} is not holding '{action.item_name}'.")
+        if len(player.inventory) >= player.max_inventory_size:
+            return Rejected(action, "Inventory is full.")
+        return Accepted(action, HeldItem(held))
+
     # === Combat ===
 
     def _validate_attack(self, action: AttackAction) -> ValidationResult:
@@ -334,6 +366,18 @@ class ActionValidator:
         if npc.hit_points <= 0:
             return Rejected(action, f"{npc.name} is already down.")
         return Accepted(action, TargetNpc(npc))
+
+    def _validate_shove(self, action: ShoveAction) -> ValidationResult:
+        manager = self.manager
+        zombie_target = self._zombie_target(action.target_name)
+        if zombie_target is None:
+            if self._names_a_zombie(action.target_name):
+                return Rejected(action, f"'{action.target_name}' is not here to shove.")
+            return Rejected(action, f"{self._name} can only shove zombies.")
+        zombie = manager.world.zombies[zombie_target.zombie_id]
+        if zombie.is_down(manager.narrative.minutes):
+            return Rejected(action, "It's already down.")
+        return Accepted(action, zombie_target)
 
     def _names_a_zombie(self, name: str) -> bool:
         needle = name.strip().casefold()
@@ -521,6 +565,9 @@ class ActionValidator:
         "WEAR": _validate_wear,
         "TAKE_OFF": _validate_take_off,
         "ATTACK": _validate_attack,
+        "SHOVE": _validate_shove,
+        "EQUIP": _validate_equip,
+        "UNEQUIP": _validate_unequip,
         "USE_ITEM": _validate_use_item,
         "WAIT": _validate_wait,
         "SLEEP": _validate_sleep,

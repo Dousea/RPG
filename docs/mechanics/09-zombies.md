@@ -150,7 +150,7 @@ A zombie at 0 health is removed from the world.
 The loop runs in 1-minute steps for every minute an action spends, before the
 stat chunk that covers that minute. It runs only after the outbreak. Each minute:
 
-0. **Swing:** the player's `ATTACK`, if this minute is one.
+0. **Swing:** the player's `ATTACK` or `SHOVE`, if this minute is one ([Melee Combat](11-melee-combat.md)).
 1. **Sounds:** the player's sounds ([Noise](#noise)).
 2. **Hearing:** each idle or alerted zombie checks the loudest sound it hears.
 3. **Movement:** alerted and chasing zombies close their gap; the player's own
@@ -158,7 +158,7 @@ stat chunk that covers that minute. It runs only after the outbreak. Each minute
 4. **Spotting:** each idle or alerted zombie in the player's zone, and each
    chasing zombie, rolls to see the player.
 5. **Memory:** timers advance; a chaser that lost the player goes idle.
-6. **Attacks:** every zombie at gap 1 or less attacks.
+6. **Attacks:** every zombie at gap 1 or less attacks, unless it is down or staggered.
 7. **Interruption check.**
 
 A minute is 180 ticks. A per-tick chance `p` becomes `1 − (1 − p)^180` for the
@@ -400,8 +400,8 @@ made but no infection follows from it yet, and the body keeps no per-part state.
 - If the target is more than 1 tile away the player first walks up to it at
   4 tiles per minute: `ceil((gap − 1) / 4)` minutes, added to the swing's 1
   minute. Zombies act during them.
-- The swing always connects and takes 1 off the zombie's health. A zombie that
-  was not hunting starts chasing. The melee weapon's XP is awarded.
+- The swing always connects. What it does to the zombie, and the kill, are in
+  [Melee Combat](11-melee-combat.md).
 - At 0 health the zombie is killed and removed; its zone's kill count goes up.
 
 ## Interruptions
@@ -412,9 +412,10 @@ An action's remaining minutes are **not spent** when, during a minute:
 - a zombie reaches gap 1, or
 - the player is attacked.
 
-During a fight (the approach and the swing of an `ATTACK`), the target's own
-spotting and arrival don't count, and attacks interrupt only when they wound or
-drag the player down.
+The target's own spotting and arrival never count. During the swing of an
+`ATTACK` or `SHOVE`, attacks interrupt only when they wound or drag the player
+down. During the approach minutes an attack by any zombie other than the target
+interrupts too, even when defended.
 
 The action's effects are applied up to that point and the stats advance only
 over the minutes that passed. A `MOVE_TO` stops in the zone the player had

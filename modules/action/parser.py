@@ -19,16 +19,19 @@ from modules.action.types import (
     AttackAction,
     DropAction,
     Duration,
+    EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
     RemoveGoalAction,
     ShoutAction,
+    ShoveAction,
     SleepAction,
     StanceAction,
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnequipAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -117,6 +120,24 @@ def _parse_attack(args: str) -> AttackAction:
     if not args:
         raise _ActionParseError("ATTACK needs a target.")
     return AttackAction(target_name=args)
+
+
+def _parse_shove(args: str) -> ShoveAction:
+    if not args:
+        raise _ActionParseError("SHOVE needs a target.")
+    return ShoveAction(target_name=args)
+
+
+def _parse_equip(args: str) -> EquipAction:
+    if not args:
+        raise _ActionParseError("EQUIP needs an item name.")
+    return EquipAction(item_name=args)
+
+
+def _parse_unequip(args: str) -> UnequipAction:
+    if not args:
+        raise _ActionParseError("UNEQUIP needs an item name.")
+    return UnequipAction(item_name=args)
 
 
 def _parse_use_item(args: str) -> UseItemAction:
@@ -307,6 +328,7 @@ SceneKey = Literal[
     "goals",
     "items_here",
     "carried",
+    "held",
     "wearable_carried",
     "worn",
     "npcs_here",
@@ -392,6 +414,23 @@ VERBS: dict[str, Verb] = dict(
             1,
             ("npcs_here", "threats"),
         ),
+        _verb(
+            "SHOVE",
+            ("zombie",),
+            _parse_shove,
+            "a zombie id from [THREATS]; knocks it back with bare hands, whatever is held",
+            1,
+            ("threats",),
+        ),
+        _verb(
+            "EQUIP",
+            ("item",),
+            _parse_equip,
+            "a carried item into the hands; refused if the hands are full",
+            1,
+            ("carried",),
+        ),
+        _verb("UNEQUIP", ("item",), _parse_unequip, "the item in the hands", 1, ("held",)),
         _verb("SHOUT", (), _parse_shout, "call out loudly; zombies may hear it", 0),
         _verb(
             "TALK",

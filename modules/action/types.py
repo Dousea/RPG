@@ -54,6 +54,30 @@ class AttackAction:
 
 
 @dataclass
+class ShoveAction:
+    """One shove at a zombie, bare-handed whatever is held (spec 11)."""
+
+    verb: ClassVar[str] = "SHOVE"
+    target_name: str
+
+
+@dataclass
+class EquipAction:
+    """Take a carried item in hand."""
+
+    verb: ClassVar[str] = "EQUIP"
+    item_name: str
+
+
+@dataclass
+class UnequipAction:
+    """Put a held item back in the inventory."""
+
+    verb: ClassVar[str] = "UNEQUIP"
+    item_name: str
+
+
+@dataclass
 class UseItemAction:
     verb: ClassVar[str] = "USE_ITEM"
     item_name: str
@@ -157,6 +181,9 @@ AnyAction = (
     | WearAction
     | TakeOffAction
     | AttackAction
+    | ShoveAction
+    | EquipAction
+    | UnequipAction
     | UseItemAction
     | WaitAction
     | SleepAction

@@ -73,7 +73,8 @@ the validator's resolved data and returns whole minutes.
 
 | Action | Minutes |
 | --- | --- |
-| `ATTACK` | 1 per swing |
+| `ATTACK`, `SHOVE` | 1 per swing |
+| `EQUIP`, `UNEQUIP` | 1 |
 | `TAKE`, `DROP` | 1 |
 | `USE_ITEM` on food or drink | the item's `eat_minutes` (default 5) |
 | `USE_ITEM` on anything else | 1 |

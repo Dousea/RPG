@@ -398,23 +398,20 @@ class LevelWordTests(unittest.TestCase):
 class HitXpCapTests(unittest.TestCase):
     """Spec 08, Where XP comes from: the hit XP cap."""
 
-    def category_xp(self, xp_damage: float) -> float:
-        import dataclasses
-
+    def category_xp(self, split: float) -> float:
         from data.items import ITEMS
 
         crowbar = ITEMS["item_crowbar"]
         assert isinstance(crowbar, MeleeWeaponItem)
-        weapon = dataclasses.replace(crowbar, skill_categories=("long_blunt",), xp_damage=xp_damage)
         player = make_player(skill_boosts={"long_blunt": 1})
-        SkillEngine().hit_xp(player, weapon)
+        SkillEngine().hit_xp(player, crowbar, split, 1)
         return player.skills["long_blunt"].xp
 
     def test_the_category_xp_is_capped_at_three(self):
         self.assertAlmostEqual(self.category_xp(5.0), 3.0)
         self.assertAlmostEqual(self.category_xp(3.7), 3.0)
 
-    def test_below_the_cap_it_is_point_nine_of_the_damage(self):
+    def test_below_the_cap_it_is_point_nine_of_the_split(self):
         self.assertAlmostEqual(self.category_xp(2.0), 1.8)
 
 

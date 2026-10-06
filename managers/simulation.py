@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from data import exercises as ex_k
+from data import melee as melee_k
 from data import skills as skill_k
 from data import status_effects, survival
 from data import thermal as thermal_k
@@ -36,7 +37,7 @@ from data.time_costs import (
 )
 from data.topics import TOPICS
 from managers.climate import weather_change_facts
-from managers.combat import UNARMED_WEAPON, equipped_weapon, roll_damage
+from managers.combat import equipped_weapon, held_slots, roll_damage
 from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
@@ -66,16 +67,18 @@ from modules.action.types import (
     GiveAction,
     MoveAction,
     RemoveGoalAction,
+    ShoveAction,
     StanceAction,
     TalkAction,
     WaitAction,
 )
 from modules.action.words import describe_action
+from modules.character.equipment import CharacterHoldableSlot
 from modules.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
 )
-from modules.item import AppliableItem, ClothingItem, ConsumableItem, MeleeWeaponItem
+from modules.item import AppliableItem, ClothingItem, ConsumableItem, HoldableItem, MeleeWeaponItem
 from modules.modifier import (
     AffinityModifier,
     ConditionsModifier,
@@ -135,6 +138,7 @@ class Motion:
     pace: Pace = Pace.STILL
     approach_target: str | None = None
     swing_target: str | None = None
+    shove: bool = False
 
 
 def _minutes_fact(minutes: int) -> str:
@@ -343,7 +347,9 @@ class SimulationCore:
             asleep=asleep,
             talking=isinstance(action, SOCIAL_ACTIONS),
             resting=isinstance(action, WaitAction),
-            exercising=isinstance(action, AttackAction) or exerting or pace == Pace.RUN,
+            exercising=isinstance(action, AttackAction | ShoveAction)
+            or exerting
+            or pace == Pace.RUN,
             walking=isinstance(action, MoveAction),
             sneaking=player.sneaking,
             indoors=location.indoors,
@@ -363,6 +369,8 @@ class SimulationCore:
             return Metabolic.WALKING_5KMH
         if isinstance(action, AttackAction):
             return attack_metabolic(equipped_weapon(self.manager.player))
+        if isinstance(action, ShoveAction):
+            return attack_metabolic(None)
         if isinstance(action, ExerciseAction):
             exercise = find_exercise(action.exercise_name)
             if exercise is not None:
@@ -465,6 +473,7 @@ class SimulationCore:
                 asleep=asleep,
                 approach_target=motion.approach_target,
                 swing_target=motion.swing_target,
+                shove=motion.shove,
             )
             sounds, self._pending_sounds = self._pending_sounds, []
             self._shouted = False
@@ -500,8 +509,6 @@ class SimulationCore:
 
     def _resolve_one(self, accepted: Accepted) -> tuple[list[str], int]:
         """Resolve one accepted action; returns its facts and the minutes it took."""
-        if isinstance(accepted.resolved, TargetZombie):
-            return self._resolve_zombie_attack(accepted)
         if isinstance(accepted.action, MoveAction):
             if accepted.action.run:
                 self.manager.player.sneaking = False
@@ -759,19 +766,44 @@ class SimulationCore:
             spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
         if self._interruption or self.manager.narrative.game_over:
             return facts, spent
-        swing = Motion(Pace.STILL, swing_target=target.zombie_id)
+        swing = Motion(
+            Pace.STILL,
+            swing_target=target.zombie_id,
+            shove=isinstance(accepted.action, ShoveAction),
+        )
         swing_spent, swing_facts = self._spend(SWING_MIN, accepted.action, motion=swing)
         return [*facts, *swing_facts], spent + swing_spent
 
-    def _resolve_attack(self, accepted: Accepted) -> str:
+    def _resolve_equip(self, accepted: Accepted) -> str:
+        player = self.manager.player
+        entity = accepted.expect(HeldItem).entity
+        item = entity.item
+        assert isinstance(item, HoldableItem), "_validate_equip checks this"
+        player.inventory.remove(entity)
+        for slot in held_slots(item):
+            player.equipment[slot] = entity
+        return melee_k.EQUIP_FACT.format(name=self._name, item=item.name.lower())
+
+    def _resolve_unequip(self, accepted: Accepted) -> str:
+        player = self.manager.player
+        entity = accepted.expect(HeldItem).entity
+        for slot in CharacterHoldableSlot:
+            if player.equipment[slot] is entity:
+                player.equipment[slot] = None
+        player.inventory.append(entity)
+        return melee_k.UNEQUIP_FACT.format(name=self._name, item=entity.item.name.lower())
+
+    def _resolve_attack(self, accepted: Accepted) -> str | tuple[list[str], int]:
+        if isinstance(accepted.resolved, TargetZombie):
+            return self._resolve_zombie_attack(accepted)
         npc = accepted.expect(TargetNpc).npc
         attacker = self.manager.player
-        weapon = equipped_weapon(attacker) or UNARMED_WEAPON
+        weapon = equipped_weapon(attacker) or melee_k.BARE_HANDS
         damage, modifiers = roll_damage(attacker, weapon, npc, self._rng)
         npc.hit_points -= damage
         self._apply_relationship_modifiers(modifiers)
         if isinstance(weapon, MeleeWeaponItem):
-            self._skill_facts.extend(self.skill_engine.hit_xp(attacker, weapon))
+            self._skill_facts.extend(self.skill_engine.hit_xp(attacker, weapon, 0.0, 1))
 
         if npc.hit_points <= 0:
             fact = f"Attack {npc.name} with {weapon.name}: hit, {npc.name} is down."
@@ -1017,6 +1049,9 @@ class SimulationCore:
         "WEAR": _resolve_wear,
         "TAKE_OFF": _resolve_take_off,
         "ATTACK": _resolve_attack,
+        "SHOVE": _resolve_zombie_attack,
+        "EQUIP": _resolve_equip,
+        "UNEQUIP": _resolve_unequip,
         "USE_ITEM": _resolve_use_item,
         "WAIT": _resolve_wait,
         "SLEEP": _resolve_sleep,

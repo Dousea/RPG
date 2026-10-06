@@ -267,8 +267,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_14(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 14)
+    def test_schema_version_is_15(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 15)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -857,3 +857,45 @@ class SocialSaveTests(IsolatedSaveTestCase):
         loaded = codec.from_dict(data)
         log = loaded.narrative.social_log
         self.assertEqual((log.counts, log.refusals, log.told_topics), ({}, {}, set()))
+
+
+class MeleeSaveTests(IsolatedSaveTestCase):
+    """Spec 11, Saves: weapon condition, hits_taken, down_until and zombie_kills."""
+
+    def test_weapon_condition_zombie_hits_and_kills_round_trip(self):
+        gm = GameManager()
+        crowbar = ItemEntity(item=ITEMS["item_crowbar"])
+        crowbar.condition = 7
+        gm.player.inventory.append(crowbar)
+        broken = ItemEntity(item=ITEMS["item_kitchen_knife"])
+        broken.condition = 0
+        gm.player.inventory.append(broken)
+        gm.player.zombie_kills = 4
+        gm.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_street",
+            health=1.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            hits_taken=3,
+            down_until=1234,
+        )
+        loaded = codec.from_dict(codec.to_dict(gm))
+        conditions = {e.item.id: e.condition for e in loaded.player.inventory}
+        self.assertEqual(conditions["item_crowbar"], 7)
+        self.assertEqual(conditions["item_kitchen_knife"], 0)
+        self.assertTrue(
+            next(e for e in loaded.player.inventory if e.item.id == "item_kitchen_knife").broken
+        )
+        self.assertEqual(loaded.player.zombie_kills, 4)
+        self.assertEqual(loaded.world.zombies["z1"].hits_taken, 3)
+        self.assertEqual(loaded.world.zombies["z1"].down_until, 1234)
+
+    def test_a_new_weapon_starts_at_full_condition(self):
+        self.assertEqual(ItemEntity(item=ITEMS["item_crowbar"]).condition, 15)
+        self.assertEqual(ItemEntity(item=ITEMS["item_kitchen_knife"]).condition, 10)

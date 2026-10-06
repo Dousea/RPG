@@ -69,8 +69,9 @@ table order ("Orton is now Peckish.", "Orton is no longer Peckish.").
 | Defence | 2 per Endurance level, 3 per Tired level and 2 per Drunk level are lost. |
 
 `melee_status_effect_penalty`, `damage_after_status_effects`, `crit_penalty` and
-`defence_penalty` in `managers/stats/status_effects.py` compute these. The melee, zombie and
-health specs call them. Heavy Load is 0 until the carrying spec.
+`defence_penalty` in `managers/stats/status_effects.py` compute these. The melee spec calls
+`melee_status_effect_penalty` (through `damage_after_status_effects`) and `crit_penalty`; the
+zombie and health specs call the rest. Heavy Load is 0 until the carrying spec.
 
 ## Eating and drinking
 

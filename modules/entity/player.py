@@ -60,6 +60,7 @@ class PlayerEntity(BaseEntity):
     loss_timer_steps: dict[str, int] = field(default_factory=dict[str, int])
     exercise: ExerciseState = field(default_factory=ExerciseState)
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
+    zombie_kills: int = 0  # spec 11
 
     def __post_init__(self) -> None:
         super().__post_init__()

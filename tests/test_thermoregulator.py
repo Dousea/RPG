@@ -839,31 +839,24 @@ class WiringTests(unittest.TestCase):
     """Spec 06, Set point and metabolic rate: what the simulation hands the drivers."""
 
     def test_attack_metabolic_targets_by_weapon(self):
-        from managers.combat import UNARMED_WEAPON
+        from data.items import ITEMS
+        from data.melee import BARE_HANDS
         from managers.thermoregulator import attack_metabolic
         from modules.character.equipment import AnyCharacterEquipmentSlot, CharacterHoldableSlot
         from modules.item import MeleeWeaponItem, RangedWeaponItem
-        from modules.weapon import MeleeWeaponType, RangedWeaponType
-
-        def melee(kind, two_handed):
-            slots: list[AnyCharacterEquipmentSlot] = [CharacterHoldableSlot.RIGHT_HAND]
-            if two_handed:
-                slots = [CharacterHoldableSlot.LEFT_HAND, CharacterHoldableSlot.RIGHT_HAND]
-            return MeleeWeaponItem("w", "w", "", 1, [], slots, two_handed, kind, 3)
+        from modules.weapon import RangedWeaponType
 
         def ranged(kind):
             slots: list[AnyCharacterEquipmentSlot] = [CharacterHoldableSlot.RIGHT_HAND]
             return RangedWeaponItem("g", "g", "", 1, [], slots, False, kind, 3, 5)
 
+        crowbar = ITEMS["item_crowbar"]
+        knife = ITEMS["item_kitchen_knife"]
+        assert isinstance(crowbar, MeleeWeaponItem) and isinstance(knife, MeleeWeaponItem)
         self.assertEqual(attack_metabolic(None), Metabolic.MEDIUM_WORK)
-        self.assertEqual(attack_metabolic(UNARMED_WEAPON), Metabolic.MEDIUM_WORK)
-        self.assertEqual(
-            attack_metabolic(melee(MeleeWeaponType.BLUNT, False)), Metabolic.MEDIUM_WORK
-        )
-        self.assertEqual(attack_metabolic(melee(MeleeWeaponType.BLUNT, True)), Metabolic.HEAVY_WORK)
-        self.assertEqual(
-            attack_metabolic(melee(MeleeWeaponType.BLADE, False)), Metabolic.LIGHT_WORK
-        )
+        self.assertEqual(attack_metabolic(BARE_HANDS), Metabolic.MEDIUM_WORK)
+        self.assertEqual(attack_metabolic(crowbar), Metabolic.HEAVY_WORK)
+        self.assertEqual(attack_metabolic(knife), Metabolic.LIGHT_WORK)
         self.assertEqual(attack_metabolic(ranged(RangedWeaponType.RIFLE)), Metabolic.LIGHT_WORK)
         self.assertEqual(attack_metabolic(ranged(RangedWeaponType.PISTOL)), Metabolic.USING_TOOLS)
 

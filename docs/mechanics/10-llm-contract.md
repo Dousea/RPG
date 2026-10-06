@@ -87,6 +87,8 @@ drift apart.
 | `WEAR` / `TAKE_OFF` | clothing item | 1 |
 | `EXERCISE` | type, optional minutes | as done |
 | `ATTACK` | NPC name, zombie id, or `zombie` | 1 per swing |
+| `SHOVE` | zombie id, or `zombie` | 1 per swing |
+| `EQUIP` / `UNEQUIP` | item | 1 |
 | `SHOUT` | none | 0 |
 | `TALK` | NPC, approach | 5 per turn |
 | `ASK` | NPC, request | 5 per turn |

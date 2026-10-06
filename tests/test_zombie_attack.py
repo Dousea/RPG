@@ -97,7 +97,7 @@ class DefenceTests(unittest.TestCase):
 
     def test_an_axe_takes_its_level_whole(self):
         gm = GameManager()
-        axe = dataclasses.replace(ITEMS["item_crowbar"], skill_categories=("axe",))
+        axe = dataclasses.replace(ITEMS["item_crowbar"], categories=("axe",))
         gm.player.equipment[next(iter(gm.player.equipment))] = ItemEntity(item=axe)
         gm.player.skills["axe"] = SkillState(level=5, xp=0)
         self.assertEqual(weapon_level(gm.player), 5)

@@ -42,6 +42,13 @@ class ZombieEntity:
     bonus_spot_time: float = 0.0
     side: AttackSide | None = None
     sound_gap: float = 0.0
+    hits_taken: int = 0  # spec 11: it never resets
+    down_until: int = 0  # spec 11: the clock minute it gets up
+    staggered: bool = False  # spec 11: set by a hit or shove, cleared at the end of that minute
+
+    def is_down(self, now: int) -> bool:
+        """Whether it is on the floor during the minute that starts at clock minute `now`."""
+        return now < self.down_until
 
     @property
     def poor_sight(self) -> bool:

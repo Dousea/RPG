@@ -208,12 +208,6 @@ THUMP_FACT = "A zombie's blow glances off {name}."  # spec 09
 WOUND_FACT = "A zombie {verb} {name}'s {part}."  # spec 09
 DRAGGED_FACT = "{name} was dragged down by the dead."  # spec 09
 
-STAND_IN_SWING_DAMAGE = (
-    1.0  # spec 09: a swing always connects for this much until the melee damage chain lands
-)
-SWING_KILL_FACT = "Attack the zombie with {weapon}: hit, and it goes down for good."  # spec 09
-SWING_HIT_FACT = "Attack the zombie with {weapon}: hit, it reels but keeps coming."  # spec 09
-
 DISTANCE_WORDS = ((1, "on you"), (5, "close"), (15, "nearby"))  # spec 09: (gap up to, word)
 DISTANCE_WORD_FAR = "far off"  # spec 09
 STATE_WORDS = {  # spec 09
@@ -224,5 +218,6 @@ STATE_WORDS = {  # spec 09
 }
 STATE_WORD_FAST = "coming at you fast"  # spec 09: a lunger that has chased the player
 STATE_WORD_BEHIND = "right behind you"  # spec 09
+STATE_WORD_DOWN = "down"  # spec 11
 HEARD_WORD_HUNTING = "something behind you"  # spec 09
 HEARD_WORD_OTHER = "something shuffling nearby"  # spec 09

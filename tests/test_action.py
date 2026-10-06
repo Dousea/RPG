@@ -261,7 +261,7 @@ class VerbRegistryTests(unittest.TestCase):
                 self.assertIn("not an available action", result.reason)
 
     def test_a_verb_of_a_later_spec_is_a_parse_failure_until_it_lands(self):
-        for line in ("EQUIP Crowbar", "BANDAGE left hand", "OPEN door", "REPAIR knife"):
+        for line in ("BANDAGE left hand", "OPEN door", "REPAIR knife"):
             with self.subTest(line=line):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 
@@ -291,6 +291,9 @@ class VerbRegistryTests(unittest.TestCase):
             "TAKE_OFF": "TAKE_OFF Jeans",
             "EXERCISE": "EXERCISE Push-ups 10",
             "ATTACK": "ATTACK z1",
+            "SHOVE": "SHOVE z1",
+            "EQUIP": "EQUIP Crowbar",
+            "UNEQUIP": "UNEQUIP Crowbar",
             "SHOUT": "SHOUT",
             "ADD_GOAL": "ADD_GOAL short_term Find water",
             "REMOVE_GOAL": "REMOVE_GOAL short_term Find water",
@@ -395,11 +398,12 @@ class SceneFilteringTests(unittest.TestCase):
         expected = {
             "goals": ["REMOVE_GOAL"],
             "items_here": ["TAKE"],
-            "carried": ["DROP", "USE_ITEM"],
+            "carried": ["DROP", "USE_ITEM", "EQUIP"],
+            "held": ["UNEQUIP"],
             "wearable_carried": ["WEAR"],
             "worn": ["TAKE_OFF"],
             "npcs_here": ["ATTACK", "TALK", "ASK", "GIVE"],
-            "threats": ["ATTACK"],
+            "threats": ["ATTACK", "SHOVE"],
         }
         for key, added in expected.items():
             with self.subTest(key=key):

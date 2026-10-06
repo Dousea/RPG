@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 from ..body import BodyPart
-from ..item import BaseItem
+from ..item import BaseItem, MeleeWeaponItem
 from . import BaseEntity
 
 
@@ -10,7 +10,17 @@ class ItemEntity(BaseEntity):
     item: BaseItem
     wetness: float = 0.0  # 0-100, spec 05
     holes: set[BodyPart] = field(default_factory=set[BodyPart])  # spec 05, written from spec 09
+    condition: int = -1  # a melee weapon's wear: -1 until set to full, 0 is broken; spec 11
+
+    def __post_init__(self):
+        super().__post_init__()
+        if isinstance(self.item, MeleeWeaponItem) and self.condition < 0:
+            self.condition = self.item.condition_max
 
     @property
     def max_hit_points(self) -> int:
         return self.item.max_hit_points
+
+    @property
+    def broken(self) -> bool:
+        return isinstance(self.item, MeleeWeaponItem) and self.condition <= 0

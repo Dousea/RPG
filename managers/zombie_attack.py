@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass
 from enum import StrEnum
 
+from data import melee as melee_k
 from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
@@ -58,11 +59,12 @@ def weapon_level(player: PlayerEntity) -> int:
         return 0
     levels = skill_levels(player)
     level = -1
-    for category in weapon.skill_categories:
-        if category == skill_k.AXE:
-            level = levels.get(category, 0)
+    for category in weapon.categories:
+        skill_id = melee_k.CATEGORY_SKILL[category]
+        if skill_id == skill_k.AXE:
+            level = levels.get(skill_id, 0)
         else:
-            level += levels.get(category, 0)
+            level += levels.get(skill_id, 0)
     return min(max(level, 0), skill_k.MAX_LEVEL)
 
 

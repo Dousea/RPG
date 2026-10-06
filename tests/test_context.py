@@ -675,6 +675,63 @@ class ThreatsContextTests(unittest.TestCase):
         self.assertNotIn("coming at you", block)
 
 
+class MeleeContextTests(unittest.TestCase):
+    """Spec 11, What the narrator and the player see."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_street"
+        self.gm.world.outbreak_started_at = 0
+        clear_sky(self.gm)
+
+    def hold(self, item_id: str) -> ItemEntity:
+        entity = ItemEntity(item=ITEMS[item_id])
+        for slot in entity.item.slots:  # type: ignore[attr-defined]
+            self.gm.player.equipment[slot] = entity  # type: ignore[index]
+        return entity
+
+    def narrator(self) -> str:
+        return ContextBuilder(self.gm).build_narrator_prompt("look")
+
+    def test_a_down_zombie_reads_down(self):
+        zombie = add_zombie(self.gm, 1, ZombieState.ATTACKING)
+        zombie.down_until = self.gm.narrative.minutes + 2
+        block = threats_block(self.narrator())
+        self.assertIn("z1, on you, down", block)
+
+    def test_the_condition_block_has_a_hands_line_with_a_word_and_no_number(self):
+        entity = self.hold("item_crowbar")
+        entity.condition = 8
+        condition = self.narrator().split("[CONDITION]")[1].split("\n[")[0]
+        self.assertIn("Holding: crowbar (worn)", condition)
+        self.assertNotRegex(condition.split("Holding:")[1], r"\d")
+
+    def test_no_hands_line_when_nothing_is_held(self):
+        condition = self.narrator().split("[CONDITION]")[1].split("\n[")[0]
+        self.assertNotIn("Holding", condition)
+
+    def test_the_parser_inventory_marks_held_and_broken_items(self):
+        self.hold("item_crowbar")
+        broken = ItemEntity(item=ITEMS["item_kitchen_knife"])
+        broken.condition = 0
+        self.gm.player.inventory.append(broken)
+        prompt = ContextBuilder(self.gm).build_parser_prompt("look")
+        inventory = prompt.split("[INVENTORY]")[1].split("\n[")[0]
+        self.assertIn("Crowbar (in hands)", inventory)
+        self.assertIn("Kitchen Knife (broken)", inventory)
+
+    def test_the_condition_words_by_share_of_full_condition(self):
+        from data.melee import condition_word
+
+        self.assertEqual(condition_word(15, 15), "good")
+        self.assertEqual(condition_word(12, 15), "good")
+        self.assertEqual(condition_word(11, 15), "worn")
+        self.assertEqual(condition_word(6, 15), "worn")
+        self.assertEqual(condition_word(5, 15), "badly worn")
+        self.assertEqual(condition_word(1, 15), "badly worn")
+        self.assertEqual(condition_word(0, 15), "broken")
+
+
 def _positions(prompt: str, headers: list[str]) -> list[int]:
     positions = []
     text = "\n" + prompt
@@ -937,7 +994,7 @@ class SceneKeyTests(unittest.TestCase):
         add_zombie(self.gm, 3, ZombieState.CHASING)
         self.assertEqual(self.builder.scene_keys(), frozenset({"threats"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"ATTACK"})
+        self.assertEqual(listed, ALWAYS | {"ATTACK", "SHOVE"})
 
     def test_a_ground_item_gives_items_here(self):
         item = ITEMS["item_apartment_key"]
@@ -950,7 +1007,7 @@ class SceneKeyTests(unittest.TestCase):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
         self.assertEqual(self.builder.scene_keys(), frozenset({"carried"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM"})
+        self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM", "EQUIP"})
 
     def test_a_goal_gives_goals(self):
         self.gm.narrative.goals["short_term"].append("Find water")
@@ -963,7 +1020,7 @@ class SceneKeyTests(unittest.TestCase):
         self.gm.player.inventory.append(ItemEntity(item=clothing))
         self.assertEqual(self.builder.scene_keys(), frozenset({"carried", "wearable_carried"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM", "WEAR"})
+        self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM", "WEAR", "EQUIP"})
 
     def test_a_worn_item_gives_worn(self):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_jeans"]))

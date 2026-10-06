@@ -15,16 +15,19 @@ from modules.action.types import (
     AskAction,
     AttackAction,
     DropAction,
+    EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
     RemoveGoalAction,
     ShoutAction,
+    ShoveAction,
     SleepAction,
     StanceAction,
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnequipAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -44,7 +47,9 @@ from modules.resolution import (
     TimeSpan,
 )
 
-SWING_MIN = 1  # spec 01
+SWING_MIN = 1  # spec 11
+EQUIP_MIN = 1  # spec 01
+UNEQUIP_MIN = 1  # spec 01
 QUICK_ACTION_MIN = 1  # spec 01
 WALK_TO_BARRIER_MIN = 1  # spec 01
 WINDOW_CLIMB_MIN = 1  # spec 01
@@ -112,6 +117,9 @@ def _exercise_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 TIME_COSTS: dict[type, int | CostFunction] = {
     AttackAction: _attack_minutes,
+    ShoveAction: _attack_minutes,
+    EquipAction: EQUIP_MIN,
+    UnequipAction: UNEQUIP_MIN,
     TakeAction: QUICK_ACTION_MIN,
     DropAction: QUICK_ACTION_MIN,
     WearAction: WEAR_MINUTES,

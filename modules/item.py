@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from .body import BodyLocation, BodyPart
 from .character.equipment import AnyCharacterEquipmentSlot, CharacterHoldableSlot
 from .modifier import AnyModifier
-from .weapon import MeleeWeaponType, RangedWeaponType
+from .weapon import RangedWeaponType
 
 DEFAULT_EAT_MINUTES = 5  # spec 03
 SCRATCH_DEFENSE_DEFAULT = 0  # spec 05
@@ -87,12 +87,26 @@ class AppliableItem(HoldableItem):
 
 @dataclass
 class MeleeWeaponItem(HoldableItem):
-    type: MeleeWeaponType
-    damage: int
-    # The skills a hit trains, and the damage the XP formula reads when a fight
-    # keeps the item's own damage number.
-    skill_categories: tuple[str, ...] = ()
-    xp_damage: float = 0.0
+    """A melee weapon's stats; the runtime `condition` lives on its `ItemEntity`."""
+
+    damage: int  # HP in a fight with an NPC (spec 11)
+    min_damage: float
+    max_damage: float
+    max_range: float
+    categories: tuple[str, ...] = ()
+    critical_chance: float = 0.0
+    crit_dmg_multiplier: float = 2.0
+    max_hit_count: int = 1
+    knockback_on_no_death: bool = False
+    condition_max: int = 1
+    condition_lower_chance: int = 1
+    weight: float = 1.0
+    endurance_mod: float = 1.0
+    base_speed: float = 1.0
+    is_stab: bool = False
+    door_damage: int = 1
+    no_criticals: bool = False
+    no_maintenance_xp: bool = False
 
     def __post_init__(self):
         super().__post_init__()

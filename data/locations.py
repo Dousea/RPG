@@ -189,7 +189,12 @@ def build_starting_locations() -> dict[str, Location]:
     locations["zone_building"].entities.append(apartment_door)
 
     starting_ground_items = {
-        "zone_home": ["item_canned_beans", "item_water_bottle", "item_black_jacket"],
+        "zone_home": [
+            "item_canned_beans",
+            "item_water_bottle",
+            "item_black_jacket",
+            "item_kitchen_knife",
+        ],
         "zone_building": ["item_first_aid_kit"],
         "zone_street": ["item_crowbar"],
     }

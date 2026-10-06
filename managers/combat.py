@@ -1,34 +1,35 @@
-"""Combat: which weapon a body swings and how much damage one hit deals."""
+"""Combat: which weapon the player holds and how much damage one hit does to an NPC."""
 
 import random
 
 from managers.events import broadcast_event
 from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.event import WeaponDealDamageEvent, WeaponTakeDamageEvent
-from modules.item import MeleeWeaponItem, RangedWeaponItem
+from modules.item import HoldableItem, MeleeWeaponItem, RangedWeaponItem
 from modules.modifier import AnyModifier, DamageMultiplicativeModifier
-from modules.weapon import MeleeWeaponType
-
-# Fists deal a token amount of damage so an unarmed ATTACK still resolves
-# through the same event/modifier pipeline as an armed one, instead of being a
-# special case.
-UNARMED_WEAPON = MeleeWeaponItem(
-    id="unarmed",
-    name="bare hands",
-    description="No weapon -- just hands.",
-    max_hit_points=1,
-    tags=["unarmed"],
-    type=MeleeWeaponType.BLUNT,
-    damage=2,
-    slots=[CharacterHoldableSlot.RIGHT_HAND],
-    is_two_handed=False,
-)
 
 # +/-10% variance on damage rolls, just enough that combat doesn't read as a
 # fixed calculator.
 DAMAGE_JITTER = 0.10
+
+
+def held_slots(item: HoldableItem) -> list[CharacterHoldableSlot]:
+    """The hands an item takes: both if it is two-handed, otherwise the right."""
+    if item.is_two_handed:
+        return list(CharacterHoldableSlot)
+    return [CharacterHoldableSlot.RIGHT_HAND]
+
+
+def held_entity(player: PlayerEntity) -> ItemEntity | None:
+    """The entity in the player's hands (a two-handed one fills both), or None."""
+    for slot in CharacterHoldableSlot:
+        entity = player.equipment[slot]
+        if entity is not None:
+            return entity
+    return None
 
 
 def equipped_weapon(player: PlayerEntity) -> MeleeWeaponItem | RangedWeaponItem | None:

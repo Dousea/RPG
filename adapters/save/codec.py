@@ -46,7 +46,7 @@ from modules.entity.zombie import (
     ZombieEntity,
     ZombieState,
 )
-from modules.item import ClothingItem
+from modules.item import ClothingItem, MeleeWeaponItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.social import SocialLog
@@ -56,7 +56,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 14  # spec 10
+SCHEMA_VERSION = 15  # spec 11
 
 MAX_ID_LENGTH = 40
 
@@ -217,6 +217,7 @@ def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
         "hit_points": entity.hit_points,
         "wetness": entity.wetness,
         "holes": sorted(part.value for part in entity.holes),
+        "condition": entity.condition,
     }
 
 
@@ -229,6 +230,11 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
     # __post_init__ sets full health; restore the saved condition over it.
     entity.hit_points = int(data.get("hit_points", entity.max_hit_points))
     entity.wetness = min(max(float(data.get("wetness", 0.0)), 0.0), WETNESS_MAX)
+    if isinstance(entity.item, MeleeWeaponItem):
+        entity.condition = min(
+            max(int(data.get("condition", entity.item.condition_max)), 0),
+            entity.item.condition_max,
+        )
     for name in data.get("holes", []):
         try:
             entity.holes.add(BodyPart(name))
@@ -275,6 +281,9 @@ def _zombie_from_dict(data: dict[str, Any], zone_ids: Any) -> ZombieEntity | Non
             bonus_spot_time=float(data.get("bonus_spot_time", 0.0)),
             side=side,
             sound_gap=float(data.get("sound_gap", 0.0)),
+            hits_taken=int(data.get("hits_taken", 0)),
+            down_until=int(data.get("down_until", 0)),
+            staggered=_as_bool(data.get("staggered", False)),
         )
     except (KeyError, TypeError, ValueError):
         logger.warning("Dropping a zombie with unreadable fields.")
@@ -417,6 +426,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 for location, entity in player.worn.items()
             },
             "conditions": [condition.value for condition in player.conditions],
+            "zombie_kills": player.zombie_kills,
         },
         "npcs": [
             {
@@ -726,6 +736,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         },
         exercise=_exercise_from_dict(_as_dict(data.get("exercise"))),
         conditions=conditions,
+        zombie_kills=max(0, int(data.get("zombie_kills", 0))),
     )
     player.equipment = equipment
     player.worn = worn

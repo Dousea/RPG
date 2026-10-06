@@ -560,6 +560,10 @@
                 <div class="screen" data-screen="inventory">
                     <h2 class="screen-title">Inventory</h2>
                     <div class="section">
+                        <h3>In hands</h3>
+                        <ul class="row-list" id="held-list"></ul>
+                    </div>
+                    <div class="section">
                         <h3>Equipped</h3>
                         <ul class="row-list" id="equipment-list"></ul>
                     </div>
@@ -686,6 +690,7 @@
     const vitals = document.getElementById('vitals');
     const conditionChips = document.getElementById('condition-chips');
     const goalList = document.getElementById('goal-list');
+    const heldList = document.getElementById('held-list');
     const equipmentList = document.getElementById('equipment-list');
     const inventoryList = document.getElementById('inventory-list');
     const wornList = document.getElementById('worn-list');
@@ -948,6 +953,18 @@
         }));
     }
 
+    function renderHeld(data) {
+        const held = data.held;
+        if (!held) {
+            clearAndFill(heldList, [emptyNote('Nothing in hand.')]);
+            return;
+        }
+        const li = el('li', 'row-item');
+        li.appendChild(el('span', 'label', held.name));
+        li.appendChild(el('span', 'value muted', held.condition_word));
+        clearAndFill(heldList, [li]);
+    }
+
     function renderEquipment(data) {
         const slots = data.equipment || [];
         clearAndFill(equipmentList, slots.map(slot => {
@@ -975,6 +992,7 @@
     function renderSurvivor(data) {
         const character = data.character || {};
         const rows = [['Name', character.name], ['Occupation', character.occupation]];
+        if (typeof data.zombie_kills === 'number') rows.push(['Zombies killed', String(data.zombie_kills)]);
         clearAndFill(survivorList, rows.filter(([, value]) => value).map(([label, value]) => {
             const li = el('li', 'row-item');
             li.appendChild(el('span', 'label', label));
@@ -1162,6 +1180,7 @@
         renderVitals(data);
         renderGoals(data);
         renderInventory(data);
+        renderHeld(data);
         renderEquipment(data);
         renderWorn(data);
         renderSurvivor(data);

@@ -1,3 +1,4 @@
+from data import melee as melee_k
 from data.clothing_coverage import covered_parts
 from data.clothing_items import STARTING_CLOTHES
 from modules.body import BodyLocation
@@ -13,7 +14,7 @@ from modules.item import (
     RangedWeaponItem,
 )
 from modules.modifier import HPModifier
-from modules.weapon import MeleeWeaponType, RangedWeaponType
+from modules.weapon import RangedWeaponType
 
 # Our rule: below this share of its max hit points an item reads as damaged
 # rather than worn, so the narrator gets a word, never the number.
@@ -26,7 +27,9 @@ WETNESS_SOAKED_MIN = 75  # our band edge, as above
 
 
 def item_condition_word(entity: ItemEntity) -> str:
-    """The item's hit points as intact, worn, damaged or broken."""
+    """The item's hit points as intact, worn, damaged or broken; a melee weapon by its wear."""
+    if isinstance(entity.item, MeleeWeaponItem):
+        return melee_k.condition_word(entity.condition, entity.item.condition_max)
     if entity.hit_points >= entity.max_hit_points:
         return "intact"
     if entity.hit_points <= 0:
@@ -63,15 +66,46 @@ ITEMS: dict[str, BaseItem] = {
         description="A sturdy piece of metal. Good for prying or hitting.",
         max_hit_points=50,
         tags=["tool", "weapon"],
-        type=MeleeWeaponType.BLUNT,
-        damage=5,
-        skill_categories=("long_blunt",),  # spec 08
-        xp_damage=0.875,  # spec 08: mean of the matched weapon's damage range
+        damage=5,  # spec 11: HP in a fight with an NPC
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
             CharacterHoldableSlot.LEFT_HAND,
         ],
         is_two_handed=True,
+        categories=(melee_k.CATEGORY_BLUNT,),
+        min_damage=0.6,
+        max_damage=1.15,
+        max_range=1.25,
+        critical_chance=20.0,
+        crit_dmg_multiplier=2.5,
+        max_hit_count=3,
+        knockback_on_no_death=True,
+        condition_max=15,
+        condition_lower_chance=70,
+        weight=2.0,
+        door_damage=8,
+    ),
+    "item_kitchen_knife": MeleeWeaponItem(
+        id="item_kitchen_knife",
+        name="Kitchen Knife",
+        description="A sharp chef's knife. Quick, and it ends a fight if it finds the jaw.",
+        max_hit_points=20,
+        tags=["tool", "weapon"],
+        damage=3,  # spec 11: HP in a fight with an NPC
+        slots=[CharacterHoldableSlot.RIGHT_HAND],
+        is_two_handed=False,
+        categories=(melee_k.CATEGORY_SMALL_BLADE,),
+        min_damage=0.3,
+        max_damage=0.7,
+        max_range=0.9,
+        critical_chance=25.0,
+        crit_dmg_multiplier=4.0,
+        max_hit_count=1,
+        condition_max=10,
+        condition_lower_chance=2,
+        weight=0.7,
+        is_stab=True,
+        door_damage=1,
     ),
     "item_pistol": RangedWeaponItem(
         id="item_pistol",
