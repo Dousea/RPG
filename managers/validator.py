@@ -6,14 +6,14 @@ Core decides "what happens" and long before the narrator writes a word about
 it -- the inversion that makes the engine authoritative instead of the old
 narrate-then-vet order.
 
-Every check here is read-only. `Accepted.resolved` carries whatever entities
-the check already looked up (the target NPC, the item entity, the door) so
+Every check here is read-only. `Accepted.resolved` carries whatever the check
+already looked up (the target NPC, the item entity, the destination zone) as a
+`modules.resolution` type, so
 `managers/simulation.py` never has to re-resolve them and never has to
 re-derive the reason something was legal.
 """
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from data import survival
 from data.clock import (
@@ -51,6 +51,19 @@ from modules.action import (
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ConsumableItem
+from modules.resolution import (
+    HeldItem,
+    MoveBlocked,
+    MoveToSpot,
+    MoveToZone,
+    NewItem,
+    NpcDestination,
+    Resolution,
+    ShuffleInZone,
+    StayPut,
+    TargetNpc,
+    TimeSpan,
+)
 from modules.stats import CharacterStat, StatusEffect
 
 GOAL_HORIZONS = ("short_term", "long_term")
@@ -64,7 +77,16 @@ INCAPACITATING_STATUSES = frozenset({"unconscious", "incapacitated", "restrained
 @dataclass
 class Accepted:
     action: AnyAction
-    resolved: dict[str, Any] = field(default_factory=dict)
+    resolved: Resolution = None
+
+    def expect[R](self, kind: type[R]) -> R:
+        """`resolved` as a `kind`; anything else is a validator bug."""
+        if not isinstance(self.resolved, kind):
+            raise TypeError(
+                f"{type(self.action).__name__} resolved to {self.resolved!r}, "
+                f"expected {kind.__name__}"
+            )
+        return self.resolved
 
 
 @dataclass
@@ -110,14 +132,13 @@ class ActionValidator:
 
         Anything that isn't a recognized zone, connection, or bare direction
         becomes a free-text spot inside the zone the player is already in.
-        `resolved["kind"]` tells `SimulationCore._resolve_move` which of the
-        five outcomes (stay/shuffle/spot/zone/blocked) this is.
+        The result is one of the five `MoveOutcome` types.
         """
         manager = self.manager
         current = manager.current_location
         raw = action.destination.strip().strip("\"'.,;:")
         if not raw:
-            return Accepted(action, {"kind": "stay", "location": current})
+            return Accepted(action, StayPut(current))
 
         folded = raw.casefold()
 
@@ -130,14 +151,11 @@ class ActionValidator:
         target = connection_target(folded, current, manager.world.locations)
         if target is None:
             if folded in BARE_DIRECTIONS:
-                return Accepted(action, {"kind": "shuffle", "location": current, "raw": raw})
+                return Accepted(action, ShuffleInZone(current, raw))
             target = manager.resolve_location(raw)
 
         if target is None:
-            return Accepted(
-                action,
-                {"kind": "spot", "location": current, "place": raw[:MAX_PLACE_LENGTH]},
-            )
+            return Accepted(action, MoveToSpot(current, raw[:MAX_PLACE_LENGTH]))
 
         # "the pharmacy" and "the kitchen" resolve to a zone via an alias, but
         # the words themselves are the interesting part -- they are where in
@@ -150,13 +168,13 @@ class ActionValidator:
         )
 
         if target.id == current.id:
-            return Accepted(action, {"kind": "spot", "location": current, "place": place})
+            return Accepted(action, MoveToSpot(current, place))
 
         path = manager.zone_path(current.id, target.id)
         if path is None:
             # Disconnected map -- not possible with the shipped content, but
             # zone_path can express it, so this must not raise or refuse.
-            return Accepted(action, {"kind": "spot", "location": current, "place": place})
+            return Accepted(action, MoveToSpot(current, place))
 
         hop_from = current
         for hop_id in path:
@@ -169,20 +187,16 @@ class ActionValidator:
                 hop_to = manager.world.locations[hop_id]
                 return Accepted(
                     action,
-                    {
-                        "kind": "blocked",
-                        "hops": path.index(hop_id),
-                        "location": hop_from,
-                        "place": f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
-                        "target": target,
-                        "door": door,
-                    },
+                    MoveBlocked(
+                        location=hop_from,
+                        place=f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
+                        hops=path.index(hop_id),
+                        target=target,
+                    ),
                 )
             hop_from = manager.world.locations[hop_id]
 
-        return Accepted(
-            action, {"kind": "zone", "location": target, "place": place, "hops": len(path)}
-        )
+        return Accepted(action, MoveToZone(target, place, hops=len(path)))
 
     @staticmethod
     def _door_blocking(location, target_id: str) -> DoorEntity | None:
@@ -205,7 +219,7 @@ class ActionValidator:
             return Rejected(action, f"No '{action.item_name}' here to take.")
         if len(manager.player.inventory) >= manager.player.max_inventory_size:
             return Rejected(action, "Inventory is full.")
-        return Accepted(action, {"item_entity": entity})
+        return Accepted(action, HeldItem(entity))
 
     def _validate_drop(self, action: DropAction) -> ValidationResult:
         entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
@@ -213,7 +227,7 @@ class ActionValidator:
             return Rejected(action, f"No '{action.item_name}' in inventory to drop.")
         if self._is_door_key(entity.item.id):
             return Rejected(action, "Orton keeps his keys on him.")
-        return Accepted(action, {"item_entity": entity})
+        return Accepted(action, HeldItem(entity))
 
     def _is_door_key(self, item_id: str) -> bool:
         """Whether `item_id` is the `key_id` of any `DoorEntity` anywhere in
@@ -233,7 +247,7 @@ class ActionValidator:
             return Rejected(action, f"No '{action.item_name}' in inventory to use.")
         if not isinstance(entity.item, (ConsumableItem, AppliableItem)):
             return Rejected(action, f"{entity.item.name} cannot be used this way.")
-        return Accepted(action, {"item_entity": entity})
+        return Accepted(action, HeldItem(entity))
 
     def _validate_update_inventory(self, action: UpdateInventoryAction) -> ValidationResult:
         manager = self.manager
@@ -245,7 +259,7 @@ class ActionValidator:
                 return Rejected(action, "Orton can't conjure a key; it has to be found.")
             if len(manager.player.inventory) >= manager.player.max_inventory_size:
                 return Rejected(action, "Inventory is full.")
-            return Accepted(action, {"item": item})
+            return Accepted(action, NewItem(item))
 
         entity = manager._find_item_entity(manager.player.inventory, action.item_name)
         if entity is None:
@@ -272,7 +286,7 @@ class ActionValidator:
                     return Rejected(action, "Orton keeps his keys on him.")
                 if value > 1:
                     return Rejected(action, "Orton can't conjure a key; it has to be found.")
-        return Accepted(action, {"item_entity": entity})
+        return Accepted(action, HeldItem(entity))
 
     # === Combat ===
 
@@ -285,7 +299,7 @@ class ActionValidator:
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
         if npc.hit_points <= 0:
             return Rejected(action, f"{npc.name} is already down.")
-        return Accepted(action, {"npc": npc})
+        return Accepted(action, TargetNpc(npc))
 
     def _player_incapacitated(self) -> bool:
         statuses = {s.casefold() for s in self.manager.narrative.player_status}
@@ -294,12 +308,12 @@ class ActionValidator:
     # === Status / conditions ===
 
     def _validate_status_add(self, action: StatusAddAction) -> ValidationResult:
-        return Accepted(action, {})
+        return Accepted(action)
 
     def _validate_status_remove(self, action: StatusRemoveAction) -> ValidationResult:
         if action.status not in self.manager.narrative.player_status:
             return Rejected(action, f"Player did not have status '{action.status}'.")
-        return Accepted(action, {})
+        return Accepted(action)
 
     def _validate_update_condition(self, action: UpdateConditionAction) -> ValidationResult:
         return Rejected(
@@ -324,7 +338,7 @@ class ActionValidator:
         span = self._span(duration)
         if span is None:
             return Rejected(action, f"Unknown time of day: '{duration.until_time_of_day}'.")
-        return Accepted(action, {"minutes": min(span, cap), "clamped": span > cap})
+        return Accepted(action, TimeSpan(min(span, cap), clamped=span > cap))
 
     def _validate_wait(self, action: WaitAction) -> ValidationResult:
         return self._timed(action, action.duration, WAIT_CAP_MIN)
@@ -339,7 +353,7 @@ class ActionValidator:
         now = self.manager.narrative.minutes
         if self.manager.narrative.time_of_day == "night":
             minutes = min(minutes, minutes_until(now, survival.SLEEP_DEFAULT_WAKE_MINUTE_OF_DAY))
-        return Accepted(action, {"minutes": minutes, "clamped": False})
+        return Accepted(action, TimeSpan(minutes, clamped=False))
 
     def _sleep_refusal(self) -> str:
         stats = self.manager.player.stats
@@ -359,14 +373,14 @@ class ActionValidator:
     def _validate_add_goal(self, action: AddGoalAction) -> ValidationResult:
         if action.horizon not in GOAL_HORIZONS:
             return Rejected(action, f"Unknown goal horizon: '{action.horizon}'.")
-        return Accepted(action, {})
+        return Accepted(action)
 
     def _validate_remove_goal(self, action: RemoveGoalAction) -> ValidationResult:
         if action.horizon not in GOAL_HORIZONS:
             return Rejected(action, f"Unknown goal horizon: '{action.horizon}'.")
         if action.goal_text not in self.manager.narrative.goals.get(action.horizon, []):
             return Rejected(action, f"No such {action.horizon} goal: '{action.goal_text}'.")
-        return Accepted(action, {})
+        return Accepted(action)
 
     # === Relationships ===
 
@@ -374,7 +388,7 @@ class ActionValidator:
         npc = self.manager.resolve_npc(action.npc_name)
         if npc is None:
             return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        return Accepted(action, {"npc": npc})
+        return Accepted(action, TargetNpc(npc))
 
     def _validate_add_relationship_note(
         self, action: AddRelationshipNoteAction
@@ -382,15 +396,15 @@ class ActionValidator:
         npc = self.manager.resolve_npc(action.npc_name)
         if npc is None:
             return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        return Accepted(action, {"npc": npc})
+        return Accepted(action, TargetNpc(npc))
 
     # === World flags ===
 
     def _validate_set_flag(self, action: SetFlagAction) -> ValidationResult:
-        return Accepted(action, {})
+        return Accepted(action)
 
     def _validate_discover_flag(self, action: DiscoverFlagAction) -> ValidationResult:
-        return Accepted(action, {})
+        return Accepted(action)
 
     # === NPCs ===
 
@@ -413,7 +427,7 @@ class ActionValidator:
                 action,
                 "Orton's apartment is locked; nobody gets in unless he's there to let them in.",
             )
-        return Accepted(action, {"npc": npc, "location": location})
+        return Accepted(action, NpcDestination(npc, location))
 
     def _validate_npc_status(self, action: NpcStatusAction) -> ValidationResult:
         npc = self.manager.resolve_npc(action.npc_name)
@@ -423,7 +437,7 @@ class ActionValidator:
             return Rejected(action, f"Unknown NPC_STATUS operation: '{action.operation}'.")
         if action.operation == "REMOVE" and action.status not in npc.status:
             return Rejected(action, f"{npc.name} did not have status '{action.status}'.")
-        return Accepted(action, {"npc": npc})
+        return Accepted(action, TargetNpc(npc))
 
     _VALIDATORS = {
         MoveAction: _validate_move,

@@ -1,12 +1,11 @@
 """Time cost of each action, in in-game minutes (spec 01).
 
-A row is a fixed number of minutes or a function of the resolved action. The
-validator's `resolved` dict is the second argument, so a function never
-re-derives what the check already decided.
+A row is a fixed number of minutes or a function of the action and what the
+validator resolved for it, so a function never re-derives what the check
+already decided.
 """
 
 from collections.abc import Callable
-from typing import Any
 
 from modules.action import (
     AddGoalAction,
@@ -30,7 +29,17 @@ from modules.action import (
     UseItemAction,
     WaitAction,
 )
+from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
+from modules.resolution import (
+    HeldItem,
+    MoveBlocked,
+    MoveToSpot,
+    MoveToZone,
+    Resolution,
+    ShuffleInZone,
+    TimeSpan,
+)
 
 SWING_MIN = 1  # spec 01
 QUICK_ACTION_MIN = 1  # spec 01
@@ -44,7 +53,7 @@ ZONE_HOP_SNEAKING_MIN = 20  # spec 01
 TALK_MIN = 5  # spec 01
 NONE_TURN_MIN = 1  # spec 01
 
-CostFunction = Callable[[AnyAction, dict[str, Any]], int]
+CostFunction = Callable[[AnyAction, Resolution], int]
 
 
 def zone_hop_minutes() -> int:
@@ -52,26 +61,28 @@ def zone_hop_minutes() -> int:
     return ZONE_HOP_MIN
 
 
-def _use_item_minutes(action: AnyAction, resolved: dict[str, Any]) -> int:
-    item = resolved["item_entity"].item
-    return item.eat_minutes if isinstance(item, ConsumableItem) else QUICK_ACTION_MIN
+def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
+    match resolved:
+        case HeldItem(entity=ItemEntity(item=ConsumableItem() as item)):
+            return item.eat_minutes
+    return QUICK_ACTION_MIN
 
 
-def _move_minutes(action: AnyAction, resolved: dict[str, Any]) -> int:
-    kind = resolved["kind"]
-    if kind == "zone":
-        return resolved["hops"] * zone_hop_minutes()
-    if kind == "blocked":
-        return max(resolved["hops"] * zone_hop_minutes(), WALK_TO_BARRIER_MIN)
-    if kind == "spot":
-        return QUICK_ACTION_MIN if resolved.get("place") else 0
-    if kind == "shuffle":
-        return QUICK_ACTION_MIN
+def _move_minutes(action: AnyAction, resolved: Resolution) -> int:
+    match resolved:
+        case MoveToZone(hops=hops):
+            return hops * zone_hop_minutes()
+        case MoveBlocked(hops=hops):
+            return max(hops * zone_hop_minutes(), WALK_TO_BARRIER_MIN)
+        case MoveToSpot(place=place):
+            return QUICK_ACTION_MIN if place else 0
+        case ShuffleInZone():
+            return QUICK_ACTION_MIN
     return 0
 
 
-def _spent_minutes(action: AnyAction, resolved: dict[str, Any]) -> int:
-    return resolved["minutes"]
+def _spent_minutes(action: AnyAction, resolved: Resolution) -> int:
+    return resolved.minutes if isinstance(resolved, TimeSpan) else 0
 
 
 TIME_COSTS: dict[type, int | CostFunction] = {
@@ -100,7 +111,7 @@ TIME_COSTS: dict[type, int | CostFunction] = {
 MULTIPLIED_ACTIONS: tuple[type, ...] = (TakeAction, DropAction, UseItemAction)  # spec 01
 
 
-def action_minutes(action: AnyAction, resolved: dict[str, Any]) -> int:
+def action_minutes(action: AnyAction, resolved: Resolution) -> int:
     """Whole minutes an accepted action takes, before any multiplier."""
     cost = TIME_COSTS.get(type(action), 0)
     return cost(action, resolved) if callable(cost) else cost

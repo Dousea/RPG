@@ -56,7 +56,7 @@ from modules.event import (
     WeaponDealDamageEvent,
     WeaponTakeDamageEvent,
 )
-from modules.item import ConsumableItem, MeleeWeaponItem, RangedWeaponItem
+from modules.item import AppliableItem, ConsumableItem, MeleeWeaponItem, RangedWeaponItem
 from modules.modifier import (
     AffinityModifier,
     ConditionsModifier,
@@ -65,6 +65,17 @@ from modules.modifier import (
     ReputationModifier,
 )
 from modules.quest import QuestStatus
+from modules.resolution import (
+    HeldItem,
+    MoveBlocked,
+    MoveToSpot,
+    MoveToZone,
+    NewItem,
+    NpcDestination,
+    ShuffleInZone,
+    TargetNpc,
+    TimeSpan,
+)
 from modules.stats import CharacterStat, StatusEffect
 from modules.weapon import MeleeWeaponType
 from modules.weather import WeatherSample
@@ -272,61 +283,44 @@ class SimulationCore:
     # === Movement ===
 
     def _resolve_move(self, accepted: Accepted) -> str:
-        """Apply whatever `_validate_move` decided MOVE_TO means.
+        """Apply the `MoveOutcome` `_validate_move` chose; MOVE_TO never fails.
 
-        MOVE_TO never fails (doc 01's inversion applied to movement): the
-        validator has already turned every possible destination into one of
-        five kinds, and this only applies it. `current_place` is set from
-        `resolved["place"]` whenever the validator produced one -- "" clears
-        it (the model named the zone itself), text sets it -- and is left
-        untouched for "shuffle"/"stay", which carry no `place` at all.
+        Outcomes with a `place` replace `current_place` (an empty one clears
+        it); a stay or a shuffle leaves it as it was.
         """
-        resolved = accepted.resolved
-        kind = resolved["kind"]
-        manager = self.manager
-
-        if "place" in resolved:
-            manager.player.current_place = resolved["place"]
-        place = resolved.get("place", "")
-
-        if kind == "zone":
-            location = resolved["location"]
-            manager.player.current_location_id = location.id
-            where = f" ({place})" if place else ""
-            fact = self._with_quest_note(
-                f"Move to {location.name}{where}: succeeded.", f"reach:{location.id}"
-            )
-            return fact
-
-        if kind == "blocked":
-            stop = resolved["location"]
-            target = resolved["target"]
-            fact = (
-                f"Move to {target.name}: blocked -- the door to {target.name} is "
-                f"locked and Orton has no key. Orton is in {stop.name}, {place}."
-            )
-            if stop.id != manager.player.current_location_id:
-                manager.player.current_location_id = stop.id
-                fact = self._with_quest_note(fact, f"reach:{stop.id}")
-            return fact
-
-        if kind == "spot":
-            zone = resolved["location"]
-            if place:
-                return f"Move within {zone.name} to {place}: succeeded."
-            return f"Already in {zone.name}."
-
-        if kind == "shuffle":
-            zone = resolved["location"]
-            return f"Moved {resolved['raw']} within {zone.name}."
-
-        # kind == "stay"
-        return "MOVE_TO had no destination; Orton stayed put."
+        player = self.manager.player
+        match accepted.resolved:
+            case MoveToZone(location=location, place=place):
+                player.current_place = place
+                player.current_location_id = location.id
+                where = f" ({place})" if place else ""
+                return self._with_quest_note(
+                    f"Move to {location.name}{where}: succeeded.", f"reach:{location.id}"
+                )
+            case MoveBlocked(location=stop, place=place, target=target):
+                player.current_place = place
+                fact = (
+                    f"Move to {target.name}: blocked -- the door to {target.name} is "
+                    f"locked and Orton has no key. Orton is in {stop.name}, {place}."
+                )
+                if stop.id != player.current_location_id:
+                    player.current_location_id = stop.id
+                    fact = self._with_quest_note(fact, f"reach:{stop.id}")
+                return fact
+            case MoveToSpot(location=zone, place=place):
+                player.current_place = place
+                if place:
+                    return f"Move within {zone.name} to {place}: succeeded."
+                return f"Already in {zone.name}."
+            case ShuffleInZone(location=zone, direction=direction):
+                return f"Moved {direction} within {zone.name}."
+            case _:
+                return "MOVE_TO had no destination; Orton stayed put."
 
     # === Items ===
 
     def _resolve_take(self, accepted: Accepted) -> str:
-        entity = accepted.resolved["item_entity"]
+        entity = accepted.expect(HeldItem).entity
         manager = self.manager
         manager.current_location.entities.remove(entity)
         manager.player.inventory.append(entity)
@@ -335,7 +329,7 @@ class SimulationCore:
         )
 
     def _resolve_drop(self, accepted: Accepted) -> str:
-        entity = accepted.resolved["item_entity"]
+        entity = accepted.expect(HeldItem).entity
         manager = self.manager
         manager.player.inventory.remove(entity)
         manager.current_location.entities.append(entity)
@@ -343,8 +337,9 @@ class SimulationCore:
 
     def _resolve_use_item(self, accepted: Accepted) -> str:
         manager = self.manager
-        entity = accepted.resolved["item_entity"]
+        entity = accepted.expect(HeldItem).entity
         item = entity.item
+        assert isinstance(item, ConsumableItem | AppliableItem), "_validate_use_item checks this"
         player = manager.player
 
         # The item's own effect (e.g. a medkit's HPModifier) is not a trait/
@@ -401,11 +396,11 @@ class SimulationCore:
         action: UpdateInventoryAction = accepted.action
 
         if action.operation == "ADD":
-            item = accepted.resolved["item"]
+            item = accepted.expect(NewItem).item
             manager.player.inventory.append(ItemEntity(item=item))
             return f"Added {item.name} to inventory."
 
-        entity = accepted.resolved["item_entity"]
+        entity = accepted.expect(HeldItem).entity
         if action.operation == "REMOVE":
             manager.player.inventory.remove(entity)
             return f"Removed {entity.item.name} from inventory."
@@ -428,7 +423,7 @@ class SimulationCore:
 
     def _resolve_attack(self, accepted: Accepted) -> str:
         manager = self.manager
-        npc = accepted.resolved["npc"]
+        npc = accepted.expect(TargetNpc).npc
         attacker = manager.player
         weapon = self._equipped_weapon(attacker) or UNARMED_WEAPON
         base_damage = weapon.damage
@@ -568,7 +563,7 @@ class SimulationCore:
 
     def _resolve_update_relationship(self, accepted: Accepted) -> str:
         action: UpdateRelationshipAction = accepted.action
-        npc = accepted.resolved["npc"]
+        npc = accepted.expect(TargetNpc).npc
         manager = self.manager
         if action.axis == "affection":
             manager.relationship_manager.apply_affinity_modifier(
@@ -587,19 +582,19 @@ class SimulationCore:
 
     def _resolve_add_relationship_note(self, accepted: Accepted) -> str:
         action: AddRelationshipNoteAction = accepted.action
-        npc = accepted.resolved["npc"]
+        npc = accepted.expect(TargetNpc).npc
         npc.notes = f"{npc.notes}; {action.note}" if npc.notes else action.note
         return f"Noted about {npc.name}: {action.note}"
 
     def _resolve_npc_move(self, accepted: Accepted) -> str:
-        npc = accepted.resolved["npc"]
-        location = accepted.resolved["location"]
+        destination = accepted.expect(NpcDestination)
+        npc, location = destination.npc, destination.location
         npc.current_location_id = location.id
         return f"{npc.name} moved to {location.name}."
 
     def _resolve_npc_status(self, accepted: Accepted) -> str:
         action: NpcStatusAction = accepted.action
-        npc = accepted.resolved["npc"]
+        npc = accepted.expect(TargetNpc).npc
         if action.operation == "ADD":
             if action.status not in npc.status:
                 npc.status.append(action.status)
@@ -631,17 +626,17 @@ class SimulationCore:
         return f"Removed status '{action.status}'."
 
     def _resolve_wait(self, accepted: Accepted) -> str:
-        resolved = accepted.resolved
-        spent = _span_words(resolved["minutes"])
-        if resolved["clamped"]:
+        span = accepted.expect(TimeSpan)
+        spent = _span_words(span.minutes)
+        if span.clamped:
             return f"Orton waits {spent}, the most he can at once."
         return f"Orton waits {spent}."
 
     def _resolve_sleep(self, accepted: Accepted) -> tuple[list[str], int]:
         """Sleep chunk by chunk until the time is up or something wakes Orton."""
-        resolved = accepted.resolved
+        span = accepted.expect(TimeSpan)
         player = self.manager.player
-        wanted = resolved["minutes"]
+        wanted = span.minutes
         player.asleep = True
         spent = 0
         facts: list[str] = []
@@ -656,7 +651,7 @@ class SimulationCore:
                 break
         player.asleep = False
         words = _span_words(spent)
-        if resolved["clamped"]:
+        if span.clamped:
             lead = f"Orton sleeps {words}, the most he can at once."
         else:
             lead = f"Orton sleeps {words}."

@@ -3,7 +3,7 @@
 import unittest
 
 from managers.game import GameManager
-from managers.validator import Accepted, ActionValidator, Rejected
+from managers.validator import Accepted, ActionValidator, Rejected, ValidationResult
 from modules.action import (
     AttackAction,
     DropAction,
@@ -18,7 +18,21 @@ from modules.action import (
     WaitAction,
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.resolution import (
+    HeldItem,
+    MoveBlocked,
+    MoveToSpot,
+    MoveToZone,
+    ShuffleInZone,
+    TargetNpc,
+    TimeSpan,
+)
 from modules.stats import CharacterStat
+
+
+def _accepted(result: ValidationResult) -> Accepted:
+    assert isinstance(result, Accepted), result
+    return result
 
 
 class ClockValidationTests(unittest.TestCase):
@@ -31,43 +45,39 @@ class ClockValidationTests(unittest.TestCase):
     def _wait(self, **kwargs):
         return self.validator.validate(WaitAction(duration=Duration(**kwargs)))
 
-    def _resolved(self, **kwargs) -> dict:
-        result = self._wait(**kwargs)
-        assert isinstance(result, Accepted)
-        return result.resolved
+    def _resolved(self, **kwargs) -> TimeSpan:
+        return _accepted(self._wait(**kwargs)).expect(TimeSpan)
 
     def test_a_span_resolves_to_its_minutes(self):
-        self.assertEqual(self._resolved(minutes=90), {"minutes": 90, "clamped": False})
+        self.assertEqual(self._resolved(minutes=90), TimeSpan(90, clamped=False))
 
     def test_until_a_time_of_day_from_the_start(self):
-        self.assertEqual(self._resolved(until_time_of_day="night")["minutes"], 14 * 60)
-        self.assertEqual(self._resolved(until_time_of_day="evening")["minutes"], 10 * 60)
+        self.assertEqual(self._resolved(until_time_of_day="night").minutes, 14 * 60)
+        self.assertEqual(self._resolved(until_time_of_day="evening").minutes, 10 * 60)
 
     def test_until_the_current_band_start_waits_a_full_day(self):
         self.gm.narrative.minutes = 1440 - 480 + 7 * 60  # 07:00 on day 2
-        self.assertEqual(self._resolved(until_time_of_day="morning")["minutes"], 23 * 60)
+        self.assertEqual(self._resolved(until_time_of_day="morning").minutes, 23 * 60)
 
     def test_until_exactly_now_is_tomorrow_not_zero(self):
-        self.assertEqual(
-            self._resolved(until_minute_of_day=480), {"minutes": 1440, "clamped": False}
-        )
+        self.assertEqual(self._resolved(until_minute_of_day=480), TimeSpan(1440, clamped=False))
 
     def test_until_a_past_clock_time_is_tomorrow(self):
         self.gm.narrative.minutes = 1440 - 480 + 8 * 60  # 08:00 on day 2
-        self.assertEqual(self._resolved(until_minute_of_day=7 * 60)["minutes"], 23 * 60)
+        self.assertEqual(self._resolved(until_minute_of_day=7 * 60).minutes, 23 * 60)
 
     def test_a_wait_over_24_hours_is_clamped(self):
-        self.assertEqual(self._resolved(minutes=25 * 60), {"minutes": 1440, "clamped": True})
+        self.assertEqual(self._resolved(minutes=25 * 60), TimeSpan(1440, clamped=True))
 
     def test_a_sleep_is_capped_at_16_hours(self):
         result = self.validator.validate(SleepAction(duration=Duration(minutes=17 * 60)))
         assert isinstance(result, Accepted)
-        self.assertEqual(result.resolved, {"minutes": 960, "clamped": True})
+        self.assertEqual(result.resolved, TimeSpan(960, clamped=True))
 
     def test_an_open_sleep_by_day_runs_to_the_cap(self):
         result = self.validator.validate(SleepAction())
         assert isinstance(result, Accepted)
-        self.assertEqual(result.resolved["minutes"], 960)
+        self.assertEqual(result.expect(TimeSpan).minutes, 960)
 
     def test_an_unknown_time_of_day_is_rejected(self):
         self.assertIsInstance(self._wait(until_time_of_day="teatime"), Rejected)
@@ -79,9 +89,8 @@ class MovementValidationTests(unittest.TestCase):
         self.validator = ActionValidator(self.gm)
 
     def test_adjacent_move_by_direction_is_accepted(self):
-        result = self.validator.validate(MoveAction(destination="out"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["location"].id, "zone_building")
+        result = _accepted(self.validator.validate(MoveAction(destination="out")))
+        self.assertEqual(result.expect(MoveToZone).location.id, "zone_building")
 
     def test_adjacent_move_by_name_is_accepted(self):
         result = self.validator.validate(MoveAction(destination="Your Building"))
@@ -90,18 +99,14 @@ class MovementValidationTests(unittest.TestCase):
     def test_non_adjacent_zone_is_reached_by_walking(self):
         # The Street is reachable from zone_home by walking the connection
         # graph through the building, though not directly adjacent.
-        result = self.validator.validate(MoveAction(destination="The Street"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["kind"], "zone")
-        self.assertEqual(result.resolved["location"].id, "zone_street")
+        result = _accepted(self.validator.validate(MoveAction(destination="The Street")))
+        self.assertEqual(result.expect(MoveToZone).location.id, "zone_street")
 
     def test_nonexistent_location_becomes_a_spot(self):
         # MOVE_TO never fails -- an unmatched name soft-lands as a free-text
         # spot in the current zone.
-        result = self.validator.validate(MoveAction(destination="Atlantis"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["kind"], "spot")
-        self.assertEqual(result.resolved["place"], "Atlantis")
+        result = _accepted(self.validator.validate(MoveAction(destination="Atlantis")))
+        self.assertEqual(result.expect(MoveToSpot).place, "Atlantis")
         # State must not have moved -- validation never mutates.
         self.assertEqual(self.gm.player.current_location_id, "zone_home")
 
@@ -116,10 +121,8 @@ class MovementValidationTests(unittest.TestCase):
         )
         self.gm.current_location.entities.append(door)
 
-        result = self.validator.validate(MoveAction(destination="out"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["kind"], "blocked")
-        self.assertEqual(result.resolved["location"].id, "zone_home")
+        result = _accepted(self.validator.validate(MoveAction(destination="out")))
+        self.assertEqual(result.expect(MoveBlocked).location.id, "zone_home")
 
     def test_locked_door_opens_with_the_key_in_inventory(self):
         # Accepted carries kind="zone".
@@ -134,9 +137,8 @@ class MovementValidationTests(unittest.TestCase):
         self.gm.current_location.entities.append(door)
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
 
-        result = self.validator.validate(MoveAction(destination="out"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["kind"], "zone")
+        result = _accepted(self.validator.validate(MoveAction(destination="out")))
+        self.assertIsInstance(result.resolved, MoveToZone)
 
     def test_bare_direction_wins_over_a_colliding_alias(self):
         # BARE_DIRECTIONS is checked before resolve_location's whole-word
@@ -144,18 +146,15 @@ class MovementValidationTests(unittest.TestCase):
         # zone's alias list happens to contain it too (content bug, but the
         # validator must not let it silently turn a shuffle into a teleport).
         self.gm.current_location.aliases.append("north")
-        result = self.validator.validate(MoveAction(destination="north"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["kind"], "shuffle")
-        self.assertEqual(result.resolved["location"].id, "zone_home")
+        result = _accepted(self.validator.validate(MoveAction(destination="north")))
+        self.assertEqual(result.expect(ShuffleInZone).location.id, "zone_home")
 
     def test_validation_never_mutates(self):
         # The validator only decides what a move means; it never writes
         # state. A spot move resolved via the validator alone (SimulationCore
         # not invoked) must leave current_place untouched.
-        result = self.validator.validate(MoveAction(destination="the pharmacy"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["place"], "the pharmacy")
+        result = _accepted(self.validator.validate(MoveAction(destination="the pharmacy")))
+        self.assertEqual(result.expect(MoveToZone).place, "the pharmacy")
         self.assertEqual(self.gm.player.current_place, "")
         self.assertEqual(self.gm.player.current_location_id, "zone_home")
 
@@ -171,9 +170,8 @@ class ItemValidationTests(unittest.TestCase):
 
     def test_take_present_item_is_accepted(self):
         self.gm.player.current_location_id = "zone_street"
-        result = self.validator.validate(TakeAction(item_name="Crowbar"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["item_entity"].item.name, "Crowbar")
+        result = _accepted(self.validator.validate(TakeAction(item_name="Crowbar")))
+        self.assertEqual(result.expect(HeldItem).entity.item.name, "Crowbar")
 
     def test_take_rejected_when_inventory_full(self):
         self.gm.player.current_location_id = "zone_street"
@@ -340,9 +338,8 @@ class CombatValidationTests(unittest.TestCase):
         self.validator = ActionValidator(self.gm)
 
     def test_attack_present_npc_is_accepted(self):
-        result = self.validator.validate(AttackAction(target_name="Emma"))
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["npc"].npc_id, "npc_emma")
+        result = _accepted(self.validator.validate(AttackAction(target_name="Emma")))
+        self.assertEqual(result.expect(TargetNpc).npc.npc_id, "npc_emma")
 
     def test_attack_absent_npc_is_rejected(self):
         # Jen is in zone_neighborhood, not zone_building -- Marcus moved
@@ -427,13 +424,13 @@ class SleepRefusalTests(unittest.TestCase):
     def test_open_sleep_runs_to_the_cap_by_day(self):
         result = self.validator.validate(SleepAction())
         assert isinstance(result, Accepted)
-        self.assertEqual(result.resolved["minutes"], 960)
+        self.assertEqual(result.expect(TimeSpan).minutes, 960)
 
     def test_open_sleep_at_night_runs_to_nine(self):
         self.gm.narrative.minutes = 14 * 60  # 22:00
         result = self.validator.validate(SleepAction())
         assert isinstance(result, Accepted)
-        self.assertEqual(result.resolved["minutes"], 11 * 60)
+        self.assertEqual(result.expect(TimeSpan).minutes, 11 * 60)
 
 
 if __name__ == "__main__":
