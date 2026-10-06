@@ -108,7 +108,7 @@ this one.
 | [22 Relationships](22-relationships.md) | Implemented | `managers/relationship.py` | — |
 | [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `managers/events.py` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
 | [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/save/codec.py`, `adapters/save/files.py`, `adapters/engine.py` | Schema is v4 (see [mechanics 01](mechanics/01-game-clock.md#saves)); `current_place`, `game_over` and `death_cause` are saved. Any other version is discarded and a new game starts; there is no migration. |
-| [25 UI Layout](25-ui-layout.md) | Partial | `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py` | The page, its five tabs and the creation screen exist and are read-only. `weather` and `character.occupation` are sent but not shown; the Health, Clothing and Nearby tabs wait for their mechanics, and the three responsive layouts aren't built. |
+| [25 UI Layout](25-ui-layout.md) | Partial | `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py` | The page, its three responsive layouts (8, 5 and 4 tabs) and the creation screen exist and are read-only. The Health and Nearby screens stay hidden until their mechanics send fields; hit points and item condition still show as numbers. |
 
 ## Known issues
 

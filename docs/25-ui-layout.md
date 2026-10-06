@@ -1,6 +1,6 @@
 # UI Layout
 
-> **Status: Partial.** `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page and the creation screen exist; the tab layout below is the target, and [What the page lacks today](#what-the-page-lacks-today) lists the gap. See [Implementation Status](00-status.md).
+> **Status: Partial.** `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts and the creation screen exist; screens whose mechanics haven't landed stay hidden, and [What the page lacks today](#what-the-page-lacks-today) lists the rest. See [Implementation Status](00-status.md).
 
 The browser page is one HTML file that renders the snapshot the engine returns.
 This document says which screen each snapshot field belongs to, how it is
@@ -85,9 +85,9 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 | --- | --- | --- | --- |
 | Status | status effects, conditions, effects, goals | `effects`, `conditions`, `status_effects`, `sneaking` (spec 09), `goals` | yes, with the health bar |
 | Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (spec 12, 17) | no |
-| Inventory | held item, equipped slots, carried items | `held` (spec 11, 15), `equipment`, `inventory` | as part of Gear |
-| Clothing | worn items, outer to inner, by body location | `worn` | as part of Gear |
-| Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | partly |
+| Inventory | held item, equipped slots, carried items | `held` (spec 11, 15), `equipment`, `inventory` | yes, without `held` |
+| Clothing | worn items, outer to inner, by body location | `worn` | yes |
+| Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | yes, with Level and Experience until spec 08 |
 | People | NPCs here: disposition, trust, following | `npcs` | yes |
 | Nearby | threats, corpses, doors and windows | `threats` (spec 09), `corpses` (spec 14), `barriers` (spec 13) | no |
 | Quests | active quests and their objectives | `quests` | yes |
@@ -176,7 +176,7 @@ What else changes on a narrow window:
   one menu button.
 - The story log fills the screen. The location heading stays above it, and a
   button beside the input opens the sidebar sheet; the sheet closes by the same
-  button or a swipe down.
+  button, Escape, or a swipe down that starts on its handle or tab bar.
 - The option buttons scroll sideways in one row above the input, which stays
   pinned to the bottom.
 - The creation screen's trait columns stack into one, and its fieldsets
@@ -211,19 +211,18 @@ A mechanic that adds or changes a snapshot field:
    adds a row there if the table has none;
 2. removes whatever still reads a field it drops;
 3. shows words, plus only the numbers its own document allows;
-4. updates the table's *Exists* column when it opens a tab.
+4. lists the field under its screen in the page's `SCREEN_FIELDS`, which is
+   what un-hides a screen;
+5. updates the table's *Exists* column.
 
 ## What the page lacks today
 
 | Gap | Fix |
 | --- | --- |
-| `weather` is sent but not shown | header chip: summary, temperature, and "sheltered" when indoors |
-| `character.occupation` is sent but not shown | Character tab, under the name |
 | Character tab shows Level and Experience as numbers | replaced by skills in spec 08 |
 | Header shows `apocalypse_stage` | replaced by `outbreak_day` in spec 10 |
-| Health bar shows hit points as `n/max` | removed with spec 12; until then it is the one number grandfathered in |
+| Health bar shows hit points as a percentage | removed with spec 12; until then it is the one number grandfathered in |
 | Inventory and equipment show item condition as `n/max` | condition word with spec 11 |
-| One layout with five tabs; below 860 px the story and sidebar only stack | the three layouts in [Screen sizes](#screen-sizes) |
 
 ---
 

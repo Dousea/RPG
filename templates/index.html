@@ -198,8 +198,19 @@
             padding: 1.1rem 1.25rem 1.5rem;
         }
 
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
+        .screen { display: none; }
+        .screen.shown { display: block; }
+        .screen.shown ~ .screen.shown { margin-top: 1.75rem; }
+        .screen-title {
+            display: none;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ember);
+            margin-bottom: 0.85rem;
+        }
+        .tab-panels.stacked .screen-title { display: block; }
 
         .section { margin-bottom: 1.5rem; }
         .section:last-child { margin-bottom: 0; }
@@ -372,12 +383,70 @@
         #submit-button:hover { background: #d4894e; }
         #submit-button:disabled { background: var(--line); color: var(--paper-dim); cursor: default; }
 
+        /* === Screen sizes (docs/25-ui-layout.md): wide 1200px+, medium 861-1199px, narrow 860px and below === */
+        .btn.menu, #sheet-button, .sheet-handle { display: none; }
+
+        @media (max-width: 1199px) {
+            #story-display { width: 58%; }
+            .dossier { width: 42%; }
+        }
+
         @media (max-width: 860px) {
-            main { flex-direction: column; overflow: visible; }
-            .page { height: auto; min-height: 100vh; overflow-y: auto; }
-            #story-display, .dossier { width: 100%; }
-            #story-display { height: 45vh; }
-            .dossier { height: 60vh; }
+            .page { height: 100dvh; padding: 0.75rem; gap: 0.6rem; }
+
+            header { position: relative; align-items: center; flex-wrap: nowrap; padding-bottom: 0.6rem; }
+            .title-block { min-width: 0; }
+            .title-block h1 { font-size: 1.25rem; }
+            .meta-chips { flex-wrap: wrap; }
+            .btn.menu { display: inline-block; flex-shrink: 0; }
+            .header-actions {
+                display: none;
+                position: absolute; top: 100%; right: 0; z-index: 30;
+                flex-direction: column;
+                background: var(--panel-raised);
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                padding: 0.5rem;
+            }
+            .header-actions.open { display: flex; }
+
+            main { flex-direction: column; gap: 0.6rem; }
+            #story-display { width: 100%; flex-grow: 1; padding: 1rem 1.1rem; font-size: 1.05rem; }
+            main > .dossier-location {
+                flex-shrink: 0;
+                padding: 0 0.25rem;
+                border-bottom: none;
+            }
+
+            .dossier {
+                position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+                width: 100%; height: 80dvh;
+                border-radius: 10px 10px 0 0;
+                box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+                transform: translateY(100%);
+                visibility: hidden;
+                transition: transform 0.25s ease, visibility 0s linear 0.25s;
+            }
+            .dossier.open {
+                transform: none;
+                visibility: visible;
+                transition: transform 0.25s ease;
+            }
+            .sheet-handle {
+                display: block; flex-shrink: 0;
+                width: 2.5rem; height: 4px;
+                margin: 0.6rem auto 0.2rem;
+                background: var(--line); border-radius: 2px;
+            }
+            .tab-nav { justify-content: space-around; padding: 0; }
+            .tab-btn { flex: 1; padding: 0.75rem 0.25rem; }
+
+            #choice-options { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+            .choice-option { flex-shrink: 0; white-space: nowrap; }
+            #sheet-button { display: inline-block; flex-shrink: 0; }
+            #input-form { padding-left: 0.35rem; gap: 0.5rem; }
+            #player-input { min-width: 0; font-size: 1rem; }
+            #submit-button { padding: 0.65rem 1rem; }
         }
 
         /* Character creation */
@@ -389,6 +458,7 @@
         #creation-form { max-width: 56rem; margin: 0 auto; display: grid; gap: 1rem; }
         #creation-form fieldset { border: 1px solid var(--line); padding: 0.8rem 1rem; }
         #creation-form label { display: block; margin: 0.25rem 0; }
+        #creation-form label[hidden] { display: none; }
         #creation-form input[type=text], #creation-form select, #creation-form textarea {
             background: var(--panel); color: var(--paper); border: 1px solid var(--line);
             padding: 0.3rem 0.5rem; font: inherit;
@@ -396,6 +466,12 @@
         #creation-form .trait-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         #creation-form .muted { color: var(--paper-dim); }
         #creation-errors { color: var(--hazard); margin: 0; padding-left: 1.2rem; }
+
+        @media (max-width: 860px) {
+            #creation-screen { padding: 0.75rem; }
+            #creation-form .trait-columns { grid-template-columns: 1fr; }
+            #creation-form input[type=text], #creation-form select, #creation-form textarea { max-width: 100%; }
+        }
     </style>
 </head>
 <body>
@@ -408,7 +484,8 @@
                 <span class="chip">Day &mdash;</span>
             </div>
         </div>
-        <div class="header-actions">
+        <button id="menu-button" class="btn menu" aria-expanded="false" aria-controls="header-actions">Menu</button>
+        <div class="header-actions" id="header-actions">
             <button id="save-button" class="btn save">Save to file</button>
             <button id="load-button" class="btn load">Load from file</button>
             <input type="file" id="load-input" accept="application/json" hidden>
@@ -423,24 +500,21 @@
             <p>The adventure begins&hellip;</p>
         </div>
 
-        <div class="dossier">
-            <div class="dossier-location">
+        <div class="dossier" id="dossier">
+            <div class="dossier-location" id="dossier-location">
                 <h2 id="location-status">&mdash;</h2>
                 <p id="location-place" hidden></p>
                 <p id="location-description"></p>
             </div>
 
-            <nav class="tab-nav">
-                <button class="tab-btn active" data-tab="status">Status</button>
-                <button class="tab-btn" data-tab="gear">Gear</button>
-                <button class="tab-btn" data-tab="character">Character</button>
-                <button class="tab-btn" data-tab="people">People</button>
-                <button class="tab-btn" data-tab="quests">Quests</button>
-            </nav>
+            <div class="sheet-handle" aria-hidden="true"></div>
+            <nav class="tab-nav" id="tab-nav"></nav>
 
+            <!-- Screens in the order docs/25-ui-layout.md lists them; a merged tab stacks them in this order. -->
             <div class="tab-panels">
 
-                <div class="tab-panel active" id="tab-status">
+                <div class="screen" data-screen="status">
+                    <h2 class="screen-title">Status</h2>
                     <div class="section">
                         <h3>Vitals</h3>
                         <div id="vitals"></div>
@@ -456,7 +530,12 @@
                     </div>
                 </div>
 
-                <div class="tab-panel" id="tab-gear">
+                <div class="screen" data-screen="health">
+                    <h2 class="screen-title">Health</h2>
+                </div>
+
+                <div class="screen" data-screen="inventory">
+                    <h2 class="screen-title">Inventory</h2>
                     <div class="section">
                         <h3>Equipped</h3>
                         <ul class="row-list" id="equipment-list"></ul>
@@ -467,7 +546,20 @@
                     </div>
                 </div>
 
-                <div class="tab-panel" id="tab-character">
+                <div class="screen" data-screen="clothing">
+                    <h2 class="screen-title">Clothing</h2>
+                    <div class="section">
+                        <h3>Worn</h3>
+                        <ul class="row-list" id="worn-list"></ul>
+                    </div>
+                </div>
+
+                <div class="screen" data-screen="character">
+                    <h2 class="screen-title">Character</h2>
+                    <div class="section">
+                        <h3>Survivor</h3>
+                        <ul class="row-list" id="survivor-list"></ul>
+                    </div>
                     <div class="section">
                         <h3>Standing</h3>
                         <ul class="row-list" id="standing-list"></ul>
@@ -478,14 +570,20 @@
                     </div>
                 </div>
 
-                <div class="tab-panel" id="tab-people">
+                <div class="screen" data-screen="people">
+                    <h2 class="screen-title">People</h2>
                     <div class="section">
                         <h3>Present</h3>
                         <div id="npc-list"></div>
                     </div>
                 </div>
 
-                <div class="tab-panel" id="tab-quests">
+                <div class="screen" data-screen="nearby">
+                    <h2 class="screen-title">Nearby</h2>
+                </div>
+
+                <div class="screen" data-screen="quests">
+                    <h2 class="screen-title">Quests</h2>
                     <div class="section">
                         <h3>Active</h3>
                         <div id="quest-list"></div>
@@ -499,6 +597,7 @@
     <footer>
         <div id="choice-options"></div>
         <form id="input-form">
+            <button type="button" id="sheet-button" class="btn" aria-expanded="false" aria-controls="dossier">Panel</button>
             <label for="player-input">&gt;</label>
             <input type="text" id="player-input" autocomplete="off" placeholder="What do you do?">
             <button type="submit" id="submit-button">Act</button>
@@ -563,6 +662,8 @@
     const goalList = document.getElementById('goal-list');
     const equipmentList = document.getElementById('equipment-list');
     const inventoryList = document.getElementById('inventory-list');
+    const wornList = document.getElementById('worn-list');
+    const survivorList = document.getElementById('survivor-list');
     const standingList = document.getElementById('standing-list');
     const traitList = document.getElementById('trait-list');
     const npcList = document.getElementById('npc-list');
@@ -607,14 +708,131 @@
         return el('p', 'empty-note', text);
     }
 
-    // === Tab switching ===
-    document.querySelectorAll('.tab-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-            button.classList.add('active');
-            document.getElementById(`tab-${button.dataset.tab}`).classList.add('active');
+    // === Screens and tabs (docs/25-ui-layout.md, Screen sizes) ===
+    // A screen shows once the snapshot carries any of its fields, so a screen
+    // whose mechanic hasn't landed stays hidden without a code change here.
+    const SCREEN_FIELDS = {
+        status: ['vitals', 'effects', 'conditions', 'status_effects', 'sneaking', 'goals'],
+        health: ['body'],
+        inventory: ['held', 'equipment', 'inventory'],
+        clothing: ['worn'],
+        character: ['character', 'skills', 'zombie_kills'],
+        people: ['npcs'],
+        nearby: ['threats', 'corpses', 'barriers'],
+        quests: ['quests'],
+    };
+    const GEAR = ['Gear', ['inventory', 'clothing']];
+    const AROUND = ['Around', ['people', 'nearby']];
+    const QUESTS = ['Quests', ['quests']];
+    const LAYOUTS = {
+        wide: Object.keys(SCREEN_FIELDS).map(id => [id.replace(/^\w/, c => c.toUpperCase()), [id]]),
+        medium: [['Status', ['status', 'health']], GEAR, ['Character', ['character']], AROUND, QUESTS],
+        narrow: [['You', ['status', 'health', 'character']], GEAR, AROUND, QUESTS],
+    };
+    const wideQuery = window.matchMedia('(min-width: 1200px)');
+    const mediumQuery = window.matchMedia('(min-width: 861px)');
+
+    const tabNav = document.getElementById('tab-nav');
+    const tabPanels = document.querySelector('.tab-panels');
+    const dossier = document.getElementById('dossier');
+    const dossierLocation = document.getElementById('dossier-location');
+    const screens = new Map([...document.querySelectorAll('.screen')].map(node => [node.dataset.screen, node]));
+    let liveScreens = new Set(['status']);
+    let viewedScreen = 'status';
+    let layoutName = null;
+
+    function currentLayout() {
+        if (wideQuery.matches) return 'wide';
+        return mediumQuery.matches ? 'medium' : 'narrow';
+    }
+
+    function liveIn(screenIds) {
+        return screenIds.filter(id => liveScreens.has(id));
+    }
+
+    function showTab(screenIds) {
+        const live = liveIn(screenIds);
+        screens.forEach((node, id) => node.classList.toggle('shown', live.includes(id)));
+        tabPanels.classList.toggle('stacked', live.length > 1);
+        tabPanels.scrollTop = 0;
+        viewedScreen = live[0] || viewedScreen;
+        tabNav.querySelectorAll('.tab-btn').forEach(button => {
+            button.classList.toggle('active', button.dataset.screens === screenIds.join(' '));
         });
+    }
+
+    // Rebuilds the tab bar for the current width, reopening the tab that holds
+    // the screen the player was reading.
+    function buildTabs() {
+        layoutName = currentLayout();
+        const tabs = LAYOUTS[layoutName].filter(([, ids]) => liveIn(ids).length > 0);
+        tabNav.innerHTML = '';
+        tabs.forEach(([label, ids]) => {
+            const button = el('button', 'tab-btn', label);
+            button.type = 'button';
+            button.dataset.screens = ids.join(' ');
+            button.addEventListener('click', () => showTab(ids));
+            tabNav.appendChild(button);
+        });
+        const open = tabs.find(([, ids]) => ids.includes(viewedScreen)) || tabs[0];
+        if (open) showTab(open[1]);
+
+        // On a narrow window the location heading sits above the story, not in the sheet.
+        if (layoutName === 'narrow') {
+            storyDisplay.before(dossierLocation);
+        } else {
+            dossier.prepend(dossierLocation);
+            setSheetOpen(false);
+        }
+    }
+
+    function updateLiveScreens(data) {
+        const live = new Set(Object.keys(SCREEN_FIELDS).filter(id => SCREEN_FIELDS[id].some(field => field in data)));
+        const changed = live.size !== liveScreens.size || [...live].some(id => !liveScreens.has(id));
+        liveScreens = live;
+        if (changed) buildTabs();
+    }
+
+    wideQuery.addEventListener('change', buildTabs);
+    mediumQuery.addEventListener('change', buildTabs);
+
+    // === Narrow window: header menu and the sidebar sheet ===
+    const menuButton = document.getElementById('menu-button');
+    const headerActions = document.getElementById('header-actions');
+    const sheetButton = document.getElementById('sheet-button');
+
+    function setMenuOpen(open) {
+        headerActions.classList.toggle('open', open);
+        menuButton.setAttribute('aria-expanded', String(open));
+    }
+
+    function setSheetOpen(open) {
+        dossier.classList.toggle('open', open);
+        sheetButton.setAttribute('aria-expanded', String(open));
+    }
+
+    menuButton.addEventListener('click', () => setMenuOpen(!headerActions.classList.contains('open')));
+    headerActions.addEventListener('click', () => setMenuOpen(false));
+    sheetButton.addEventListener('click', () => setSheetOpen(!dossier.classList.contains('open')));
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            setSheetOpen(false);
+            setMenuOpen(false);
+        }
+    });
+
+    // A downward swipe that starts on the handle or the tab bar closes the sheet;
+    // starting on the panels it would fight their scrolling.
+    let swipeStartY = null;
+    dossier.addEventListener('touchstart', event => {
+        const onGrip = event.target.closest('.sheet-handle, .tab-nav');
+        swipeStartY = onGrip ? event.touches[0].clientY : null;
+    }, { passive: true });
+    dossier.addEventListener('touchend', event => {
+        if (swipeStartY !== null && event.changedTouches[0].clientY - swipeStartY > 60) {
+            setSheetOpen(false);
+        }
+        swipeStartY = null;
     });
 
     // === Section renderers ===
@@ -624,6 +842,11 @@
         metaChips.innerHTML = '';
         metaChips.appendChild(el('span', 'chip', `Day ${data.day}`));
         metaChips.appendChild(el('span', 'chip', timeLabel));
+        if (data.weather) {
+            const w = data.weather;
+            const sky = w.summary.replace(/^\w/, c => c.toUpperCase());
+            metaChips.appendChild(el('span', 'chip', `${sky}, ${w.temperature_c} °C${w.sheltered ? ' · sheltered' : ''}`));
+        }
         metaChips.appendChild(el('span', 'chip stage', data.apocalypse_stage));
     }
 
@@ -711,12 +934,32 @@
             li.appendChild(el('span', 'label', slot.slot));
             li.appendChild(el('span', slot.item ? 'value' : 'value muted', slot.item ? `${slot.item} (${slot.condition})` : 'Empty'));
             return li;
-        }).concat((data.worn || []).map(piece => {
+        }));
+    }
+
+    function renderWorn(data) {
+        const worn = data.worn || [];
+        if (worn.length === 0) {
+            clearAndFill(wornList, [emptyNote('Nothing worn.')]);
+            return;
+        }
+        clearAndFill(wornList, worn.map(piece => {
             const li = el('li', 'row-item');
             li.appendChild(el('span', 'label', piece.location.replace('base:', '').replace(/_/g, ' ')));
             li.appendChild(el('span', 'value', piece.wetness_word ? `${piece.name} (${piece.wetness_word})` : piece.name));
             return li;
-        })));
+        }));
+    }
+
+    function renderSurvivor(data) {
+        const character = data.character || {};
+        const rows = [['Name', character.name], ['Occupation', character.occupation]];
+        clearAndFill(survivorList, rows.filter(([, value]) => value).map(([label, value]) => {
+            const li = el('li', 'row-item');
+            li.appendChild(el('span', 'label', label));
+            li.appendChild(el('span', 'value', value));
+            return li;
+        }));
     }
 
     function renderStanding(data) {
@@ -859,12 +1102,15 @@
         renderGoals(data);
         renderInventory(data);
         renderEquipment(data);
+        renderWorn(data);
+        renderSurvivor(data);
         renderStanding(data);
         renderNamedEntries(traitList, data.traits, 'None recorded.');
         renderNpcs(data);
         renderQuests(data);
         renderChoiceOptions(data);
         applyGameOverState(data);
+        updateLiveScreens(data);
     }
 
     function updateUI(data, playerText) {
@@ -1204,6 +1450,7 @@
     loadButton.addEventListener('click', handleLoad);
     loadInput.addEventListener('change', handleLoadFile);
 
+    buildTabs();
     loadState();
     playerInput.focus();
 </script>
