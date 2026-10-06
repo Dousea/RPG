@@ -9,21 +9,26 @@ A save whose version is not `SCHEMA_VERSION` is discarded and a new game is
 started, rather than being loaded half-understood.
 """
 
+import dataclasses
 import json
 import logging
 import os
 from typing import Any
 
 import config
+from data.climate import STAGE_PHRASES
+from data.clock import WORLD_START_MINUTE_OF_DAY
 from data.items import ITEMS
 from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
 from data.traits import TRAITS
+from managers.climate import ClimateEngine
 from managers.game import (
     DEATH_CAUSE_MAX_LENGTH,
     MAX_PLACE_LENGTH,
+    WORLD_START_DATE,
     GameManager,
     MemoryState,
     NarrativeState,
@@ -43,10 +48,11 @@ from modules.entity.player import PlayerEntity
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.stats import Stats
+from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 6  # spec 03
+SCHEMA_VERSION = 7  # spec 04
 
 GAME_DATA_DIR = config.persistence.game_data_dir
 SAVE_FILE = os.path.join(GAME_DATA_DIR, config.persistence.save_file_name)
@@ -117,6 +123,66 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
 # === Serialization ===
 
 
+def _weather_to_dict(climate: ClimateEngine) -> dict[str, Any]:
+    period = climate.period
+    front = climate.front
+    return {
+        "front": {
+            "positive": front.positive,
+            "strength": front.strength,
+            "start_hour": front.start_hour,
+        },
+        "period": None
+        if period is None
+        else {
+            "start_hour": period.start_hour,
+            "stages": [dataclasses.asdict(stage) for stage in period.stages],
+        },
+    }
+
+
+def _stage_from_dict(data: dict[str, Any]) -> PeriodStage:
+    name = str(data["name"])
+    if name not in STAGE_PHRASES:
+        raise ValueError(f"unknown weather stage {name!r}")
+    return PeriodStage(
+        name=name,
+        hours=float(data["hours"]),
+        precipitation=float(data["precipitation"]),
+        wind=float(data["wind"]),
+        cloud=float(data["cloud"]),
+        thunder=_as_bool(data["thunder"]),
+    )
+
+
+def _climate_from_dict(seed: int, minutes: int, data: dict[str, Any]) -> ClimateEngine:
+    """Rebuild the climate: noise from the seed, front and period from the save."""
+    climate = ClimateEngine(seed, WORLD_START_DATE, WORLD_START_MINUTE_OF_DAY)
+    front_data = _as_dict(data.get("front"))
+    front = None
+    if front_data:
+        try:
+            front = AirFront(
+                positive=_as_bool(front_data.get("positive", False)),
+                strength=float(front_data.get("strength", 0.0)),
+                start_hour=int(front_data.get("start_hour", 0)),
+            )
+        except (TypeError, ValueError):
+            logger.warning("Dropping an unreadable weather front from the save.")
+    period = None
+    period_data = data.get("period")
+    if isinstance(period_data, dict):
+        try:
+            period = WeatherPeriod(
+                start_hour=float(period_data["start_hour"]),
+                stages=tuple(_stage_from_dict(stage) for stage in period_data["stages"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            logger.warning("Dropping an unreadable weather period from the save.")
+    climate.restore(minutes, front, period)
+    return climate
+
+
 def to_dict(manager: GameManager) -> dict[str, Any]:
     player = manager.player
     narrative = manager.narrative
@@ -127,6 +193,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
         "world": {
             "time": manager.world.time,
             "date": manager.world.date,
+            "seed": manager.world.seed,
             # Locations themselves are static; only ground items move.
             "ground_items": {
                 location_id: [
@@ -197,6 +264,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 for source, targets in manager.relationship_manager.reputations.items()
             },
         },
+        "weather": _weather_to_dict(manager.climate),
         "narrative": {
             "minutes": narrative.minutes,
             "apocalypse_stage": narrative.apocalypse_stage,
@@ -255,6 +323,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
     world = World(
         time=world_data.get("time", "12:00 PM"),
         date=world_data.get("date", "2023-10-01"),
+        seed=int(world_data.get("seed", 0)),
         locations=locations,
     )
 
@@ -293,6 +362,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         narrative=narrative,
         memory=memory,
         quests=quests,
+        climate=_climate_from_dict(world.seed, narrative.minutes, _as_dict(data.get("weather"))),
     )
 
 

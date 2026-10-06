@@ -1,17 +1,24 @@
 import logging
+import random
 import re
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import config
-from data.clock import day_number, minute_of_day, time_of_day_at
+from data.clock import (
+    WORLD_START_MINUTE_OF_DAY,
+    day_number,
+    minute_of_day,
+    time_of_day_at,
+)
 from data.items import ITEMS
 from data.locations import STARTING_ZONE_ID, ZONE_EXIT_NOUNS, build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
 from data.traits import TRAITS
+from managers.climate import ClimateEngine
 from managers.relationship import RelationshipManager
 from modules.character.player import PlayerPerk, PlayerTrait
 from modules.character.state import CharacterCondition
@@ -161,6 +168,9 @@ def _exit_noun_prefix(words: list[str]) -> tuple[str, int] | None:
 # The calendar date of day 1.
 WORLD_START_DATE = date(2023, 10, 1)
 
+# New worlds draw their seed below this (spec 04).
+WORLD_SEED_LIMIT = 2**31
+
 
 @dataclass
 class NarrativeState:
@@ -233,11 +243,24 @@ class GameManager:
         narrative: NarrativeState | None = None,
         memory: MemoryState | None = None,
         quests: dict[str, QuestState] | None = None,
+        climate: ClimateEngine | None = None,
     ):
         """Build a manager. Every component defaults to its new-game value, so
         `GameManager()` starts a fresh game and the persistence layer can
         reconstruct a saved one by passing components in."""
-        self.world = world if world is not None else World(locations=build_starting_locations())
+        self.world = (
+            world
+            if world is not None
+            else World(
+                locations=build_starting_locations(),
+                seed=random.Random().randrange(WORLD_SEED_LIMIT),
+            )
+        )
+        self.climate = (
+            climate
+            if climate is not None
+            else ClimateEngine(self.world.seed, WORLD_START_DATE, WORLD_START_MINUTE_OF_DAY)
+        )
         self.player = (
             player
             if player is not None

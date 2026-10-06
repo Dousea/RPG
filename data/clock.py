@@ -1,6 +1,7 @@
 """Clock constants and the pure arithmetic over the minute clock (spec 01)."""
 
 MINUTES_PER_DAY = 1440  # spec 01
+MINUTES_PER_HOUR = 60  # spec 01
 WORLD_START_MINUTE_OF_DAY = 480  # spec 01: the game starts at 08:00
 
 # Band starts as minutes after midnight, in ascending order; night wraps past midnight.

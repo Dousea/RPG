@@ -21,6 +21,7 @@ mutable game state, so a shared dict would leak one game's dropped items into
 the next game after a reset.
 """
 
+from data.climate import INDOORS_BY_ZONE
 from data.items import ITEMS
 from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
@@ -169,6 +170,9 @@ def build_starting_locations() -> dict[str, Location]:
             ],
         ),
     }
+
+    for zone_id, indoors in INDOORS_BY_ZONE.items():
+        locations[zone_id].indoors = indoors
 
     # Locked from the building side only: leaving the apartment needs no key.
     apartment_door = DoorEntity(leads_to="zone_home")

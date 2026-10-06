@@ -213,3 +213,161 @@ class ConditionBlockTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WeatherWordBandTests(unittest.TestCase):
+    """Spec 04, Word bands."""
+
+    def test_wind_bands(self):
+        from managers.climate import wind_word
+
+        self.assertEqual(wind_word(0.05), "still")
+        self.assertEqual(wind_word(0.06), "mild")
+        self.assertEqual(wind_word(0.25), "mild")
+        self.assertEqual(wind_word(0.26), "moderate")
+        self.assertEqual(wind_word(0.5), "moderate")
+        self.assertEqual(wind_word(0.51), "strong")
+        self.assertEqual(wind_word(0.76), "storm-strength")
+
+    def test_cloud_bands(self):
+        from managers.climate import cloud_word
+
+        self.assertEqual(cloud_word(0.0), "clear skies")
+        self.assertEqual(cloud_word(0.4), "clear skies")
+        self.assertEqual(cloud_word(0.41), "some clouds")
+        self.assertEqual(cloud_word(0.7), "some clouds")
+        self.assertEqual(cloud_word(0.71), "overcast")
+
+    def test_fog_bands(self):
+        from managers.climate import fog_word
+
+        self.assertIsNone(fog_word(0.2))
+        self.assertEqual(fog_word(0.21), "light fog")
+        self.assertEqual(fog_word(0.75), "light fog")
+        self.assertEqual(fog_word(0.76), "thick fog")
+        self.assertEqual(fog_word(0.99), "thick fog")
+        self.assertEqual(fog_word(1.0), "very thick fog")
+
+    def test_temperature_bands(self):
+        from managers.climate import temperature_word
+
+        for value, word in [
+            (-10.1, "freezing"),
+            (-10.0, "freezing"),
+            (-9.9, "bitter cold"),
+            (0.0, "bitter cold"),
+            (0.1, "cold"),
+            (8.0, "cold"),
+            (8.1, "chilly"),
+            (15.1, "mild"),
+            (22.1, "warm"),
+            (29.1, "hot"),
+        ]:
+            self.assertEqual(temperature_word(value), word, value)
+
+
+class WeatherBlockTests(unittest.TestCase):
+    """Spec 04, What the narrator and the player see."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def _weather_block(self, prompt: str) -> str:
+        return prompt.split("[WEATHER]")[1].split("\n\n[")[0]
+
+    def test_narrator_block_has_no_raw_numbers(self):
+        self.gm.climate.start_period(0, 0.9)
+        block = self._weather_block(self.builder.build_narrator_prompt("look"))
+        self.assertNotRegex(block, r"\d")
+        self.assertIn("Sheltered", block)
+
+    def test_parser_prompt_carries_the_same_block(self):
+        self.assertIn("[WEATHER]", self.builder.build_parser_prompt("look"))
+
+    def test_shelter_follows_the_zone(self):
+        block = self._weather_block(self.builder.build_narrator_prompt("look"))
+        self.assertIn("yes", block)
+        resolve_actions(self.gm, MoveAction(destination="street"))
+        block = self._weather_block(self.builder.build_narrator_prompt("look"))
+        self.assertIn("no", block)
+
+    def test_stage_phrases_turn_to_snow_when_it_snows(self):
+        from managers.climate import precipitation_phrase
+
+        self.assertEqual(precipitation_phrase("heavy_precipitation", False), "heavy rain")
+        self.assertEqual(precipitation_phrase("heavy_precipitation", True), "heavy snow")
+        self.assertEqual(precipitation_phrase(None, False), "dry")
+
+
+class WeatherFactTests(unittest.TestCase):
+    """Spec 04, What the narrator and the player see: outcomes."""
+
+    def _sample(self, **changes):
+        from modules.weather import WeatherSample
+
+        base = {
+            "air_temperature": 10.0,
+            "humidity": 0.5,
+            "wind_intensity": 0.1,
+            "wind_angle": 0.0,
+            "cloud_intensity": 0.3,
+            "precipitation_intensity": 0.0,
+            "precipitation_is_snow": False,
+            "fog_intensity": 0.2,
+            "daylight": 1.0,
+        }
+        return WeatherSample(**{**base, **changes})
+
+    def test_changes_become_facts(self):
+        from managers.climate import weather_change_facts
+
+        dry = self._sample()
+        rain = self._sample(precipitation_intensity=0.5, stage="showers")
+        snow = self._sample(precipitation_intensity=0.5, precipitation_is_snow=True)
+        thunder = self._sample(precipitation_intensity=1.0, thunder=True)
+        foggy = self._sample(fog_intensity=0.6)
+        self.assertEqual(weather_change_facts(dry, rain), ["It starts to rain."])
+        self.assertEqual(weather_change_facts(rain, snow), ["The rain turns to snow."])
+        self.assertEqual(weather_change_facts(snow, dry), ["The snow stops."])
+        self.assertEqual(weather_change_facts(rain, thunder), ["Thunder rolls overhead."])
+        self.assertEqual(weather_change_facts(foggy, dry), ["The fog lifts."])
+        self.assertEqual(weather_change_facts(dry, dry), [])
+
+    def test_a_waited_span_reports_the_rain_starting(self):
+        from managers.simulation import SimulationCore
+        from modules.action import Duration, WaitAction
+
+        gm = GameManager()
+        gm.climate.start_period(gm.narrative.minutes // 60 + 1, 0.5)
+        facts = SimulationCore(gm).resolve([WaitAction(duration=Duration(minutes=240))])
+        self.assertIn("It starts to rain.", facts)
+
+    def test_thunder_is_reported_once(self):
+        from managers.climate import weather_change_facts
+
+        thunder = self._sample(precipitation_intensity=1.0, thunder=True)
+        self.assertEqual(weather_change_facts(thunder, thunder), [])
+
+    def test_fog_rolling_in_is_a_fact(self):
+        from managers.climate import weather_change_facts
+
+        self.assertEqual(
+            weather_change_facts(self._sample(), self._sample(fog_intensity=0.5)),
+            ["Fog rolls in."],
+        )
+
+    def test_the_block_lists_fog_only_above_point_two(self):
+        from managers.climate import describe_weather
+
+        self.assertIn("Fog: light fog", describe_weather(self._sample(fog_intensity=0.6), True))
+        self.assertNotIn("Fog", describe_weather(self._sample(fog_intensity=0.2), True))
+
+    def test_every_stage_has_a_rain_and_a_snow_phrase(self):
+        from data.climate import STAGE_PHRASES
+        from managers.climate import precipitation_phrase
+
+        for stage, (rain, snow) in STAGE_PHRASES.items():
+            self.assertEqual(precipitation_phrase(stage, False), rain)
+            self.assertEqual(precipitation_phrase(stage, True), snow)
+        self.assertEqual(precipitation_phrase("storm", True), "a snow storm")

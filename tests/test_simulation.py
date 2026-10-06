@@ -632,9 +632,9 @@ class TimeCostTests(unittest.TestCase):
         handed: list[int] = []
         advance = core.stats_engine.advance
 
-        def spy(player, minutes, ctx):
+        def spy(player, minutes, ctx, weather_for_chunk=None):
             handed.append(minutes)
-            return advance(player, minutes, ctx)
+            return advance(player, minutes, ctx, weather_for_chunk)
 
         core.stats_engine.advance = spy
         core.resolve([MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5))])
@@ -1035,3 +1035,53 @@ class ConsumingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WeatherWiringTests(unittest.TestCase):
+    """Spec 04, Components: the simulation core feeds each chunk its weather."""
+
+    def test_each_chunk_gets_the_weather_at_its_midpoint_and_the_zone_shelter(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        seen = []
+
+        class Spy:
+            def apply(self, stats, hours, ctx):
+                seen.append((ctx.weather, ctx.indoors))
+
+        core.stats_engine.register(Spy())
+        core.resolve([WaitAction(duration=Duration(minutes=45))])
+        self.assertEqual(len(seen), 5)
+        for weather, indoors in seen:
+            self.assertIsNotNone(weather)
+            self.assertTrue(indoors)
+        self.assertEqual(seen[0][0], gm.climate.sample(5))
+
+    def test_the_climate_advances_with_the_clock(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        core.resolve([WaitAction(duration=Duration(minutes=180))])
+        self.assertEqual(gm.climate.last_hour, 3)
+
+    def test_time_after_death_still_advances_the_climate(self):
+        gm = GameManager()
+        gm.narrative.game_over = True
+        core = SimulationCore(gm)
+        spent, facts = core._spend(150)
+        self.assertEqual((spent, facts), (150, []))
+        self.assertEqual(gm.climate.last_hour, 2)
+
+    def test_a_weather_fact_comes_before_the_stat_facts(self):
+        gm = GameManager()
+        gm.climate.start_period(1, 0.5)
+        core = SimulationCore(gm)
+
+        def advance(player, minutes, ctx, weather_for_chunk=None):
+            assert weather_for_chunk is not None
+            weather_for_chunk(55, 10)
+            core.stats_engine.minutes_advanced = minutes
+            return ["STAT FACT"]
+
+        core.stats_engine.advance = advance
+        _, facts = core._spend(10)
+        self.assertEqual(facts, ["It starts to rain.", "STAT FACT"])

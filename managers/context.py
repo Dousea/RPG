@@ -12,6 +12,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 """
 
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
+from managers.climate import describe_weather
 from managers.game import GameManager
 from managers.stats import active_status_effects
 from modules.quest import QuestStatus
@@ -119,6 +120,12 @@ class ContextBuilder:
             return "Fine"
         return ", ".join(f"{name} ({level}/{STATUS_EFFECT_MAX_LEVEL})" for _, level, name in active)
 
+    def _weather_section(self) -> str:
+        """The outdoor weather in words, and whether Orton is sheltered from it."""
+        manager = self.manager
+        sample = manager.climate.sample(manager.narrative.minutes)
+        return describe_weather(sample, manager.current_location.indoors)
+
     @staticmethod
     def _outcomes_section(outcome_facts: list[str] | None) -> str:
         if not outcome_facts:
@@ -215,6 +222,9 @@ door rather than refusing the move.)
 [CONDITION]
 {self._condition_section()}
 
+[WEATHER]
+{self._weather_section()}
+
 [EQUIPPED]
 {equipped_str}
 
@@ -306,6 +316,11 @@ give them numbers.)
 
 [CURRENT LOCATION]
 {location_context}
+
+[WEATHER]
+(The weather outside, in words. When Orton is sheltered, rain and wind do not
+reach him, though he can still hear them.)
+{self._weather_section()}
 
 [ITEMS IN CURRENT LOCATION]
 

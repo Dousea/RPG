@@ -224,3 +224,20 @@ class LazyEngineTests(IsolatedSaveTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WeatherPayloadTests(RouteTestCase):
+    """Spec 04, What the narrator and the player see."""
+
+    def test_state_carries_weather_summary_temperature_and_shelter(self):
+        weather = self.client.get("/state").get_json()["weather"]
+        self.assertEqual(set(weather), {"summary", "temperature_c", "sheltered"})
+        self.assertIsInstance(weather["summary"], str)
+        self.assertIsInstance(weather["temperature_c"], int)
+        self.assertTrue(weather["sheltered"])
+
+    def test_temperature_is_the_rounded_outdoor_sample(self):
+        manager = self.engine.manager
+        expected = round(manager.climate.sample(manager.narrative.minutes).air_temperature)
+        weather = self.client.get("/state").get_json()["weather"]
+        self.assertEqual(weather["temperature_c"], expected)

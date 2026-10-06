@@ -3,6 +3,7 @@
 import dataclasses
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -23,6 +24,7 @@ from data.status_effects import (
 )
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, Stats, StatusEffect
+from modules.weather import WeatherSample
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +188,7 @@ class StatContext:
     bed_type: str = k.DEFAULT_BED_TYPE
     hours_survived: float = 0.0
     new_zombies_seen: int = 0
-    weather: object | None = None
+    weather: WeatherSample | None = None
     body: BodyMultipliers = field(default_factory=BodyMultipliers)
     skills: SkillLevels = field(default_factory=SkillLevels)
     corpse_count: int = 0
@@ -418,8 +420,18 @@ class StatsEngine:
     def register(self, driver: StatDriver) -> None:
         self._drivers.append(driver)
 
-    def advance(self, player: PlayerEntity, minutes: int, ctx: StatContext) -> list[str]:
-        """Advance the player's stats by `minutes`; returns status-effect-change and health facts."""
+    def advance(
+        self,
+        player: PlayerEntity,
+        minutes: int,
+        ctx: StatContext,
+        weather_for_chunk: Callable[[int, int], WeatherSample] | None = None,
+    ) -> list[str]:
+        """Advance the player's stats by `minutes`; returns status-effect-change and health facts.
+
+        `weather_for_chunk(offset, chunk)` gives the weather of the chunk that
+        starts `offset` minutes in and lasts `chunk` minutes.
+        """
         self.minutes_advanced = 0
         self.health_lost = 0.0
         self.death_cause = ""
@@ -428,6 +440,10 @@ class StatsEngine:
         remaining = minutes
         while remaining > 0:
             chunk = min(k.MAX_CHUNK_MINUTES, remaining)
+            if weather_for_chunk is not None:
+                ctx = dataclasses.replace(
+                    ctx, weather=weather_for_chunk(self.minutes_advanced, chunk)
+                )
             facts.extend(self._advance_chunk(player, chunk, ctx))
             self.minutes_advanced += chunk
             remaining -= chunk

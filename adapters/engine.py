@@ -12,6 +12,7 @@ from typing import Any
 
 from adapters import llm, persistence
 from adapters.memory import SemanticMemory
+from managers.climate import weather_summary
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.stats import active_status_effects
@@ -190,6 +191,7 @@ class GameEngine:
         narrative = manager.narrative
 
         npcs_here = manager.npcs_in_location(player.current_location_id)
+        weather = manager.climate.sample(narrative.minutes)
 
         return {
             "story_text": story_text,
@@ -205,6 +207,11 @@ class GameEngine:
             "vitals": {
                 "health": player.hit_points,
                 "max_health": player.max_hit_points,
+            },
+            "weather": {
+                "summary": weather_summary(weather),
+                "temperature_c": round(weather.air_temperature),
+                "sheltered": manager.current_location.indoors,
             },
             "effects": [
                 {"type": status_effect.value, "level": level, "name": name}

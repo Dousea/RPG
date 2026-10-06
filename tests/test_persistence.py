@@ -228,8 +228,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_6(self):
-        self.assertEqual(persistence.SCHEMA_VERSION, 6)
+    def test_schema_version_is_7(self):
+        self.assertEqual(persistence.SCHEMA_VERSION, 7)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -244,6 +244,98 @@ class ClockSaveTests(IsolatedSaveTestCase):
         assert loaded is not None
         self.assertEqual(loaded.narrative.minutes, 2 * 1440 + 95)
         self.assertEqual(loaded.narrative.day, 3)
+
+
+class WeatherSaveTests(IsolatedSaveTestCase):
+    """Spec 04, Saves."""
+
+    def _stormy_game(self) -> GameManager:
+        gm = GameManager()
+        gm.world.seed = 4242
+        gm.climate = type(gm.climate)(4242, gm.climate.start_date, gm.climate.start_minute_of_day)
+        gm.narrative.minutes = 100 * 60
+        gm.climate.advance_to(gm.narrative.minutes)
+        gm.climate.start_period(99, 0.9)
+        return gm
+
+    def test_the_save_holds_the_seed_front_and_period(self):
+        gm = self._stormy_game()
+        persistence.save(gm, self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        self.assertEqual(data["world"]["seed"], 4242)
+        self.assertEqual(set(data["weather"]), {"front", "period"})
+        self.assertEqual(len(data["weather"]["period"]["stages"]), 5)
+
+    def test_a_round_trip_gives_identical_weather_for_48_hours(self):
+        gm = self._stormy_game()
+        persistence.save(gm, self.save_path)
+        loaded = persistence.load(self.save_path)
+        assert loaded is not None
+        start = gm.narrative.minutes
+        for hour in range(1, 49):
+            minutes = start + hour * 60
+            gm.climate.advance_to(minutes)
+            loaded.climate.advance_to(minutes)
+            self.assertEqual(gm.climate.sample(minutes), loaded.climate.sample(minutes))
+            self.assertEqual(gm.climate.sample(minutes + 30), loaded.climate.sample(minutes + 30))
+        self.assertEqual(gm.climate.front, loaded.climate.front)
+        self.assertEqual(gm.climate.period, loaded.climate.period)
+
+    def _saved_weather(self, gm):
+        persistence.save(gm, self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def _load_with_weather(self, mutate):
+        gm = self._stormy_game()
+        data = self._saved_weather(gm)
+        mutate(data["weather"])
+        restored = persistence.from_dict(data)
+        return gm, restored
+
+    def test_a_non_default_front_round_trips(self):
+        from modules.weather import AirFront
+
+        gm = self._stormy_game()
+        gm.climate.front = AirFront(positive=True, strength=0.7, start_hour=5)
+        persistence.save(gm, self.save_path)
+        loaded = persistence.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.climate.front, AirFront(True, 0.7, 5))
+        self.assertEqual(loaded.climate.last_hour, 100)
+
+    def test_a_period_with_a_bad_start_hour_is_dropped(self):
+        _, loaded = self._load_with_weather(lambda w: w["period"].update(start_hour="abc"))
+        self.assertIsNone(loaded.climate.period)
+
+    def test_a_period_with_a_bad_stage_value_is_dropped(self):
+        _, loaded = self._load_with_weather(
+            lambda w: w["period"]["stages"][1].update(precipitation="lots")
+        )
+        self.assertIsNone(loaded.climate.period)
+
+    def test_a_period_with_an_unknown_stage_is_dropped(self):
+        _, loaded = self._load_with_weather(
+            lambda w: w["period"]["stages"][0].update(name="hailstorm")
+        )
+        self.assertIsNone(loaded.climate.period)
+        from managers.climate import describe_weather
+
+        minutes = loaded.narrative.minutes
+        describe_weather(loaded.climate.sample(minutes), True)
+
+    def test_a_bad_front_falls_back_to_the_air_mass(self):
+        _, loaded = self._load_with_weather(lambda w: w["front"].update(strength="x"))
+        self.assertEqual(loaded.climate.front.strength, 0.0)
+
+    def test_a_save_without_a_period_round_trips(self):
+        gm = GameManager()
+        persistence.save(gm, self.save_path)
+        loaded = persistence.load(self.save_path)
+        assert loaded is not None
+        self.assertIsNone(loaded.climate.period)
+        self.assertEqual(loaded.world.seed, gm.world.seed)
 
 
 class SaveFileTests(IsolatedSaveTestCase):

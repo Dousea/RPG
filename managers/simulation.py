@@ -17,6 +17,7 @@ import random
 
 from data import status_effects, survival
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
+from managers.climate import weather_change_facts
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.stats import (
     StatContext,
@@ -66,6 +67,7 @@ from modules.modifier import (
 from modules.quest import QuestStatus
 from modules.stats import CharacterStat, StatusEffect
 from modules.weapon import MeleeWeaponType
+from modules.weather import WeatherSample
 
 # Fists deal a token amount of damage so an unarmed ATTACK still resolves
 # through the same event/modifier pipeline as an armed one, instead of being a
@@ -133,6 +135,7 @@ class SimulationCore:
         self._rng = rng if rng is not None else random.Random()
         self.stats_engine = StatsEngine()
         self._zombies_seen_this_chunk = 0
+        self._weather_facts: list[str] = []
 
     def resolve(self, actions: list[AnyAction]) -> list[str]:
         """Validate and resolve each action in order, one at a time.
@@ -183,11 +186,24 @@ class SimulationCore:
             resting=isinstance(action, WaitAction),
             exercising=isinstance(action, AttackAction),
             walking=isinstance(action, MoveAction),
+            indoors=location.indoors,
             npcs_present=bool(manager.npcs_in_location(player.current_location_id)),
             bed_type=bed_type or location.bed_type_at(player.current_place),
             hours_survived=manager.narrative.minutes / 60,
             new_zombies_seen=self._zombies_seen_this_chunk,
         )
+
+    def _weather_for_chunk(self, offset: int, chunk: int) -> WeatherSample:
+        """Advance the climate across a chunk; returns the weather at its midpoint.
+
+        Facts for what changed over the chunk collect in `_weather_facts`.
+        """
+        climate = self.manager.climate
+        start = self.manager.narrative.minutes + offset
+        before = climate.sample(start)
+        climate.advance_to(start + chunk)
+        self._weather_facts.extend(weather_change_facts(before, climate.sample(start + chunk)))
+        return climate.sample(start + chunk / 2)
 
     def _spend(
         self,
@@ -203,11 +219,17 @@ class SimulationCore:
         """
         manager = self.manager
         if manager.narrative.game_over:
+            manager.climate.advance_to(manager.narrative.minutes + minutes)
             manager.advance_clock(minutes)
             return minutes, []
-        facts = self.stats_engine.advance(
-            manager.player, minutes, self._stat_context(action, asleep=asleep)
+        self._weather_facts = []
+        stat_facts = self.stats_engine.advance(
+            manager.player,
+            minutes,
+            self._stat_context(action, asleep=asleep),
+            self._weather_for_chunk,
         )
+        facts = self._weather_facts + stat_facts
         spent = self.stats_engine.minutes_advanced
         manager.advance_clock(spent)
         if self.stats_engine.death_cause:

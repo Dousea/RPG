@@ -19,6 +19,8 @@ class Location:
     # override it: a word in `current_place` selects its bed type (spec 02).
     bed_type: str = "floor"
     place_bed_types: dict[str, str] = field(default_factory=dict[str, str])
+    # Rain and wind do not reach the player here (spec 04).
+    indoors: bool = False
 
     def bed_type_at(self, place: str) -> str:
         """The bed type at a free-text spot inside this zone."""
@@ -40,6 +42,8 @@ class World:
 
     time: str = "08:00 AM"
     date: str = "2023-10-01"
+    # Drawn once when a new game starts; fixes the weather for the whole game (spec 04).
+    seed: int = 0
     locations: dict[str, Location] = field(
         default_factory=dict[str, Location]
     )  # e.g., {"zone_home": Location(...)}
