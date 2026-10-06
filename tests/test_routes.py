@@ -24,11 +24,10 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_parser = self.llm.query_parser
         engine_module.llm.query_narrator = self.llm.query_narrator
         engine_module.llm.query_summary = self.llm.query_summary
+        self._original_memory = engine_module.SemanticMemory
+        engine_module.SemanticMemory = FakeMemory
 
-        # Install a prepared engine so the lazy singleton does not build a real
-        # one (which would load the embedding model).
         engine = GameEngine()
-        engine.memory = FakeMemory()
         self._original_engine = app_module._engine
         app_module._engine = engine
         self.engine = engine
@@ -41,6 +40,7 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_parser = self._original_parser
         engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
+        engine_module.SemanticMemory = self._original_memory
         super().tearDown()
 
 

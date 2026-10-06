@@ -33,14 +33,16 @@ class EngineTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_parser = self.llm.query_parser
         engine_module.llm.query_narrator = self.llm.query_narrator
         engine_module.llm.query_summary = self.llm.query_summary
+        self._original_memory = engine_module.SemanticMemory
+        engine_module.SemanticMemory = FakeMemory
 
         self.engine = GameEngine()
-        self.engine.memory = FakeMemory()
 
     def tearDown(self):
         engine_module.llm.query_parser = self._original_parser
         engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
+        engine_module.SemanticMemory = self._original_memory
         super().tearDown()
 
 

@@ -588,14 +588,6 @@
             {
                 "code": "reportAttributeAccessIssue",
                 "range": {
-                    "startColumn": 20,
-                    "endColumn": 26,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
                     "startColumn": 31,
                     "endColumn": 43,
                     "lineCount": 1
@@ -1628,16 +1620,6 @@
                 "range": {
                     "startColumn": 15,
                     "endColumn": 25,
-                    "lineCount": 1
-                }
-            }
-        ],
-        "./tests/test_routes.py": [
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 21,
                     "lineCount": 1
                 }
             }
