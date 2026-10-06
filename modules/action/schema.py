@@ -303,6 +303,8 @@ def parse_plan(payload: object) -> tuple[list[AnyAction], list[ParseFailure]]:
         try:
             lines.append(action_line(entry))
         except _PlanShapeError as exc:
-            failures.append(ParseFailure(raw=str(entry), reason=str(exc)))
+            verb = entry.get("verb") if isinstance(entry, dict) else None
+            known = verb if isinstance(verb, str) and verb in _LINE_BUILDERS else None
+            failures.append(ParseFailure(raw=str(entry), reason=str(exc), verb=known))
     actions, line_failures = parse_action_plan(lines)
     return actions, [*failures, *line_failures]

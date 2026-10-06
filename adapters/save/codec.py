@@ -16,6 +16,7 @@ from data.clock import WORLD_START_MINUTE_OF_DAY
 from data.exercises import EXERCISES, REGION_PARTS
 from data.items import ITEMS, WETNESS_MAX
 from data.locations import STARTING_ZONE_ID, build_starting_locations
+from data.memory import LAST_STORY_MAX_LENGTH
 from data.npcs import build_starting_npcs
 from data.quests import build_starting_quests
 from data.skills import MAX_LEVEL, SKILLS, total_xp_for_level
@@ -56,7 +57,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 16  # spec 12
+SCHEMA_VERSION = 17  # spec 10
 
 MAX_ID_LENGTH = 40
 
@@ -516,6 +517,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "recent_events": list(memory.recent_events),
             "full_event_log": list(memory.full_event_log),
             "summaries": list(memory.summaries),
+            "last_story": memory.last_story,
         },
         "quests": {
             quest_id: {
@@ -599,6 +601,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         recent_events=memory_data.get("recent_events", []),
         full_event_log=memory_data.get("full_event_log", []),
         summaries=memory_data.get("summaries", []),
+        last_story=_as_text(memory_data.get("last_story", ""), LAST_STORY_MAX_LENGTH),
     )
 
     quests = _quests_from_dict(data.get("quests", {}), player, narrative, npcs)

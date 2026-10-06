@@ -1,5 +1,6 @@
 """A few words for what an action would have done, for facts about actions that never ran."""
 
+from modules.action.parser import ParseFailure
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -24,6 +25,13 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
+
+
+def refusal_in_words(failure: ParseFailure, forename: str, subject: str) -> str:
+    """A refusal fact for a line that never parsed: no raw text, grammar or numbers."""
+    if failure.verb is None:
+        return f"Refused: {forename}'s attempt isn't something {subject} can do here."
+    return f"Refused: {forename} tried to {failure.verb.lower().replace('_', ' ')}, but it wasn't clear how."
 
 
 def describe_action(action: AnyAction) -> str:

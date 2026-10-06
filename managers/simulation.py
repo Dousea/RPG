@@ -235,7 +235,9 @@ class SimulationCore:
         for index, action in enumerate(actions[:MAX_PLAN_ACTIONS]):
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
-                facts.append(f"Refused: {type(result.action).__name__} -- {result.reason}")
+                facts.append(
+                    f"Refused: {self._name} can't {describe_action(result.action)}: {result.reason}"
+                )
                 continue
             self._interruption = ""
             action_facts, minutes = self._resolve_one(result)

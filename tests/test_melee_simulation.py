@@ -343,7 +343,7 @@ class ShoveActionTests(unittest.TestCase):
         zombie = add_zombie(gm, gap=1, health=100)
         zombie.down_until = gm.narrative.minutes + 2
         facts = simulate(gm, ShoveAction(target_name=zombie.zombie_id))
-        self.assertEqual(facts[0], "Refused: ShoveAction -- It's already down.")
+        self.assertEqual(facts[0], "Refused: Orton can't shove z1: It's already down.")
 
     def test_attack_on_a_down_zombie_stomps_or_floor_attacks(self):
         gm = fight_game()

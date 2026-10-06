@@ -78,12 +78,14 @@ class FakeMemory:
         self.next_hits: list[int] = []
         self.rebuilt_with: list[list[str]] = []
         self.searched_for: list[str] = []
+        self.searched_k: list[int] = []
 
     def rebuild(self, events: list[str]) -> None:
         self.rebuilt_with.append(list(events))
 
     def search(self, query_text: str, k: int = 2) -> list[int]:
         self.searched_for.append(query_text)
+        self.searched_k.append(k)
         return list(self.next_hits)
 
 
@@ -91,14 +93,14 @@ class ScriptedLLM:
     """Replaces adapters.llm's three network calls with canned answers.
 
     `actions` scripts the parser call (an ACTIONS: block, or "NONE"); `story`
-    scripts the narrator call (a STORY:/EVENT: block). Kept as two separate
+    scripts the narrator call (a STORY: block). Kept as two separate
     scripts because the turn loop now makes two calls, not one.
     """
 
     def __init__(
         self,
         actions: str = "ACTIONS:\nNONE",
-        story: str = "STORY:\n...\n\nEVENT:\n...",
+        story: str = "STORY:\n...",
         summary: str = "A summary.",
         structured: bool = False,
     ):

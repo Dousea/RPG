@@ -1077,15 +1077,15 @@ class NarratorBlockOrderTests(unittest.TestCase):
         for header in ("[CHARACTER]", "[NPCS PRESENT]", "[CONDITION]"):
             self.assertNotIn("0.7371", prompt.split(header)[1].split("\n\n[")[0])
 
-    def test_recent_events_say_that_facts_in_parentheses_are_true(self):
-        self.gm.memory.recent_events.append("Orton waved. (Facts: Emma responds warmly.)")
+    def test_recent_events_say_they_run_oldest_first(self):
+        self.gm.memory.recent_events.append("Orton waved. Emma responds warmly.")
         block = (
             self.builder.build_narrator_prompt("look")
             .split("[RECENT EVENTS]")[1]
             .split("[TIME AND WEATHER]")[0]
         )
-        self.assertIn("(Facts: Emma responds warmly.)", block)
-        self.assertIn("win over the rest", block)
+        self.assertIn("Orton waved. Emma responds warmly.", block)
+        self.assertIn("oldest first", block)
 
 
 ALWAYS = {

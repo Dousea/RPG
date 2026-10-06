@@ -125,11 +125,12 @@ two are orthogonal; only the compressive one exists.
 ### Three tiers
 
 ```text
-RECENT EVENTS     the last 5, verbatim, newest first
+RECENT EVENTS     the last 5, verbatim, rendered oldest first
                   MemoryState.recent_events, config game.max_recent_events
 
 DEEP MEMORY       the top 2 semantic matches for this turn's player input,
-                  drawn from the entire event log
+                  drawn from the entire event log, never an entry that is
+                  already in RECENT EVENTS
                   SemanticMemory.search, config memory.default_recall
 
 SUMMARIES         every 10 events, folded by the LLM into one narrative
@@ -139,7 +140,11 @@ SUMMARIES         every 10 events, folded by the LLM into one narrative
 
 `MemoryState.full_event_log` holds every event ever recorded and is never
 truncated — it is the corpus the vector index is built from, not prompt
-material. Only the three tiers above reach the model.
+material. Beyond the three tiers, two more pieces reach a model:
+`[LAST SCENE]`, the previous turn's story verbatim, goes to the narrator (cut on
+a sentence or line boundary to `LAST_SCENE_MAX_CHARS` in `data/memory.py`, and
+left out when there is none), and `[LAST TURN]`, the newest entry of the event
+log, goes to the parser. The parser never sees story text.
 
 A fourth and fifth section round out the narrator prompt, both assembled by
 `managers/context.py`'s `ContextBuilder`: `[OUTCOMES]`, what the Action
@@ -153,9 +158,9 @@ narration, so `[CONTINUITY]` is now a defensive fallback for the rare case
 Simulation Core itself throws, not the primary correction mechanism. See
 [document 15](15-turn-loop.md).
 
-Together they bound prompt growth against an unbounded game: recent events are
-capped, deep memory is capped, and only the summary list grows — one paragraph
-per ten turns.
+Together they bound prompt growth against an unbounded game: recent events,
+deep memory and the last scene are capped, and only the summary list grows —
+one paragraph per ten turns.
 
 ### Semantic recall
 

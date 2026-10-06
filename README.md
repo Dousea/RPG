@@ -57,8 +57,8 @@ GameEngine.play()                             [adapters/engine.py]
     |                                         unlock a later one (take) in the same turn
     +-- ContextBuilder.build_narrator_prompt() full context + [OUTCOMES] facts
     +-- llm.query_narrator()                  ask LM Studio to describe what happened
-    +-- llm.parse_narrator_response()         split into STORY / EVENT
-    +-- GameManager.record_event()            push to short-term + full log
+    +-- llm.parse_narrator_response()         split into STORY / OPTIONS
+    +-- build_event_entry() + record_event()  engine-written entry to short-term + full log
     +-- SemanticMemory.rebuild()              reindex
     +-- llm.query_summary()                   fold old events into a summary
     +-- persistence.save()                    write engine_state.json
@@ -290,7 +290,7 @@ rather than your real save.
 | `tests/test_quests.py` | Quest state: engine-only completion |
 | `tests/test_game_manager.py` | Starting state, prompt assembly, memory tiers |
 | `tests/test_persistence.py` | Save/load round trip, schema guarding, corrupt and stale saves |
-| `tests/test_llm.py` | Parser ACTIONS extraction and narrator STORY/EVENT parsing |
+| `tests/test_llm.py` | Parser ACTIONS extraction and narrator STORY/OPTIONS parsing |
 | `tests/test_engine.py` | Turn orchestration (two LLM calls), summarization, LLM failure, reset |
 | `tests/test_routes.py` | All four routes through Flask's test client |
 | `tests/test_memory.py` | FAISS recall (opt-in, see below) |

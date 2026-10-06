@@ -317,6 +317,14 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Orton locked the door.", prompt)
         self.assertIn("The city grew quiet.", prompt)
 
+    def test_recent_events_render_oldest_first_and_say_so(self):
+        self.gm.record_event("First thing.")
+        self.gm.record_event("Second thing.")
+        prompt = ContextBuilder(self.gm).build_narrator_prompt("look")
+        self.assertLess(prompt.index("First thing."), prompt.index("Second thing."))
+        recent = prompt.split("[RECENT EVENTS]")[1].split("[TIME AND WEATHER]")[0]
+        self.assertIn("oldest first", recent)
+
 
 class ParserPromptTests(unittest.TestCase):
     def setUp(self):

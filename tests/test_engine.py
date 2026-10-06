@@ -6,13 +6,17 @@ narrator describes what already happened (script via `ScriptedLLM(story=...)`).
 """
 
 import json
+import re
 import unittest
+from typing import cast
 
 import adapters.engine as engine_module
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
+from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
 from data.presets import ORTON
+from managers.game import MAX_RECENT_EVENTS
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
@@ -58,7 +62,7 @@ class TurnTests(EngineTestCase):
     def test_turn_records_the_event_in_both_tiers(self):
         self.engine.play("go out")
         memory = self.engine.game.memory
-        self.assertTrue(memory.full_event_log[-1].startswith("Orton entered the building"))
+        self.assertTrue(memory.full_event_log[-1].startswith("Day 1, 08:00 AM, Your Apartment."))
         self.assertEqual(memory.recent_events[0], memory.full_event_log[-1])
 
     def test_turn_reindexes_memory(self):
@@ -117,6 +121,26 @@ class TurnTests(EngineTestCase):
         self.engine.memory.next_hits = [99]
         result = self.engine.play("go out")
         self.assertEqual(result["current_location"], "Your Building")
+
+    def test_deep_memory_skips_entries_already_in_recent_events(self):
+        memory = self.engine.game.memory
+        memory.full_event_log.extend(["Entry A.", "Entry B.", "Entry C.", "Entry D."])
+        memory.recent_events[:] = ["Entry D."]
+        cast(FakeMemory, self.engine.memory).next_hits = [3, 0, 1, 2]
+        self.engine.play("what was that noise")
+        prompt = self.llm.narrator_prompts[-1]
+        deep = prompt.split("[DEEP MEMORY]")[1].split("[SUMMARY OF PAST EVENTS]")[0]
+        self.assertEqual(prompt.count("Entry D."), 1)
+        self.assertNotIn("Entry D.", deep)
+        self.assertIn("Entry A.", deep)
+        self.assertIn("Entry B.", deep)
+        self.assertNotIn("Entry C.", deep)
+
+    def test_deep_memory_searches_wider_than_it_recalls(self):
+        self.engine.play("what was that noise")
+        self.assertGreaterEqual(
+            cast(FakeMemory, self.engine.memory).searched_k[-1], DEFAULT_RECALL + MAX_RECENT_EVENTS
+        )
 
     def test_turn_persists(self):
         self.engine.play("go out")
@@ -407,9 +431,7 @@ class FailureTests(EngineTestCase):
         result = self.engine.play("go out")
         self.assertEqual(result["story_text"], "You walk out into the building.")
         self.assertEqual(self.engine.game.memory.summaries, [])
-        self.assertTrue(
-            self.engine.game.memory.full_event_log[-1].startswith("Orton entered the building")
-        )
+        self.assertTrue(self.engine.game.memory.full_event_log[-1].startswith("Day 1, 08:00 AM"))
 
 
 class LifecycleTests(EngineTestCase):
@@ -525,11 +547,14 @@ if __name__ == "__main__":
 class MemoryFactsTests(EngineTestCase):
     """Spec 10, Memory and Plans."""
 
-    def test_each_event_log_entry_is_the_event_then_the_turns_facts(self):
+    def test_each_event_log_entry_is_stamp_attempt_then_the_turns_facts(self):
         self.engine.play("go out")
         entry = self.engine.game.memory.full_event_log[-1]
-        self.assertTrue(entry.startswith("Orton entered the building (Facts: "), entry)
-        self.assertTrue(entry.endswith("About 10 minutes pass.)"), entry)
+        self.assertTrue(
+            entry.startswith('Day 1, 08:00 AM, Your Apartment. Orton tries: "go out" '), entry
+        )
+        self.assertTrue(entry.endswith("About 10 minutes pass."), entry)
+        self.assertNotIn("Orton entered the building", entry)
         self.assertIn("Move to Your Building", entry)
         self.assertIn("Find a weapon", entry)
 
@@ -542,7 +567,8 @@ class MemoryFactsTests(EngineTestCase):
         self.llm.actions = "ACTIONS:\nFROBNICATE the widget"
         self.engine.play("do something weird")
         entry = self.engine.game.memory.full_event_log[-1]
-        self.assertIn("(Facts: Refused: 'FROBNICATE the widget'", entry)
+        self.assertIn("Refused:", entry)
+        self.assertNotIn("the widget", entry)
 
     def test_the_entry_names_no_zombie_id(self):
         self.llm.actions = "ACTIONS:\nATTACK z7"
@@ -561,20 +587,30 @@ class MemoryFactsTests(EngineTestCase):
         self.engine.play("look around")
         self.assertEqual(self.engine.game.narrative.minutes, 1)
         self.assertTrue(
-            self.engine.game.memory.full_event_log[-1].endswith("(Facts: About 1 minute passes.)")
+            self.engine.game.memory.full_event_log[-1].endswith(
+                'Orton tries: "look around" About 1 minute passes.'
+            )
         )
 
-    def test_the_narrator_failure_records_the_facts_verbatim(self):
-        self.llm.error = None
+    def test_the_narrator_failure_records_the_same_entry(self):
+        self.engine.play("go out")
+        narrated = self.engine.game.memory.full_event_log[-1]
+        self.engine.reset()
+        self.engine.create_character(ORTON)
 
         def failing(prompt: str) -> str:
             raise LLMError("narrator offline")
 
         engine_module.llm.query_narrator = failing
         self.engine.play("go out")
+        self.assertEqual(self.engine.game.memory.full_event_log[-1], narrated)
+
+    def test_the_entry_holds_no_narrator_text(self):
+        self.llm.story = "STORY:\nYou kill it dead.\n\nEVENT:\nOrton killed a zombie"
+        self.engine.play("go out")
         entry = self.engine.game.memory.full_event_log[-1]
-        self.assertNotIn("(Facts:", entry)
-        self.assertIn("About 10 minutes pass.", entry)
+        self.assertNotIn("kill it dead", entry)
+        self.assertNotIn("killed a zombie", entry)
 
     def test_the_narrator_failure_entry_names_no_zombie_id(self):
         self.llm.actions = "ACTIONS:\nATTACK z7"
@@ -585,6 +621,66 @@ class MemoryFactsTests(EngineTestCase):
         engine_module.llm.query_narrator = failing
         self.engine.play("attack it")
         self.assertNotRegex(self.engine.game.memory.full_event_log[-1], r"\bz\d+\b")
+
+
+class RefusalWordingTests(EngineTestCase):
+    """Spec 10, Failures."""
+
+    def _refusals(self) -> list[str]:
+        prompt = self.llm.narrator_prompts[-1]
+        return [line for line in prompt.splitlines() if "Refused" in line and "[" not in line]
+
+    def test_a_malformed_line_is_refused_in_words_without_the_raw_line(self):
+        self.llm.actions = 'ACTIONS:\nTALK Emma "Emma, I need help"'
+        self.engine.play("talk")
+        refusals = [line for line in self._refusals() if "tried to talk" in line]
+        self.assertEqual(len(refusals), 1, self._refusals())
+        self.assertNotIn("TALK", refusals[0])
+        self.assertNotIn("Emma, I need help", refusals[0])
+
+    def test_an_unknown_verb_is_refused_in_words_without_the_raw_line(self):
+        self.llm.actions = "ACTIONS:\nFROBNICATE the widget"
+        self.engine.play("do something weird")
+        self.assertFalse(any("the widget" in line for line in self._refusals()))
+
+    def test_every_parse_failure_path_is_refused_in_plain_words(self):
+        scripts = {
+            "bad talk": (False, 'ACTIONS:\nTALK Emma "Emma, I need help"'),
+            "bad wait": (False, "ACTIONS:\nWAIT soon"),
+            "unknown verb": (False, "ACTIONS:\nFROBNICATE the widget"),
+            "removed verb": (False, "ACTIONS:\nCRAFT a spear"),
+            "not json": (True, "not json at all"),
+            "malformed plan": (True, '{"steps": 3}'),
+            "unknown structured verb": (True, '{"actions": [{"verb": "FROB"}]}'),
+        }
+        for label, (structured, reply) in scripts.items():
+            with self.subTest(label):
+                self.llm.structured = structured
+                self.llm.actions = reply
+                self.engine.play("do something")
+                refusals = re.findall(r"Refused:[^.]*\.", self.llm.narrator_prompts[-1])
+                self.assertTrue(refusals, label)
+                for line in refusals:
+                    self.assertNotRegex(line, r"\d", line)
+                    self.assertNotRegex(line, r"(?<!\w)'|'(?!\w)|[\"{}\[\]]", line)
+                    self.assertNotIn("one of", line)
+                    self.assertFalse(line.removeprefix("Refused:").count(":"), line)
+                    self.assertNotRegex(line, r"\b[A-Z]{2,}\b", line)
+
+    def test_a_known_verb_that_failed_to_parse_is_named_in_lower_case(self):
+        self.llm.actions = "ACTIONS:\nWAIT soon"
+        self.engine.play("wait")
+        refusals = [line for line in self._refusals() if "tried to wait" in line]
+        self.assertEqual(len(refusals), 1, self._refusals())
+
+    def test_a_known_structured_verb_with_a_bad_field_is_named(self):
+        self.llm.structured = True
+        self.llm.actions = (
+            '{"actions": [{"verb": "EXERCISE", "exercise": "pushups", "minutes": "ten"}]}'
+        )
+        self.engine.play("exercise")
+        refusals = [line for line in self._refusals() if "tried to exercise" in line]
+        self.assertEqual(len(refusals), 1, self._refusals())
 
 
 class PayloadTests(EngineTestCase):

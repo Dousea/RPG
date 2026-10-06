@@ -4,7 +4,7 @@ Two roles, two calls, in place of the old single game-master call: the parser
 turns player input plus a minimal scene description into a proposed ACTIONS
 block (no prose, and no authority -- the engine validates and simulates every
 line before anything is narrated); the narrator then turns the engine's
-already-decided outcome facts into STORY/EVENT prose. Per docs/01-engine-authority.md,
+already-decided outcome facts into STORY prose. Per docs/01-engine-authority.md,
 the LLM interprets intent and writes prose; it never decides state.
 """
 
@@ -113,8 +113,11 @@ NARRATOR_SYSTEM_PROMPT = (
     "- Romance should evolve naturally based on character interactions\n\n"
     "The blocks run from memory to the present. [DEEP MEMORY], [SUMMARY OF PAST EVENTS] "
     "and [RECENT EVENTS] are the past; everything after them is how things stand now. "
-    "When memory and the current blocks disagree, the current blocks win. In memory, "
-    "facts in parentheses are true; the rest of an entry is only someone's account.\n\n"
+    "When memory and the current blocks disagree, the current blocks win. [LAST SCENE] "
+    "is the story the player last read, in your own words; keep to what it said and "
+    "let the facts correct it. In memory, "
+    "what a character 'tries' is only an attempt; the sentences after it say what "
+    "actually happened.\n\n"
     "[OUTCOMES] tells you exactly what happened this turn -- movement, combat, "
     "item use, talk, everything the engine already decided before you were asked to "
     "write anything. Narrate what is there. Never contradict it and never invent "
@@ -152,7 +155,7 @@ NARRATOR_SYSTEM_PROMPT = (
     "player's own action draws attention to a specific detail. Otherwise, "
     "spend the words on what's new this turn: the outcome, the dialogue, the "
     "character beat.\n\n"
-    "After EVENT, add an OPTIONS section: 2-4 short, concrete things the character "
+    "After STORY, add an OPTIONS section: 2-4 short, concrete things the character "
     "could plausibly do next, each on its own line starting with '- '. These "
     "are only suggestions -- the player can always ignore them and do something "
     "else entirely, so never phrase them as the only paths forward. If "
@@ -161,8 +164,6 @@ NARRATOR_SYSTEM_PROMPT = (
     "Your response must follow this EXACT format:\n\n"
     "STORY:\n"
     "[Write the narrative in second-person, addressing the character directly]\n\n"
-    "EVENT:\n"
-    "[Brief summary for the event log]\n\n"
     "OPTIONS:\n"
     "[2-4 short suggestions, one per line, each starting with '- ', or NONE]\n\n"
     "Example:\n"
@@ -170,8 +171,6 @@ NARRATOR_SYSTEM_PROMPT = (
     "A woman about your age is wrestling with an armful of groceries outside the "
     "door next to yours. She catches you watching and gives an easy, curious "
     "smile, like she's sizing up the new neighbor.\n\n"
-    "EVENT:\n"
-    "The character crossed paths with a neighbor in the hallway\n\n"
     "OPTIONS:\n"
     "- Offer to help her with the groceries\n"
     "- Introduce yourself\n"
@@ -180,8 +179,9 @@ NARRATOR_SYSTEM_PROMPT = (
 
 SUMMARIZER_SYSTEM_PROMPT = (
     "You are a story summarizer. Condense the following events into a single, "
-    "concise narrative paragraph. Facts in parentheses, such as '(Facts: ...)', are "
-    "true and win over the rest of an entry; keep them and never contradict them."
+    "concise narrative paragraph. In each entry, what a character 'tries' is only an "
+    "attempt; the sentences after it say what actually happened. Keep what happened "
+    "and never contradict it."
 )
 
 
@@ -300,7 +300,7 @@ def parse_action_response(llm_response_text: str) -> list[str]:
 
     Tolerant of the model dropping the `ACTIONS:` header: with only one
     section to write, a small local model sometimes skips the header it used
-    to need to distinguish ACTIONS from STORY/EVENT. If no header is found,
+    to need to distinguish ACTIONS from STORY. If no header is found,
     every non-blank line is treated as a candidate action line, which is what
     `modules.action.parser.parse_action_plan` would have received anyway.
     """
@@ -320,16 +320,16 @@ _PROMPT_BLOCK_HEADER = re.compile(r"\[[A-Z][A-Z ]*\]")
 
 
 def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]]:
-    """Split a STORY/EVENT/OPTIONS narrator response into its parts.
+    """Split a STORY/OPTIONS narrator response into its parts.
 
     Section headers are matched line by line rather than by splitting on
     blank lines, so a story containing blank lines survives intact. A reply
     with no headers is all story. An echoed prompt block (`[OUTCOMES]` and
-    the lines under it) is dropped up to the next header. OPTIONS is
-    optional: none (or NONE) yields an empty list.
+    the lines under it) is dropped up to the next header, and so is a stray
+    EVENT section. OPTIONS is optional: none (or NONE) yields an empty list.
     """
-    sections: dict[str, list[str]] = {"story": [], "event": [], "options": []}
-    headers = {"STORY:": "story", "EVENT:": "event", "OPTIONS:": "options"}
+    sections: dict[str, list[str]] = {"story": [], "dropped": [], "options": []}
+    headers = {"STORY:": "story", "EVENT:": "dropped", "OPTIONS:": "options"}
     lines = llm_response_text.splitlines()
 
     def header_of(stripped: str) -> str | None:
@@ -355,7 +355,6 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
             sections[current].append(line)
 
     story = "\n".join(sections["story"]).strip()
-    event = "\n".join(sections["event"]).strip()
     # The model sometimes punctuates "NONE" (a period, an exclamation
     # mark, a semicolon, a colon) -- strip that before comparing, or it reads
     # as a stray one-item options list instead of "no options".
@@ -367,6 +366,5 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
 
     return {
         "story": story or "The world is silent.",
-        "event": event or "Nothing happened.",
         "options": options,
     }

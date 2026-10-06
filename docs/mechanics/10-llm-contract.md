@@ -32,7 +32,8 @@ parser.
 | `GameManager.move_npc`, `outbreak_day`, `NarrativeState.social_log` | `managers/game.py` |
 | Both prompts' blocks | `managers/context.py` |
 | The parser prompt built from `VERBS`, the narrator rules, the summarizer note | `adapters/llm.py` |
-| Event-log entries with facts, the page payload | `adapters/engine.py` |
+| The event-log entry written for a turn | `managers/event_log.py` |
+| Parse-failure facts, the page payload | `adapters/engine.py` |
 | Saving | `adapters/save/codec.py` |
 | Hand-run parser quality check | `evals/parser_cases.yaml`, `scripts/eval_parser.py` |
 
@@ -43,7 +44,7 @@ Three calls:
 | Call | Temperature | Gets | Returns | Decides |
 | --- | --- | --- | --- | --- |
 | **Parser** | 0.2 | the scene, in the parser blocks below | a JSON plan `{"actions": [...]}`, or `ACTIONS:` lines as the fallback | which verb, which listed target, which listed label |
-| **Narrator** | 0.7 | memory, state and this turn's `[OUTCOMES]` | `STORY`, `EVENT`, `OPTIONS` | the words |
+| **Narrator** | 0.7 | memory, state and this turn's `[OUTCOMES]` | `STORY`, `OPTIONS` | the words |
 | **Summarizer** | 0.5 | older event-log entries | one paragraph | the words |
 
 **The test for a lever:** could a player get a different result by rewording the
@@ -133,7 +134,7 @@ isn't talking, so it doesn't lower boredom.
 
 ### What the parser sees
 
-The scene and nothing else: no memory, no prose, no relationship bands. In order:
+The scene and the last turn: no memory, no narrator prose, no relationship bands. In order:
 
 | Block | Contents |
 | --- | --- |
@@ -149,6 +150,7 @@ The scene and nothing else: no memory, no prose, no relationship bands. In order
 | `[WEATHER]` | the weather in words |
 | `[EXERCISES]` | exercise types, and whether a barbell or dumbbell is carried |
 | `[AVAILABLE ACTIONS]` | the verbs the scene lists, each with its argument kinds and gloss; `TALK` carries its eight approaches |
+| `[LAST TURN]` | the latest event-log entry (the attempt and its facts, zombie ids in words), so "again" and pronouns resolve; omitted with an empty log |
 | `[PLAYER INPUT]` | what the player typed |
 
 `[DOORS AND WINDOWS]` and `[CORPSES]` sit before and after `[ITEMS HERE]` once
@@ -346,6 +348,7 @@ In this order. Memory comes first, so current state and this turn's outcomes win
 | --- | --- |
 | `[CHARACTER]` | name, pronouns, occupation, appearance, backstory, skills in words, goals, inventory, equipment, the outfit line, traits |
 | `[DEEP MEMORY]` / `[SUMMARY OF PAST EVENTS]` / `[RECENT EVENTS]` | memory |
+| `[LAST SCENE]` | the story the player last read, verbatim, with a note that the facts and current blocks win; omitted when there is none |
 | `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
 | `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, discovered flags |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
@@ -383,12 +386,12 @@ The system prompt keeps its style section and states these rules:
 - Death is final, and `OPTIONS` is `NONE`.
 
 These are prompt rules. What is enforced is that nothing the narrator writes changes
-state: `STORY` is shown to the player, `OPTIONS` is only a suggestion, and `EVENT`
-only feeds memory.
+state: `STORY` is shown to the player and `OPTIONS` is only a suggestion. The
+narrator writes nothing into memory.
 
 ### What the narrator returns
 
-`STORY:`, `EVENT:` and `OPTIONS:`. An option is something the player could type, and
+`STORY:` and `OPTIONS:`. A stray `EVENT:` section is dropped, never shown as story. An option is something the player could type, and
 clicking it sends it to the parser like typed text, so a suggestion is never a
 shortcut past the engine. A reply with no headers at all is all story. A prompt block
 the narrator echoes back (`[OUTCOMES]` and the lines under it) is dropped up to the
@@ -396,12 +399,24 @@ next header.
 
 ## Memory
 
-- Each event-log entry is the narrator's `EVENT` line followed by the turn's engine
-  facts: "Orton talked Emma into coming along. (Facts: Emma agrees to follow Orton.
-  About 5 minutes pass.)". The recent buffer holds the same entry.
-- The summarizer's prompt says the facts in parentheses are true and win over the
-  rest.
-- Memory goes to the narrator only, never the parser.
+- The engine writes each event-log entry from the turn, never from narrator text:
+  the game day, clock time and zone as the player acted, what the player tried
+  (their input, quoted), then the turn's outcome facts with zombie ids read as "the
+  zombie". "Day 3, 06:32 AM, Your Building. Orton tries: "I stab the zombie in the
+  head." Orton hits the zombie with the kitchen knife and it staggers back. About 1
+  minute passes." The recent buffer holds the same entry, and so does a turn whose
+  narrator call failed.
+- The narrator's prompt and the summarizer's say that what a character "tries" is
+  only an attempt and the sentences after it say what happened.
+- `[RECENT EVENTS]` renders oldest to newest, and its note says so.
+- `[DEEP MEMORY]` never repeats an entry that is in `[RECENT EVENTS]`: the search
+  looks wider than the recall count, drops the recent entries and keeps the first 2.
+- The save keeps the last story: the prose shown after a narrated turn, replacing the
+  previous one. A turn whose narrator call failed clears it, and a new game has none.
+- `[LAST SCENE]` renders it between memory and state, cut to 1600 characters on a line
+  or sentence boundary.
+- The parser gets the latest event-log entry as `[LAST TURN]`, never any narrator prose;
+  memory proper (`[DEEP MEMORY]`, summaries, recent events) goes to the narrator only.
 - In the narrator's prompt, memory blocks come before state blocks, and the system
   prompt says the current blocks win.
 
@@ -410,9 +425,9 @@ next header.
 | Failure | Result |
 | --- | --- |
 | Parser call errors or times out | No state change, no time; a system error is shown |
-| A line is malformed or uses a removed verb | `ParseFailure`, refused as a fact; the rest of the plan runs |
-| The validator refuses an action | Refused as a fact; 0 minutes |
-| Narrator call errors after the engine acted | The facts are recorded as the event verbatim and saved; a system error is shown |
+| A line is malformed or uses a removed verb | `ParseFailure`, refused as a fact in words: "Refused: Orton tried to talk, but it wasn't clear how." (or, when the verb is unknown or the reply unreadable, "Refused: Orton's attempt isn't something he can do here."); the raw line and the grammar reason go to the log only, never into the fact; the rest of the plan runs |
+| The validator refuses an action | Refused as a fact in words, 0 minutes: "Refused: Orton can't bandage the left hand: The left hand isn't hurt." No class name, no verb syntax |
+| Narrator call errors after the engine acted | The same event entry is recorded and saved; a system error is shown |
 | The summarizer fails | Skipped; retried next turn |
 
 ## Checking the models
@@ -452,7 +467,9 @@ Schema version 14 adds `npc.following`, `world.fired_beats` and
 `narrative.apocalypse_stage`. The social log is the day its counts belong to, the
 counts keyed `"<npc_id>|<approach or give>"`, the refusals keyed
 `"<npc_id>|<request>"` with the minute, and the told topics. The counts clear when
-the clock's day differs from the saved one. Older saves are discarded.
+the clock's day differs from the saved one. Schema version 17 adds
+`memory.last_story`, the previous turn's story, cut to `LAST_STORY_MAX_LENGTH`
+characters on load and emptied when the narrator fails. Older saves are discarded.
 
 ## Edge cases
 
@@ -487,7 +504,8 @@ the clock's day differs from the saved one. Older saves are discarded.
   `WAIT` or `SLEEP`, each condition and effect, `trusts_player`.
 - `tests/test_context.py`: both prompts' blocks in order, no numbers in the narrator's
   blocks, `[CHARACTER]` without the old lines.
-- `tests/test_engine.py`: each event-log entry carries the turn's facts; the payload.
+- `tests/test_last_scene.py`: the stored story, `[LAST SCENE]`, `[LAST TURN]`, the save round trip.
+- `tests/test_engine.py`: the event-log entry, its parity on a narrator failure, deep memory without repeats, refusal wording; the payload.
 - `tests/test_persistence.py`: following, the social log, told topics and fired beats
   round-trip.
 - `tests/test_eval_cases.py`: the hand-run cases still parse.

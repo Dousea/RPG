@@ -21,6 +21,7 @@ from managers.zombies import (
 from modules.action.types import (
     AddGoalAction,
     AttackAction,
+    BandageAction,
     DropAction,
     Duration,
     MoveAction,
@@ -127,6 +128,17 @@ class PlayerDeathResolutionTests(unittest.TestCase):
         self.assertFalse(gm.narrative.game_over)
         self.assertEqual(gm.narrative.death_cause, "")
         self.assertNotIn("Orton has died", facts[0])
+
+
+class RefusalWordingTests(unittest.TestCase):
+    """Spec 10, Failures: a refusal reads as a sentence, never a class name."""
+
+    def test_a_refused_action_names_what_orton_could_not_do_and_why(self):
+        facts = simulate(GameManager(), BandageAction(part_name="left hand"))
+        self.assertEqual(len(facts), 1)
+        self.assertTrue(facts[0].startswith("Refused: Orton can't bandage the left hand: "), facts)
+        self.assertNotIn("Action", facts[0])
+        self.assertNotIn(" -- ", facts[0])
 
 
 class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):

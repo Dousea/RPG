@@ -25,6 +25,7 @@ from data.exercises import (
     EXERCISES,
 )
 from data.items import ITEMS, item_condition_word, wetness_word
+from data.memory import LAST_SCENE_MAX_CHARS
 from data.names import SKIN_TONE_WORDS
 from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
@@ -166,7 +167,30 @@ class ContextBuilder:
     def _events_section(self) -> str:
         if not self.manager.memory.recent_events:
             return "(No recent events)"
-        return "\n".join(f" - {event}" for event in self.manager.memory.recent_events)
+        return "\n".join(f" - {event}" for event in reversed(self.manager.memory.recent_events))
+
+    def _last_scene_section(self) -> str:
+        """The stored story, cut to the limit on a line or sentence boundary; empty without one."""
+        story = self.manager.memory.last_story.strip()
+        if len(story) > LAST_SCENE_MAX_CHARS:
+            window = story[: LAST_SCENE_MAX_CHARS + 1]
+            ends = [m.end() for m in re.finditer(r"[.!?][\"')]*(?=\s)", window)]
+            ends += [i for i, char in enumerate(window) if char == "\n"]
+            story = story[: max(ends, default=LAST_SCENE_MAX_CHARS)].rstrip()
+        if not story:
+            return ""
+        return (
+            "[LAST SCENE]\n"
+            "(What the player last read, verbatim. The outcomes and the current blocks "
+            "win where it disagrees.)\n\n"
+            f"{story}\n\n"
+        )
+
+    def _last_turn_section(self) -> str:
+        log = self.manager.memory.full_event_log
+        if not log:
+            return ""
+        return f"[LAST TURN]\n{zombie_ids_to_words(log[-1])}\n\n"
 
     def _corrections_section(self) -> str:
         corrections = self.manager.narrative.pending_corrections
@@ -548,7 +572,7 @@ door rather than refusing the move.)
 [AVAILABLE ACTIONS]
 {self._available_actions_section()}
 
-[PLAYER INPUT]
+{self._last_turn_section()}[PLAYER INPUT]
 {player_input}"""
 
     # === Narrator prompt ===
@@ -580,11 +604,11 @@ door rather than refusing the move.)
 {self._summary_section().rstrip()}
 
 [RECENT EVENTS]
-(What just happened; facts in parentheses are true and win over the rest)
+(What just happened, oldest first; the last entry is the most recent)
 
 {self._events_section().rstrip()}
 
-[TIME AND WEATHER]
+{self._last_scene_section()}[TIME AND WEATHER]
 {self._time_and_weather_section()}
 
 [CURRENT LOCATION]

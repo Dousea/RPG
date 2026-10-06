@@ -112,6 +112,7 @@ class MemoryState:
     recent_events: list[str] = field(default_factory=list[str])
     full_event_log: list[str] = field(default_factory=list[str])
     summaries: list[str] = field(default_factory=list[str])
+    last_story: str = ""
 
 
 class GameManager:

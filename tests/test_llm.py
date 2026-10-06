@@ -1,4 +1,4 @@
-"""Parsing of the parser call's ACTIONS block and the narrator's STORY/EVENT."""
+"""Parsing of the parser call's ACTIONS block and the narrator's STORY."""
 
 import json
 import unittest
@@ -59,7 +59,7 @@ class ParseNarratorResponseTests(unittest.TestCase):
             "STORY:\nYou step into the hall.\n\nEVENT:\nOrton entered the hallway"
         )
         self.assertEqual(parsed["story"], "You step into the hall.")
-        self.assertEqual(parsed["event"], "Orton entered the hallway")
+        self.assertNotIn("event", parsed)
 
     def test_blank_lines_inside_the_story_survive(self):
         parsed = parse_narrator_response(
@@ -70,17 +70,14 @@ class ParseNarratorResponseTests(unittest.TestCase):
     def test_content_on_the_header_line_is_kept(self):
         parsed = parse_narrator_response("STORY: All on one line.\n\nEVENT: Something")
         self.assertEqual(parsed["story"], "All on one line.")
-        self.assertEqual(parsed["event"], "Something")
 
     def test_headers_are_case_insensitive(self):
         parsed = parse_narrator_response("story:\nx\n\nevent:\ny")
         self.assertEqual(parsed["story"], "x")
-        self.assertEqual(parsed["event"], "y")
 
     def test_prose_with_no_headers_at_all_is_the_story(self):
         parsed = parse_narrator_response("just some prose\n\nwith no headers at all")
         self.assertEqual(parsed["story"], "just some prose\n\nwith no headers at all")
-        self.assertEqual(parsed["event"], "Nothing happened.")
         self.assertEqual(parsed["options"], [])
 
     def test_an_echoed_prompt_block_is_dropped_from_the_story(self):
@@ -94,16 +91,17 @@ class ParseNarratorResponseTests(unittest.TestCase):
     def test_empty_response(self):
         parsed = parse_narrator_response("")
         self.assertEqual(parsed["story"], "The world is silent.")
-        self.assertEqual(parsed["event"], "Nothing happened.")
 
-    def test_a_stray_actions_section_is_not_recognized_as_a_header(self):
-        # The narrator is not asked for ACTIONS anymore; if it emits one
-        # anyway, it is not authoritative and is simply absorbed as story/
-        # event text rather than crashing the parse.
+    def test_a_stray_event_section_is_dropped_never_shown_as_story(self):
         parsed = parse_narrator_response(
-            "STORY:\nYou look around.\n\nEVENT:\nOrton looked around\n\nACTIONS:\nNONE"
+            "STORY:\nYou look around.\n\nEVENT:\nOrton looked around\n\nOPTIONS:\n- Wait"
         )
-        self.assertEqual(parsed["event"], "Orton looked around\n\nACTIONS:\nNONE")
+        self.assertEqual(parsed["story"], "You look around.")
+        self.assertEqual(parsed["options"], ["Wait"])
+
+    def test_event_before_story_is_dropped_too(self):
+        parsed = parse_narrator_response("EVENT: Orton looked around\nSTORY:\nYou look around.")
+        self.assertEqual(parsed["story"], "You look around.")
 
     def test_options_are_extracted_as_a_list_with_dashes_stripped(self):
         parsed = parse_narrator_response(
@@ -150,13 +148,20 @@ class PromptRuleTests(unittest.TestCase):
         self.assertIn("Refused", NARRATOR_SYSTEM_PROMPT)
         self.assertIn("did not happen", NARRATOR_SYSTEM_PROMPT)
 
+    def test_nothing_appears_in_anyones_hands_unless_the_blocks_say_so(self):
+        self.assertIn("in anyone's hands", NARRATOR_SYSTEM_PROMPT)
+
+    def test_the_narrator_is_not_asked_for_an_event_line(self):
+        self.assertNotIn("EVENT:", NARRATOR_SYSTEM_PROMPT)
+        self.assertNotIn("After EVENT", NARRATOR_SYSTEM_PROMPT)
+
     def test_the_narrator_may_only_use_listed_zombies_corpses_and_people(self):
         for block in ("[THREATS]", "[CORPSES]", "[NPCS PRESENT]"):
             self.assertIn(block, NARRATOR_SYSTEM_PROMPT)
 
     def test_the_narrator_is_told_state_wins_over_memory(self):
         self.assertIn("current blocks win", NARRATOR_SYSTEM_PROMPT)
-        self.assertIn("facts in parentheses are true", NARRATOR_SYSTEM_PROMPT)
+        self.assertIn("only an attempt", NARRATOR_SYSTEM_PROMPT)
 
     def test_a_topic_is_said_only_when_outcomes_says_it_was_told(self):
         self.assertIn("only when [OUTCOMES] says it was told", NARRATOR_SYSTEM_PROMPT)
@@ -165,9 +170,9 @@ class PromptRuleTests(unittest.TestCase):
         for word in ("UPDATE_", "SET_FLAG", "Orton"):
             self.assertNotIn(word, NARRATOR_SYSTEM_PROMPT)
 
-    def test_the_summarizer_is_told_parenthesised_facts_win(self):
-        self.assertIn("Facts in parentheses", SUMMARIZER_SYSTEM_PROMPT)
-        self.assertIn("win over the rest", SUMMARIZER_SYSTEM_PROMPT)
+    def test_the_summarizer_is_told_an_attempt_is_not_an_outcome(self):
+        self.assertIn("only an attempt", SUMMARIZER_SYSTEM_PROMPT)
+        self.assertIn("what actually happened", SUMMARIZER_SYSTEM_PROMPT)
 
 
 class FakeResponse:

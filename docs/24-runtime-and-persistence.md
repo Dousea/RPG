@@ -84,7 +84,7 @@ is what keeps the save small and safe to reload.
 
 Three rules, in order of severity:
 
-**Schema mismatch discards the save.** `SCHEMA_VERSION` (now 10) is written into
+**Schema mismatch discards the save.** `SCHEMA_VERSION` (now 17) is written into
 every save. A `version` that does not match causes the save to be dropped and a
 new game started, with a log line. A half-understood save is worse than a fresh
 one; there is no migration and no partial load. The clock fields of the save are

@@ -269,8 +269,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_16(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 16)
+    def test_schema_version_is_17(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 17)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()

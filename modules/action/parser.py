@@ -67,6 +67,7 @@ class ParseFailure:
 
     raw: str
     reason: str
+    verb: str | None = None
 
 
 class _ActionParseError(ValueError):
@@ -592,7 +593,7 @@ def parse_action_line(line: str) -> AnyAction | ParseFailure:
     try:
         return verb.parse(remainder.strip())
     except _ActionParseError as exc:
-        return ParseFailure(raw=line, reason=str(exc))
+        return ParseFailure(raw=line, reason=str(exc), verb=verb.name)
 
 
 def parse_action_plan(lines: list[str]) -> tuple[list[AnyAction], list[ParseFailure]]:

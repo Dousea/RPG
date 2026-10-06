@@ -11,7 +11,7 @@ import threading
 from typing import Any
 
 from adapters import llm
-from adapters.memory import SemanticMemory
+from adapters.memory import DEFAULT_RECALL, SemanticMemory
 from adapters.save import codec, files
 from data.items import item_condition_word, wetness_word
 from data.occupations import OCCUPATIONS
@@ -21,13 +21,15 @@ from managers import creation
 from managers.body import open_wounds
 from managers.climate import weather_summary
 from managers.combat import held_entity
-from managers.context import ContextBuilder, zombie_ids_to_words
+from managers.context import ContextBuilder
+from managers.event_log import build_event_entry, event_stamp
 from managers.first_aid import part_word
-from managers.game import GameManager
+from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects
 from managers.zombies import threat_views
+from modules.action.words import refusal_in_words
 from modules.character.build import CharacterBuild
 from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
@@ -87,13 +89,16 @@ class GameEngine:
                 )
 
             # 1. Recall semantically relevant past events (for the narrator).
-            indices = self.memory.search(player_input)
+            indices = self.memory.search(player_input, DEFAULT_RECALL + MAX_RECENT_EVENTS)
             deep_memories = [
-                manager.memory.full_event_log[i]
+                entry
                 for i in indices
                 if i < len(manager.memory.full_event_log)
-            ]
+                and (entry := manager.memory.full_event_log[i]) not in manager.memory.recent_events
+            ][:DEFAULT_RECALL]
             logger.debug(f"Recalled {len(deep_memories)} deep memories.")
+
+            stamp = event_stamp(manager)
 
             # 2. Ask the parser what the player is trying to do. No prose exists yet.
             context = ContextBuilder(manager)
@@ -109,9 +114,10 @@ class GameEngine:
             # where the engine decides what happens -- before the narrator
             # writes a single word about it.
             outcome_facts = SimulationCore(manager).resolve(actions, refused=len(parse_failures))
+            looks = manager.player.appearance
             for failure in parse_failures:
                 logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
-                outcome_facts.append(f"Refused: '{failure.raw}' -- {failure.reason}")
+                outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
 
             # 4. Ask the narrator to describe what already happened.
             narrator_prompt = ContextBuilder(manager).build_narrator_prompt(
@@ -123,26 +129,23 @@ class GameEngine:
                 # Unlike a parser failure, real state changes may already
                 # exist here -- the engine decided them before asking for
                 # prose, and a rendering failure must not discard engine
-                # truth. Record the outcome facts as this turn's event
-                # verbatim and persist, so state and disk agree even though
-                # nothing was narrated.
-                fallback_event = (
-                    "; ".join(zombie_ids_to_words(fact) for fact in outcome_facts)
-                    if outcome_facts
-                    else "Nothing happened."
-                )
-                manager.record_event(fallback_event)
+                # truth. Record the same entry a narrated turn would and
+                # persist, so state and disk agree even though nothing was
+                # narrated.
+                manager.record_event(build_event_entry(manager, stamp, player_input, outcome_facts))
+                manager.memory.last_story = ""
                 self.memory.rebuild(manager.memory.full_event_log)
                 files.save(manager)
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
             parsed = llm.parse_narrator_response(raw_response)
             story_text = str(parsed["story"])
-            event_text = _entry_with_facts(str(parsed["event"]), outcome_facts)
             options = list(parsed["options"])
+            entry = build_event_entry(manager, stamp, player_input, outcome_facts)
 
             # 5. Record the event in both memory tiers and reindex.
-            manager.record_event(event_text)
+            manager.record_event(entry)
+            manager.memory.last_story = story_text
             self.memory.rebuild(manager.memory.full_event_log)
 
             # 6. Summarize if enough history has built up.
@@ -288,13 +291,6 @@ class GameEngine:
             "sneaking": player.sneaking,
             "zombie_kills": player.zombie_kills,
         }
-
-
-def _entry_with_facts(event: str, facts: list[str]) -> str:
-    """The event-log entry: the narrator's event, then the engine's facts as the true part."""
-    if not facts:
-        return event
-    return f"{event} (Facts: {' '.join(zombie_ids_to_words(fact) for fact in facts)})"
 
 
 def _trait_entries(player: PlayerEntity) -> list[dict[str, str]]:
