@@ -6,6 +6,7 @@ from unittest import mock
 
 import requests
 
+import config
 from adapters import llm
 from adapters.llm import (
     NARRATOR_SYSTEM_PROMPT,
@@ -17,6 +18,7 @@ from adapters.llm import (
     parse_narrator_response,
     parse_plan_response,
 )
+from data.memory import DEFAULT_CHARS_PER_TOKEN
 
 
 class ParseActionResponseTests(unittest.TestCase):
@@ -176,16 +178,20 @@ class PromptRuleTests(unittest.TestCase):
 
 
 class FakeResponse:
-    def __init__(self, status_code: int, content: str = ""):
+    def __init__(self, status_code: int, content: str = "", prompt_tokens: int | None = None):
         self.status_code = status_code
         self._content = content
+        self._prompt_tokens = prompt_tokens
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
             raise requests.exceptions.HTTPError(f"HTTP {self.status_code}")
 
     def json(self) -> dict:
-        return {"choices": [{"message": {"content": self._content}}]}
+        body: dict = {"choices": [{"message": {"content": self._content}}]}
+        if self._prompt_tokens is not None:
+            body["usage"] = {"prompt_tokens": self._prompt_tokens}
+        return body
 
 
 SCHEMA = {"type": "object", "properties": {"actions": {"type": "array"}}}
@@ -282,6 +288,73 @@ class ParsePlanResponseTests(unittest.TestCase):
         for text in ("", "ACTIONS:\nNONE", '{"actions": [', "null"):
             actions, failures = parse_plan_response(text)
             self.assertEqual((actions, len(failures)), ([], 1), text)
+
+
+class ReplyCapTests(unittest.TestCase):
+    """Spec 10, Token budget: reply caps."""
+
+    def sent(self, call) -> dict:
+        with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
+            call()
+        return post.call_args.kwargs["json"]
+
+    def test_the_defaults_are_the_documented_caps(self):
+        self.assertEqual(
+            (
+                config.llm.context_tokens,
+                config.llm.narrator_max_tokens,
+                config.llm.parser_max_tokens,
+                config.llm.summarizer_max_tokens,
+            ),
+            (8192, 800, 400, 300),
+        )
+
+    def test_the_narrator_request_is_capped(self):
+        self.assertEqual(self.sent(lambda: llm.query_narrator("p"))["max_tokens"], 800)
+
+    def test_the_parser_request_is_capped_in_both_formats(self):
+        self.assertEqual(self.sent(lambda: llm.query_parser("p", SCHEMA))["max_tokens"], 400)
+        self.assertEqual(self.sent(lambda: llm.query_parser("p"))["max_tokens"], 400)
+
+    def test_the_summary_request_is_capped(self):
+        self.assertEqual(self.sent(lambda: llm.query_summary("p"))["max_tokens"], 300)
+
+
+class CharsPerTokenTests(unittest.TestCase):
+    """Spec 10, Token budget: characters per token."""
+
+    def setUp(self):
+        llm.reset_chars_per_token()
+        self.addCleanup(llm.reset_chars_per_token)
+
+    def ask(self, response: FakeResponse) -> None:
+        with mock.patch.object(llm.requests, "post", return_value=response):
+            llm.query_narrator("u" * 100)
+
+    def test_it_starts_at_the_default(self):
+        self.assertEqual(llm.chars_per_token(), DEFAULT_CHARS_PER_TOKEN)
+        self.assertEqual(DEFAULT_CHARS_PER_TOKEN, 3.5)
+
+    def test_a_reply_with_usage_sets_the_ratio_of_characters_sent_to_prompt_tokens(self):
+        self.ask(FakeResponse(200, "x", prompt_tokens=100))
+        sent = len(NARRATOR_SYSTEM_PROMPT) + 100
+        self.assertAlmostEqual(llm.chars_per_token(), sent / 100)
+
+    def test_the_latest_reply_wins(self):
+        self.ask(FakeResponse(200, "x", prompt_tokens=100))
+        self.ask(FakeResponse(200, "x", prompt_tokens=200))
+        self.assertAlmostEqual(llm.chars_per_token(), (len(NARRATOR_SYSTEM_PROMPT) + 100) / 200)
+
+    def test_a_reply_without_usage_leaves_it_alone(self):
+        self.ask(FakeResponse(200, "x", prompt_tokens=100))
+        before = llm.chars_per_token()
+        self.ask(FakeResponse(200, "x"))
+        self.assertEqual(llm.chars_per_token(), before)
+
+
+class NarratorPromptLengthTests(unittest.TestCase):
+    def test_the_system_prompt_fits_three_thousand_two_hundred_characters(self):
+        self.assertLessEqual(len(NARRATOR_SYSTEM_PROMPT), 3200)
 
 
 if __name__ == "__main__":

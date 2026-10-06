@@ -48,6 +48,17 @@ The Parser and Narrator can use different local models.
 
 A larger model is not required for every task.
 
+### Reply caps and the prompt budget
+
+Every call sends `max_tokens`: the narrator 800, the parser 400, the summarizer 300
+(`llm.narrator_max_tokens`, `parser_max_tokens`, `summarizer_max_tokens`).
+`llm.context_tokens` (8192) is the loaded model's window. The adapter learns the
+characters-per-token ratio from each reply's `usage.prompt_tokens` (3.5 until one
+arrives), and the engine cuts the narrator's user prompt to
+`(context_tokens - narrator_max_tokens - 200) * ratio - len(system prompt)`
+characters. What is cut, and in what order, is in
+[document 13](13-context-and-memory.md).
+
 ---
 
 ## Narrator Constraints

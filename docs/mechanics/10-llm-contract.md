@@ -47,6 +47,9 @@ Three calls:
 | **Narrator** | 0.7 | memory, state and this turn's `[OUTCOMES]` | `STORY`, `OPTIONS` | the words |
 | **Summarizer** | 0.5 | older event-log entries | one paragraph | the words |
 
+Each call carries a reply cap, `max_tokens`: narrator 800, parser 400, summarizer
+300. The model's context is 8192 tokens (`llm.context_tokens`).
+
 **The test for a lever:** could a player get a different result by rewording the
 same action? If so, the model is deciding an outcome, and the verb has to change.
 
@@ -419,6 +422,15 @@ next header.
   memory proper (`[DEEP MEMORY]`, summaries, recent events) goes to the narrator only.
 - In the narrator's prompt, memory blocks come before state blocks, and the system
   prompt says the current blocks win.
+- The narrator's user prompt has a character budget: `(context tokens - narrator
+  reply cap - 200) x characters per token - the system prompt's length`. The ratio is
+  the latest reply's characters sent over its reported prompt tokens, 3.5 before any
+  reply has one, and unchanged by a reply without usage. Over budget, the prompt
+  drops deep-memory entries (last recalled first), then summaries (oldest first),
+  then `[LAST SCENE]`, then recent events (oldest first, never the newest), checking
+  after each drop. Current-state blocks, `[OUTCOMES]` and the player's input are never
+  dropped; an emptied section keeps its header and placeholder. One warning per
+  prompt lists what was dropped, and another says when it still does not fit.
 
 ## Failures
 

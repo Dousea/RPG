@@ -17,6 +17,7 @@ from typing import Any
 import requests
 
 import config
+from data.memory import DEFAULT_CHARS_PER_TOKEN
 from data.time_costs import MAX_PLAN_ACTIONS
 from modules.action.parser import ParseFailure, parse_action_plan
 from modules.action.schema import parse_plan
@@ -100,67 +101,47 @@ PARSER_JSON_SYSTEM_PROMPT = (
 
 NARRATOR_SYSTEM_PROMPT = (
     "You are the narrator for a serious, grounded, text-based zombie apocalypse RPG. "
-    "Write in second-person ('you') addressing the player character, a survivor of societal collapse.\n\n"
-    "[CHARACTER] gives the character's name, pronouns, occupation, looks, backstory "
-    "and traits. Let the traits colour how they act and react; never contradict them "
-    "and never show them as numbers.\n\n"
+    "Write in second person ('you') to the player character, a survivor of societal collapse.\n\n"
+    "[CHARACTER] is who they are. Let the traits colour how they act and react; never "
+    "contradict them and never show them as numbers.\n\n"
     "NARRATIVE STYLE:\n"
     "- Emotionally grounded and character-driven\n"
-    "- Start with slow-burn collapse, hint at unrest/disease/infrastructure failure\n"
-    "- Focus on realistic human reactions and relationship dynamics\n"
-    "- Allow downtime: conversations, bonding, vulnerability, arguments\n"
-    "- Present choices but allow custom responses\n"
-    "- Romance should evolve naturally based on character interactions\n\n"
+    "- Slow-burn collapse: hint at unrest, disease, infrastructure failure\n"
+    "- Realistic reactions and relationships; allow downtime, bonding, arguments\n"
+    "- Romance evolves naturally\n\n"
     "The blocks run from memory to the present. [DEEP MEMORY], [SUMMARY OF PAST EVENTS] "
-    "and [RECENT EVENTS] are the past; everything after them is how things stand now. "
-    "When memory and the current blocks disagree, the current blocks win. [LAST SCENE] "
-    "is the story the player last read, in your own words; keep to what it said and "
-    "let the facts correct it. In memory, "
+    "and [RECENT EVENTS] are the past; the rest is how things stand now, and where "
+    "they disagree the current blocks win. [LAST SCENE] is the story the player last "
+    "read, in your own words; keep to it, and let the facts correct it. In memory, "
     "what a character 'tries' is only an attempt; the sentences after it say what "
     "actually happened.\n\n"
-    "[OUTCOMES] tells you exactly what happened this turn -- movement, combat, "
-    "item use, talk, everything the engine already decided before you were asked to "
-    "write anything. Narrate what is there. Never contradict it and never invent "
-    "your own HP, inventory or combat numbers. RULES:\n"
+    "[OUTCOMES] is what happened this turn, decided by the engine. Narrate it; never "
+    "contradict it and never invent your own HP, inventory or combat numbers. RULES:\n"
     "- Anything marked 'Refused' did not happen; write around it. An interrupted "
-    "action stops where its fact says, and what the fact says was cancelled never "
-    "happens.\n"
-    "- Zombies: every zombie in the prose is in [THREATS]; never invent one and never "
-    "give one a number. Before the outbreak nobody on screen is one of the walking "
-    "dead; rumours and news are fine.\n"
-    "- Corpses: every body in the prose is in [CORPSES] and is dead until an "
-    "[OUTCOMES] fact says it rises.\n"
-    "- People: every person present is in [NPCS PRESENT]. Others can be remembered or "
-    "mentioned, never met.\n"
+    "action stops where its fact says; what it says was cancelled never happens.\n"
+    "- Zombies: every zombie in the prose is in [THREATS]. Before the outbreak nobody "
+    "on screen is one of the walking dead; rumours and news are fine.\n"
+    "- Corpses: every body in the prose is in [CORPSES], dead until [OUTCOMES] says it rises.\n"
+    "- People: every person present is in [NPCS PRESENT]. Others can be mentioned, "
+    "never met.\n"
     "- Items: the character holds only what [CHARACTER]'s Inventory, Equipment and "
     "Wearing say. Nothing appears in anyone's hands that those lines do not put there.\n"
     "- NPC reactions follow the reaction fact and the bands: a talk that 'seems "
-    "unmoved' is not a breakthrough, and one where someone 'bristles' is not a warm "
-    "moment.\n"
-    "- NPC knowledge: an NPC states facts about the world only from the blocks. A "
-    "topic's fact is said only when [OUTCOMES] says it was told. Opinions, feelings and "
-    "small talk are yours to write.\n"
-    "- If [OUTCOMES] says the character has died, narrate their death as final -- "
-    "this is the end of the story, not a setback -- and write OPTIONS: NONE\n\n"
-    "[QUESTS] lists what the character is currently working toward. Use it for "
-    "motivation and flavor -- you may not declare a quest objective complete "
-    "yourself; that only happens through [OUTCOMES].\n\n"
-    "[CURRENT LOCATION]'s description is reference material, not a script to "
-    "recite. The character already knows what a space looks, sounds, and smells like "
-    "once they've been standing in it -- do not re-describe the room, the "
-    "lighting, the air, or the ambient noise again just because the block is "
-    "there. Only bring physical surroundings back into the prose when "
-    "something about them has actually changed (a new arrival, an action "
-    "that disturbs the space, a shift in time or weather) or when the "
-    "player's own action draws attention to a specific detail. Otherwise, "
-    "spend the words on what's new this turn: the outcome, the dialogue, the "
-    "character beat.\n\n"
+    "unmoved' is not a breakthrough.\n"
+    "- NPC knowledge: an NPC states world facts only from the blocks. A "
+    "topic's fact is said only when [OUTCOMES] says it was told; opinions, feelings and "
+    "small talk are yours.\n"
+    "- If [OUTCOMES] says the character has died, narrate their death as final, the "
+    "end of the story, and write OPTIONS: NONE\n\n"
+    "[QUESTS] is motivation and flavor; only [OUTCOMES] can complete an objective.\n\n"
+    "[CURRENT LOCATION] is reference material, not a script. The character already knows "
+    "the space; describe the surroundings again only when something has changed or the "
+    "player's action draws attention to a detail. Spend the words on what's new this "
+    "turn: the outcome, the dialogue, the character beat.\n\n"
     "After STORY, add an OPTIONS section: 2-4 short, concrete things the character "
-    "could plausibly do next, each on its own line starting with '- '. These "
-    "are only suggestions -- the player can always ignore them and do something "
-    "else entirely, so never phrase them as the only paths forward. If "
-    "nothing sensible suggests itself (the character is mid-action, or waiting on "
-    "someone else mid-conversation), write NONE instead of forcing options.\n\n"
+    "could plausibly do next, each on its own line starting with '- ', never the only "
+    "paths forward. If nothing sensible suggests itself (mid-action, or waiting on "
+    "someone mid-conversation), write NONE.\n\n"
     "Your response must follow this EXACT format:\n\n"
     "STORY:\n"
     "[Write the narrative in second-person, addressing the character directly]\n\n"
@@ -168,13 +149,12 @@ NARRATOR_SYSTEM_PROMPT = (
     "[2-4 short suggestions, one per line, each starting with '- ', or NONE]\n\n"
     "Example:\n"
     "STORY:\n"
-    "A woman about your age is wrestling with an armful of groceries outside the "
-    "door next to yours. She catches you watching and gives an easy, curious "
-    "smile, like she's sizing up the new neighbor.\n\n"
+    "A woman wrestles with groceries outside the next door. She catches your eye "
+    "and smiles.\n\n"
     "OPTIONS:\n"
-    "- Offer to help her with the groceries\n"
+    "- Offer to help her\n"
     "- Introduce yourself\n"
-    "- Give a polite nod and keep walking"
+    "- Nod and walk on"
 )
 
 SUMMARIZER_SYSTEM_PROMPT = (
@@ -183,6 +163,27 @@ SUMMARIZER_SYSTEM_PROMPT = (
     "attempt; the sentences after it say what actually happened. Keep what happened "
     "and never contradict it."
 )
+
+
+_chars_per_token = DEFAULT_CHARS_PER_TOKEN
+
+
+def chars_per_token() -> float:
+    """Characters per prompt token as of the latest reply that reported its usage."""
+    return _chars_per_token
+
+
+def reset_chars_per_token() -> None:
+    global _chars_per_token
+    _chars_per_token = DEFAULT_CHARS_PER_TOKEN
+
+
+def _record_usage(body: dict[str, Any], chars_sent: int) -> None:
+    global _chars_per_token
+    usage = body.get("usage")
+    prompt_tokens = usage.get("prompt_tokens") if isinstance(usage, dict) else None
+    if isinstance(prompt_tokens, int) and prompt_tokens > 0:
+        _chars_per_token = chars_sent / prompt_tokens
 
 
 class LLMError(RuntimeError):
@@ -197,6 +198,7 @@ def _chat(
     system_prompt: str,
     user_content: str,
     temperature: float,
+    max_tokens: int,
     response_format: dict[str, Any] | None = None,
 ) -> str:
     payload: dict[str, Any] = {
@@ -206,6 +208,7 @@ def _chat(
             {"role": "user", "content": user_content},
         ],
         "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     if response_format is not None:
         payload["response_format"] = response_format
@@ -222,7 +225,10 @@ def _chat(
                 f"LM Studio refused the request with HTTP {response.status_code}."
             )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        body = response.json()
+        content = body["choices"][0]["message"]["content"]
+        _record_usage(body, len(system_prompt) + len(user_content))
+        return content
     except requests.exceptions.RequestException as exc:
         raise LLMError(
             f"Could not reach LM Studio at {LM_STUDIO_URL}. Is it running? ({exc})"
@@ -246,19 +252,22 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
     request gets the text prompt once instead.
     """
     temperature = config.llm.parser_temperature
+    max_tokens = config.llm.parser_max_tokens
     if schema is not None:
         response_format = {
             "type": "json_schema",
             "json_schema": {"name": "action_plan", "strict": True, "schema": schema},
         }
         try:
-            raw = _chat(PARSER_JSON_SYSTEM_PROMPT, prompt_text, temperature, response_format)
+            raw = _chat(
+                PARSER_JSON_SYSTEM_PROMPT, prompt_text, temperature, max_tokens, response_format
+            )
         except LLMRequestRejected as exc:
             logger.warning("Structured parser output refused, using the text prompt: %s", exc)
         else:
             logger.debug("Parser raw response:\n%s", raw)
             return ParserReply(raw, structured=True)
-    raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature)
+    raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature, max_tokens)
     logger.debug("Parser raw response:\n%s", raw)
     return ParserReply(raw, structured=False)
 
@@ -281,7 +290,12 @@ def read_parser_reply(reply: ParserReply) -> tuple[list[AnyAction], list[ParseFa
 
 def query_narrator(prompt_text: str) -> str:
     """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure."""
-    raw = _chat(NARRATOR_SYSTEM_PROMPT, prompt_text, temperature=config.llm.narrator_temperature)
+    raw = _chat(
+        NARRATOR_SYSTEM_PROMPT,
+        prompt_text,
+        temperature=config.llm.narrator_temperature,
+        max_tokens=config.llm.narrator_max_tokens,
+    )
     logger.debug("Narrator raw response:\n%s", raw)
     return raw
 
@@ -292,6 +306,7 @@ def query_summary(text_to_summarize: str) -> str:
         SUMMARIZER_SYSTEM_PROMPT,
         text_to_summarize,
         temperature=config.llm.summarizer_temperature,
+        max_tokens=config.llm.summarizer_max_tokens,
     ).strip()
 
 

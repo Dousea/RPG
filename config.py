@@ -24,6 +24,10 @@ _DEFAULTS: dict[str, Any] = {
         "parser_temperature": 0.2,
         "narrator_temperature": 0.7,
         "summarizer_temperature": 0.5,
+        "context_tokens": 8192,
+        "narrator_max_tokens": 800,
+        "parser_max_tokens": 400,
+        "summarizer_max_tokens": 300,
     },
     "memory": {
         "embedding_model_name": "all-MiniLM-L6-v2",

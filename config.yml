@@ -15,6 +15,12 @@ llm:
   narrator_temperature: 0.7
   # Sampling temperature for summarizing old events.
   summarizer_temperature: 0.5
+  # The loaded model's context window, in tokens; the narrator prompt is cut to fit it.
+  context_tokens: 8192
+  # Reply caps, in tokens, per call.
+  narrator_max_tokens: 800
+  parser_max_tokens: 400
+  summarizer_max_tokens: 300
 
 memory:
   # sentence-transformers model used to embed events for semantic recall.

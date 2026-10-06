@@ -160,7 +160,14 @@ Simulation Core itself throws, not the primary correction mechanism. See
 
 Together they bound prompt growth against an unbounded game: recent events,
 deep memory and the last scene are capped, and only the summary list grows —
-one paragraph per ten turns.
+one paragraph per ten turns. The narrator prompt is also held to a character
+budget (see [document 14](14-llm-roles.md)). Over it, memory is dropped until the
+prompt fits, re-measuring after each drop: deep-memory entries (last recalled
+first), then summaries (oldest first), then `[LAST SCENE]`, then recent events
+(oldest first, never the newest). Current-state blocks, `[OUTCOMES]` and the
+player's input are never dropped. A section that loses everything keeps its header
+and its empty placeholder. Each over-budget prompt logs one warning saying what
+went.
 
 ### Semantic recall
 

@@ -10,10 +10,12 @@ import logging
 import threading
 from typing import Any
 
+import config
 from adapters import llm
 from adapters.memory import DEFAULT_RECALL, SemanticMemory
 from adapters.save import codec, files
 from data.items import item_condition_word, wetness_word
+from data.memory import BUDGET_MARGIN_TOKENS
 from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
 from data.traits import TRAITS
@@ -65,6 +67,14 @@ class GameEngine:
         if self.manager is None:
             raise RuntimeError("No game is running: create a character first.")
         return self.manager
+
+    @staticmethod
+    def _narrator_budget() -> int:
+        """Characters the narrator's user prompt may take: the context less reply, margin and system prompt."""
+        prompt_tokens = (
+            config.llm.context_tokens - config.llm.narrator_max_tokens - BUDGET_MARGIN_TOKENS
+        )
+        return int(prompt_tokens * llm.chars_per_token()) - len(llm.NARRATOR_SYSTEM_PROMPT)
 
     # === Turn execution ===
 
@@ -121,7 +131,7 @@ class GameEngine:
 
             # 4. Ask the narrator to describe what already happened.
             narrator_prompt = ContextBuilder(manager).build_narrator_prompt(
-                player_input, outcome_facts, deep_memories
+                player_input, outcome_facts, deep_memories, max_chars=self._narrator_budget()
             )
             try:
                 raw_response = llm.query_narrator(narrator_prompt)

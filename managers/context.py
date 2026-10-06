@@ -11,6 +11,7 @@ context, no memory) because it only proposes actions; the narrator gets full
 prose context plus this turn's already-decided [OUTCOMES].
 """
 
+import logging
 import re
 from collections.abc import Iterable
 from datetime import date
@@ -47,6 +48,8 @@ from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, MedicalItem
 from modules.quest import QuestStatus
+
+logger = logging.getLogger(__name__)
 
 _ZOMBIE_ID = re.compile(r"\bz\d+\b")
 
@@ -159,15 +162,17 @@ class ContextBuilder:
                 lines.append(f"   {self._name}'s impressions: {npc.notes}")
         return "\n".join(lines)
 
-    def _summary_section(self) -> str:
-        if not self.manager.memory.summaries:
+    @staticmethod
+    def _summary_section(summaries: list[str]) -> str:
+        if not summaries:
             return "(No summary available yet)"
-        return "\n\n".join(self.manager.memory.summaries)
+        return "\n\n".join(summaries)
 
-    def _events_section(self) -> str:
-        if not self.manager.memory.recent_events:
+    @staticmethod
+    def _events_section(events_newest_first: list[str]) -> str:
+        if not events_newest_first:
             return "(No recent events)"
-        return "\n".join(f" - {event}" for event in reversed(self.manager.memory.recent_events))
+        return "\n".join(f" - {event}" for event in reversed(events_newest_first))
 
     def _last_scene_section(self) -> str:
         """The stored story, cut to the limit on a line or sentence boundary; empty without one."""
@@ -582,6 +587,7 @@ door rather than refusing the move.)
         player_input: str,
         outcome_facts: list[str] | None = None,
         deep_memories: list[str] | None = None,
+        max_chars: int | None = None,
     ) -> str:
         """Assemble the full LLM prompt for the narrator call.
 
@@ -589,9 +595,66 @@ door rather than refusing the move.)
         later, win. `outcome_facts` are what the Action Validator and Simulation Core
         already decided this turn; the narrator describes them and decides nothing.
         `deep_memories` are semantically retrieved past events supplied by the memory layer.
+        Over `max_chars`, memory is dropped until it fits: deep memories (last first),
+        summaries (oldest first), [LAST SCENE], then recent events (oldest first, never
+        the newest). Current state, [OUTCOMES] and the player's input are never dropped.
         """
+        deep = list(deep_memories or [])
+        summaries = list(self.manager.memory.summaries)
+        events = list(self.manager.memory.recent_events)
+        show_scene = True
+        dropped: dict[str, int] = {}
+        character = self._character_section()
+        last_scene = self._last_scene_section()
+        current = self._narrator_current_state(player_input, outcome_facts)
+
+        def render() -> str:
+            return self._render_narrator(
+                character, deep, summaries, events, last_scene if show_scene else "", current
+            )
+
+        prompt = render()
+        while max_chars is not None and len(prompt) > max_chars:
+            if deep:
+                deep.pop()
+                kind = "deep memory entries"
+            elif summaries:
+                summaries.pop(0)
+                kind = "summaries"
+            elif show_scene and last_scene:
+                show_scene = False
+                kind = "last scene"
+            elif len(events) > 1:
+                events.pop()
+                kind = "recent events"
+            else:
+                logger.warning(
+                    "Narrator prompt is still %d characters over its %d budget with all "
+                    "memory dropped.",
+                    len(prompt) - max_chars,
+                    max_chars,
+                )
+                break
+            dropped[kind] = dropped.get(kind, 0) + 1
+            prompt = render()
+        if dropped:
+            logger.warning(
+                "Narrator prompt over budget; dropped %s.",
+                ", ".join(f"{count} {kind}" for kind, count in dropped.items()),
+            )
+        return prompt
+
+    def _render_narrator(
+        self,
+        character: str,
+        deep_memories: list[str],
+        summaries: list[str],
+        events_newest_first: list[str],
+        last_scene: str,
+        current: str,
+    ) -> str:
         return f"""[CHARACTER]
-{self._character_section()}
+{character}
 
 [DEEP MEMORY]
 (Past events recalled as relevant to what the player just did)
@@ -601,14 +664,18 @@ door rather than refusing the move.)
 [SUMMARY OF PAST EVENTS]
 (A narrative overview of the long-term past)
 
-{self._summary_section().rstrip()}
+{self._summary_section(summaries).rstrip()}
 
 [RECENT EVENTS]
 (What just happened, oldest first; the last entry is the most recent)
 
-{self._events_section().rstrip()}
+{self._events_section(events_newest_first).rstrip()}
 
-{self._last_scene_section()}[TIME AND WEATHER]
+{last_scene}{current}"""
+
+    def _narrator_current_state(self, player_input: str, outcome_facts: list[str] | None) -> str:
+        """The narrator prompt from [TIME AND WEATHER] to the player's input."""
+        return f"""[TIME AND WEATHER]
 {self._time_and_weather_section()}
 
 [CURRENT LOCATION]

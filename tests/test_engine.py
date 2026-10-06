@@ -9,12 +9,16 @@ import json
 import re
 import unittest
 from typing import cast
+from unittest import mock
 
 import adapters.engine as engine_module
+import config
+from adapters import llm
 from adapters.engine import GameEngine
-from adapters.llm import LLMError
+from adapters.llm import NARRATOR_SYSTEM_PROMPT, LLMError
 from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
+from data.memory import BUDGET_MARGIN_TOKENS
 from data.presets import ORTON
 from managers.game import MAX_RECENT_EVENTS
 from modules.body import BodyLocation, BodyPart
@@ -709,3 +713,42 @@ class PayloadTests(EngineTestCase):
 
     def test_the_payload_drops_the_player_status_list(self):
         self.assertNotIn("status_effects", self.engine.state())
+
+
+class NarratorBudgetTests(EngineTestCase):
+    """Spec 10, Token budget: the narrator prompt's character budget."""
+
+    def tearDown(self):
+        llm.reset_chars_per_token()
+        super().tearDown()
+
+    def test_the_budget_is_the_context_less_reply_and_margin_in_characters(self):
+        llm.reset_chars_per_token()
+        with (
+            mock.patch.dict(
+                config.llm._values, {"context_tokens": 3000, "narrator_max_tokens": 500}
+            ),
+            mock.patch.object(
+                engine_module.ContextBuilder,
+                "build_narrator_prompt",
+                autospec=True,
+                return_value="prompt",
+            ) as build,
+        ):
+            self.engine.play("go out")
+        expected = int((3000 - 500 - BUDGET_MARGIN_TOKENS) * 3.5) - len(NARRATOR_SYSTEM_PROMPT)
+        self.assertEqual(build.call_args.kwargs["max_chars"], expected)
+
+    def test_the_budget_follows_the_measured_ratio(self):
+        with (
+            mock.patch.object(llm, "chars_per_token", return_value=2.0),
+            mock.patch.object(
+                engine_module.ContextBuilder,
+                "build_narrator_prompt",
+                autospec=True,
+                return_value="prompt",
+            ) as build,
+        ):
+            self.engine.play("go out")
+        expected = int((8192 - 800 - BUDGET_MARGIN_TOKENS) * 2.0) - len(NARRATOR_SYSTEM_PROMPT)
+        self.assertEqual(build.call_args.kwargs["max_chars"], expected)

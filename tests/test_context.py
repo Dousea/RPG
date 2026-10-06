@@ -1,6 +1,7 @@
 """ContextBuilder: the knowledge-firewall boundary between state and prompts."""
 
 import unittest
+from unittest import mock
 
 from adapters import llm
 from data.items import ITEMS
@@ -1227,3 +1228,87 @@ class ParserSystemPromptTests(unittest.TestCase):
         gm = GameManager()
         actions = ContextBuilder(gm).build_parser_prompt("look").split("[AVAILABLE ACTIONS]")[1]
         self.assertIn("- MOVE_TO <zone> -- ", actions)
+
+
+class NarratorBudgetTests(unittest.TestCase):
+    """Spec 10, Token budget: what the narrator prompt drops to fit."""
+
+    DEEP = ["deepmark-1 " + "a" * 150, "deepmark-2 " + "b" * 150]
+    SCENE = "scenemark " + "c" * 150 + "."
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_building"
+        memory = self.gm.memory
+        memory.summaries = ["summark-1 " + "d" * 150, "summark-2 " + "e" * 150]
+        memory.recent_events = ["evmark-3 newest", "evmark-2 " + "f" * 150, "evmark-1 " + "g" * 150]
+        memory.last_story = self.SCENE
+
+    def prompt(self, max_chars: int | None = None) -> str:
+        return ContextBuilder(self.gm).build_narrator_prompt(
+            "look", ["The wind rises."], self.DEEP, max_chars=max_chars
+        )
+
+    def test_no_limit_leaves_the_prompt_unchanged(self):
+        full = self.prompt()
+        for marker in ("deepmark-1", "deepmark-2", "summark-1", "scenemark", "evmark-1"):
+            self.assertIn(marker, full)
+        self.assertEqual(self.prompt(len(full)), full)
+
+    def test_memory_goes_in_the_documented_order_and_the_newest_event_stays(self):
+        gone: list[str] = []
+        markers = (
+            "deepmark-2",
+            "deepmark-1",
+            "summark-1",
+            "summark-2",
+            "scenemark",
+            "evmark-1",
+            "evmark-2",
+        )
+        prompt = self.prompt()
+        with self.assertLogs("managers.context", level="WARNING"):
+            while True:
+                prompt = self.prompt(len(prompt) - 1)
+                vanished = [m for m in markers if m not in prompt and m not in gone]
+                if not vanished:
+                    break
+                self.assertEqual(len(vanished), 1)
+                gone.extend(vanished)
+        self.assertEqual(gone, list(markers))
+        self.assertIn("evmark-3 newest", prompt)
+
+    def test_a_dropped_section_keeps_its_header_and_placeholder(self):
+        with self.assertLogs("managers.context", level="WARNING"):
+            prompt = self.prompt(0)
+        self.assertIn("[DEEP MEMORY]", prompt)
+        self.assertIn("(No relevant memories surfaced)", prompt)
+        self.assertIn("[SUMMARY OF PAST EVENTS]", prompt)
+        self.assertIn("(No summary available yet)", prompt)
+        self.assertNotIn("[LAST SCENE]", prompt)
+
+    def test_current_state_and_outcomes_are_never_dropped(self):
+        with self.assertLogs("managers.context", level="WARNING"):
+            prompt = self.prompt(0)
+        for block in ("[CHARACTER]", "[CURRENT LOCATION]", "[THREATS]", "[CONDITION]"):
+            self.assertIn(block, prompt)
+        self.assertIn("The wind rises.", prompt)
+        self.assertTrue(prompt.endswith("[SCENE]\nlook"))
+
+    def test_the_drops_are_logged_once_per_prompt_with_what_went(self):
+        full = self.prompt()
+        with self.assertLogs("managers.context", level="WARNING") as logged:
+            self.prompt(len(full) - 1)
+        self.assertEqual(len(logged.records), 1)
+        self.assertIn("deep memory", logged.records[0].getMessage())
+
+    def test_a_prompt_that_cannot_fit_is_returned_with_a_warning(self):
+        with self.assertLogs("managers.context", level="WARNING") as logged:
+            prompt = self.prompt(0)
+        self.assertGreater(len(prompt), 0)
+        self.assertTrue(any("still" in r.getMessage() for r in logged.records))
+
+    def test_a_prompt_that_fits_logs_nothing(self):
+        with mock.patch("managers.context.logger") as log:
+            self.prompt(len(self.prompt()))
+        log.warning.assert_not_called()
