@@ -17,6 +17,9 @@ from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.stats import active_status_effects
 from modules.action import parse_action_plan
+from modules.entity.item import ItemEntity
+from modules.entity.npc import NpcEntity
+from modules.entity.player import PlayerEntity
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
@@ -189,9 +192,7 @@ class GameEngine:
         manager = self.manager
         player = manager.player
         narrative = manager.narrative
-
         npcs_here = manager.npcs_in_location(player.current_location_id)
-        weather = manager.climate.sample(narrative.minutes)
 
         return {
             "story_text": story_text,
@@ -204,46 +205,19 @@ class GameEngine:
             "day": narrative.day,
             "time_of_day": narrative.time_of_day,
             "apocalypse_stage": narrative.apocalypse_stage,
-            "vitals": {
-                "health": player.hit_points,
-                "max_health": player.max_hit_points,
-            },
-            "weather": {
-                "summary": weather_summary(weather),
-                "temperature_c": round(weather.air_temperature),
-                "sheltered": manager.current_location.indoors,
-            },
-            "effects": [
-                {"type": status_effect.value, "level": level, "name": name}
-                for status_effect, level, name in sorted(
-                    active_status_effects(player), key=lambda entry: -entry[1]
-                )
-            ],
+            "vitals": {"health": player.hit_points, "max_health": player.max_hit_points},
+            "weather": _weather(manager),
+            "effects": _status_effects(player),
             "level": player.level,
             "experience_points": player.experience_points,
             "attributes": {attr.value: value for attr, value in player.attributes.items()},
             "conditions": [condition.value for condition in player.conditions],
             "status_effects": list(narrative.player_status),
-            # A list, not a string: the frontend iterates this.
             "inventory": [
-                {
-                    "name": entity.item.name,
-                    "condition": f"{entity.hit_points}/{entity.max_hit_points}",
-                }
+                {"name": entity.item.name, "condition": _condition(entity)}
                 for entity in player.inventory
             ],
-            "equipment": [
-                {
-                    "slot": slot.value.replace("_", " ").title(),
-                    "item": entity.item.name if entity is not None else None,
-                    "condition": (
-                        f"{entity.hit_points}/{entity.max_hit_points}"
-                        if entity is not None
-                        else None
-                    ),
-                }
-                for slot, entity in player.equipment.items()
-            ],
+            "equipment": _equipment(player),
             "traits": [
                 {"name": trait.name, "description": trait.description} for trait in player.traits
             ],
@@ -254,34 +228,70 @@ class GameEngine:
                 "short_term": list(narrative.goals.get("short_term", [])),
                 "long_term": list(narrative.goals.get("long_term", [])),
             },
-            "quests": [
-                {
-                    "title": quest.title or quest.quest_id,
-                    "objectives": [
-                        {
-                            "label": quest.objective_labels.get(objective, objective),
-                            "done": objective in quest.completed_objectives,
-                        }
-                        for objective in quest.objectives
-                    ],
-                }
-                for quest in manager.quests.values()
-                if quest.status == QuestStatus.ACTIVE
-            ],
+            "quests": _active_quests(manager),
             # Plain names, kept for callers that only need the roster.
             "npcs_present": [npc.name for npc in npcs_here],
-            # Same names alongside how each NPC currently regards Orton, as a
-            # disposition/trust band rather than the underlying integer.
-            "npcs": [
+            "npcs": [_npc_regard(manager, npc) for npc in npcs_here],
+        }
+
+
+def _weather(manager: GameManager) -> dict[str, Any]:
+    weather = manager.climate.sample(manager.narrative.minutes)
+    return {
+        "summary": weather_summary(weather),
+        "temperature_c": round(weather.air_temperature),
+        "sheltered": manager.current_location.indoors,
+    }
+
+
+def _status_effects(player: PlayerEntity) -> list[dict[str, Any]]:
+    """Active status effects, strongest first."""
+    return [
+        {"type": status_effect.value, "level": level, "name": name}
+        for status_effect, level, name in sorted(
+            active_status_effects(player), key=lambda entry: -entry[1]
+        )
+    ]
+
+
+def _condition(entity: ItemEntity) -> str:
+    return f"{entity.hit_points}/{entity.max_hit_points}"
+
+
+def _equipment(player: PlayerEntity) -> list[dict[str, Any]]:
+    return [
+        {
+            "slot": slot.value.replace("_", " ").title(),
+            "item": entity.item.name if entity is not None else None,
+            "condition": _condition(entity) if entity is not None else None,
+        }
+        for slot, entity in player.equipment.items()
+    ]
+
+
+def _active_quests(manager: GameManager) -> list[dict[str, Any]]:
+    return [
+        {
+            "title": quest.title or quest.quest_id,
+            "objectives": [
                 {
-                    "name": npc.name,
-                    "disposition": manager.relationship_manager.get_disposition(
-                        npc.npc_id, player.entity_id
-                    ).value,
-                    "trust": manager.relationship_manager.get_trust_level(
-                        npc.npc_id, player.entity_id
-                    ).value,
+                    "label": quest.objective_labels.get(objective, objective),
+                    "done": objective in quest.completed_objectives,
                 }
-                for npc in npcs_here
+                for objective in quest.objectives
             ],
         }
+        for quest in manager.quests.values()
+        if quest.status == QuestStatus.ACTIVE
+    ]
+
+
+def _npc_regard(manager: GameManager, npc: NpcEntity) -> dict[str, Any]:
+    """An NPC's name and how they regard Orton, as bands, never the integers."""
+    relationships = manager.relationship_manager
+    player_id = manager.player.entity_id
+    return {
+        "name": npc.name,
+        "disposition": relationships.get_disposition(npc.npc_id, player_id).value,
+        "trust": relationships.get_trust_level(npc.npc_id, player_id).value,
+    }

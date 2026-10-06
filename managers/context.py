@@ -11,10 +11,13 @@ context, no memory) because it only proposes actions; the narrator gets full
 prose context plus this turn's already-decided [OUTCOMES].
 """
 
+from collections.abc import Iterable
+
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from managers.climate import describe_weather
 from managers.game import GameManager
 from managers.stats import active_status_effects
+from modules.entity.item import ItemEntity
 from modules.quest import QuestStatus
 
 
@@ -173,6 +176,54 @@ class ContextBuilder:
                 lines.append(f"   [{'x' if done else ' '}] {label}")
         return "\n".join(lines)
 
+    def _character_section(self) -> str:
+        player = self.manager.player
+        narrative = self.manager.narrative
+        equipment = (
+            f" - {slot.name}: {_with_condition(entity) if entity else 'None'}"
+            for slot, entity in player.equipment.items()
+        )
+        return f"""
+Name: {player.name}
+Level: {player.level} (XP: {player.experience_points})
+Health: {player.hit_points}/{player.max_hit_points}
+Conditions: {", ".join(condition.name for condition in player.conditions) or "None"}
+Status: {", ".join(narrative.player_status) or "None"}
+Goals: {self._goals_line() or "None"}
+Inventory: {_lines(f" - {_with_condition(entity)}" for entity in player.inventory) or "Empty"}
+Attributes: {_lines(f" - {attr.name}: {value}" for attr, value in player.attributes.items()) or "None"}
+Equipment: {_lines(equipment) or "None"}
+Traits: {_lines(f" - {trait.name}: {trait.description}" for trait in player.traits) or "None"}
+Perks: {_lines(f" - {perk.name}: {perk.description}" for perk in player.perks) or "None"}
+"""
+
+    def _goals_line(self) -> str:
+        goals = self.manager.narrative.goals
+        line = ""
+        if goals.get("short_term"):
+            line += f"Short-term: {', '.join(goals['short_term'])}. "
+        if goals.get("long_term"):
+            line += f"Long-term: {', '.join(goals['long_term'])}."
+        return line
+
+    def _location_section(self) -> str:
+        manager = self.manager
+        narrative = manager.narrative
+        return f"""
+Current Location: {manager.current_location.name}
+Specific spot: {manager.player.current_place or "(nowhere in particular)"}
+Description: {manager.current_location.description}
+Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
+Apocalypse Stage: {narrative.apocalypse_stage}
+Flags: {self._discovered_flags_section()}
+"""
+
+    @staticmethod
+    def _deep_memory_section(deep_memories: list[str] | None) -> str:
+        if not deep_memories:
+            return "(No relevant memories surfaced)"
+        return _lines(f" - {memory}" for memory in deep_memories)
+
     # === Parser prompt ===
 
     def build_parser_prompt(self, player_input: str) -> str:
@@ -247,62 +298,8 @@ door rather than refusing the move.)
         describes them; it does not decide them. `deep_memories` are
         semantically retrieved past events supplied by the memory layer.
         """
-        manager = self.manager
-        player = manager.player
-        narrative = manager.narrative
-
-        inventory_str = "\n".join(
-            f" - {entity.item.name} (condition: {entity.hit_points}/{entity.max_hit_points})"
-            for entity in player.inventory
-        )
-        attributes_str = "\n".join(
-            f" - {attr.name}: {value}" for attr, value in player.attributes.items()
-        )
-        equipment_str = "\n".join(
-            f" - {slot.name}: {f'{entity.item.name} (condition: {entity.hit_points}/{entity.max_hit_points})' if entity else 'None'}"
-            for slot, entity in player.equipment.items()
-        )
-        traits_str = "\n".join(f" - {trait.name}: {trait.description}" for trait in player.traits)
-        perks_str = "\n".join(f" - {perk.name}: {perk.description}" for perk in player.perks)
-        conditions_str = ", ".join(condition.name for condition in player.conditions)
-
-        goals_str = ""
-        if narrative.goals.get("short_term"):
-            goals_str += f"Short-term: {', '.join(narrative.goals['short_term'])}. "
-        if narrative.goals.get("long_term"):
-            goals_str += f"Long-term: {', '.join(narrative.goals['long_term'])}."
-
-        char_context = f"""
-Name: {player.name}
-Level: {player.level} (XP: {player.experience_points})
-Health: {player.hit_points}/{player.max_hit_points}
-Conditions: {conditions_str if conditions_str else "None"}
-Status: {", ".join(narrative.player_status) if narrative.player_status else "None"}
-Goals: {goals_str if goals_str else "None"}
-Inventory: {inventory_str if inventory_str else "Empty"}
-Attributes: {attributes_str if attributes_str else "None"}
-Equipment: {equipment_str if equipment_str else "None"}
-Traits: {traits_str if traits_str else "None"}
-Perks: {perks_str if perks_str else "None"}
-"""
-
-        location_context = f"""
-Current Location: {manager.current_location.name}
-Specific spot: {player.current_place or "(nowhere in particular)"}
-Description: {manager.current_location.description}
-Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
-Apocalypse Stage: {narrative.apocalypse_stage}
-Flags: {self._discovered_flags_section()}
-"""
-
-        deep_memory_section = (
-            "\n".join(f" - {memory}" for memory in deep_memories)
-            if deep_memories
-            else "(No relevant memories surfaced)"
-        )
-
         return f"""[CHARACTER]
-{char_context}
+{self._character_section()}
 
 [CONDITION]
 (Orton's body and mood right now, as levels out of 4. Describe them; do not
@@ -312,10 +309,10 @@ give them numbers.)
 [DEEP MEMORY]
 (Past events recalled as relevant to what the player just did)
 
-{deep_memory_section}
+{self._deep_memory_section(deep_memories)}
 
 [CURRENT LOCATION]
-{location_context}
+{self._location_section()}
 
 [WEATHER]
 (The weather outside, in words. When Orton is sheltered, rain and wind do not
@@ -366,3 +363,11 @@ engine could not decide at all -- treat it the same as [OUTCOMES].)
 
 [SCENE]
 {player_input}"""
+
+
+def _lines(lines: Iterable[str]) -> str:
+    return "\n".join(lines)
+
+
+def _with_condition(entity: ItemEntity) -> str:
+    return f"{entity.item.name} (condition: {entity.hit_points}/{entity.max_hit_points})"
