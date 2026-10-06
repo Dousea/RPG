@@ -11,6 +11,10 @@ from modules.item import (
 from modules.modifier import HPModifier
 from modules.weapon import MeleeWeaponType, RangedWeaponType
 
+# Our rule: below this share of its max hit points an item reads as damaged
+# rather than worn, so the narrator gets a word, never the number.
+ITEM_WORN_MIN_FRACTION = 0.5
+
 ITEMS: dict[str, BaseItem] = {
     "item_crowbar": MeleeWeaponItem(
         id="item_crowbar",

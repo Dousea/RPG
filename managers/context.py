@@ -13,6 +13,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 
 from collections.abc import Iterable
 
+from data.items import ITEM_WORN_MIN_FRACTION
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from managers.climate import describe_weather
 from managers.game import GameManager
@@ -186,7 +187,6 @@ class ContextBuilder:
         return f"""
 Name: {player.name}
 Level: {player.level} (XP: {player.experience_points})
-Health: {player.hit_points}/{player.max_hit_points}
 Conditions: {", ".join(condition.name for condition in player.conditions) or "None"}
 Status: {", ".join(narrative.player_status) or "None"}
 Goals: {self._goals_line() or "None"}
@@ -370,4 +370,14 @@ def _lines(lines: Iterable[str]) -> str:
 
 
 def _with_condition(entity: ItemEntity) -> str:
-    return f"{entity.item.name} (condition: {entity.hit_points}/{entity.max_hit_points})"
+    return f"{entity.item.name} ({_condition_word(entity)})"
+
+
+def _condition_word(entity: ItemEntity) -> str:
+    if entity.hit_points >= entity.max_hit_points:
+        return "intact"
+    if entity.hit_points <= 0:
+        return "broken"
+    if entity.hit_points >= entity.max_hit_points * ITEM_WORN_MIN_FRACTION:
+        return "worn"
+    return "damaged"

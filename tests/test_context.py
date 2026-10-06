@@ -5,6 +5,7 @@ import unittest
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from modules.action import DiscoverFlagAction, MoveAction, SetFlagAction
+from modules.character.equipment import CharacterHoldableSlot
 from modules.quest import QuestState
 from modules.stats import CharacterStat
 from tests.support import resolve_actions
@@ -209,6 +210,48 @@ class ConditionBlockTests(unittest.TestCase):
         self.gm.player.food_eaten_timer = 2000
         prompt = self.builder.build_narrator_prompt("look")
         self.assertIn("Well Fed (2/4)", prompt)
+
+
+class HitPointsStayOutOfTheNarratorPromptTests(unittest.TestCase):
+    """docs/01-engine-authority.md: the narrator gets HP and item condition in
+    words, never as numbers."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def _character(self) -> str:
+        prompt = self.builder.build_narrator_prompt("look")
+        return prompt.split("[CHARACTER]")[1].split("[CONDITION]")[0]
+
+    def test_player_hit_points_are_not_in_the_prompt(self):
+        self.gm.player.hit_points = 37
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertNotIn("37", prompt)
+        self.assertNotIn("Health:", prompt)
+        self.assertIn("Severe Injuries (3/4)", prompt)
+
+    def test_item_condition_is_a_word(self):
+        key = self.gm.player.inventory[0]
+        cases = (
+            (key.max_hit_points, "intact"),
+            (key.max_hit_points // 2, "worn"),
+            (key.max_hit_points // 2 - 1, "damaged"),
+            (1, "damaged"),
+            (0, "broken"),
+        )
+        for hit_points, word in cases:
+            with self.subTest(hit_points=hit_points):
+                key.hit_points = hit_points
+                character = self._character()
+                self.assertIn(f"{key.item.name} ({word})", character)
+                self.assertNotIn(f"{hit_points}/", character)
+
+    def test_equipped_item_condition_is_a_word(self):
+        key = self.gm.player.inventory[0]
+        key.hit_points = 0
+        self.gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = key
+        self.assertIn(f"RIGHT_HAND: {key.item.name} (broken)", self._character())
 
 
 if __name__ == "__main__":
