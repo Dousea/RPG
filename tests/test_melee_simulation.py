@@ -392,6 +392,18 @@ class FightInterruptionTests(unittest.TestCase):
         self.assertEqual(gm.narrative.minutes - before, 1)
         self.assertTrue(any("never gets to" in fact for fact in facts))
 
+    def test_an_attack_stopped_during_the_approach_says_the_swing_never_happens(self):
+        gm, target = self.setup_fight()
+        target.gap = 4
+        target.state = ZombieState.CHASING
+        defended = AttackOutcome(defended=True)
+        with mock.patch("managers.zombies.resolve_attack", return_value=defended):
+            facts = SimulationCore(gm, rng=random.Random(1)).resolve(
+                [AttackAction(target_name=target.zombie_id)]
+            )
+        self.assertIn("Orton never gets to swing.", facts)
+        self.assertEqual(target.hits_taken, 0)
+
     def test_a_wounding_attack_stops_the_plan(self):
         gm, target = self.setup_fight()
         before = gm.narrative.minutes

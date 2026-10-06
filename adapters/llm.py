@@ -225,21 +225,36 @@ def parse_action_response(llm_response_text: str) -> list[str]:
     return [line for line in lines if line.strip()]
 
 
+# A prompt block such as [OUTCOMES] echoed back into the reply; it is never prose.
+_PROMPT_BLOCK_HEADER = re.compile(r"\[[A-Z][A-Z ]*\]")
+
+
 def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]]:
     """Split a STORY/EVENT/OPTIONS narrator response into its parts.
 
     Section headers are matched line by line rather than by splitting on
-    blank lines, so a story containing blank lines survives intact. OPTIONS
-    is new and optional: a response with no OPTIONS section (or NONE) simply
-    yields an empty list, so older-style responses still parse cleanly.
+    blank lines, so a story containing blank lines survives intact. A reply
+    with no headers is all story. An echoed prompt block (`[OUTCOMES]` and
+    the lines under it) is dropped up to the next header. OPTIONS is
+    optional: none (or NONE) yields an empty list.
     """
     sections: dict[str, list[str]] = {"story": [], "event": [], "options": []}
     headers = {"STORY:": "story", "EVENT:": "event", "OPTIONS:": "options"}
-    current: str | None = None
+    lines = llm_response_text.splitlines()
 
-    for line in llm_response_text.splitlines():
+    def header_of(stripped: str) -> str | None:
+        return next((key for key in headers if stripped.upper().startswith(key)), None)
+
+    # A reply with no headers at all is still prose; keep it as the story.
+    has_headers = any(header_of(line.strip()) for line in lines)
+    current: str | None = None if has_headers else "story"
+
+    for line in lines:
         stripped = line.strip()
-        matched_header = next((key for key in headers if stripped.upper().startswith(key)), None)
+        if _PROMPT_BLOCK_HEADER.fullmatch(stripped):
+            current = None
+            continue
+        matched_header = header_of(stripped)
         if matched_header:
             current = headers[matched_header]
             remainder = stripped[len(matched_header) :].strip()

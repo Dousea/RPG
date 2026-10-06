@@ -181,13 +181,13 @@ def _parse_disinfect(args: str) -> DisinfectAction:
     return DisinfectAction(part_name=part, item_name=item)
 
 
-_SPAN_PATTERN = re.compile(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?")
+_SPAN_PATTERN = re.compile(r"(?:(\d+)\s*(?:h|hrs?|hours?))?\s*(?:(\d+)\s*(?:m|mins?|minutes?))?")
 _CLOCK_TIME_PATTERN = re.compile(r"(\d{1,2}):(\d{2})")
 _TIME_OF_DAY_PATTERN = re.compile(r"[a-z]+")
 
 
 def _parse_duration(verb: str, args: str) -> Duration:
-    """Parse '10m', '2h', '1h30m', 'until <time of day>' or 'until HH:MM'."""
+    """Parse '10m', '2h', '1h30m' (units may be spelled out), 'until <time of day>' or 'until HH:MM'."""
     text = args.strip().strip(".,;").casefold()
     if text.startswith("until "):
         target = text[len("until ") :].strip()
@@ -298,13 +298,21 @@ TALK_TURN_MINUTES = 5  # spec 10: one cost per turn, shared by TALK, ASK and GIV
 
 
 def _parse_talk(args: str) -> TalkAction:
-    *name_words, last = args.split() or [""]
-    approach = normalize_key(last)
-    if not name_words or approach not in TALK_APPROACH_LABELS:
+    """The approach is the first label after the name; the spoken line after it is dropped."""
+    words = args.split()
+    index = next(
+        (
+            i
+            for i, word in enumerate(words)
+            if i > 0 and normalize_key(word) in TALK_APPROACH_LABELS
+        ),
+        None,
+    )
+    if index is None:
         raise _ActionParseError(
             f"TALK needs an NPC name and one of: {', '.join(TALK_APPROACH_LABELS)}."
         )
-    return TalkAction(npc_name=" ".join(name_words), approach=approach)
+    return TalkAction(npc_name=" ".join(words[:index]), approach=normalize_key(words[index]))
 
 
 def _parse_ask(args: str) -> AskAction:
@@ -364,7 +372,7 @@ SceneKey = Literal[
     "items_here",
     "carried",
     "held",
-    "wearable_carried",
+    "wearable",
     "worn",
     "npcs_here",
     "threats",
@@ -428,7 +436,7 @@ VERBS: dict[str, Verb] = dict(
         ),
         _verb(
             "BANDAGE",
-            ("body_part", "item"),
+            ("body_part",),
             _parse_bandage,
             "a body part from [CONDITION], then optionally 'with <bandage>'",
             1,
@@ -444,7 +452,7 @@ VERBS: dict[str, Verb] = dict(
         ),
         _verb(
             "DISINFECT",
-            ("body_part", "item"),
+            ("body_part",),
             _parse_disinfect,
             "a hurt, unbandaged body part, then optionally 'with <alcohol item>'",
             1,
@@ -456,7 +464,7 @@ VERBS: dict[str, Verb] = dict(
             _parse_wear,
             "a carried garment; refused if something is already there",
             1,
-            ("wearable_carried",),
+            ("wearable",),
         ),
         _verb("TAKE_OFF", ("item",), _parse_take_off, "a worn garment", 1, ("worn",)),
         _verb(
@@ -543,6 +551,9 @@ VERBS: dict[str, Verb] = dict(
 
 # Verbs the model once proposed outcomes through. The engine owns what they set,
 # so a line using one is refused as not available.
+# Verbs small models write for USE_ITEM although the prompt never lists them.
+VERB_ALIASES = {"EAT": "USE_ITEM", "DRINK": "USE_ITEM"}
+
 REMOVED_VERBS = frozenset(
     {
         "TIME_ADVANCE",
@@ -572,7 +583,7 @@ def parse_action_line(line: str) -> AnyAction | ParseFailure:
     """Parse one already-stripped, non-empty, non-'NONE' action line."""
     name, _, remainder = line.partition(" ")
     name = name.upper()
-    verb = VERBS.get(name)
+    verb = VERBS.get(VERB_ALIASES.get(name, name))
     if verb is None:
         if name in REMOVED_VERBS:
             return ParseFailure(raw=line, reason=f"'{name}' is not an available action.")

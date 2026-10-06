@@ -481,6 +481,16 @@ class WeatherBlockTests(unittest.TestCase):
         self.assertEqual(precipitation_phrase(None, False), "dry")
 
 
+class TimeLineTests(unittest.TestCase):
+    def test_the_narrators_time_line_names_the_weekday(self):
+        gm = GameManager()
+        prompt = ContextBuilder(gm).build_narrator_prompt("look")
+        self.assertIn("08:00 AM, Sunday 2023-10-01", prompt)
+        gm.advance_clock(24 * 60)
+        prompt = ContextBuilder(gm).build_narrator_prompt("look")
+        self.assertIn("Monday 2023-10-02", prompt)
+
+
 class WeatherFactTests(unittest.TestCase):
     """Spec 04, What the narrator and the player see: outcomes."""
 
@@ -735,9 +745,9 @@ class ThreatsContextTests(unittest.TestCase):
         add_zombie(self.gm, 12, ZombieState.IDLE)
         add_zombie(self.gm, 18, ZombieState.IDLE)
         block = self.narrator_threats()
-        self.assertIn("z1, close, coming at you", block)
-        self.assertIn("z2, nearby, hasn't noticed you", block)
-        self.assertIn("z3, far off, hasn't noticed you", block)
+        self.assertIn("a zombie, close, coming at you", block)
+        self.assertIn("a zombie, nearby, hasn't noticed you", block)
+        self.assertIn("a zombie, far off, hasn't noticed you", block)
 
     def test_the_distance_words(self):
         for gap in (1, 5, 6, 15, 16):
@@ -747,12 +757,12 @@ class ThreatsContextTests(unittest.TestCase):
 
     def test_a_zombie_behind_the_player_is_right_behind_them(self):
         add_zombie(self.gm, 1, ZombieState.ATTACKING, side=AttackSide.BEHIND)
-        self.assertIn("z1, on you, right behind you", self.narrator_threats())
+        self.assertIn("a zombie, on you, right behind you", self.narrator_threats())
 
     def test_a_lunger_that_has_chased_is_fast(self):
         lunger = add_zombie(self.gm, 8, ZombieState.CHASING, lunger=True)
         lunger.has_chased = True
-        self.assertIn("z1, nearby, coming at you fast", self.narrator_threats())
+        self.assertIn("a zombie, nearby, coming at you fast", self.narrator_threats())
 
     def test_never_health_speed_or_senses(self):
         add_zombie(self.gm, 3, ZombieState.CHASING, health=2.345, speed_mod=0.8765)
@@ -778,6 +788,23 @@ class ThreatsContextTests(unittest.TestCase):
         block = self.narrator_threats()
         self.assertIn("something shuffling nearby", block)
         self.assertNotIn("z1", block)
+
+    def test_the_narrator_never_sees_a_zombie_id(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING)
+        facts = [
+            "Orton hits z1 with the kitchen knife and it staggers back.",
+            "The knife goes in under z12's jaw.",
+            "z1 goes still.",
+        ]
+        prompt = ContextBuilder(self.gm).build_narrator_prompt("I attack z1", facts)
+        outcomes = prompt.split("[OUTCOMES]")[1].split("\n[")[0]
+        self.assertIn(
+            "Orton hits the zombie with the kitchen knife and it staggers back.", outcomes
+        )
+        self.assertIn("The knife goes in under the zombie's jaw.", outcomes)
+        self.assertIn(" - The zombie goes still.", outcomes)
+        before_scene = prompt.split("[SCENE]")[0]
+        self.assertNotRegex(before_scene, r"\bz\d+\b")
 
     def test_the_parser_sees_the_ids_and_distances_only(self):
         add_zombie(self.gm, 3, ZombieState.CHASING)
@@ -808,7 +835,7 @@ class MeleeContextTests(unittest.TestCase):
         zombie = add_zombie(self.gm, 1, ZombieState.ATTACKING)
         zombie.down_until = self.gm.narrative.minutes + 2
         block = threats_block(self.narrator())
-        self.assertIn("z1, on you, down", block)
+        self.assertIn("a zombie, on you, down", block)
 
     def test_the_condition_block_has_a_hands_line_with_a_word_and_no_number(self):
         entity = self.hold("item_crowbar")
@@ -1126,12 +1153,27 @@ class SceneKeyTests(unittest.TestCase):
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
         self.assertEqual(listed, ALWAYS | {"REMOVE_GOAL"})
 
-    def test_a_carried_garment_gives_wearable_carried_and_carried(self):
+    def test_a_carried_garment_gives_wearable_and_carried(self):
         clothing = next(i for i in ITEMS.values() if isinstance(i, ClothingItem))
         self.gm.player.inventory.append(ItemEntity(item=clothing))
-        self.assertEqual(self.builder.scene_keys(), frozenset({"carried", "wearable_carried"}))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"carried", "wearable"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
         self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM", "WEAR", "EQUIP"})
+
+    def test_a_garment_on_the_ground_lists_wear_so_take_then_wear_can_be_planned(self):
+        clothing = next(i for i in ITEMS.values() if isinstance(i, ClothingItem))
+        self.gm.current_location.entities.append(ItemEntity(item=clothing))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"items_here", "wearable"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"TAKE", "WEAR"})
+
+    def test_first_aid_lines_name_only_the_body_part_before_the_with_clause(self):
+        self.gm.player.body[BodyPart.HAND_L].scratch_time = 4.0
+        prompt = self.builder.build_parser_prompt("look")
+        block = prompt.split("[AVAILABLE ACTIONS]")[1]
+        self.assertIn("- BANDAGE <body_part> -- ", block)
+        self.assertIn("- DISINFECT <body_part> -- ", block)
+        self.assertNotIn("<body_part> <item>", block)
 
     def test_an_injured_part_gives_hurt_and_lists_the_first_aid_verbs(self):
         self.gm.player.body[BodyPart.HAND_L].scratch_time = 4.0

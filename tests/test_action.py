@@ -53,6 +53,22 @@ class ClockActionTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertEqual(parse_action_line(line), WaitAction(duration=duration))
 
+    def test_wait_accepts_spelled_out_units(self):
+        cases = {
+            "WAIT 18 hours": Duration(minutes=18 * 60),
+            "WAIT 1 hour": Duration(minutes=60),
+            "WAIT 30 minutes": Duration(minutes=30),
+            "WAIT 1 hour 30 minutes": Duration(minutes=90),
+            "WAIT 2 hrs 15 mins": Duration(minutes=135),
+        }
+        for line, duration in cases.items():
+            with self.subTest(line=line):
+                self.assertEqual(parse_action_line(line), WaitAction(duration=duration))
+
+    def test_eat_and_drink_are_use_item(self):
+        self.assertEqual(parse_action_line("DRINK Water Bottle"), UseItemAction("Water Bottle"))
+        self.assertEqual(parse_action_line("EAT Canned Beans"), UseItemAction("Canned Beans"))
+
     def test_sleep_parses_with_and_without_a_duration(self):
         self.assertEqual(parse_action_line("SLEEP"), SleepAction())
         self.assertEqual(parse_action_line("SLEEP 8h"), SleepAction(duration=Duration(minutes=480)))
@@ -334,6 +350,18 @@ class SocialParseTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 
+    def test_talk_ignores_the_spoken_line_after_the_approach(self):
+        cases = {
+            'TALK Emma chat "Hi, I\'m the new guy in 3B"': TalkAction("Emma", "chat"),
+            'TALK Emma compliment "Your apartment is really nice"': TalkAction(
+                "Emma", "compliment"
+            ),
+            "TALK Mary Ann flirt you look nice today": TalkAction("Mary Ann", "flirt"),
+        }
+        for line, expected in cases.items():
+            with self.subTest(line=line):
+                self.assertEqual(parse_action_line(line), expected)
+
     def test_ask_accepts_only_the_four_requests(self):
         self.assertEqual(set(ASK_REQUEST_LABELS), {"follow", "stay", "give", "about"})
         self.assertEqual(
@@ -400,7 +428,7 @@ class SceneFilteringTests(unittest.TestCase):
             "items_here": ["TAKE"],
             "carried": ["DROP", "USE_ITEM", "EQUIP"],
             "held": ["UNEQUIP"],
-            "wearable_carried": ["WEAR"],
+            "wearable": ["WEAR"],
             "worn": ["TAKE_OFF"],
             "npcs_here": ["ATTACK", "TALK", "ASK", "GIVE"],
             "threats": ["ATTACK", "SHOVE"],

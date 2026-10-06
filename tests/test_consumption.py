@@ -105,6 +105,13 @@ class ConsumingTests(unittest.TestCase):
         self.assertAlmostEqual(stats.get(CharacterStat.BOREDOM), 20)
         self.assertAlmostEqual(stats.get(CharacterStat.STRESS), 0.45)
 
+    def test_a_meal_reports_well_fed_once(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.HUNGER, 0.5)
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        facts = simulate(gm, UseItemAction(item_name="Canned Beans"))
+        self.assertEqual(" ".join(facts).count("Well Fed"), 1, facts)
+
     def test_bad_food_raises_unhappiness_and_clamps(self):
         gm, _ = _eat(_food(unhappy_change=30), unhappiness=90)
         self.assertGreater(gm.player.stats.get(CharacterStat.UNHAPPINESS), 99)

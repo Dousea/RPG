@@ -53,6 +53,7 @@ matter.
 | minutes | `10m` | 10 minutes |
 | hours | `2h` | 120 minutes |
 | both | `1h30m` | 90 minutes |
+| spelled out | `18 hours`, `1 hour 30 minutes`, `45 mins` | the same, with `h`/`hr`/`hrs`/`hour`/`hours` and `m`/`min`/`mins`/`minute`/`minutes` |
 | time of day | `until night` | the next 22:00 |
 | clock time | `until 14:30` | the next 14:30 |
 
@@ -116,6 +117,8 @@ facts the clock adds:
 - "Orton waits 3 hours." and "Orton sleeps 8 hours." for the time spent.
 - "Orton waits 24 hours, the most he can at once." when a wait is clamped, and
   the same with "sleeps 16 hours" for sleep.
+- "Orton waits 27 minutes, then is interrupted." when a story beat, a zombie or
+  a worsening wound cuts a wait short. The time is what actually passed.
 
 ## Saves
 

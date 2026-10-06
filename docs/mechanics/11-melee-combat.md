@@ -366,8 +366,9 @@ takes 4 or 5 HP, a knife 2 or 3, bare hands 1 or 2. `SHOVE` on an NPC is refused
 - **Facts** name what happened in words, never damage or health: "<name> hits z3
   with the crowbar and it staggers back." "A crushing blow: z3 goes down."
   "<name> stomps on z3's head." "The knife goes in under z3's jaw." "z3 goes
-  still." "The crowbar is getting worn."
-- **`[THREATS]`:** a down zombie reads "z3, on you, down". A stagger ends with
+  still." "The crowbar is getting worn." The narrator and the event log read
+  each id as "the zombie" ("The zombie goes still.").
+- **`[THREATS]`:** a down zombie reads "a zombie, on you, down". A stagger ends with
   its minute, before the player sees the panel, so it has no word; the hit fact
   tells it.
 - **`[CONDITION]`:** a hands line, "Holding: crowbar (worn)". The words come from

@@ -21,7 +21,7 @@ from managers import creation
 from managers.body import open_wounds
 from managers.climate import weather_summary
 from managers.combat import held_entity
-from managers.context import ContextBuilder
+from managers.context import ContextBuilder, zombie_ids_to_words
 from managers.first_aid import part_word
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -127,7 +127,11 @@ class GameEngine:
                 # truth. Record the outcome facts as this turn's event
                 # verbatim and persist, so state and disk agree even though
                 # nothing was narrated.
-                fallback_event = "; ".join(outcome_facts) if outcome_facts else "Nothing happened."
+                fallback_event = (
+                    "; ".join(zombie_ids_to_words(fact) for fact in outcome_facts)
+                    if outcome_facts
+                    else "Nothing happened."
+                )
                 manager.record_event(fallback_event)
                 self.memory.rebuild(manager.memory.full_event_log)
                 files.save(manager)
@@ -291,7 +295,7 @@ def _entry_with_facts(event: str, facts: list[str]) -> str:
     """The event-log entry: the narrator's event, then the engine's facts as the true part."""
     if not facts:
         return event
-    return f"{event} (Facts: {' '.join(facts)})"
+    return f"{event} (Facts: {' '.join(zombie_ids_to_words(fact) for fact in facts)})"
 
 
 def _trait_entries(player: PlayerEntity) -> list[dict[str, str]]:

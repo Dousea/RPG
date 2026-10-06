@@ -510,6 +510,13 @@ class MemoryFactsTests(EngineTestCase):
         entry = self.engine.game.memory.full_event_log[-1]
         self.assertIn("(Facts: Refused: 'FROBNICATE the widget'", entry)
 
+    def test_the_entry_names_no_zombie_id(self):
+        self.llm.actions = "ACTIONS:\nATTACK z7"
+        self.engine.play("attack it")
+        entry = self.engine.game.memory.full_event_log[-1]
+        self.assertIn("the zombie", entry)
+        self.assertNotRegex(entry, r"\bz\d+\b")
+
     def test_a_turn_of_only_refused_lines_costs_no_time(self):
         self.llm.actions = "ACTIONS:\nFROBNICATE the widget"
         self.engine.play("do something weird")
@@ -534,6 +541,16 @@ class MemoryFactsTests(EngineTestCase):
         entry = self.engine.game.memory.full_event_log[-1]
         self.assertNotIn("(Facts:", entry)
         self.assertIn("About 10 minutes pass.", entry)
+
+    def test_the_narrator_failure_entry_names_no_zombie_id(self):
+        self.llm.actions = "ACTIONS:\nATTACK z7"
+
+        def failing(prompt: str) -> str:
+            raise LLMError("narrator offline")
+
+        engine_module.llm.query_narrator = failing
+        self.engine.play("attack it")
+        self.assertNotRegex(self.engine.game.memory.full_event_log[-1], r"\bz\d+\b")
 
 
 class PayloadTests(EngineTestCase):

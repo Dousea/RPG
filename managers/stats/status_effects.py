@@ -172,17 +172,28 @@ def active_status_effects(player: PlayerEntity) -> list[tuple[StatusEffect, int,
 def level_change_facts(
     name: str, before: dict[StatusEffect, int], after: dict[StatusEffect, int]
 ) -> list[str]:
-    """One fact per status effect whose level changed, in table order."""
+    """One fact per status effect whose level changed to a differently named one, in table order."""
     facts: list[str] = []
     for status_effect, level in after.items():
-        if level == before[status_effect]:
-            continue
+        was = before[status_effect]
         names = STATUS_EFFECT_THRESHOLDS[status_effect].names
+        if level == was or (level and was and names[level - 1] == names[was - 1]):
+            continue
         if level == 0:
-            facts.append(f"{name} is no longer {names[before[status_effect] - 1]}.")
+            facts.append(f"{name} is no longer {names[was - 1]}.")
         else:
             facts.append(f"{name} is now {names[level - 1]}.")
     return facts
+
+
+def level_change_fact_texts(name: str) -> frozenset[str]:
+    """Every fact `level_change_facts` can write for this name."""
+    return frozenset(
+        f"{name} is {word} {level_name}."
+        for spec in STATUS_EFFECT_THRESHOLDS.values()
+        for level_name in spec.names
+        for word in ("now", "no longer")
+    )
 
 
 def alcohol_intoxication(item: ConsumableItem, hunger: float) -> float:

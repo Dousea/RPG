@@ -55,7 +55,10 @@ the level.
 
 `status_effect_level(status_effect, value)` returns 0 to 4. `StatsEngine` compares every
 status effect's level before and after each chunk and reports one fact per change, in
-table order ("Orton is now Peckish.", "Orton is no longer Peckish.").
+table order ("Orton is now Peckish.", "Orton is no longer Peckish."). A change between
+two levels with the same name gives no fact. Over one span of time (a wait, a sleep, a
+walk) the facts are netted: each status effect is reported once, at the level it ended
+on, so a long wait says "Orton is now Extremely Bored." and not every step up to it.
 
 ## What status effects do
 

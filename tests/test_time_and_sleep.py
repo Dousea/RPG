@@ -215,6 +215,16 @@ class StatTurnTests(unittest.TestCase):
         self.assertTrue(facts[-1].startswith("About"))
         self.assertLess(facts.index("Orton is now Peckish."), len(facts) - 1)
 
+    def test_a_long_wait_reports_each_status_effect_once_at_its_final_level(self):
+        gm = GameManager()
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=10 * 60)))
+        bored = [fact for fact in facts if "Bored" in fact]
+        self.assertEqual(bored, ["Orton is now Extremely Bored."])
+        hungry = [
+            fact for fact in facts if fact in ("Orton is now Peckish.", "Orton is now Hungry.")
+        ]
+        self.assertEqual(hungry, ["Orton is now Hungry."])
+
     def test_a_refused_action_advances_no_stats(self):
         gm = GameManager()
         facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")])

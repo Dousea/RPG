@@ -68,10 +68,19 @@ class ParseNarratorResponseTests(unittest.TestCase):
         self.assertEqual(parsed["story"], "x")
         self.assertEqual(parsed["event"], "y")
 
-    def test_missing_sections_fall_back_to_defaults(self):
-        parsed = parse_narrator_response("just some prose with no headers at all")
-        self.assertEqual(parsed["story"], "The world is silent.")
+    def test_prose_with_no_headers_at_all_is_the_story(self):
+        parsed = parse_narrator_response("just some prose\n\nwith no headers at all")
+        self.assertEqual(parsed["story"], "just some prose\n\nwith no headers at all")
         self.assertEqual(parsed["event"], "Nothing happened.")
+        self.assertEqual(parsed["options"], [])
+
+    def test_an_echoed_prompt_block_is_dropped_from_the_story(self):
+        parsed = parse_narrator_response(
+            "STORY:\nThe screen goes dark.\n\n[OUTCOMES]\n- Take Kitchen Knife: succeeded.\n"
+            "- About 2 minutes pass.\n\nOPTIONS:\n- Barricade the door"
+        )
+        self.assertEqual(parsed["story"], "The screen goes dark.")
+        self.assertEqual(parsed["options"], ["Barricade the door"])
 
     def test_empty_response(self):
         parsed = parse_narrator_response("")

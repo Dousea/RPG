@@ -159,16 +159,13 @@ class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):
                 fact = self._first_fact(AttackAction(target_name="Emma"))
                 self.assertIn(f"Emma is {words}", fact)
 
-    def test_using_an_item_reports_how_hurt_orton_is(self):
+    def test_eating_says_nothing_about_health(self):
         set_health(self.gm.player, 50)
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         fact = self._first_fact(UseItemAction(item_name="Canned Beans"))
-        self.assertIn("Use Canned Beans: succeeded, Orton is ", fact)
-
-    def test_an_unhurt_player_reads_as_unhurt(self):
-        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
-        fact = self._first_fact(UseItemAction(item_name="Canned Beans"))
-        self.assertIn("Orton is unhurt", fact)
+        self.assertTrue(fact.startswith("Use Canned Beans: succeeded."), fact)
+        self.assertNotIn("hurt", fact)
+        self.assertNotIn("injured", fact)
 
 
 class WeatherWiringTests(unittest.TestCase):

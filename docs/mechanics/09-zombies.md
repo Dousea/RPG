@@ -453,9 +453,11 @@ The player perceives a zombie in their zone when:
   range = range − fatigue − intoxication × 0.01
   ```
 
-- **Narrator:** a `[THREATS]` block lists each seen zombie by id, a distance word
-  and what it is doing: "z3, close, coming at you", "z7, far off, hasn't noticed
-  you", "z2, on you, right behind you".
+- **Narrator:** a `[THREATS]` block lists each seen zombie by a distance word and
+  what it is doing, never by id: "a zombie, close, coming at you", "a zombie, far
+  off, hasn't noticed you", "a zombie, on you, right behind you". Zombie ids never
+  reach the narrator: in its `[OUTCOMES]` and in the event log each id reads "the
+  zombie".
 
   | Gap | Word |
   | --- | --- |

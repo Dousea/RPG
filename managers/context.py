@@ -11,7 +11,9 @@ context, no memory) because it only proposes actions; the narrator gets full
 prose context plus this turn's already-decided [OUTCOMES].
 """
 
+import re
 from collections.abc import Iterable
+from datetime import date
 
 from data.exercises import BARBELL_ID, DUMBBELL_ID, EXERCISES
 from data.items import ITEMS, item_condition_word, wetness_word
@@ -34,6 +36,14 @@ from modules.action.parser import SceneKey, available_verbs
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, MedicalItem
 from modules.quest import QuestStatus
+
+_ZOMBIE_ID = re.compile(r"\bz\d+\b")
+
+
+def zombie_ids_to_words(fact: str) -> str:
+    """The fact with every zombie id read as "the zombie", for text the narrator sees."""
+    worded = _ZOMBIE_ID.sub("the zombie", fact)
+    return "T" + worded[1:] if _ZOMBIE_ID.match(fact) else worded
 
 
 class ContextBuilder:
@@ -195,13 +205,13 @@ class ContextBuilder:
         return lines
 
     def _threats_section(self) -> str:
-        """The zombies the player perceives, by id, distance and what they are doing."""
+        """The zombies the player perceives, by distance and what they are doing; no ids."""
         lines: list[str] = []
         for view in threat_views(self.manager):
             if view.zombie_id is None:
                 lines.append(f" - {view.state_word}")
             else:
-                lines.append(f" - {view.zombie_id}, {view.distance_word}, {view.state_word}")
+                lines.append(f" - a zombie, {view.distance_word}, {view.state_word}")
         return "\n".join(lines) or "None"
 
     def _parser_threats_section(self) -> str:
@@ -223,7 +233,7 @@ class ContextBuilder:
     def _outcomes_section(outcome_facts: list[str] | None) -> str:
         if not outcome_facts:
             return "(No actions were taken this turn)"
-        return "\n".join(f" - {fact}" for fact in outcome_facts)
+        return "\n".join(f" - {zombie_ids_to_words(fact)}" for fact in outcome_facts)
 
     def _discovered_flags_section(self) -> str:
         """Only flags the player has discovered, so the engine can hold ground truth the
@@ -324,8 +334,9 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("carried")
         if held_entity(player) is not None:
             keys.add("held")
-        if any(isinstance(entity.item, ClothingItem) for entity in player.inventory):
-            keys.add("wearable_carried")
+        reachable = [*player.inventory, *manager._ground_items()]
+        if any(isinstance(entity.item, ClothingItem) for entity in reachable):
+            keys.add("wearable")
         if self._worn_section() != "Nothing":
             keys.add("worn")
         if manager.npcs_in_location(player.current_location_id):
@@ -388,7 +399,8 @@ Flags: {self._discovered_flags_section()}
         manager = self.manager
         narrative = manager.narrative
         looks = manager.player.appearance
-        return f"""Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
+        weekday = date.fromisoformat(manager.world.date).strftime("%A")
+        return f"""Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {weekday} {manager.world.date}
 It is {self._outbreak_line()}.
 (The weather outside, in words. When {self._name} is sheltered, rain and wind do not
 reach {looks.object}, though {looks.subject} can still hear them.)

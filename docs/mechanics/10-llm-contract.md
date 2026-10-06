@@ -166,13 +166,13 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `REMOVE_GOAL` | `goals` | the player has a goal |
 | `TAKE` | `items_here` | an item lies here |
 | `DROP`, `USE_ITEM` | `carried` | the player carries an item |
-| `WEAR` | `wearable_carried` | a carried item is clothing |
+| `WEAR` | `wearable` | clothing is carried or lies here, so `TAKE` then `WEAR` can be planned |
 | `TAKE_OFF` | `worn` | something is worn or in hand |
 | `TALK`, `ASK`, `GIVE` | `npcs_here` | someone is here |
 | `ATTACK` | `npcs_here`, `threats` | someone is here, or a zombie is perceived |
 | `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](12-health-and-infection.md)) |
 
-With nothing present, the block lists the eight always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. Closed labels inside a listed verb are printed in full.
+With nothing present, the block lists the eight always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. `EAT` and `DRINK` parse as `USE_ITEM`. Closed labels inside a listed verb are printed in full.
 
 ### Plans
 
@@ -192,7 +192,9 @@ The parser returns a plan: its `ACTIONS:` lines, resolved in order.
 ## Talking to people
 
 Everything the player says to an NPC becomes one `TALK`, and the parser chooses the
-approach. The engine owns what it is worth.
+approach. The engine owns what it is worth. The approach is the first label after the
+NPC's name; anything after it, such as the line being said, is dropped
+(`TALK Emma chat "Hi, I'm new here"` is a `chat`).
 
 ### Approaches
 
@@ -365,7 +367,9 @@ only feeds memory.
 
 `STORY:`, `EVENT:` and `OPTIONS:`. An option is something the player could type, and
 clicking it sends it to the parser like typed text, so a suggestion is never a
-shortcut past the engine.
+shortcut past the engine. A reply with no headers at all is all story. A prompt block
+the narrator echoes back (`[OUTCOMES]` and the lines under it) is dropped up to the
+next header.
 
 ## Memory
 

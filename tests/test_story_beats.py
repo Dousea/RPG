@@ -65,6 +65,13 @@ class OutbreakBeatTests(unittest.TestCase):
         self.assertIn(SIRENS, facts)
         self.assertEqual(facts[-1], "About 27 minutes pass.")
 
+    def test_a_wait_it_cuts_short_reports_the_time_actually_waited(self):
+        gm = GameManager()
+        gm.advance_clock(2733)
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=120)), rng=random.Random(1))
+        self.assertEqual(facts[0], "Orton waits 27 minutes, then is interrupted.")
+        self.assertNotIn("Orton waits 2 hours.", facts)
+
     def test_it_fires_exactly_once(self):
         gm = GameManager()
         gm.advance_clock(2750)

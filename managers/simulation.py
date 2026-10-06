@@ -52,6 +52,7 @@ from managers.stats.engine import StatsEngine
 from managers.stats.status_effects import (
     alcohol_intoxication,
     injury_words,
+    level_change_fact_texts,
     level_change_facts,
     player_status_effect_levels,
     status_effect_level,
@@ -444,6 +445,7 @@ class SimulationCore:
         facts: list[str] = []
         spent = 0
         started = manager.narrative.minutes
+        span_levels = player_status_effect_levels(manager.player)
         self._zombies_seen_this_chunk = 0
         self._body.begin_span()
         weakens = isinstance(action, WaitAction | SleepAction | ExerciseAction)
@@ -480,7 +482,14 @@ class SimulationCore:
             self._pending_sounds.extend(self._coughs(stat_facts))
         if not manager.narrative.game_over:
             facts.extend(self._run_ticks(started, spent, walking=isinstance(action, MoveAction)))
-        return spent, facts
+        return spent, self._net_level_facts(facts, span_levels)
+
+    def _net_level_facts(self, facts: list[str], before: dict[StatusEffect, int]) -> list[str]:
+        """The span's facts with its status-effect changes reported once each, at their final level."""
+        level_facts = level_change_fact_texts(self._name)
+        kept = [fact for fact in facts if fact not in level_facts]
+        after = player_status_effect_levels(self.manager.player)
+        return [*kept, *level_change_facts(self._name, before, after)]
 
     def _coughs(self, stat_facts: list[str]) -> list[Sound]:
         words = {
@@ -780,13 +789,12 @@ class SimulationCore:
         for modifier in broadcast_event(event):
             self._apply_modifier(player, modifier)
 
-        return " ".join(
-            [
-                f"Use {item.name}: succeeded, "
-                f"{self._name} is {injury_words(player.hit_points, player.max_hit_points)}.",
-                *consume_facts,
-            ]
-        )
+        if isinstance(item, ConsumableItem):
+            lead = f"Use {item.name}: succeeded."
+        else:
+            hurt = injury_words(player.hit_points, player.max_hit_points)
+            lead = f"Use {item.name}: succeeded, {self._name} is {hurt}."
+        return " ".join([lead, *consume_facts])
 
     def _consume(self, item: ConsumableItem) -> list[str]:
         """Apply every food field once, feed the well-fed timer and add alcohol.
@@ -822,8 +830,10 @@ class SimulationCore:
         if target.approach_minutes:
             motion = Motion(Pace.WALK, approach_target=target.zombie_id)
             spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
-        if self._interruption or self.manager.narrative.game_over:
+        if self.manager.narrative.game_over:
             return facts, spent
+        if self._interruption:
+            return [*facts, f"{self._name} never gets to swing."], spent
         swing = Motion(
             Pace.STILL,
             swing_target=target.zombie_id,
@@ -1006,12 +1016,18 @@ class SimulationCore:
         npc.notes = f"{npc.notes}; {action.note}" if npc.notes else action.note
         return f"Noted about {npc.name}: {action.note}"
 
-    def _resolve_wait(self, accepted: Accepted) -> str:
+    def _resolve_wait(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Wait out the span; the lead fact gives the minutes that actually passed."""
         span = accepted.expect(TimeSpan)
-        spent = _span_words(span.minutes)
-        if span.clamped:
-            return f"{self._name} waits {spent}, the most {self._subject} can at once."
-        return f"{self._name} waits {spent}."
+        spent, facts = self._spend(span.minutes, accepted.action)
+        words = _span_words(spent)
+        if spent < span.minutes and (self._interruption or self.manager.narrative.game_over):
+            lead = f"{self._name} waits {words}, then is interrupted."
+        elif span.clamped:
+            lead = f"{self._name} waits {words}, the most {self._subject} can at once."
+        else:
+            lead = f"{self._name} waits {words}."
+        return [lead, *facts], spent
 
     def _resolve_sleep(self, accepted: Accepted) -> tuple[list[str], int]:
         """Sleep chunk by chunk until the time is up or something wakes the player."""
