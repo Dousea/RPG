@@ -6,17 +6,13 @@ tests/test_validator.py and tests/test_simulation.py.
 
 import unittest
 
+from managers.context import ContextBuilder
 from managers.game import (
     MAX_RECENT_EVENTS,
     SUMMARY_THRESHOLD,
     GameManager,
 )
-from modules.action import (
-    MoveAction,
-    NpcStatusAction,
-    TakeAction,
-    UpdateRelationshipAction,
-)
+from modules.action.types import MoveAction, NpcStatusAction, TakeAction, UpdateRelationshipAction
 from tests.support import resolve_actions
 
 
@@ -233,7 +229,7 @@ class StartingStateTests(unittest.TestCase):
         # tests. Orton now starts alone in his apartment, so move to where
         # Emma is to see her disposition line.
         self.gm.player.current_location_id = "zone_building"
-        self.assertIn("trust: unformed", self.gm.build_narrator_prompt("look"))
+        self.assertIn("trust: unformed", ContextBuilder(self.gm).build_narrator_prompt("look"))
 
     def test_two_games_do_not_share_mutable_state(self):
         # Locations and NPCs are per-game, so a dropped item or an NPC's status
@@ -262,7 +258,9 @@ class PromptTests(unittest.TestCase):
         self.gm = GameManager()
 
     def test_prompt_contains_every_section(self):
-        prompt = self.gm.build_narrator_prompt("look around", deep_memories=["Orton heard sirens."])
+        prompt = ContextBuilder(self.gm).build_narrator_prompt(
+            "look around", deep_memories=["Orton heard sirens."]
+        )
         for section in (
             "[CHARACTER]",
             "[DEEP MEMORY]",
@@ -278,37 +276,44 @@ class PromptTests(unittest.TestCase):
             self.assertIn(section, prompt)
 
     def test_prompt_carries_deep_memories(self):
-        prompt = self.gm.build_narrator_prompt("look", deep_memories=["Orton heard sirens."])
+        prompt = ContextBuilder(self.gm).build_narrator_prompt(
+            "look", deep_memories=["Orton heard sirens."]
+        )
         self.assertIn("Orton heard sirens.", prompt)
 
     def test_prompt_carries_outcome_facts(self):
-        self.assertIn("(No actions were taken this turn)", self.gm.build_narrator_prompt("look"))
-        prompt = self.gm.build_narrator_prompt("look", outcome_facts=["Move to Office: succeeded."])
+        self.assertIn(
+            "(No actions were taken this turn)",
+            ContextBuilder(self.gm).build_narrator_prompt("look"),
+        )
+        prompt = ContextBuilder(self.gm).build_narrator_prompt(
+            "look", outcome_facts=["Move to Office: succeeded."]
+        )
         self.assertIn("[OUTCOMES]", prompt)
         self.assertIn("Move to Office: succeeded.", prompt)
 
     def test_prompt_carries_pending_corrections(self):
-        self.assertIn("(Nothing to correct)", self.gm.build_narrator_prompt("look"))
+        self.assertIn("(Nothing to correct)", ContextBuilder(self.gm).build_narrator_prompt("look"))
         self.gm.narrative.pending_corrections = ["TAKE Medkit -- No 'Medkit' here to take."]
-        prompt = self.gm.build_narrator_prompt("look")
+        prompt = ContextBuilder(self.gm).build_narrator_prompt("look")
         self.assertIn("[CONTINUITY]", prompt)
         self.assertIn("No 'Medkit' here to take.", prompt)
 
     def test_prompt_describes_present_npcs_only(self):
         # Orton now starts alone in his apartment.
         self.gm.player.current_location_id = "zone_building"
-        prompt = self.gm.build_narrator_prompt("look")
+        prompt = ContextBuilder(self.gm).build_narrator_prompt("look")
         self.assertIn("Emma", prompt)  # in the building with the player
         self.assertNotIn("Jen", prompt)  # in the neighborhood
 
     def test_prompt_lists_exits_by_direction(self):
-        self.assertIn("Out: Your Building", self.gm.build_narrator_prompt("look"))
+        self.assertIn("Out: Your Building", ContextBuilder(self.gm).build_narrator_prompt("look"))
 
     def test_prompt_reflects_recent_events_and_summaries(self):
-        self.assertIn("(No recent events)", self.gm.build_narrator_prompt("look"))
+        self.assertIn("(No recent events)", ContextBuilder(self.gm).build_narrator_prompt("look"))
         self.gm.record_event("Orton locked the door.")
         self.gm.memory.summaries.append("The city grew quiet.")
-        prompt = self.gm.build_narrator_prompt("look")
+        prompt = ContextBuilder(self.gm).build_narrator_prompt("look")
         self.assertIn("Orton locked the door.", prompt)
         self.assertIn("The city grew quiet.", prompt)
 
@@ -318,7 +323,7 @@ class ParserPromptTests(unittest.TestCase):
         self.gm = GameManager()
 
     def test_parser_prompt_contains_minimal_scene_context(self):
-        prompt = self.gm.build_parser_prompt("go north")
+        prompt = ContextBuilder(self.gm).build_parser_prompt("go north")
         for section in (
             "[LOCATION]",
             "[EXITS]",
@@ -334,14 +339,14 @@ class ParserPromptTests(unittest.TestCase):
     def test_parser_prompt_has_no_prose_context(self):
         # The parser proposes actions, not prose -- it gets none of the
         # narrator's memory/summary/disposition sections.
-        prompt = self.gm.build_parser_prompt("look")
+        prompt = ContextBuilder(self.gm).build_parser_prompt("look")
         for section in ("[DEEP MEMORY]", "[SUMMARY OF PAST EVENTS]", "[OUTCOMES]"):
             self.assertNotIn(section, prompt)
 
     def test_parser_prompt_lists_present_npcs_by_name_only(self):
         # Orton now starts alone in his apartment.
         self.gm.player.current_location_id = "zone_building"
-        prompt = self.gm.build_parser_prompt("look")
+        prompt = ContextBuilder(self.gm).build_parser_prompt("look")
         self.assertIn("Emma", prompt)
         self.assertNotIn("Disposition", prompt)
 
@@ -355,7 +360,7 @@ class KnowledgeFirewallTests(unittest.TestCase):
         self.gm.player.current_location_id = "zone_building"
 
     def _npcs_section(self) -> str:
-        prompt = self.gm.build_narrator_prompt("look")
+        prompt = ContextBuilder(self.gm).build_narrator_prompt("look")
         return prompt.split("[NPCS PRESENT]")[1].split("[SUMMARY OF PAST EVENTS]")[0]
 
     def test_raw_relationship_scores_never_reach_the_prompt(self):
@@ -376,18 +381,25 @@ class KnowledgeFirewallTests(unittest.TestCase):
             UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=50),
             UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=45),
         )
-        self.assertIn("Disposition: friendly (trust: solid)", self.gm.build_narrator_prompt("look"))
+        self.assertIn(
+            "Disposition: friendly (trust: solid)",
+            ContextBuilder(self.gm).build_narrator_prompt("look"),
+        )
 
     def test_bands_move_with_the_underlying_scores(self):
         self.assertIn(
-            "Disposition: neutral (trust: unformed)", self.gm.build_narrator_prompt("look")
+            "Disposition: neutral (trust: unformed)",
+            ContextBuilder(self.gm).build_narrator_prompt("look"),
         )
         resolve_actions(
             self.gm,
             UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=-50),
             UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-45),
         )
-        self.assertIn("Disposition: hostile (trust: broken)", self.gm.build_narrator_prompt("look"))
+        self.assertIn(
+            "Disposition: hostile (trust: broken)",
+            ContextBuilder(self.gm).build_narrator_prompt("look"),
+        )
 
 
 class MemoryTests(unittest.TestCase):

@@ -142,7 +142,7 @@ game starts.
 - `tests/test_action.py` and `tests/test_validator.py`: every duration form,
   malformed durations, the caps, `until` landing times, and `TIME_ADVANCE` as an
   unknown verb.
-- `tests/test_simulation.py`: each table cost, refused actions, the `NONE` turn,
+- `tests/test_time_and_sleep.py`: each table cost, refused actions, the `NONE` turn,
   the summed-minutes fact and the edge cases.
 - `tests/test_persistence.py`: a round trip keeps `minutes`, and a v3 or v4 save
   is discarded.

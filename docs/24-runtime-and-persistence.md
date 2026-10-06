@@ -1,6 +1,6 @@
 # Runtime, Configuration, and Persistence
 
-> **Status: Implemented.** `config.py`, `adapters/persistence.py`, `adapters/engine.py`, `app.py`. See [Implementation Status](00-status.md).
+> **Status: Implemented.** `config.py`, `adapters/save/codec.py`, `adapters/save/files.py`, `adapters/engine.py`, `app.py`. See [Implementation Status](00-status.md).
 
 [Document 16](16-determinism-and-versioning.md) says to version anything that
 affects a persistent world. [Document 12](12-data-model.md) says to persist

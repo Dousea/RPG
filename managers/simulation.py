@@ -4,8 +4,7 @@ Validates each action (via `managers/validator.py`) and decides what actually
 happens -- HP, inventory, position, the clock -- before any prose exists.
 Movement, inventory, and world-state actions are direct field mutations;
 combat and item use additionally build real events and run them through the
-event/effect/modifier pipeline in `managers/game.py` (see
-`GameManager._broadcast_event`), so trait/perk reactions in `data/traits.py`
+event/effect/modifier pipeline in `managers/events.py`, so trait/perk reactions in `data/traits.py`
 and `data/perks.py` fire.
 
 `resolve()` returns one outcome-fact string per action -- what the narrator
@@ -19,17 +18,20 @@ from data import status_effects, survival
 from data.items import item_condition_word
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.climate import weather_change_facts
+from managers.combat import UNARMED_WEAPON, equipped_weapon, roll_damage
+from managers.events import broadcast_event
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
-from managers.stats import (
-    StatContext,
-    StatsEngine,
+from managers.stats.drivers import StatContext
+from managers.stats.engine import StatsEngine
+from managers.stats.status_effects import (
+    alcohol_intoxication,
     injury_words,
     level_change_facts,
     player_status_effect_levels,
     status_effect_level,
 )
 from managers.validator import Accepted, ActionValidator, Rejected
-from modules.action import (
+from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
@@ -50,19 +52,15 @@ from modules.action import (
     UseItemAction,
     WaitAction,
 )
-from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
-    WeaponDealDamageEvent,
-    WeaponTakeDamageEvent,
 )
-from modules.item import AppliableItem, ConsumableItem, MeleeWeaponItem, RangedWeaponItem
+from modules.item import AppliableItem, ConsumableItem
 from modules.modifier import (
     AffinityModifier,
     ConditionsModifier,
-    DamageMultiplicativeModifier,
     HPModifier,
     ReputationModifier,
 )
@@ -79,28 +77,7 @@ from modules.resolution import (
     TimeSpan,
 )
 from modules.stats import CharacterStat, StatusEffect
-from modules.weapon import MeleeWeaponType
 from modules.weather import WeatherSample
-
-# Fists deal a token amount of damage so an unarmed ATTACK still resolves
-# through the same event/modifier pipeline as an armed one, instead of being a
-# special case.
-UNARMED_WEAPON = MeleeWeaponItem(
-    id="unarmed",
-    name="bare hands",
-    description="No weapon -- just hands.",
-    max_hit_points=1,
-    tags=["unarmed"],
-    type=MeleeWeaponType.BLUNT,
-    damage=2,
-    slots=[CharacterHoldableSlot.RIGHT_HAND],
-    is_two_handed=False,
-)
-
-# +/-10% variance on damage rolls. Building seeded/versioned RNG (doc 16) is
-# explicitly out of scope; this is just enough randomness that combat doesn't
-# read as a fixed calculator.
-DAMAGE_JITTER = 0.10
 
 
 def _span_words(minutes: int) -> str:
@@ -117,23 +94,6 @@ def _minutes_fact(minutes: int) -> str:
     if minutes == 1:
         return "About 1 minute passes."
     return f"About {minutes} minutes pass."
-
-
-def alcohol_intoxication(item: ConsumableItem, hunger: float) -> float:
-    """Intoxication one alcoholic item adds when drunk at the given hunger."""
-    portion = (
-        status_effects.ALCOHOL_WHOLE_ITEM_PORTION
-        if item.hunger_change
-        else status_effects.ALCOHOL_PARTIAL_PORTION
-    )
-    amount = status_effects.ALCOHOL_INTOXICATION_PER_PORTION * portion
-    if item.low_alcohol:
-        amount *= status_effects.ALCOHOL_LOW_MULT
-    if hunger > status_effects.ALCOHOL_HUNGER_HIGH:
-        amount *= status_effects.ALCOHOL_HUNGER_HIGH_MULT
-    elif hunger > status_effects.ALCOHOL_HUNGER_MID:
-        amount *= status_effects.ALCOHOL_HUNGER_MID_MULT
-    return amount
 
 
 class SimulationCore:
@@ -358,7 +318,7 @@ class SimulationCore:
             consume_facts = []
             event = ApplyItemEvent(source=player, item=item, target=player)
 
-        for modifier in manager._broadcast_event(event):
+        for modifier in broadcast_event(event):
             self._apply_modifier(player, modifier)
 
         return " ".join(
@@ -424,38 +384,12 @@ class SimulationCore:
     # === Combat ===
 
     def _resolve_attack(self, accepted: Accepted) -> str:
-        manager = self.manager
         npc = accepted.expect(TargetNpc).npc
-        attacker = manager.player
-        weapon = self._equipped_weapon(attacker) or UNARMED_WEAPON
-        base_damage = weapon.damage
-
-        # Two events for one hit: one for the attacker's "dealt" reactions
-        # (e.g. Gun Slinger's +20% with ranged weapons), one for the
-        # defender's "taken" reactions (e.g. Small Frame's +10% damage
-        # taken). Both contribute to a single combined multiplier so the hit
-        # is only ever subtracted once.
-        dealt_event = WeaponDealDamageEvent(
-            source=attacker, weapon=weapon, damage=base_damage, target=npc
-        )
-        taken_event = WeaponTakeDamageEvent(
-            source=attacker, weapon=weapon, damage=base_damage, target=npc
-        )
-        dealt_modifiers = manager._broadcast_event(dealt_event)
-        taken_modifiers = manager._broadcast_event(taken_event)
-
-        multiplier = 1.0
-        for modifier in (*dealt_modifiers, *taken_modifiers):
-            if isinstance(modifier, DamageMultiplicativeModifier):
-                multiplier *= modifier.multiplier
-
-        jitter = 1.0 + self._rng.uniform(-DAMAGE_JITTER, DAMAGE_JITTER)
-        final_damage = max(1, int(base_damage * multiplier * jitter))
-
-        npc.hit_points -= final_damage
-
-        self._apply_relationship_modifiers(dealt_modifiers)
-        self._apply_relationship_modifiers(taken_modifiers)
+        attacker = self.manager.player
+        weapon = equipped_weapon(attacker) or UNARMED_WEAPON
+        damage, modifiers = roll_damage(attacker, weapon, npc, self._rng)
+        npc.hit_points -= damage
+        self._apply_relationship_modifiers(modifiers)
 
         if npc.hit_points <= 0:
             fact = f"Attack {npc.name} with {weapon.name}: hit, {npc.name} is down."
@@ -496,13 +430,6 @@ class SimulationCore:
                 quest.status = QuestStatus.COMPLETED
                 notes.append(f"Quest '{quest.quest_id}' completed!")
         return " ".join(notes)
-
-    @staticmethod
-    def _equipped_weapon(player) -> MeleeWeaponItem | RangedWeaponItem | None:
-        for entity in player.equipment.values():
-            if entity is not None and isinstance(entity.item, (MeleeWeaponItem, RangedWeaponItem)):
-                return entity.item
-        return None
 
     def _apply_relationship_modifiers(self, modifiers) -> None:
         for modifier in modifiers:

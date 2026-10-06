@@ -4,7 +4,7 @@ import unittest
 
 from managers.context import ContextBuilder
 from managers.game import GameManager
-from modules.action import DiscoverFlagAction, MoveAction, SetFlagAction
+from modules.action.types import DiscoverFlagAction, MoveAction, SetFlagAction
 from modules.character.equipment import CharacterHoldableSlot
 from modules.quest import QuestState
 from modules.stats import CharacterStat
@@ -379,7 +379,7 @@ class WeatherFactTests(unittest.TestCase):
 
     def test_a_waited_span_reports_the_rain_starting(self):
         from managers.simulation import SimulationCore
-        from modules.action import Duration, WaitAction
+        from modules.action.types import Duration, WaitAction
 
         gm = GameManager()
         gm.climate.start_period(gm.narrative.minutes // 60 + 1, 0.5)

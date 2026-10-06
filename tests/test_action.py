@@ -2,14 +2,14 @@
 
 import unittest
 
-from modules.action import (
+from modules.action.parser import ParseFailure, parse_action_line, parse_action_plan
+from modules.action.types import (
     AddGoalAction,
     AttackAction,
     Duration,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
-    ParseFailure,
     RemoveGoalAction,
     SetFlagAction,
     SleepAction,
@@ -19,8 +19,6 @@ from modules.action import (
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
-    parse_action_line,
-    parse_action_plan,
 )
 
 

@@ -16,7 +16,8 @@ the main way the player moves stats back down.
 | modules | `modules/entity/player.py` | `PlayerEntity.food_eaten_timer` |
 | data | `data/status_effects.py` | `STATUS_EFFECT_THRESHOLDS`, level names, well-fed, alcohol and penalty constants |
 | data | `data/items.py` | the shipped food and drink |
-| managers | `managers/stats.py` | `status_effect_level`, `active_status_effects`, the penalty functions, the timer drain |
+| managers | `managers/stats/status_effects.py` | `status_effect_level`, `active_status_effects`, the penalty functions, `alcohol_intoxication` |
+| managers | `managers/stats/engine.py` | the timer drain |
 | managers | `managers/simulation.py` | consuming an item |
 | managers | `managers/context.py` | the `[CONDITION]` block |
 | adapters | `adapters/engine.py` | the `/play` `effects` payload |
@@ -68,7 +69,7 @@ table order ("Orton is now Peckish.", "Orton is no longer Peckish.").
 | Defence | 2 per Endurance level, 3 per Tired level and 2 per Drunk level are lost. |
 
 `melee_status_effect_penalty`, `damage_after_status_effects`, `crit_penalty` and
-`defence_penalty` in `managers/stats.py` compute these. The melee, zombie and
+`defence_penalty` in `managers/stats/status_effects.py` compute these. The melee, zombie and
 health specs call them. Heavy Load is 0 until the carrying spec.
 
 ## Eating and drinking
@@ -156,7 +157,7 @@ discarded.
   penalty functions.
 - `tests/test_stats_engine.py`: one fact per crossing, none without one; the
   timer drain.
-- `tests/test_simulation.py`: item fields, the timer (apple, cooked, cap),
+- `tests/test_consumption.py`: item fields, the timer (apple, cooked, cap),
   alcohol, eat time, no instant healing.
 - `tests/test_context.py`, `tests/test_routes.py`: the `[CONDITION]` block and
   the `effects` payload.

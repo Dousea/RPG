@@ -3,7 +3,9 @@
 import unittest
 
 from data.survival import BED_MULTIPLIERS
-from managers.stats import StatContext, StatsEngine, status_effect_level
+from managers.stats.drivers import StatContext
+from managers.stats.engine import StatsEngine
+from managers.stats.status_effects import status_effect_level
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat as S
 from modules.stats import StatusEffect
@@ -60,7 +62,7 @@ class AwakeDriverTests(unittest.TestCase):
         self.assertAlmostEqual(player.stats.get(S.HUNGER), 0.006912, places=6)
 
     def test_hunger_is_scaled_by_the_energy_multiplier(self):
-        from managers.stats import BodyMultipliers
+        from managers.stats.drivers import BodyMultipliers
 
         player = make_player()
         run(player, 6, body=BodyMultipliers(energy=2.0))

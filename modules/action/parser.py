@@ -1,22 +1,39 @@
-"""Typed action-plan model: what the parser LLM may propose.
+"""Parsing of the parser LLM's ACTIONS lines into typed actions.
 
-Mirrors the AnyEvent/AnyModifier/AnyEffect pattern in `event.py`/`modifier.py`/
-`effect.py`. Parsing here only recognizes shape (right verb, right number of
-arguments) -- it never touches game state and never resolves an item/NPC/
-location name to a real entity. That is the Action Validator's job
-(`managers/validator.py`); this module's only contract is "is this a
-well-formed proposal at all."
-
-The line grammar is unchanged from the old single-call `ACTIONS:` format (the
-local model is tuned to it) with two exceptions: `UPDATE_CONDITION health` is
-retired (player HP is never LLM-authoritative -- see docs/01-engine-authority.md)
-and `ATTACK`/`USE_ITEM` are added so combat and item effects have an entry
-point into the Simulation Core instead of being narrated as raw HP deltas.
+Parsing recognizes shape only (right verb, right number of arguments). It
+never touches game state and never resolves an item, NPC or location name to
+a real entity; that is the Action Validator's job (`managers/validator.py`).
+`UPDATE_CONDITION health` is refused here because player HP is never
+LLM-authoritative (docs/01-engine-authority.md).
 """
 
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+
+from modules.action.types import (
+    AddGoalAction,
+    AddRelationshipNoteAction,
+    AnyAction,
+    AttackAction,
+    DiscoverFlagAction,
+    DropAction,
+    Duration,
+    MoveAction,
+    NpcMoveAction,
+    NpcStatusAction,
+    RemoveGoalAction,
+    SetFlagAction,
+    SleepAction,
+    StatusAddAction,
+    StatusRemoveAction,
+    TakeAction,
+    UpdateConditionAction,
+    UpdateInventoryAction,
+    UpdateRelationshipAction,
+    UseItemAction,
+    WaitAction,
+)
 
 NARRATIVE_CONDITION_FIELDS = ("sleep", "infection_risk")
 NUMERIC_CONDITION_FIELDS = ("hunger", "thirst", "morale")
@@ -55,160 +72,8 @@ def normalize_key(raw: str) -> str:
 
 
 @dataclass
-class MoveAction:
-    destination: str
-
-
-@dataclass
-class TakeAction:
-    item_name: str
-
-
-@dataclass
-class DropAction:
-    item_name: str
-
-
-@dataclass
-class AttackAction:
-    target_name: str
-
-
-@dataclass
-class UseItemAction:
-    item_name: str
-
-
-@dataclass
-class Duration:
-    """How long a WAIT or SLEEP lasts: a fixed span, or until a clock time.
-
-    Exactly one field is set. `until_time_of_day` is a band name the validator
-    checks; `until_minute_of_day` is minutes after midnight, already in range.
-    """
-
-    minutes: int | None = None
-    until_time_of_day: str | None = None
-    until_minute_of_day: int | None = None
-
-
-@dataclass
-class WaitAction:
-    duration: Duration
-
-
-@dataclass
-class SleepAction:
-    """`duration` is None for sleeping until woken."""
-
-    duration: Duration | None = None
-
-
-@dataclass
-class StatusAddAction:
-    status: str
-
-
-@dataclass
-class StatusRemoveAction:
-    status: str
-
-
-@dataclass
-class UpdateConditionAction:
-    """Parsed but always refused: the engine owns every survival stat."""
-
-    field_name: str
-    raw_value: str
-
-
-@dataclass
-class AddGoalAction:
-    horizon: str
-    goal_text: str
-
-
-@dataclass
-class RemoveGoalAction:
-    horizon: str
-    goal_text: str
-
-
-@dataclass
-class UpdateRelationshipAction:
-    npc_name: str
-    axis: str
-    amount: int
-
-
-@dataclass
-class AddRelationshipNoteAction:
-    npc_name: str
-    note: str
-
-
-@dataclass
-class SetFlagAction:
-    flag_name: str
-    value: bool
-
-
-@dataclass
-class DiscoverFlagAction:
-    """The player has learned a world flag's state, whatever it is. Setting a
-    flag (engine ground truth) and discovering it (player knowledge) are
-    separate actions -- see docs/11-knowledge-firewall.md."""
-
-    flag_name: str
-
-
-@dataclass
-class UpdateInventoryAction:
-    item_name: str
-    operation: str  # ADD / REMOVE / UPDATE_CONDITION / UPDATE_QUANTITY
-    value: str
-
-
-@dataclass
-class NpcMoveAction:
-    npc_name: str
-    destination: str
-
-
-@dataclass
-class NpcStatusAction:
-    npc_name: str
-    operation: str  # ADD / REMOVE
-    status: str
-
-
-AnyAction = (
-    MoveAction
-    | TakeAction
-    | DropAction
-    | AttackAction
-    | UseItemAction
-    | WaitAction
-    | SleepAction
-    | StatusAddAction
-    | StatusRemoveAction
-    | UpdateConditionAction
-    | AddGoalAction
-    | RemoveGoalAction
-    | UpdateRelationshipAction
-    | AddRelationshipNoteAction
-    | SetFlagAction
-    | DiscoverFlagAction
-    | UpdateInventoryAction
-    | NpcMoveAction
-    | NpcStatusAction
-)
-
-
-@dataclass
 class ParseFailure:
-    """A line that never became an action -- rejected before validation, and
-    therefore before narration, unlike the old post-hoc [CONTINUITY] path."""
+    """A line that never became an action; rejected before validation and narration."""
 
     raw: str
     reason: str

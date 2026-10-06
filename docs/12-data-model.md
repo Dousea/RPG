@@ -221,7 +221,7 @@ The LLM narrates the visible consequences; it does not create them.
 ## As Implemented
 
 The real model is in `modules/`, the starting content in `data/`, and the save
-format in `adapters/persistence.py`. It is richer than the schemas above in
+format in `adapters/save/codec.py`. It is richer than the schemas above in
 some places and absent in others.
 
 ### Everything is a `BaseEntity` with hit points

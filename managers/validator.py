@@ -25,8 +25,8 @@ from data.clock import (
 from data.items import find_item_by_name
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
-from managers.stats import status_effect_level
-from modules.action import (
+from managers.stats.status_effects import status_effect_level
+from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,

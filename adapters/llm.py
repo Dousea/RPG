@@ -218,7 +218,7 @@ def parse_action_response(llm_response_text: str) -> list[str]:
     section to write, a small local model sometimes skips the header it used
     to need to distinguish ACTIONS from STORY/EVENT. If no header is found,
     every non-blank line is treated as a candidate action line, which is what
-    `modules.action.parse_action_plan` would have received anyway.
+    `modules.action.parser.parse_action_plan` would have received anyway.
     """
     lines = llm_response_text.splitlines()
     header_index = next(

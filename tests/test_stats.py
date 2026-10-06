@@ -3,7 +3,7 @@
 import unittest
 
 from data import survival
-from managers.stats import (
+from managers.stats.status_effects import (
     active_status_effects,
     bleeding_level,
     crit_penalty,

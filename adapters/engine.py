@@ -10,13 +10,15 @@ import logging
 import threading
 from typing import Any
 
-from adapters import llm, persistence
+from adapters import llm
 from adapters.memory import SemanticMemory
+from adapters.save import codec, files
 from managers.climate import weather_summary
+from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from managers.stats import active_status_effects
-from modules.action import parse_action_plan
+from managers.stats.status_effects import active_status_effects
+from modules.action.parser import parse_action_plan
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
@@ -36,7 +38,7 @@ class GameEngine:
     def __init__(self):
         self._lock = threading.Lock()
         self.memory = SemanticMemory()
-        self.manager = persistence.load() or GameManager()
+        self.manager = files.load() or GameManager()
         self.memory.rebuild(self.manager.memory.full_event_log)
 
     # === Turn execution ===
@@ -68,7 +70,7 @@ class GameEngine:
             logger.debug(f"Recalled {len(deep_memories)} deep memories.")
 
             # 2. Ask the parser what Orton is trying to do. No prose exists yet.
-            parser_prompt = manager.build_parser_prompt(player_input)
+            parser_prompt = ContextBuilder(manager).build_parser_prompt(player_input)
             try:
                 raw_actions = llm.query_parser(parser_prompt)
             except llm.LLMError as exc:
@@ -86,7 +88,7 @@ class GameEngine:
                 outcome_facts.append(f"Refused: '{failure.raw}' -- {failure.reason}")
 
             # 4. Ask the narrator to describe what already happened.
-            narrator_prompt = manager.build_narrator_prompt(
+            narrator_prompt = ContextBuilder(manager).build_narrator_prompt(
                 player_input, outcome_facts, deep_memories
             )
             try:
@@ -101,7 +103,7 @@ class GameEngine:
                 fallback_event = "; ".join(outcome_facts) if outcome_facts else "Nothing happened."
                 manager.record_event(fallback_event)
                 self.memory.rebuild(manager.memory.full_event_log)
-                persistence.save(manager)
+                files.save(manager)
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
             parsed = llm.parse_narrator_response(raw_response)
@@ -116,7 +118,7 @@ class GameEngine:
             # 6. Summarize if enough history has built up.
             self._run_summarization()
 
-            persistence.save(manager)
+            files.save(manager)
             return self._snapshot(story_text=story_text, options=options)
 
     def _run_summarization(self) -> None:
@@ -138,10 +140,10 @@ class GameEngine:
     def reset(self) -> dict[str, Any]:
         """Discard the save and start a brand new game."""
         with self._lock:
-            persistence.delete()
+            files.delete()
             self.manager = GameManager()
             self.memory.rebuild(self.manager.memory.full_event_log)
-            persistence.save(self.manager)
+            files.save(self.manager)
             return self._snapshot(story_text="")
 
     def state(self) -> dict[str, Any]:
@@ -152,23 +154,23 @@ class GameEngine:
     def export_save(self) -> dict[str, Any]:
         """The current game as a save-file dict, for the player to download."""
         with self._lock:
-            return persistence.to_dict(self.manager)
+            return codec.to_dict(self.manager)
 
     def import_save(self, data: dict[str, Any]) -> dict[str, Any] | None:
         """Replace the live game with an uploaded save, or reject a bad one.
 
-        Same version/shape validation `persistence.load` applies to the
+        Same version/shape validation `files.load` (adapters/save/files.py) applies to the
         autosave on disk -- a rejected upload leaves the current game running
         untouched. A save that is accepted becomes the new autosave too, so
         the next turn continues from it rather than silently reverting.
         """
         with self._lock:
-            manager = persistence.from_saved_data(data)
+            manager = files.from_saved_data(data)
             if manager is None:
                 return None
             self.manager = manager
             self.memory.rebuild(manager.memory.full_event_log)
-            persistence.save(manager)
+            files.save(manager)
             return self._snapshot(story_text="")
 
     # === Presentation ===

@@ -1,14 +1,15 @@
 """Shared test helpers: an isolated save file and stubs for the slow edges."""
 
+import random
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from adapters import persistence
+from adapters.save import files
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from modules.action import AnyAction
+from modules.action.types import AnyAction
 
 
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
@@ -100,12 +101,17 @@ class IsolatedSaveTestCase(unittest.TestCase):
         super().setUp()
         self._temp_dir = tempfile.mkdtemp(prefix="rpg-test-")
         self.save_path = str(Path(self._temp_dir) / "engine_state.json")
-        self._original_save_file = persistence.SAVE_FILE
+        self._original_save_file = files.SAVE_FILE
         # Resolved at call time by save/load/delete, so patching it here is
         # enough to redirect every default-path write.
-        persistence.SAVE_FILE = self.save_path
+        files.SAVE_FILE = self.save_path
 
     def tearDown(self):
-        persistence.SAVE_FILE = self._original_save_file
+        files.SAVE_FILE = self._original_save_file
         shutil.rmtree(self._temp_dir, ignore_errors=True)
         super().tearDown()
+
+
+def simulate(gm: GameManager, *actions: AnyAction, rng: random.Random | None = None) -> list[str]:
+    """Resolve actions through a fresh SimulationCore; refusals come back as facts."""
+    return SimulationCore(gm, rng=rng).resolve(list(actions))

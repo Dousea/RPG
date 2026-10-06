@@ -13,7 +13,7 @@ class ParseActionResponseTests(unittest.TestCase):
         self.assertEqual(lines, ["MOVE_TO hallway", "UPDATE_RELATIONSHIP Emma affection +1"])
 
     def test_none_is_kept_as_a_line(self):
-        # modules.action.parse_action_plan is what actually treats NONE as
+        # modules.action.parser.parse_action_plan is what actually treats NONE as
         # "no actions" -- this function only extracts lines.
         self.assertEqual(parse_action_response("ACTIONS:\nNONE"), ["NONE"])
 

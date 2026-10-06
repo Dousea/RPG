@@ -18,7 +18,7 @@ only produces the weather. Status effects and the narrator read it.
 | managers | `managers/climate.py` | `ClimateEngine`, word and fact helpers |
 | managers | `managers/simulation.py` | advances the climate per stat chunk |
 | managers | `managers/context.py` | the `[WEATHER]` block |
-| adapters | `adapters/persistence.py` | seed, front and period in the save |
+| adapters | `adapters/save/codec.py` | seed, front and period in the save |
 | adapters | `adapters/engine.py` | the `/play` `weather` payload |
 
 ## Configuration

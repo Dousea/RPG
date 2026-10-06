@@ -8,9 +8,9 @@ narrator describes what already happened (script via `ScriptedLLM(story=...)`).
 import unittest
 
 import adapters.engine as engine_module
-from adapters import persistence
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
+from adapters.save import files
 from modules.entity.item import ItemEntity
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 from tests.test_simulation import LETHAL_ITEM
@@ -82,7 +82,7 @@ class TurnTests(EngineTestCase):
 
     def test_turn_persists(self):
         self.engine.play("go out")
-        reloaded = persistence.load(self.save_path)
+        reloaded = files.load(self.save_path)
         self.assertIsNotNone(reloaded)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
         self.assertIn("Find a weapon", reloaded.narrative.goals["short_term"])
@@ -214,7 +214,7 @@ class FailureTests(EngineTestCase):
 
         self.assertEqual(result["current_location"], "Your Building")
         self.assertEqual(self.engine.manager.memory.full_event_log, log_before)
-        reloaded = persistence.load(self.save_path)
+        reloaded = files.load(self.save_path)
         self.assertEqual(reloaded.memory.full_event_log, log_before)
 
     def test_narrator_failure_still_persists_the_engines_decision(self):
@@ -233,7 +233,7 @@ class FailureTests(EngineTestCase):
 
         self.assertIn("LM Studio dropped the connection", result["story_text"])
         self.assertEqual(self.engine.manager.player.current_location_id, "zone_building")
-        reloaded = persistence.load(self.save_path)
+        reloaded = files.load(self.save_path)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
 
     def test_summarization_failure_does_not_lose_the_turn(self):
@@ -270,7 +270,7 @@ class LifecycleTests(EngineTestCase):
     def test_reset_writes_a_fresh_save(self):
         self.engine.play("go out")
         self.engine.reset()
-        reloaded = persistence.load(self.save_path)
+        reloaded = files.load(self.save_path)
         self.assertIsNotNone(reloaded)
         self.assertEqual(reloaded.player.current_location_id, "zone_home")
 
@@ -313,7 +313,7 @@ class SaveLoadTests(EngineTestCase):
         self.engine.reset()  # back home; save file now says zone_home
         self.engine.import_save(exported)  # re-import the building save
 
-        reloaded = persistence.load(self.save_path)
+        reloaded = files.load(self.save_path)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
 
 

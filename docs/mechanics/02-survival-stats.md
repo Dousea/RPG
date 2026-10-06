@@ -15,7 +15,9 @@ the bands the engine needs (see [Stats](#stats)).
 | modules | `modules/units.py` | the three rate conversions |
 | data | `data/survival.py` | every rate and threshold, named, with its unit |
 | data | `data/status_effects.py` | `STATUS_EFFECT_THRESHOLDS` and the level names |
-| managers | `managers/stats.py` | `status_effect_level`, `StatContext`, the drivers, `StatsEngine` |
+| managers | `managers/stats/status_effects.py` | `status_effect_level` |
+| managers | `managers/stats/drivers.py` | `StatContext`, the drivers |
+| managers | `managers/stats/engine.py` | `StatsEngine` |
 | managers | `managers/simulation.py` | builds the context, calls the engine, runs `SLEEP` |
 
 `Stats` is a clamped mapping with `get`, `set`, `add`, `remove` and `reset`. It
@@ -315,7 +317,7 @@ the narrative `conditions` are gone. A save of any other version is discarded.
   Peckish at 4 to 5 hours, Drowsy at 15 to 17 hours, fatigue from 0.8 in bed,
   the three health-loss figures, chunk equivalence, a registered driver, and
   exactly one fact per status effect change.
-- `tests/test_simulation.py`: stats advance per action, the sleep wake causes,
+- `tests/test_time_and_sleep.py`: stats advance per action, the sleep wake causes,
   death by thirst with its cause, and the clock stopping at the death chunk.
 - `tests/test_validator.py`: every `UPDATE_CONDITION` field refused, `SLEEP`
   refused at Panic level 1 and at Pain level 2, the open-sleep span.

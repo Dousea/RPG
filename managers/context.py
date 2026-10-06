@@ -17,7 +17,7 @@ from data.items import item_condition_word
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from managers.climate import describe_weather
 from managers.game import GameManager
-from managers.stats import active_status_effects
+from managers.stats.status_effects import active_status_effects
 from modules.entity.item import ItemEntity
 from modules.quest import QuestStatus
 

@@ -25,10 +25,10 @@ what the game now does.
 
 | # | Mechanic | Status | Code |
 | --- | --- | --- | --- |
-| 01 | [Game Clock and Action Time](mechanics/01-game-clock.md) | Implemented | `data/clock.py`, `data/time_costs.py`, `managers/game.py`, `managers/simulation.py`, `managers/validator.py`, `modules/action.py` |
-| 02 | [Survival Stats](mechanics/02-survival-stats.md) | Implemented | `modules/stats.py`, `modules/units.py`, `data/survival.py`, `data/status_effects.py`, `managers/stats.py`, `managers/simulation.py`, `managers/validator.py`, `adapters/persistence.py` |
-| 03 | [Status Effects and Consumption](mechanics/03-status-effects-and-consumption.md) | Implemented | `modules/stats.py`, `modules/item.py`, `data/status_effects.py`, `data/items.py`, `managers/stats.py`, `managers/simulation.py`, `managers/context.py`, `adapters/engine.py`, `adapters/persistence.py` |
-| 04 | [Weather](mechanics/04-weather.md) | Implemented | `modules/simplex.py`, `modules/weather.py`, `modules/location.py`, `data/climate.py`, `data/locations.py`, `managers/climate.py`, `managers/simulation.py`, `managers/context.py`, `adapters/engine.py`, `adapters/persistence.py` |
+| 01 | [Game Clock and Action Time](mechanics/01-game-clock.md) | Implemented | `data/clock.py`, `data/time_costs.py`, `managers/game.py`, `managers/simulation.py`, `managers/validator.py`, `modules/action/parser.py` |
+| 02 | [Survival Stats](mechanics/02-survival-stats.md) | Implemented | `modules/stats.py`, `modules/units.py`, `data/survival.py`, `data/status_effects.py`, `managers/stats/status_effects.py`, `managers/stats/drivers.py`, `managers/stats/engine.py`, `managers/simulation.py`, `managers/validator.py`, `adapters/save/codec.py` |
+| 03 | [Status Effects and Consumption](mechanics/03-status-effects-and-consumption.md) | Implemented | `modules/stats.py`, `modules/item.py`, `data/status_effects.py`, `data/items.py`, `managers/stats/status_effects.py`, `managers/stats/engine.py`, `managers/simulation.py`, `managers/context.py`, `adapters/engine.py`, `adapters/save/codec.py` |
+| 04 | [Weather](mechanics/04-weather.md) | Implemented | `modules/simplex.py`, `modules/weather.py`, `modules/location.py`, `data/climate.py`, `data/locations.py`, `managers/climate.py`, `managers/simulation.py`, `managers/context.py`, `adapters/engine.py`, `adapters/save/codec.py` |
 
 ## The central divergence (resolved for engine authority; still open for scale)
 
@@ -45,7 +45,7 @@ LLM parser → action plan               semantic recall (FAISS, for the narrato
     ↓                                      ↓
 entity resolution                      LLM call #1: parser → ACTIONS block
     ↓                                      ↓
-validation (preconditions)             modules/action.parse_action_plan
+validation (preconditions)             modules/action/parser.parse_action_plan
     ↓                                      ↓
 SIMULATION decides outcome             managers/validator.ActionValidator
     ↓                                      ↓
@@ -82,8 +82,8 @@ this one.
 | Doc | Status | Implemented by | Gap |
 | --- | --- | --- | --- |
 | [01 Engine Authority](01-engine-authority.md) | Implemented (at current scale) | `managers/validator.py`, `managers/simulation.py`, `adapters/engine.py` `play()` | Player HP, inventory, movement, combat, time and quest completion are engine-decided before the narrator is called. Not implemented: hidden-info/faction-state depth beyond discovered flags, and everything documents 05–09 would add if the world grew past a handful of zones. |
-| [02 System Boundaries](02-system-boundaries.md) | Partial | `managers/game.py` `_broadcast_event`, `EVENT_TO_EFFECT_TYPES` | Combat and item-use events are constructed and dispatched, role-aware (a "damage taken" handler only fires for the actual target). This is direct dispatch to a fixed pair of event families, not a general publish/subscribe bus other subsystems can register against — the typed event taxonomy in this document is still aspirational. |
-| [03 Intent Parsing](03-intent-parsing.md) | Partial | `modules/action.py`, `adapters/llm.py` `query_parser` | A separate parser call proposes a typed `AnyAction` plan (`modules/action.py`) before anything is decided, matching this document's intent. Still missing: grammar-constrained decoding (the model can still emit unparseable text, caught as a `ParseFailure`) and true entity-resolution ambiguity handling (04 is unchanged). |
+| [02 System Boundaries](02-system-boundaries.md) | Partial | `managers/events.py` `broadcast_event`, `EVENT_TO_EFFECT_TYPES` | Combat and item-use events are constructed and dispatched, role-aware (a "damage taken" handler only fires for the actual target). This is direct dispatch to a fixed pair of event families, not a general publish/subscribe bus other subsystems can register against — the typed event taxonomy in this document is still aspirational. |
+| [03 Intent Parsing](03-intent-parsing.md) | Partial | `modules/action/parser.py`, `adapters/llm.py` `query_parser` | A separate parser call proposes a typed `AnyAction` plan (`modules/action/parser.py`) before anything is decided, matching this document's intent. Still missing: grammar-constrained decoding (the model can still emit unparseable text, caught as a `ParseFailure`) and true entity-resolution ambiguity handling (04 is unchanged). |
 | [04 Entity Resolution](04-entity-resolution.md) | Partial | `resolve_npc`, `resolve_location`, `_find_item_entity` | NPC resolution is still exact casefold matching on name or id only. Location resolution (`resolve_location`) now also matches connection direction, alias, and — as a last pass — whole words shared with a zone's name or aliases (a loose substring match is deliberately excluded). No description-based resolution, no ambiguity state, no clarification round trip. |
 | [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Four hand-written coarse zones (`zone_home`, `zone_building`, `zone_street`, `zone_neighborhood`), each with aliases and a free-text `PlayerEntity.current_place` for where within the zone the player narratively is. One locked door (the apartment, building → home). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
 | [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are seven of them (four zones, three NPCs). Out of scope for the engine-authority work. |
@@ -92,19 +92,19 @@ this one.
 | [09 Zombie Survival](09-zombie-survival.md) | Planned | — | No noise, no light, no visibility, no scavenging model. Out of scope for the engine-authority work. |
 | [10 Combat and Stealth](10-combat-and-stealth.md) | Partial | `managers/simulation.py` `_resolve_attack`, `modules/event.py`, `modules/modifier.py` | `ATTACK` is a real action: it resolves through the event/modifier pipeline, applies equipped-weapon damage with jitter, and both "dealt" and "taken" trait/perk reactions actually fire (Small Frame, Gun Slinger). No stealth, no ranged distance/line-of-sight, no armor mitigation yet — this is base damage resolution, not the full document. |
 | [11 Knowledge Firewall](11-knowledge-firewall.md) | Partial | `managers/context.py`, `NarrativeState.discovered_flags`, `NpcEntity.knowledge`/`.goals` | Affinity/trust are still banded, and world flags are now filtered too: a flag only reaches the narrator prompt once a `DISCOVER_FLAG` action has marked it discovered, separately from the engine setting its value. `NpcEntity.knowledge` exists but is deliberately never rendered (no dialogue system consumes it yet); NPC `status` and `notes` still go out unfiltered. The document's *As Implemented* section should be read alongside this. |
-| [12 Data Model and Persistence](12-data-model.md) | Partial | `modules/`, `adapters/persistence.py`, `modules/quest.py` | Exit requirements now exist (`DoorEntity` wired into `data/locations.py`, checked by `ActionValidator`) — in practice the only one is the apartment door (building → home), locked, keyed to `item_apartment_key`. Door lock state is not persisted; it is part of the static map and always reloads locked. NPCs carry `goals`/`knowledge` fields. Persistence is still a full snapshot, not base + mutations, and quest state (see doc 07) is a flat checklist, not the model this document describes. |
+| [12 Data Model and Persistence](12-data-model.md) | Partial | `modules/`, `adapters/save/codec.py`, `modules/quest.py` | Exit requirements now exist (`DoorEntity` wired into `data/locations.py`, checked by `ActionValidator`) — in practice the only one is the apartment door (building → home), locked, keyed to `item_apartment_key`. Door lock state is not persisted; it is part of the static map and always reloads locked. NPCs carry `goals`/`knowledge` fields. Persistence is still a full snapshot, not base + mutations, and quest state (see doc 07) is a flat checklist, not the model this document describes. |
 | [13 Context and Memory](13-context-and-memory.md) | Partial | `managers/context.py` `ContextBuilder`, `adapters/memory.py` | The context builder is now its own module (`managers/context.py`), independently testable, and the parser gets a *separate, minimal* context from the narrator's full one — a step toward selectivity. It still sends the whole local world to the narrator every turn, and memory layers remain compressive (recent / vector-recalled / summarized), not spatial (global / zone / location / scene). |
 | [14 LLM Roles](14-llm-roles.md) | Partial | `adapters/llm.py` `query_parser`/`query_narrator` | Two calls, two roles, two system prompts — parser proposes actions only, narrator only narrates and no longer has an `ACTIONS:` section to fill at all. The narrator's *constraints* (don't invent HP/inventory/combat results) are stated in its system prompt and structurally reinforced (it has nothing to declare state through), but still not mechanically enforced against a malicious or careless model. |
 | [15 Turn Loop](15-turn-loop.md) | Partial | `adapters/engine.py` `play()` | Real steps now: parser call → `parse_action_plan` → `ActionValidator` → `SimulationCore` → narrator call → record/reindex/summarize/save. Missing relative to the 15-step design: no separate entity-resolution stage (folded into the validator), no world/story/NPC/faction *rules* layer beyond quest advancement, no structured failure taxonomy beyond `Rejected`/`ParseFailure`. |
-| [16 Determinism and Versioning](16-determinism-and-versioning.md) | Partial | `adapters/persistence.py` `SCHEMA_VERSION` | No seeded randomness anywhere — combat damage jitter (`managers/simulation.py`) and the LLM itself are both unseeded. `SCHEMA_VERSION` is 4 and any other version is discarded with no migration; it remains the sole version, with no generator, rules, combat or loot version. Explicitly out of scope for the engine-authority work. |
+| [16 Determinism and Versioning](16-determinism-and-versioning.md) | Partial | `adapters/save/codec.py` `SCHEMA_VERSION` | No seeded randomness anywhere — combat damage jitter (`managers/combat.py`) and the LLM itself are both unseeded. `SCHEMA_VERSION` is 4 and any other version is discarded with no migration; it remains the sole version, with no generator, rules, combat or loot version. Explicitly out of scope for the engine-authority work. |
 | [17 Observability and Security](17-observability-and-security.md) | Partial | `print()` calls in `engine.py`, `game.py`, `simulation.py` | Turn logging is unstructured stdout. No state diff, no context snapshot, no replayable trace. LLM output *is* validated and simulated before it mutates state, which is the security half of this document, and now happens before narration too. Structured tracing is out of scope for the engine-authority work. |
 | [18 Module Layout](18-module-layout.md) | Superseded | `modules/`, `data/`, `managers/`, `adapters/` | The real layout splits by *purity* (pure model → static data → logic → I/O), not by subsystem. `managers/validator.py`, `managers/simulation.py` and `managers/context.py` extend that split; see the layering table in the root `README.md`. |
 | [19 End-to-End Example](19-end-to-end-example.md) | Planned | — | Traces a turn through stages that do not exist. |
 | [20 Principles](20-principles.md) | Partial | — | Principles 1, 2, 7 and 10 are honoured in spirit, and 3 ("events connect systems") and 6 ("knowledge is scoped") are now partly true for combat/item-use and world flags respectively. 4, 5, 8 and 9 remain unimplemented. |
 | [21 Final Architecture](21-final-architecture.md) | Planned | — | The summary diagram of the design target. |
 | [22 Relationships](22-relationships.md) | Implemented | `managers/relationship.py` | — |
-| [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
-| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | Schema is v4 (see [mechanics 01](mechanics/01-game-clock.md#saves)); `current_place`, `game_over` and `death_cause` are saved. Any other version is discarded and a new game starts; there is no migration. |
+| [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `managers/events.py` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
+| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/save/codec.py`, `adapters/save/files.py`, `adapters/engine.py` | Schema is v4 (see [mechanics 01](mechanics/01-game-clock.md#saves)); `current_place`, `game_over` and `death_cause` are saved. Any other version is discarded and a new game starts; there is no migration. |
 
 ## Known issues
 
@@ -142,7 +142,7 @@ malicious or careless model.
 **Combat is no longer dead code.** `SimulationCore._resolve_attack` builds a
 `WeaponDealDamageEvent`/`WeaponTakeDamageEvent` pair for every `ATTACK`
 action, and the event-to-handler matcher (`EVENT_TO_EFFECT_TYPES` in
-`managers/game.py`) replaces the string-prefix comparison that used to make
+`managers/events.py`) replaces the string-prefix comparison that used to make
 `_event_matches_effect_handler` return `False` unconditionally — every trait
 and perk effect in `data/traits.py`/`data/perks.py` fires now, and only for
 the correct side of the hit (a "damage taken" effect no longer fires for the
@@ -191,7 +191,7 @@ forever (the door rebuilds `LOCKED` on every load).
 **`ADD_GOAL short_term:`/`short-term` no longer get dropped.** The horizon
 token arrived from the parser model as `short_term`, `Short Term`,
 `short-term`, or with a trailing colon, and only the first form matched; the
-rest silently failed to parse. `modules/action.normalize_key` now folds all
+rest silently failed to parse. `modules/action/parser.normalize_key` now folds all
 of them to `short_term`/`long_term` before matching.
 
 **`UPDATE_CONDITION` no longer sets any survival value.** The engine drives the
@@ -247,7 +247,7 @@ rewrite, not an increment on the engine-authority work.
 
 **Door lock state is not persisted.** `data/locations.py` builds the
 apartment door LOCKED every time `build_starting_locations()` runs, and
-nothing in `adapters/persistence.py` saves or restores a door's state, so it
+nothing in `adapters/save/codec.py` saves or restores a door's state, so it
 always reloads locked regardless of whether the player unlocked it in a
 prior session. Harmless today — the only lock in the game is Orton's own
 apartment door, and he starts holding its key — but it would misbehave the

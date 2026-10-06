@@ -6,7 +6,7 @@ from adapters.llm import PARSER_SYSTEM_PROMPT
 from data.items import ITEMS
 from data.quests import NPC_STATUSES, STORY_FLAGS, build_starting_quests
 from managers.game import GameManager
-from modules.action import (
+from modules.action.types import (
     AttackAction,
     DiscoverFlagAction,
     MoveAction,

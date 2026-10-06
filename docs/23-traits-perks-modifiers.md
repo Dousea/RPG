@@ -1,6 +1,6 @@
 # Traits, Perks, Effects, and Modifiers
 
-> **Status: Implemented, live.** `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event`. `managers/simulation.py`'s `SimulationCore` now constructs the events that drive it — every `ATTACK` and `USE_ITEM` action goes through this chain. See [Implementation Status](00-status.md).
+> **Status: Implemented, live.** `modules/effect.py`, `modules/modifier.py`, `managers/events.py`. `managers/simulation.py`'s `SimulationCore` now constructs the events that drive it — every `ATTACK` and `USE_ITEM` action goes through this chain. See [Implementation Status](00-status.md).
 
 The design documents mention traits only in passing, as something a world
 generator might roll for an NPC. In the implementation they are a general
@@ -71,7 +71,7 @@ event, for effects applied at character creation. Nothing dispatches it.
 
 ## Matching handlers to events
 
-`_event_matches_effect_handler` used to compare class names by prefix:
+The event-to-handler matcher used to compare class names by prefix:
 
 ```text
 WeaponTakeDamageEvent  ←  WeaponDamageTakenEffect ?
@@ -83,10 +83,10 @@ which is a rearrangement, not a prefix. It was never observed failing only
 because nothing enqueued an event to dispatch.
 
 It has been replaced with exactly the registry this document suggested:
-`EVENT_TO_EFFECT_TYPES` in `managers/game.py` maps each event type to the
+`EVENT_TO_EFFECT_TYPES` in `managers/events.py` maps each event type to the
 effect-handler types that react to it, checked with `isinstance`. A second
 map, `EFFECT_REQUIRED_ROLE`, closes a related bug the string comparison could
-never have caught even if fixed naively: `_broadcast_event` visits both an
+never have caught even if fixed naively: `broadcast_event` visits both an
 event's source and target, and without a role check, an attacker who happens
 to also carry a "damage taken" trait would have it fire on their own
 outgoing hit. Each effect type now declares which role (`"source"` or
@@ -108,13 +108,13 @@ AffinityModifier              source_id, target_id, amount
 ReputationModifier            source_faction, target_faction, amount
 ```
 
-Separating additive from multiplicative types is what lets `_apply_modifiers`
+Separating additive from multiplicative types is what lets `apply_event_modifiers`
 impose an order — all multipliers compose before the result is applied — rather
 than letting the order in which traits happened to fire decide the outcome.
 
 ## Application
 
-`GameManager._apply_modifiers` now handles five of the eight:
+`apply_event_modifiers` (`managers/events.py`) handles five of the eight:
 `DamageMultiplicativeModifier` (composed, then applied to the event's target),
 `AffinityModifier` and `ReputationModifier` (forwarded to the
 [relationship manager](22-relationships.md)), and `HPModifier` and
@@ -126,12 +126,12 @@ is meant to apply, runs at character creation, not per-event, and nothing
 dispatches it still; see [document 00](00-status.md)'s open issues).
 
 `managers/simulation.py`'s `SimulationCore` is the actual caller for combat
-and item use — it calls `_broadcast_event` directly rather than
+and item use — it calls `broadcast_event` directly rather than
 `drain_event_queue`, because a single `ATTACK` needs to combine modifiers
 from *two* events (a `WeaponDealDamageEvent` for the attacker's reactions and
 a `WeaponTakeDamageEvent` for the defender's) before applying damage exactly
 once, which `drain_event_queue`'s one-event-in, one-event-applied loop can't
-express. `drain_event_queue`/`GameManager._apply_modifiers`/`event_queue`
+express. `GameManager.drain_event_queue`/`event_queue`
 remain as a simpler broadcast-and-apply convenience for a future event that
 only needs one perspective, and `SimulationCore.resolve` uses it for item
 use (`ConsumeItemEvent`/`ApplyItemEvent`), where there's no dealt/taken split.

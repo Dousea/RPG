@@ -11,7 +11,7 @@ The codebase is layered. Each layer only depends on the ones above it:
 
 ```
 modules/     Pure game model -- entities, items, events, effects, modifiers,
-             the typed action plan (modules/action.py). No I/O, no framework, no LLM.
+             the typed action plan (modules/action/parser.py). No I/O, no framework, no LLM.
 data/        Static content -- the item catalog, the map, NPC roster,
              trait and perk definitions.
 managers/    Game logic -- GameManager (state + prompt delegation),
@@ -28,7 +28,8 @@ Every such dependency lives in `adapters/`:
 | --- | --- |
 | `adapters/llm.py` | LM Studio chat completions, the parser/narrator system prompts, response parsing |
 | `adapters/memory.py` | FAISS semantic search over the full event log |
-| `adapters/persistence.py` | Save/load a `GameManager` to `gamedata/engine_state.json` |
+| `adapters/save/codec.py` | A `GameManager` as a JSON-ready dict and back; `SCHEMA_VERSION` |
+| `adapters/save/files.py` | Save/load that dict to `gamedata/engine_state.json` |
 | `adapters/engine.py` | `GameEngine` -- orchestrates one turn end to end |
 
 See [docs/01-engine-authority.md](docs/01-engine-authority.md) for why the turn
@@ -46,15 +47,15 @@ POST /play
 GameEngine.play()                             [adapters/engine.py]
     |
     +-- SemanticMemory.search()               recall relevant past events (FAISS)
-    +-- GameManager.build_parser_prompt()     minimal scene context, no prose
+    +-- ContextBuilder.build_parser_prompt()  minimal scene context, no prose
     +-- llm.query_parser()                    ask LM Studio what Orton is trying to do
     +-- llm.parse_action_response()           extract ACTIONS lines
-    +-- modules.action.parse_action_plan()    turn lines into typed AnyAction
+    +-- modules.action.parser.parse_action_plan()    turn lines into typed AnyAction
     +-- ActionValidator(manager).validate     is each action legal? (no mutation)
     +-- SimulationCore(manager).resolve       decide outcomes, mutate state, one at
     |                                         a time so an earlier action (move) can
     |                                         unlock a later one (take) in the same turn
-    +-- GameManager.build_narrator_prompt()   full context + [OUTCOMES] facts
+    +-- ContextBuilder.build_narrator_prompt() full context + [OUTCOMES] facts
     +-- llm.query_narrator()                  ask LM Studio to describe what happened
     +-- llm.parse_narrator_response()         split into STORY / EVENT
     +-- GameManager.record_event()            push to short-term + full log
@@ -111,7 +112,7 @@ part of the static map and always rebuild locked.
 
 ## Actions
 
-The parser proposes state changes as one action per line (`modules/action.py`
+The parser proposes state changes as one action per line (`modules/action/parser.py`
 parses each into a typed `AnyAction`); the Action Validator
 (`managers/validator.py`) checks legality with no side effects, and the
 Simulation Core (`managers/simulation.py`) is the only thing that mutates
@@ -283,7 +284,11 @@ rather than your real save.
 | --- | --- |
 | `tests/test_action.py` | ACTIONS-line parsing into typed `AnyAction`/`ParseFailure` |
 | `tests/test_validator.py` | Action Validator: preconditions only, no mutation |
-| `tests/test_simulation.py` | Simulation Core: outcome resolution, combat, item effects, the apartment door |
+| `tests/test_simulation.py` | Simulation Core: item effects, world-state actions, player death, outcome facts, weather |
+| `tests/test_movement.py` | `MOVE_TO` resolution: zones, spots, the apartment door, exits |
+| `tests/test_combat.py` | `ATTACK` resolution: weapons, damage, trait and perk reactions |
+| `tests/test_time_and_sleep.py` | Action time costs, the clock, stats per turn, sleep, stat deaths |
+| `tests/test_consumption.py` | Eating and drinking: consumable fields, status effect facts, alcohol |
 | `tests/test_context.py` | ContextBuilder: the knowledge firewall (world flags, NPC goals vs. knowledge) |
 | `tests/test_quests.py` | Quest state: engine-only completion |
 | `tests/test_game_manager.py` | Starting state, prompt assembly, memory tiers |
@@ -322,7 +327,8 @@ $env:RPG_TEST_EMBEDDINGS="1"; mise run test
 | `DEFAULT_RECALL` (2) | `adapters/memory.py` |
 | `EMBEDDING_MODEL_NAME` | `adapters/memory.py` |
 | `LM_STUDIO_URL`, parser/narrator temperatures, system prompts | `adapters/llm.py` |
-| `SCHEMA_VERSION`, `SAVE_FILE` | `adapters/persistence.py` |
+| `SCHEMA_VERSION` | `adapters/save/codec.py` |
+| `SAVE_FILE` | `adapters/save/files.py` |
 
 ## Known gaps
 

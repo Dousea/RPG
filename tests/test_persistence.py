@@ -4,9 +4,9 @@ import json
 import unittest
 from pathlib import Path
 
-from adapters import persistence
+from adapters.save import codec, files
 from managers.game import GameManager
-from modules.action import (
+from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     DiscoverFlagAction,
@@ -73,8 +73,8 @@ class RoundTripTests(IsolatedSaveTestCase):
     def setUp(self):
         super().setUp()
         self.original = played_game()
-        persistence.save(self.original, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(self.original, self.save_path)
+        loaded = files.load(self.save_path)
         self.assertIsNotNone(loaded)
         self.loaded = loaded
 
@@ -160,11 +160,11 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(self.loaded.world.date, "2023-10-01")
 
     def test_a_save_with_a_stale_world_clock_is_corrected_on_load(self):
-        data = persistence.to_dict(self.original)
+        data = codec.to_dict(self.original)
         data["world"]["time"] = "12:00 PM"
         data["world"]["date"] = "2023-10-01"
         data["narrative"]["minutes"] = 3 * 1440 + 600
-        rebuilt = persistence.from_dict(data)
+        rebuilt = codec.from_dict(data)
         self.assertEqual(rebuilt.world.time, "06:00 PM")
         self.assertEqual(rebuilt.world.date, "2023-10-04")
 
@@ -188,8 +188,8 @@ class StatsSaveTests(IsolatedSaveTestCase):
             gm.player.stats.set(stat, stat.min + (stat.max - stat.min) * (index + 1) / 37)
         gm.player.asleep = True
         gm.player.fractional_hp_loss = 0.25
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         assert loaded is not None
         for stat in CharacterStat:
             self.assertEqual(loaded.player.stats.get(stat), gm.player.stats.get(stat))
@@ -197,7 +197,7 @@ class StatsSaveTests(IsolatedSaveTestCase):
         self.assertEqual(loaded.player.fractional_hp_loss, 0.25)
 
     def test_the_old_survival_fields_are_not_saved(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             player = json.load(handle)["player"]
         for gone in ("hunger", "thirst", "morale"):
@@ -210,37 +210,37 @@ class WellFedSaveTests(IsolatedSaveTestCase):
     def test_the_well_fed_timer_round_trips(self):
         gm = GameManager()
         gm.player.food_eaten_timer = 4321.5
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         assert loaded is not None
         self.assertEqual(loaded.player.food_eaten_timer, 4321.5)
 
     def test_a_v5_save_is_discarded(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["version"] = 5
         with open(self.save_path, "w", encoding="utf-8") as handle:
             json.dump(data, handle)
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
 
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
     def test_schema_version_is_7(self):
-        self.assertEqual(persistence.SCHEMA_VERSION, 7)
+        self.assertEqual(codec.SCHEMA_VERSION, 7)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
         gm.narrative.minutes = 2 * 1440 + 95
-        persistence.save(gm, self.save_path)
+        files.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             narrative = json.load(handle)["narrative"]
         self.assertEqual(narrative["minutes"], 2 * 1440 + 95)
         self.assertNotIn("day", narrative)
         self.assertNotIn("time_of_day", narrative)
-        loaded = persistence.load(self.save_path)
+        loaded = files.load(self.save_path)
         assert loaded is not None
         self.assertEqual(loaded.narrative.minutes, 2 * 1440 + 95)
         self.assertEqual(loaded.narrative.day, 3)
@@ -260,7 +260,7 @@ class WeatherSaveTests(IsolatedSaveTestCase):
 
     def test_the_save_holds_the_seed_front_and_period(self):
         gm = self._stormy_game()
-        persistence.save(gm, self.save_path)
+        files.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         self.assertEqual(data["world"]["seed"], 4242)
@@ -269,8 +269,8 @@ class WeatherSaveTests(IsolatedSaveTestCase):
 
     def test_a_round_trip_gives_identical_weather_for_48_hours(self):
         gm = self._stormy_game()
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         assert loaded is not None
         start = gm.narrative.minutes
         for hour in range(1, 49):
@@ -283,7 +283,7 @@ class WeatherSaveTests(IsolatedSaveTestCase):
         self.assertEqual(gm.climate.period, loaded.climate.period)
 
     def _saved_weather(self, gm):
-        persistence.save(gm, self.save_path)
+        files.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             return json.load(handle)
 
@@ -291,7 +291,7 @@ class WeatherSaveTests(IsolatedSaveTestCase):
         gm = self._stormy_game()
         data = self._saved_weather(gm)
         mutate(data["weather"])
-        restored = persistence.from_dict(data)
+        restored = codec.from_dict(data)
         return gm, restored
 
     def test_a_non_default_front_round_trips(self):
@@ -299,8 +299,8 @@ class WeatherSaveTests(IsolatedSaveTestCase):
 
         gm = self._stormy_game()
         gm.climate.front = AirFront(positive=True, strength=0.7, start_hour=5)
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         assert loaded is not None
         self.assertEqual(loaded.climate.front, AirFront(True, 0.7, 5))
         self.assertEqual(loaded.climate.last_hour, 100)
@@ -331,8 +331,8 @@ class WeatherSaveTests(IsolatedSaveTestCase):
 
     def test_a_save_without_a_period_round_trips(self):
         gm = GameManager()
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         assert loaded is not None
         self.assertIsNone(loaded.climate.period)
         self.assertEqual(loaded.world.seed, gm.world.seed)
@@ -340,7 +340,7 @@ class WeatherSaveTests(IsolatedSaveTestCase):
 
 class SaveFileTests(IsolatedSaveTestCase):
     def test_save_is_written_atomically(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         self.assertTrue(Path(self.save_path).exists())
         # The temp file used during the write must not be left behind.
         self.assertFalse(Path(f"{self.save_path}.tmp").exists())
@@ -348,26 +348,26 @@ class SaveFileTests(IsolatedSaveTestCase):
     def test_default_path_follows_the_module_attribute(self):
         # Regression: the path was a default argument bound at import time, so
         # SAVE_FILE could not be redirected.
-        persistence.save(GameManager())
+        files.save(GameManager())
         self.assertTrue(Path(self.save_path).exists())
 
     def test_save_is_json_serializable_end_to_end(self):
-        persistence.save(played_game(), self.save_path)
+        files.save(played_game(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
-        self.assertEqual(data["version"], persistence.SCHEMA_VERSION)
+        self.assertEqual(data["version"], codec.SCHEMA_VERSION)
 
     def test_a_save_with_no_quests_seeds_the_starting_roster(self):
         # v2 already had a "quests" key before any quest content existed, so
         # an old save has it present but empty -- that must not leave a
         # loaded game with no quests forever, same as an empty "npcs" list
         # falls back to build_starting_npcs().
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["quests"] = {}
         self.write(data)
-        loaded = persistence.load(self.save_path)
+        loaded = files.load(self.save_path)
         self.assertTrue(loaded.quests)
         self.assertIn("quest_supply_run", loaded.quests)
 
@@ -385,13 +385,15 @@ class SaveFileTests(IsolatedSaveTestCase):
             MoveAction(destination="out"),  # zone_street -> zone_neighborhood
         )
 
-        persistence.save(gm, self.save_path)
+        files.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["quests"] = {}
         self.write(data)
 
-        quest = persistence.load(self.save_path).quests["quest_supply_run"]
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        quest = loaded.quests["quest_supply_run"]
         self.assertEqual(
             sorted(quest.completed_objectives),
             ["reach:zone_neighborhood", "take:item_crowbar"],
@@ -399,13 +401,15 @@ class SaveFileTests(IsolatedSaveTestCase):
         self.assertEqual(quest.status, QuestStatus.COMPLETED)
 
     def test_reconciliation_leaves_unachieved_objectives_open(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["quests"] = {}
         self.write(data)
 
-        quest = persistence.load(self.save_path).quests["quest_supply_run"]
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        quest = loaded.quests["quest_supply_run"]
         self.assertEqual(quest.completed_objectives, [])
         self.assertEqual(quest.status, QuestStatus.ACTIVE)
 
@@ -420,46 +424,46 @@ class BadSaveTests(IsolatedSaveTestCase):
             json.dump(data, handle)
 
     def test_missing_file_returns_none(self):
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
     def test_schema_mismatch_is_refused(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
-        data["version"] = persistence.SCHEMA_VERSION + 1
+        data["version"] = codec.SCHEMA_VERSION + 1
         self.write(data)
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
     def test_a_v4_save_is_discarded_and_a_new_game_starts(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["version"] = 4
         self.write(data)
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
     def test_a_v3_save_is_discarded_and_a_new_game_starts(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["version"] = 3
         self.write(data)
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
     def test_a_v1_save_is_discarded_cleanly_not_crashed(self):
         # v1 predates NpcEntity.goals/.knowledge and discovered_flags -- the
         # existing "unreadable save -> fresh game" policy handles this with
-        # no migration code, by design (adapters/persistence.py module doc).
+        # no migration code, by design (adapters/save/files.py module doc).
         self.write({"version": 1, "player": {}, "narrative": {}})
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
     def test_corrupt_json_returns_none(self):
         with open(self.save_path, "w", encoding="utf-8") as handle:
             handle.write("{not json")
-        self.assertIsNone(persistence.load(self.save_path))
+        self.assertIsNone(files.load(self.save_path))
 
     def test_unknown_ids_are_dropped_not_fatal(self):
-        persistence.save(played_game(), self.save_path)
+        files.save(played_game(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["player"]["inventory"].append({"item_id": "item_deleted", "hit_points": 1})
@@ -470,30 +474,30 @@ class BadSaveTests(IsolatedSaveTestCase):
         ]
         self.write(data)
 
-        loaded = persistence.load(self.save_path)
+        loaded = files.load(self.save_path)
         self.assertIsNotNone(loaded)
         self.assertNotIn("item_deleted", [e.item.id for e in loaded.player.inventory])
         self.assertNotIn("location_id_atlantis", loaded.world.locations)
 
     def test_unknown_player_location_falls_back(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["player"]["current_location_id"] = "location_id_atlantis"
         self.write(data)
 
-        loaded = persistence.load(self.save_path)
+        loaded = files.load(self.save_path)
         self.assertIsNotNone(loaded)
         self.assertIn(loaded.player.current_location_id, loaded.world.locations)
 
     def test_save_with_no_npcs_falls_back_to_the_roster(self):
-        persistence.save(GameManager(), self.save_path)
+        files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["npcs"] = []
         self.write(data)
 
-        loaded = persistence.load(self.save_path)
+        loaded = files.load(self.save_path)
         self.assertIsNotNone(loaded)
         self.assertEqual(len(loaded.npcs), 3)
 
@@ -508,8 +512,8 @@ class V3FieldsRoundTripTests(IsolatedSaveTestCase):
         resolve_actions(gm, MoveAction(destination="the kitchen"))
         self.assertEqual(gm.player.current_place, "the kitchen")
 
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         self.assertEqual(loaded.player.current_place, "the kitchen")
 
     def test_death_state_round_trips(self):
@@ -517,8 +521,8 @@ class V3FieldsRoundTripTests(IsolatedSaveTestCase):
         gm.narrative.game_over = True
         gm.narrative.death_cause = "Orton bled out from a knife wound."
 
-        persistence.save(gm, self.save_path)
-        loaded = persistence.load(self.save_path)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
         self.assertTrue(loaded.narrative.game_over)
         self.assertEqual(loaded.narrative.death_cause, "Orton bled out from a knife wound.")
 
@@ -527,23 +531,23 @@ class HandEditedFieldTests(unittest.TestCase):
     """Hand-edited values of the wrong type load as safe defaults."""
 
     def test_game_over_string_false_is_not_true(self):
-        data = persistence.to_dict(GameManager())
+        data = codec.to_dict(GameManager())
         data["narrative"]["game_over"] = "false"
-        loaded = persistence.from_saved_data(data)
+        loaded = files.from_saved_data(data)
         self.assertIsNotNone(loaded)
         self.assertFalse(loaded.narrative.game_over)
 
     def test_null_death_cause_becomes_empty_string(self):
-        data = persistence.to_dict(GameManager())
+        data = codec.to_dict(GameManager())
         data["narrative"]["death_cause"] = None
-        loaded = persistence.from_saved_data(data)
+        loaded = files.from_saved_data(data)
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded.narrative.death_cause, "")
 
     def test_null_current_place_becomes_empty_string(self):
-        data = persistence.to_dict(GameManager())
+        data = codec.to_dict(GameManager())
         data["player"]["current_place"] = None
-        loaded = persistence.from_saved_data(data)
+        loaded = files.from_saved_data(data)
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded.player.current_place, "")
 

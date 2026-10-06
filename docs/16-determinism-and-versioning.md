@@ -1,6 +1,6 @@
 # Determinism, Randomness, and Versioning
 
-> **Status: Partial.** No seeded randomness anywhere. `SCHEMA_VERSION` in `adapters/persistence.py` is the only version — see [document 24](24-runtime-and-persistence.md). See [Implementation Status](00-status.md).
+> **Status: Partial.** No seeded randomness anywhere. `SCHEMA_VERSION` in `adapters/save/codec.py` is the only version — see [document 24](24-runtime-and-persistence.md). See [Implementation Status](00-status.md).
 
 ## Determinism and Randomness
 

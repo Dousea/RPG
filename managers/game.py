@@ -18,66 +18,18 @@ from data.quests import build_starting_quests
 from data.traits import TRAITS
 from managers import locations
 from managers.climate import ClimateEngine
+from managers.events import apply_event_modifiers, broadcast_event
 from managers.relationship import RelationshipManager
-from modules.character.player import PlayerPerk, PlayerTrait
 from modules.character.state import CharacterCondition
-from modules.effect import (
-    AnyEffect,
-    ItemAppliedEffect,
-    ItemConsumedEffect,
-    QuestCompletedEffect,
-    WeaponDamageDealtEffect,
-    WeaponDamageTakenEffect,
-)
-from modules.entity import BaseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
-from modules.event import (
-    AnyEvent,
-    ApplyItemEvent,
-    ConsumeItemEvent,
-    QuestCompletionEvent,
-    WeaponDealDamageEvent,
-    WeaponTakeDamageEvent,
-)
+from modules.event import AnyEvent
 from modules.location import Location, World
-from modules.modifier import (
-    AffinityModifier,
-    AnyModifier,
-    ConditionsModifier,
-    DamageMultiplicativeModifier,
-    HPModifier,
-    ReputationModifier,
-)
+from modules.modifier import AffinityModifier
 from modules.quest import QuestState
 
 logger = logging.getLogger(__name__)
-
-# Which effect-handler classes react to which event classes. Used to be a
-# `handler_name.startswith(event_name)` string comparison, which never once
-# matched (e.g. "WeaponDamageTakenEffect".startswith("WeaponTakeDamageEvent")
-# is False -- the words are transposed), so no trait or perk effect in
-# data/traits.py or data/perks.py has ever fired.
-EVENT_TO_EFFECT_TYPES: dict[type, tuple[type, ...]] = {
-    WeaponDealDamageEvent: (WeaponDamageDealtEffect,),
-    WeaponTakeDamageEvent: (WeaponDamageTakenEffect,),
-    ApplyItemEvent: (ItemAppliedEffect,),
-    ConsumeItemEvent: (ItemConsumedEffect,),
-    QuestCompletionEvent: (QuestCompletedEffect,),
-}
-
-# Which of an event's two roles ("source" or "target") an entity must occupy
-# for a given effect type to be eligible to react at all. Without this, an
-# attacker who happens to also carry a "damage taken" trait would have it
-# fire off their own outgoing hit.
-EFFECT_REQUIRED_ROLE: dict[type, str] = {
-    WeaponDamageDealtEffect: "source",
-    WeaponDamageTakenEffect: "target",
-    ItemAppliedEffect: "target",
-    ItemConsumedEffect: "source",
-    QuestCompletedEffect: "source",
-}
 
 # Number of recent events kept in the prompt as short-term memory.
 MAX_RECENT_EVENTS = config.game.max_recent_events
@@ -92,7 +44,7 @@ MAX_PLACE_LENGTH = 80
 # `death_cause` is an outcome-fact string (LLM-adjacent, via narration of
 # engine-decided events), bounded the same way. Shared by
 # SimulationCore._check_player_death (the sole producer) and
-# adapters/persistence.py (which must apply the same cap to a hand-edited or
+# adapters/save/codec.py (which must apply the same cap to a hand-edited or
 # migrated save).
 DEATH_CAUSE_MAX_LENGTH = 200
 
@@ -302,29 +254,6 @@ class GameManager:
             entity for entity in self.current_location.entities if isinstance(entity, ItemEntity)
         ]
 
-    # === Prompt building ===
-    #
-    # Delegated to managers/context.py's ContextBuilder, which is the actual
-    # knowledge-firewall boundary (doc 11) -- kept as thin methods here so
-    # existing callers don't need to know about ContextBuilder directly.
-
-    def build_parser_prompt(self, player_input: str) -> str:
-        from managers.context import ContextBuilder
-
-        return ContextBuilder(self).build_parser_prompt(player_input)
-
-    def build_narrator_prompt(
-        self,
-        player_input: str,
-        outcome_facts: list[str] | None = None,
-        deep_memories: list[str] | None = None,
-    ) -> str:
-        from managers.context import ContextBuilder
-
-        return ContextBuilder(self).build_narrator_prompt(
-            player_input, outcome_facts, deep_memories
-        )
-
     # === Memory ===
 
     def record_event(self, event_text: str) -> None:
@@ -358,13 +287,6 @@ class GameManager:
             return None
 
     # === Event pipeline ===
-    #
-    # `managers/simulation.py` is the real caller now: combat calls
-    # `_broadcast_event` directly (it needs to combine "dealt" and "taken"
-    # modifiers from two events before applying damage once), and item use
-    # does the same. `drain_event_queue`/`_apply_modifiers`/`event_queue`
-    # remain as a single-event broadcast+apply convenience for any future
-    # event that only needs one perspective.
 
     def drain_event_queue(self) -> None:
         """Process every queued event, broadcasting it and applying the
@@ -372,130 +294,6 @@ class GameManager:
         while self.event_queue:
             current_event = self.event_queue.pop(0)
             logger.debug(f"Processing Event: {type(current_event).__name__}")
-
-            all_modifiers = self._broadcast_event(current_event)
-            self._apply_modifiers(current_event, all_modifiers)
-
-    def _broadcast_event(self, event: AnyEvent) -> list[AnyModifier]:
-        """
-        Sends an event to its source and target and collects their reactions.
-
-        An entity's effect only reacts in the role it is written for: a
-        `WeaponDamageTakenEffect` fires only for the entity that is this
-        event's *target*, never for one that merely also appears as its
-        source (e.g. the attacker's own Small Frame must not treat their own
-        swing as damage they took). `EFFECT_REQUIRED_ROLE` encodes that.
-        """
-        collected_modifiers: list[AnyModifier] = []
-
-        role_entities: dict[str, BaseEntity] = {}
-        source = getattr(event, "source", None)
-        target = getattr(event, "target", None)
-        if isinstance(source, BaseEntity):
-            role_entities["source"] = source
-        if isinstance(target, BaseEntity):
-            role_entities["target"] = target
-
-        for role, entity in role_entities.items():
-            all_effects: list[PlayerTrait | PlayerPerk] = []
-            if hasattr(entity, "traits"):
-                all_effects.extend(getattr(entity, "traits", []))
-            if hasattr(entity, "perks"):
-                all_effects.extend(getattr(entity, "perks", []))
-
-            for trait_or_perk in all_effects:
-                for effect_handler in trait_or_perk.effects:
-                    if not self._event_matches_effect_handler(event, effect_handler, role):
-                        continue
-
-                    condition = getattr(effect_handler, "condition", None)
-                    effect = getattr(effect_handler, "effect", None)
-
-                    if condition is None or not callable(condition):
-                        continue
-
-                    if effect is None or not callable(effect):
-                        continue
-
-                    if not condition(event):
-                        continue
-
-                    mod = effect(event)
-
-                    if not isinstance(mod, AnyModifier):
-                        continue
-
-                    logger.debug(
-                        f"Effect '{trait_or_perk.name}' on entity #'{entity.id}' ({role}) generated modifier: {type(mod).__name__}"
-                    )
-                    collected_modifiers.append(mod)
-
-        return collected_modifiers
-
-    def _apply_modifiers(self, event: AnyEvent, modifiers: list[AnyModifier]):
-        """
-        Applies a list of collected modifiers to the game state in a controlled order.
-        """
-        # This is where the logic from our previous discussions goes.
-        # You would sort or process modifiers based on their type.
-
-        # Example for damage calculation:
-        if isinstance(event, (WeaponDealDamageEvent, WeaponTakeDamageEvent)):
-            base_damage = event.damage
-            damage_multiplier = 1.0
-
-            for mod in modifiers:
-                if isinstance(mod, DamageMultiplicativeModifier):
-                    damage_multiplier *= mod.multiplier
-
-            final_damage = int(base_damage * damage_multiplier)
-
-            if not isinstance(event.target, BaseEntity):
-                logger.warning(
-                    f"Event target is not an Entity: {event.target}. Cannot apply damage."
-                )
-                return
-
-            event.target.hit_points -= final_damage
-            logger.debug(
-                f"Applied {final_damage} damage to #'{event.target.id}'. HP is now {event.target.hit_points}."
+            apply_event_modifiers(
+                self.relationship_manager, current_event, broadcast_event(current_event)
             )
-
-        # Every other modifier type applies to the event's target (falling
-        # back to its source for an event with no target), which is the
-        # entity the reaction was about.
-        target = getattr(event, "target", None)
-        source = getattr(event, "source", None)
-        recipient = target if isinstance(target, BaseEntity) else source
-
-        for mod in modifiers:
-            if isinstance(mod, AffinityModifier):
-                self.relationship_manager.apply_affinity_modifier(mod)
-            elif isinstance(mod, ReputationModifier):
-                self.relationship_manager.apply_reputation_modifier(mod)
-            elif isinstance(mod, HPModifier) and isinstance(recipient, BaseEntity):
-                recipient.hit_points += mod.amount
-            elif isinstance(mod, ConditionsModifier) and isinstance(recipient, BaseEntity):
-                for condition, active in mod.conditions.items():
-                    conditions = getattr(recipient, "conditions", None)
-                    if conditions is None:
-                        continue
-                    if active and condition not in conditions:
-                        conditions.append(condition)
-                    elif not active and condition in conditions:
-                        conditions.remove(condition)
-            # AttributesModifier/XPModifier/XPMultiplicativeModifier have no
-            # current producer on this path (OnceEffect runs at character
-            # creation, not per-event; QuestCompletionEvent has no emitter
-            # yet -- a real Story Director is doc 07, out of scope here) and
-            # are intentionally left unhandled rather than guessed at.
-
-    def _event_matches_effect_handler(self, event: AnyEvent, handler: AnyEffect, role: str) -> bool:
-        """Whether an effect handler (from a trait's or perk's `.effects`)
-        reacts to this event's type when held by the entity occupying `role`
-        ("source" or "target"), via the explicit EVENT_TO_EFFECT_TYPES and
-        EFFECT_REQUIRED_ROLE maps above."""
-        if not isinstance(handler, EVENT_TO_EFFECT_TYPES.get(type(event), ())):
-            return False
-        required_role = EFFECT_REQUIRED_ROLE.get(type(handler))
-        return required_role is None or required_role == role

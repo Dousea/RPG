@@ -30,7 +30,7 @@ not the contract.
 ## Engine authority
 
 The turn is parse → validate → resolve → narrate (`adapters/engine.py`). The
-LLM's output changes state only through `modules.action.parse_action_plan`,
+LLM's output changes state only through `modules.action.parser.parse_action_plan`,
 `ActionValidator` and `SimulationCore`, never by reading narrator prose back
 into state. Outcome facts handed to the narrator describe events in words and
 never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
@@ -55,6 +55,16 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
   or leave commented-out code; that belongs in the commit message. Docstrings
   state what a function guarantees, briefly. When editing a file, delete such
   comments in the code you touch.
+- **Modules:** one module, one job. Split a module once it holds two jobs
+  that can be read apart (types and their parser, a save format and its file
+  I/O, a stat engine and its drivers), and group a family of two or more such
+  modules as a package (`managers/stats/`, `modules/action/`, `adapters/save/`).
+  A package's `__init__.py` holds only a docstring: import from the submodule
+  (`from managers.stats.engine import StatsEngine`), never re-export. Don't
+  split a cohesive module just for its length, don't make a one-module
+  package, and don't name a module you'd import bare after a builtin
+  (`from adapters.save import format` hides `format()`). Tests split along the
+  same lines, one file per area.
 - **Logging, not print:** each module uses `logger = logging.getLogger(__name__)`.
   `debug` for per-turn traces, `info` for lifecycle, `warning` for dropped or
   repaired data. Ruff bans `print`.

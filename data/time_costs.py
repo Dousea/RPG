@@ -7,7 +7,7 @@ already decided.
 
 from collections.abc import Callable
 
-from modules.action import (
+from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
