@@ -7,14 +7,69 @@ from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action import (
     AttackAction,
     DropAction,
+    Duration,
     MoveAction,
     NpcStatusAction,
+    SleepAction,
     StatusRemoveAction,
     TakeAction,
     UpdateConditionAction,
     UseItemAction,
+    WaitAction,
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
+
+
+class ClockValidationTests(unittest.TestCase):
+    """Spec 01, Actions and Edge cases."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def _wait(self, **kwargs):
+        return self.validator.validate(WaitAction(duration=Duration(**kwargs)))
+
+    def _resolved(self, **kwargs) -> dict:
+        result = self._wait(**kwargs)
+        assert isinstance(result, Accepted)
+        return result.resolved
+
+    def test_a_span_resolves_to_its_minutes(self):
+        self.assertEqual(self._resolved(minutes=90), {"minutes": 90, "clamped": False})
+
+    def test_until_a_time_of_day_from_the_start(self):
+        self.assertEqual(self._resolved(until_time_of_day="night")["minutes"], 14 * 60)
+        self.assertEqual(self._resolved(until_time_of_day="evening")["minutes"], 10 * 60)
+
+    def test_until_the_current_band_start_waits_a_full_day(self):
+        self.gm.narrative.minutes = 1440 - 480 + 7 * 60  # 07:00 on day 2
+        self.assertEqual(self._resolved(until_time_of_day="morning")["minutes"], 23 * 60)
+
+    def test_until_exactly_now_is_tomorrow_not_zero(self):
+        self.assertEqual(
+            self._resolved(until_minute_of_day=480), {"minutes": 1440, "clamped": False}
+        )
+
+    def test_until_a_past_clock_time_is_tomorrow(self):
+        self.gm.narrative.minutes = 1440 - 480 + 8 * 60  # 08:00 on day 2
+        self.assertEqual(self._resolved(until_minute_of_day=7 * 60)["minutes"], 23 * 60)
+
+    def test_a_wait_over_24_hours_is_clamped(self):
+        self.assertEqual(self._resolved(minutes=25 * 60), {"minutes": 1440, "clamped": True})
+
+    def test_a_sleep_is_capped_at_16_hours(self):
+        result = self.validator.validate(SleepAction(duration=Duration(minutes=17 * 60)))
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.resolved, {"minutes": 960, "clamped": True})
+
+    def test_an_open_sleep_runs_to_the_cap_until_wake_rules_exist(self):
+        result = self.validator.validate(SleepAction())
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.resolved["minutes"], 960)
+
+    def test_an_unknown_time_of_day_is_rejected(self):
+        self.assertIsInstance(self._wait(until_time_of_day="teatime"), Rejected)
 
 
 class MovementValidationTests(unittest.TestCase):

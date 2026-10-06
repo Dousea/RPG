@@ -15,6 +15,7 @@ this list; it only puts prose around facts the engine already decided.
 
 import random
 
+from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action import (
@@ -30,14 +31,15 @@ from modules.action import (
     NpcStatusAction,
     RemoveGoalAction,
     SetFlagAction,
+    SleepAction,
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
-    TimeAdvanceAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
+    WaitAction,
 )
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
@@ -78,14 +80,21 @@ UNARMED_WEAPON = MeleeWeaponItem(
 # read as a fixed calculator.
 DAMAGE_JITTER = 0.10
 
-# Action types whose resolution costs the next tick of the coarse clock
-# (morning/afternoon/evening/night). Ordinary actions don't depend on the
-# LLM emitting TIME_ADVANCE -- the engine owns the clock outright.
-# A dedicated sub-tick clock is doc 08 territory and out of scope here.
-# MoveAction is not here: a zone change costs exactly one tick regardless of
-# how many hops the walk covered, and a spot/shuffle/stay move costs none at
-# all, so `_resolve_move` ticks for itself instead of a blanket per-action rule.
-_TICK_COSTING_ACTIONS = (AttackAction,)
+
+def _span_words(minutes: int) -> str:
+    hours, rest = divmod(minutes, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if rest:
+        parts.append(f"{rest} minute{'s' if rest != 1 else ''}")
+    return " ".join(parts)
+
+
+def _minutes_fact(minutes: int) -> str:
+    if minutes == 1:
+        return "About 1 minute passes."
+    return f"About {minutes} minutes pass."
 
 
 class SimulationCore:
@@ -111,22 +120,45 @@ class SimulationCore:
         crowbar wasn't reachable before the move happened.
         """
         facts: list[str] = []
+        total_minutes = NONE_TURN_MIN if not actions else 0
+        if not actions:
+            self._spend(NONE_TURN_MIN)
         for action in actions:
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
                 facts.append(f"Refused: {type(result.action).__name__} -- {result.reason}")
             else:
-                facts.append(self._resolve_one(result))
+                fact, minutes = self._resolve_one(result)
+                facts.append(fact)
+                total_minutes += minutes
+        if total_minutes:
+            facts.append(_minutes_fact(total_minutes))
         return facts
 
-    def _resolve_one(self, accepted: Accepted) -> str:
+    def _action_time_multiplier(self) -> float:
+        """Pain, mood and cold slow timed actions; 1 until the health spec lands."""
+        return 1.0
+
+    def _spend(self, minutes: int) -> None:
+        """Advance the clock and hand the minutes to the stat engine."""
+        self.manager.advance_clock(minutes)
+        self._advance_stats(minutes)
+
+    def _advance_stats(self, minutes: int) -> None:
+        """Hand-off point for the stat engine; a no-op until survival stats land."""
+
+    def _resolve_one(self, accepted: Accepted) -> tuple[str, int]:
+        """Resolve one accepted action; returns its fact and the minutes it took."""
         handler = self._RESOLVERS.get(type(accepted.action))
         if handler is None:
-            return f"No resolver registered for {type(accepted.action).__name__}."
+            return f"No resolver registered for {type(accepted.action).__name__}.", 0
+        minutes = action_minutes(accepted.action, accepted.resolved)
+        if isinstance(accepted.action, MULTIPLIED_ACTIONS):
+            minutes = round(minutes * self._action_time_multiplier())
         fact = handler(self, accepted)
-        if type(accepted.action) in _TICK_COSTING_ACTIONS:
-            self._advance_one_tick()
-        return self._check_player_death(fact)
+        if minutes:
+            self._spend(minutes)
+        return self._check_player_death(fact), minutes
 
     def _check_player_death(self, fact: str) -> str:
         """End the game the moment Orton's HP reaches zero.
@@ -143,12 +175,6 @@ class SimulationCore:
         narrative.game_over = True
         narrative.death_cause = fact[:DEATH_CAUSE_MAX_LENGTH]
         return f"{fact} Orton has died. The game is over."
-
-    def _advance_one_tick(self) -> None:
-        from managers.game import TIMES_OF_DAY
-
-        current = TIMES_OF_DAY.index(self.manager.narrative.time_of_day)
-        self.manager._action_time_advance(TIMES_OF_DAY[(current + 1) % len(TIMES_OF_DAY)])
 
     # === Movement ===
 
@@ -177,7 +203,6 @@ class SimulationCore:
             fact = self._with_quest_note(
                 f"Move to {location.name}{where}: succeeded.", f"reach:{location.id}"
             )
-            self._advance_one_tick()  # one tick per zone change, however many hops
             return fact
 
         if kind == "blocked":
@@ -190,7 +215,6 @@ class SimulationCore:
             if stop.id != manager.player.current_location_id:
                 manager.player.current_location_id = stop.id
                 fact = self._with_quest_note(fact, f"reach:{stop.id}")
-                self._advance_one_tick()
             return fact
 
         if kind == "spot":
@@ -505,11 +529,19 @@ class SimulationCore:
         setattr(manager.player, attribute, max(0, min(new_value, 100)))
         return f"{action.field_name} is now {getattr(manager.player, attribute)}."
 
-    def _resolve_time_advance(self, accepted: Accepted) -> str:
-        action: TimeAdvanceAction = accepted.action
-        manager = self.manager
-        manager._action_time_advance(action.time_of_day)
-        return f"Time is now {action.time_of_day} (day {manager.narrative.day})."
+    def _resolve_wait(self, accepted: Accepted) -> str:
+        resolved = accepted.resolved
+        spent = _span_words(resolved["minutes"])
+        if resolved["clamped"]:
+            return f"Orton waits {spent}, the most he can at once."
+        return f"Orton waits {spent}."
+
+    def _resolve_sleep(self, accepted: Accepted) -> str:
+        resolved = accepted.resolved
+        spent = _span_words(resolved["minutes"])
+        if resolved["clamped"]:
+            return f"Orton sleeps {spent}, the most he can at once."
+        return f"Orton sleeps {spent}."
 
     _RESOLVERS = {
         MoveAction: _resolve_move,
@@ -517,7 +549,8 @@ class SimulationCore:
         DropAction: _resolve_drop,
         AttackAction: _resolve_attack,
         UseItemAction: _resolve_use_item,
-        TimeAdvanceAction: _resolve_time_advance,
+        WaitAction: _resolve_wait,
+        SleepAction: _resolve_sleep,
         StatusAddAction: _resolve_status_add,
         StatusRemoveAction: _resolve_status_remove,
         UpdateConditionAction: _resolve_update_condition,

@@ -18,6 +18,15 @@ never part of the original design set.
 | **Planned** | Design intent. No code. Preserved deliberately as a target. |
 | **Superseded** | The document was overtaken by a different decision. |
 
+## Mechanics
+
+Each mechanic is described by a document in `docs/mechanics/`. These describe
+what the game now does.
+
+| # | Mechanic | Status | Code |
+| --- | --- | --- | --- |
+| 01 | [Game Clock and Action Time](mechanics/01-game-clock.md) | Implemented | `data/clock.py`, `data/time_costs.py`, `managers/game.py`, `managers/simulation.py`, `managers/validator.py`, `modules/action.py` |
+
 ## The central divergence (resolved for engine authority; still open for scale)
 
 The design target inverts the real control flow. That inversion is now real
@@ -76,7 +85,7 @@ this one.
 | [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Four hand-written coarse zones (`zone_home`, `zone_building`, `zone_street`, `zone_neighborhood`), each with aliases and a free-text `PlayerEntity.current_place` for where within the zone the player narratively is. One locked door (the apartment, building → home). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
 | [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are seven of them (four zones, three NPCs). Out of scope for the engine-authority work. |
 | [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `data/quests.py`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. One decided-but-unbuilt change is recorded in that document's *As Implemented* section: `discover:`/`npc_status:` objectives currently depend on names the *parser* invents, and need engine producers instead. |
-| [08 Time and Scheduling](08-time-and-scheduling.md) | Partial | `SimulationCore._advance_one_tick`, `_action_time_advance`, `_sync_world_clock` | Ordinary actions (move, attack) now advance the clock themselves — the engine owns time progression instead of depending on the LLM to remember `TIME_ADVANCE`. Still one coarse clock (four parts of a day), no sub-tick frequencies, no hunger/stamina/weather driven by it. Deeper scheduling is out of scope. |
+| [08 Time and Scheduling](08-time-and-scheduling.md) | Planned | `data/clock.py`, `managers/game.py` `NarrativeState` | The player-facing minute clock is [mechanics 01](mechanics/01-game-clock.md). NPC and world scheduling, sub-tick frequencies and everything else in this document is not built. |
 | [09 Zombie Survival](09-zombie-survival.md) | Planned | — | No noise, no light, no visibility, no scavenging model. Out of scope for the engine-authority work. |
 | [10 Combat and Stealth](10-combat-and-stealth.md) | Partial | `managers/simulation.py` `_resolve_attack`, `modules/event.py`, `modules/modifier.py` | `ATTACK` is a real action: it resolves through the event/modifier pipeline, applies equipped-weapon damage with jitter, and both "dealt" and "taken" trait/perk reactions actually fire (Small Frame, Gun Slinger). No stealth, no ranged distance/line-of-sight, no armor mitigation yet — this is base damage resolution, not the full document. |
 | [11 Knowledge Firewall](11-knowledge-firewall.md) | Partial | `managers/context.py`, `NarrativeState.discovered_flags`, `NpcEntity.knowledge`/`.goals` | Affinity/trust are still banded, and world flags are now filtered too: a flag only reaches the narrator prompt once a `DISCOVER_FLAG` action has marked it discovered, separately from the engine setting its value. `NpcEntity.knowledge` exists but is deliberately never rendered (no dialogue system consumes it yet); NPC `status` and `notes` still go out unfiltered. The document's *As Implemented* section should be read alongside this. |
@@ -84,7 +93,7 @@ this one.
 | [13 Context and Memory](13-context-and-memory.md) | Partial | `managers/context.py` `ContextBuilder`, `adapters/memory.py` | The context builder is now its own module (`managers/context.py`), independently testable, and the parser gets a *separate, minimal* context from the narrator's full one — a step toward selectivity. It still sends the whole local world to the narrator every turn, and memory layers remain compressive (recent / vector-recalled / summarized), not spatial (global / zone / location / scene). |
 | [14 LLM Roles](14-llm-roles.md) | Partial | `adapters/llm.py` `query_parser`/`query_narrator` | Two calls, two roles, two system prompts — parser proposes actions only, narrator only narrates and no longer has an `ACTIONS:` section to fill at all. The narrator's *constraints* (don't invent HP/inventory/combat results) are stated in its system prompt and structurally reinforced (it has nothing to declare state through), but still not mechanically enforced against a malicious or careless model. |
 | [15 Turn Loop](15-turn-loop.md) | Partial | `adapters/engine.py` `play()` | Real steps now: parser call → `parse_action_plan` → `ActionValidator` → `SimulationCore` → narrator call → record/reindex/summarize/save. Missing relative to the 15-step design: no separate entity-resolution stage (folded into the validator), no world/story/NPC/faction *rules* layer beyond quest advancement, no structured failure taxonomy beyond `Rejected`/`ParseFailure`. |
-| [16 Determinism and Versioning](16-determinism-and-versioning.md) | Partial | `adapters/persistence.py` `SCHEMA_VERSION` | No seeded randomness anywhere — combat damage jitter (`managers/simulation.py`) and the LLM itself are both unseeded. `SCHEMA_VERSION` is now 3, and a v2 save is migrated to v3 on load (`migrate_v2_to_v3`, the first migration code this file has had) rather than discarded; v1 saves and any other mismatched version are still discarded and a new game starts. `SCHEMA_VERSION` remains the sole version; there is no generator, rules, combat or loot version. Explicitly out of scope for the engine-authority work. |
+| [16 Determinism and Versioning](16-determinism-and-versioning.md) | Partial | `adapters/persistence.py` `SCHEMA_VERSION` | No seeded randomness anywhere — combat damage jitter (`managers/simulation.py`) and the LLM itself are both unseeded. `SCHEMA_VERSION` is 4 and any other version is discarded with no migration; it remains the sole version, with no generator, rules, combat or loot version. Explicitly out of scope for the engine-authority work. |
 | [17 Observability and Security](17-observability-and-security.md) | Partial | `print()` calls in `engine.py`, `game.py`, `simulation.py` | Turn logging is unstructured stdout. No state diff, no context snapshot, no replayable trace. LLM output *is* validated and simulated before it mutates state, which is the security half of this document, and now happens before narration too. Structured tracing is out of scope for the engine-authority work. |
 | [18 Module Layout](18-module-layout.md) | Superseded | `modules/`, `data/`, `managers/`, `adapters/` | The real layout splits by *purity* (pure model → static data → logic → I/O), not by subsystem. `managers/validator.py`, `managers/simulation.py` and `managers/context.py` extend that split; see the layering table in the root `README.md`. |
 | [19 End-to-End Example](19-end-to-end-example.md) | Planned | — | Traces a turn through stages that do not exist. |
@@ -92,7 +101,7 @@ this one.
 | [21 Final Architecture](21-final-architecture.md) | Planned | — | The summary diagram of the design target. |
 | [22 Relationships](22-relationships.md) | Implemented | `managers/relationship.py` | — |
 | [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `GameManager._broadcast_event` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
-| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | Schema is now v3, for `current_place`, `game_over` and `death_cause`. Unlike the earlier v1→v2 bump, a v2 save is not discarded: `migrate_v2_to_v3` remaps each of the four old rooms to `zone_building` (keeping the old room name as the *player's* `current_place` only — NPCs have no `current_place` field, so their position is just the remapped zone id), merges their ground items onto `zone_building`, seeds the other three zones with their normal starting items minus anything the save already holds anywhere, grants the apartment key if it's not already held, normalizes flag/discovered-flag keys, remaps `reach:<old room id>` quest objective keys, and replaces `quest_storage_room` with `quest_supply_run`. v1 saves and any other mismatched version are still discarded and a new game starts — that policy is unchanged for everything except v2. |
+| [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/persistence.py`, `adapters/engine.py` | Schema is v4 (see [mechanics 01](mechanics/01-game-clock.md#saves)); `current_place`, `game_over` and `death_cause` are saved. Any other version is discarded and a new game starts; there is no migration. |
 
 ## Known issues
 
@@ -102,22 +111,7 @@ and are recorded here so they are not rediscovered.
 
 ### Fixed
 
-**One clock, not two.** `World.time` (`"12:00 PM"`) and `World.date`
-(`"2023-10-01"`) were injected into every prompt and persisted, but nothing ever
-wrote them: the game master was told it was noon on 1 October 2023 for the whole
-game while `NarrativeState.day` and `.time_of_day` advanced alongside. The
-narrative clock is now the only clock, and the two world fields are a rendering
-of it — `GameManager._sync_world_clock` derives them (`morning` → `08:00 AM`,
-day *n* → `WORLD_START_DATE + n-1`) on construction and on every time advance.
-Construction-time sync means a save written while the two could drift is repaired
-when it loads. Nothing else may write those fields; `modules/location.py` says so.
-
-**`TIME_ADVANCE` no longer skips a day.** `_action_time_advance` incremented
-`narrative.day` when the target index was `<=` the current one, so
-`TIME_ADVANCE morning` while already in morning pushed the calendar forward. The
-check is for rolling *backwards* past night, so the comparison is now strict.
-The existing test only covered `evening → morning`, which is strictly backwards;
-the equal case is now covered too.
+**One clock, not two.** `World.time` and `World.date` are a rendering of the one minute clock; see [mechanics 01](mechanics/01-game-clock.md).
 
 **Relationship scores no longer reach the prompt as numbers.** Affinity goes out
 as a `CharacterDisposition` and trust as a `CharacterTrust`, banded by

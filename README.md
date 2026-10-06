@@ -95,26 +95,17 @@ atomically (temp file + replace) after every turn.
 Only *dynamic* state is saved. Static definitions -- item stats, location names
 and connections, trait and perk effects -- stay in `data/` and are looked up by
 id on load, so content can be rebalanced without invalidating saves. `SCHEMA_VERSION`
-is 3. A v2 save (from before the zone map) is migrated on load rather than
-discarded: `adapters/persistence.migrate_v2_to_v3` remaps each of the four old
-rooms to `zone_building` (the old room name becomes the *player's*
-`current_place` only -- NPCs have no such field, so their position is just
-the remapped zone id), merges their ground items onto `zone_building`, seeds the
-other three zones with their normal starting items minus anything the save
-already holds anywhere, grants the apartment key if it isn't already held,
-normalizes flag/discovered-flag keys, remaps `reach:<old room id>` quest
-objectives, and replaces `quest_storage_room` with `quest_supply_run`. A save
-whose `version` is anything else -- v1 included -- is still discarded rather
-than loaded half-understood, and unknown ids (a deleted item, a renamed
+is 4. A save whose `version` is anything else is discarded and a new game
+starts, rather than being loaded half-understood, and unknown ids (a deleted item, a renamed
 location) are dropped with a log line instead of crashing the load.
 
 Persisted: player (position, `current_place`, condition, inventory, equipment,
 traits, perks), NPCs (position, status, notes, condition, goals, knowledge),
-relationships (affinity, trust, reputation), narrative state (day, time of
-day, goals, flags, discovered flags, apocalypse stage, pending corrections,
+relationships (affinity, trust, reputation), narrative state (the minute clock,
+goals, flags, discovered flags, apocalypse stage, pending corrections,
 `game_over`, `death_cause`), quest state (`GameManager.quests`) and all three
 memory tiers. The world clock (`World.time`, `World.date`) is written too, but
-it is derived from the narrative day and time of day and recomputed on load.
+it is derived from the narrative clock and recomputed on load.
 Door lock state (e.g. the apartment door) is *not* persisted -- doors are
 part of the static map and always rebuild locked.
 
@@ -136,7 +127,8 @@ never gets ahead of what the engine actually decided.
 ```
 TAKE <item>                          DROP <item>
 MOVE_TO <zone|in|out|spot>           ATTACK <target>
-USE_ITEM <item>                      TIME_ADVANCE morning|afternoon|evening|night
+USE_ITEM <item>                      WAIT <10m|2h|1h30m|until night|until HH:MM>
+SLEEP [duration]
 STATUS_ADD <status>                  STATUS_REMOVE <status>
 UPDATE_CONDITION <field> <value>     SET_FLAG <flag> true|false
 DISCOVER_FLAG <flag>

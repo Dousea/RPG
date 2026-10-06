@@ -5,21 +5,71 @@ import unittest
 from modules.action import (
     AddGoalAction,
     AttackAction,
+    Duration,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
     ParseFailure,
     RemoveGoalAction,
     SetFlagAction,
+    SleepAction,
     TakeAction,
-    TimeAdvanceAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
+    WaitAction,
     parse_action_line,
     parse_action_plan,
 )
+
+
+class ClockActionTests(unittest.TestCase):
+    """Spec 01, Actions."""
+
+    def test_wait_parses_every_duration_form(self):
+        cases = {
+            "WAIT 10m": Duration(minutes=10),
+            "WAIT 2h": Duration(minutes=120),
+            "WAIT 1h30m": Duration(minutes=90),
+            "WAIT 1H 30M": Duration(minutes=90),
+            "WAIT until night": Duration(until_time_of_day="night"),
+            "WAIT until Morning.": Duration(until_time_of_day="morning"),
+            "WAIT until 14:30": Duration(until_minute_of_day=870),
+            "WAIT until 6:05": Duration(until_minute_of_day=365),
+        }
+        for line, duration in cases.items():
+            with self.subTest(line=line):
+                self.assertEqual(parse_action_line(line), WaitAction(duration=duration))
+
+    def test_sleep_parses_with_and_without_a_duration(self):
+        self.assertEqual(parse_action_line("SLEEP"), SleepAction())
+        self.assertEqual(parse_action_line("SLEEP 8h"), SleepAction(duration=Duration(minutes=480)))
+        self.assertEqual(
+            parse_action_line("SLEEP until 07:00"),
+            SleepAction(duration=Duration(until_minute_of_day=420)),
+        )
+
+    def test_a_malformed_duration_is_a_parse_failure(self):
+        for line in (
+            "WAIT",
+            "WAIT soon",
+            "WAIT 0m",
+            "WAIT 5",
+            "WAIT 1h30",
+            "WAIT until",
+            "WAIT until 25:00",
+            "WAIT until 12:60",
+            "WAIT until 12:3",
+            "SLEEP lots",
+        ):
+            with self.subTest(line=line):
+                self.assertIsInstance(parse_action_line(line), ParseFailure)
+
+    def test_time_advance_is_an_unknown_action(self):
+        result = parse_action_line("TIME_ADVANCE evening")
+        assert isinstance(result, ParseFailure)
+        self.assertIn("Unknown action verb", result.reason)
 
 
 class ParseActionLineTests(unittest.TestCase):
@@ -40,7 +90,7 @@ class ParseActionLineTests(unittest.TestCase):
 
     def test_update_condition_health_is_retired(self):
         result = parse_action_line("UPDATE_CONDITION health +9999")
-        self.assertIsInstance(result, ParseFailure)
+        assert isinstance(result, ParseFailure)
         self.assertIn("not an available action", result.reason)
 
     def test_update_condition_hunger_still_works(self):
@@ -51,7 +101,7 @@ class ParseActionLineTests(unittest.TestCase):
 
     def test_unknown_verb(self):
         result = parse_action_line("FROBNICATE the widget")
-        self.assertIsInstance(result, ParseFailure)
+        assert isinstance(result, ParseFailure)
         self.assertIn("Unknown action verb", result.reason)
 
     def test_update_relationship(self):
@@ -113,12 +163,6 @@ class ParseActionLineTests(unittest.TestCase):
         result = parse_action_line("SET_FLAG x maybe")
         self.assertIsInstance(result, ParseFailure)
 
-    def test_time_advance_normalizes_case_and_punctuation(self):
-        self.assertEqual(
-            parse_action_line("TIME_ADVANCE Evening."),
-            TimeAdvanceAction(time_of_day="evening"),
-        )
-
     def test_update_condition_normalizes_field_name_and_strips_punctuation(self):
         self.assertEqual(
             parse_action_line("UPDATE_CONDITION Infection_Risk +1."),
@@ -156,7 +200,7 @@ class ParseActionLineTests(unittest.TestCase):
             "ADD_GOAL",
         ):
             result = parse_action_line(line)
-            self.assertIsInstance(result, ParseFailure)
+            assert isinstance(result, ParseFailure)
             self.assertTrue(result.reason)
 
 

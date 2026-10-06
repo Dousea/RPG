@@ -15,13 +15,18 @@ re-derive the reason something was legal.
 from dataclasses import dataclass, field
 from typing import Any
 
+from data.clock import (
+    SLEEP_CAP_MIN,
+    TIME_OF_DAY_START,
+    WAIT_CAP_MIN,
+    minutes_until,
+)
 from data.items import find_item_by_name
 from managers.game import (
     BARE_DIRECTIONS,
     CONDITION_LADDERS,
     DIRECTION_SYNONYMS,
     MAX_PLACE_LENGTH,
-    TIMES_OF_DAY,
     GameManager,
     resolve_condition_value,
 )
@@ -33,19 +38,21 @@ from modules.action import (
     AttackAction,
     DiscoverFlagAction,
     DropAction,
+    Duration,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
     RemoveGoalAction,
     SetFlagAction,
+    SleepAction,
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
-    TimeAdvanceAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
+    WaitAction,
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ConsumableItem
@@ -173,6 +180,7 @@ class ActionValidator:
                     action,
                     {
                         "kind": "blocked",
+                        "hops": path.index(hop_id),
                         "location": hop_from,
                         "place": f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
                         "target": target,
@@ -181,7 +189,9 @@ class ActionValidator:
                 )
             hop_from = manager.world.locations[hop_id]
 
-        return Accepted(action, {"kind": "zone", "location": target, "place": place})
+        return Accepted(
+            action, {"kind": "zone", "location": target, "place": place, "hops": len(path)}
+        )
 
     @staticmethod
     def _door_blocking(location, target_id: str) -> DoorEntity | None:
@@ -320,10 +330,30 @@ class ActionValidator:
 
     # === Time ===
 
-    def _validate_time_advance(self, action: TimeAdvanceAction) -> ValidationResult:
-        if action.time_of_day.strip().casefold() not in TIMES_OF_DAY:
-            return Rejected(action, f"Unknown time of day: '{action.time_of_day}'.")
-        return Accepted(action, {})
+    def _span(self, duration: Duration) -> int | None:
+        """Minutes a duration covers from now, or None for an unknown time of day."""
+        if duration.minutes is not None:
+            return duration.minutes
+        now = self.manager.narrative.minutes
+        if duration.until_minute_of_day is not None:
+            return minutes_until(now, duration.until_minute_of_day)
+        start = TIME_OF_DAY_START.get(duration.until_time_of_day or "")
+        return None if start is None else minutes_until(now, start)
+
+    def _timed(self, action: WaitAction | SleepAction, duration: Duration, cap: int):
+        span = self._span(duration)
+        if span is None:
+            return Rejected(action, f"Unknown time of day: '{duration.until_time_of_day}'.")
+        return Accepted(action, {"minutes": min(span, cap), "clamped": span > cap})
+
+    def _validate_wait(self, action: WaitAction) -> ValidationResult:
+        return self._timed(action, action.duration, WAIT_CAP_MIN)
+
+    def _validate_sleep(self, action: SleepAction) -> ValidationResult:
+        if action.duration is None:
+            # Waking rules arrive with the stat engine; until then sleep runs to the cap.
+            return Accepted(action, {"minutes": SLEEP_CAP_MIN, "clamped": False})
+        return self._timed(action, action.duration, SLEEP_CAP_MIN)
 
     # === Goals ===
 
@@ -402,7 +432,8 @@ class ActionValidator:
         DropAction: _validate_drop,
         AttackAction: _validate_attack,
         UseItemAction: _validate_use_item,
-        TimeAdvanceAction: _validate_time_advance,
+        WaitAction: _validate_wait,
+        SleepAction: _validate_sleep,
         StatusAddAction: _validate_status_add,
         StatusRemoveAction: _validate_status_remove,
         UpdateConditionAction: _validate_update_condition,

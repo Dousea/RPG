@@ -281,12 +281,8 @@ case that exists (a locked door with a key), not the general
 hidden/blocked/destroyed-exit model this document describes — there is still
 no way to mark an exit merely hidden, or damaged rather than locked.
 
-`World.time` and `World.date` are **derived**, not stored state: `GameManager`
-renders them from the narrative clock (`NarrativeState.day` / `.time_of_day`) in
-`_sync_world_clock`, on construction and whenever the clock moves. They are
-persisted so a save reads on its own, but the saved values are not trusted — a
-load recomputes them, which repairs saves written while the two could drift.
-Nothing else may write them.
+`World.time` and `World.date` are derived from the minute clock; see
+[the game clock](mechanics/01-game-clock.md).
 
 ### NPC
 

@@ -14,6 +14,7 @@ and `ATTACK`/`USE_ITEM` are added so combat and item effects have an entry
 point into the Simulation Core instead of being narrated as raw HP deltas.
 """
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -79,8 +80,28 @@ class UseItemAction:
 
 
 @dataclass
-class TimeAdvanceAction:
-    time_of_day: str
+class Duration:
+    """How long a WAIT or SLEEP lasts: a fixed span, or until a clock time.
+
+    Exactly one field is set. `until_time_of_day` is a band name the validator
+    checks; `until_minute_of_day` is minutes after midnight, already in range.
+    """
+
+    minutes: int | None = None
+    until_time_of_day: str | None = None
+    until_minute_of_day: int | None = None
+
+
+@dataclass
+class WaitAction:
+    duration: Duration
+
+
+@dataclass
+class SleepAction:
+    """`duration` is None for sleeping until woken."""
+
+    duration: Duration | None = None
 
 
 @dataclass
@@ -167,7 +188,8 @@ AnyAction = (
     | DropAction
     | AttackAction
     | UseItemAction
-    | TimeAdvanceAction
+    | WaitAction
+    | SleepAction
     | StatusAddAction
     | StatusRemoveAction
     | UpdateConditionAction
@@ -226,10 +248,44 @@ def _parse_use_item(args: str) -> UseItemAction:
     return UseItemAction(item_name=args)
 
 
-def _parse_time_advance(args: str) -> TimeAdvanceAction:
+_SPAN_PATTERN = re.compile(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?")
+_CLOCK_TIME_PATTERN = re.compile(r"(\d{1,2}):(\d{2})")
+_TIME_OF_DAY_PATTERN = re.compile(r"[a-z]+")
+
+
+def _parse_duration(verb: str, args: str) -> Duration:
+    """Parse '10m', '2h', '1h30m', 'until <time of day>' or 'until HH:MM'."""
+    text = args.strip().strip(".,;").casefold()
+    if text.startswith("until "):
+        target = text[len("until ") :].strip()
+        clock = _CLOCK_TIME_PATTERN.fullmatch(target)
+        if clock:
+            hour, minute = int(clock.group(1)), int(clock.group(2))
+            if hour > 23 or minute > 59:
+                raise _ActionParseError(f"{verb} has no such clock time: '{target}'.")
+            return Duration(until_minute_of_day=hour * 60 + minute)
+        if _TIME_OF_DAY_PATTERN.fullmatch(target):
+            return Duration(until_time_of_day=target)
+        raise _ActionParseError(f"{verb} needs 'until <time of day>' or 'until HH:MM'.")
+    span = _SPAN_PATTERN.fullmatch(text)
+    if span is None or not (span.group(1) or span.group(2)):
+        raise _ActionParseError(f"{verb} needs a duration like 10m, 2h, 1h30m or until night.")
+    minutes = int(span.group(1) or 0) * 60 + int(span.group(2) or 0)
+    if minutes <= 0:
+        raise _ActionParseError(f"{verb} needs a duration longer than zero.")
+    return Duration(minutes=minutes)
+
+
+def _parse_wait(args: str) -> WaitAction:
     if not args:
-        raise _ActionParseError("TIME_ADVANCE needs a time of day.")
-    return TimeAdvanceAction(time_of_day=normalize_key(args))
+        raise _ActionParseError("WAIT needs a duration.")
+    return WaitAction(duration=_parse_duration("WAIT", args))
+
+
+def _parse_sleep(args: str) -> SleepAction:
+    if not args:
+        return SleepAction()
+    return SleepAction(duration=_parse_duration("SLEEP", args))
 
 
 def _parse_status_add(args: str) -> StatusAddAction:
@@ -396,7 +452,8 @@ _PARSERS: dict[str, Callable[[str], AnyAction]] = {
     "DROP": _parse_drop,
     "ATTACK": _parse_attack,
     "USE_ITEM": _parse_use_item,
-    "TIME_ADVANCE": _parse_time_advance,
+    "WAIT": _parse_wait,
+    "SLEEP": _parse_sleep,
     "STATUS_ADD": _parse_status_add,
     "STATUS_REMOVE": _parse_status_remove,
     "UPDATE_CONDITION": _parse_update_condition,

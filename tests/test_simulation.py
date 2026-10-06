@@ -12,16 +12,18 @@ from modules.action import (
     AddGoalAction,
     AttackAction,
     DropAction,
+    Duration,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
     SetFlagAction,
+    SleepAction,
     TakeAction,
-    TimeAdvanceAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
+    WaitAction,
 )
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
@@ -84,12 +86,6 @@ class MovementResolutionTests(unittest.TestCase):
         facts = _resolve(gm, MoveAction(destination="out"))
         self.assertEqual(gm.player.current_location_id, "zone_building")
         self.assertIn("succeeded", facts[0])
-
-    def test_move_advances_the_clock_by_one_tick(self):
-        gm = GameManager()
-        self.assertEqual(gm.narrative.time_of_day, "morning")
-        _resolve(gm, MoveAction(destination="out"))
-        self.assertEqual(gm.narrative.time_of_day, "afternoon")
 
     def test_move_to_unknown_becomes_a_spot_in_the_current_zone(self):
         # Rejecting an unmatched name would let the story and the state
@@ -154,19 +150,6 @@ class MovementResolutionTests(unittest.TestCase):
             # Whatever happened, the world must still be describable.
             self.assertIn("[SCENE]", gm.build_narrator_prompt("look"))
         self.assertLessEqual(len(gm.player.current_place), 80)
-
-    def test_spot_move_does_not_advance_the_clock(self):
-        gm = GameManager()
-        self.assertEqual(gm.narrative.time_of_day, "morning")
-        _resolve(gm, MoveAction(destination="Atlantis"))
-        self.assertEqual(gm.narrative.time_of_day, "morning")
-
-    def test_zone_move_advances_one_tick_even_across_several_zones(self):
-        gm = GameManager()
-        self.assertEqual(gm.narrative.time_of_day, "morning")
-        _resolve(gm, MoveAction(destination="The Neighborhood"))
-        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
-        self.assertEqual(gm.narrative.time_of_day, "afternoon")
 
     def test_locked_door_soft_lands_at_the_door(self):
         gm = GameManager()
@@ -352,12 +335,6 @@ class CombatResolutionTests(unittest.TestCase):
         self.assertLess(emma.hit_points, before)
         self.assertIn("Attack Emma", facts[0])
 
-    def test_attack_advances_the_clock(self):
-        gm = GameManager()
-        gm.player.current_location_id = "zone_building"  # Emma starts here
-        _resolve(gm, AttackAction(target_name="Emma"), rng=self._fixed_rng())
-        self.assertEqual(gm.narrative.time_of_day, "afternoon")
-
     def test_equipped_weapon_deals_its_damage(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_building"  # Emma starts here
@@ -495,12 +472,6 @@ class WorldStateResolutionTests(unittest.TestCase):
         _resolve(gm, NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"))
         self.assertIn("frightened", gm.resolve_npc("Emma").status)
 
-    def test_time_advance_rolls_the_day_over(self):
-        gm = GameManager()
-        _resolve(gm, TimeAdvanceAction(time_of_day="night"))
-        _resolve(gm, TimeAdvanceAction(time_of_day="morning"))
-        self.assertEqual(gm.narrative.day, 2)
-
     def test_update_condition_hunger(self):
         gm = GameManager()
         _resolve(gm, UpdateConditionAction(field_name="hunger", raw_value="-10"))
@@ -599,3 +570,169 @@ class PlayerDeathResolutionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _spent(gm: GameManager, *actions) -> int:
+    before = gm.narrative.minutes
+    _resolve(gm, *actions)
+    return gm.narrative.minutes - before
+
+
+class TimeCostTests(unittest.TestCase):
+    """Spec 01, Time costs."""
+
+    def test_a_swing_costs_one_minute(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        self.assertEqual(_spent(gm, AttackAction(target_name="Emma")), 1)
+
+    def test_take_and_drop_cost_one_minute(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        self.assertEqual(_spent(gm, TakeAction(item_name="Crowbar")), 1)
+        self.assertEqual(_spent(gm, DropAction(item_name="Crowbar")), 1)
+
+    def test_using_a_non_food_item_costs_one_minute(self):
+        gm = GameManager()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
+        self.assertEqual(_spent(gm, UseItemAction(item_name="First Aid Kit")), 1)
+
+    def test_eating_costs_the_default_five_minutes(self):
+        gm = GameManager()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        self.assertEqual(_spent(gm, UseItemAction(item_name="Canned Beans")), 5)
+
+    def test_the_action_time_multiplier_scales_only_the_timed_verbs(self):
+        def spent_with_double(gm: GameManager, action) -> int:
+            core = SimulationCore(gm)
+            core._action_time_multiplier = lambda: 2.0  # pyright: ignore[reportPrivateUsage]
+            before = gm.narrative.minutes
+            core.resolve([action])
+            return gm.narrative.minutes - before
+
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        self.assertEqual(spent_with_double(gm, TakeAction(item_name="Crowbar")), 2)
+        self.assertEqual(spent_with_double(gm, DropAction(item_name="Crowbar")), 2)
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        self.assertEqual(spent_with_double(gm, UseItemAction(item_name="Canned Beans")), 10)
+        self.assertEqual(spent_with_double(gm, WaitAction(duration=Duration(minutes=7))), 7)
+        self.assertEqual(spent_with_double(gm, MoveAction(destination="zone_building")), 10)
+        gm.player.current_location_id = "zone_building"
+        self.assertEqual(spent_with_double(gm, AttackAction(target_name="Emma")), 1)
+
+    def test_a_zone_hop_costs_ten_minutes_per_hop(self):
+        gm = GameManager()
+        self.assertEqual(_spent(gm, MoveAction(destination="out")), 10)
+        self.assertEqual(_spent(gm, MoveAction(destination="zone_street")), 10)
+
+    def test_a_walk_over_several_hops_costs_ten_per_hop(self):
+        gm = GameManager()
+        self.assertEqual(_spent(gm, MoveAction(destination="zone_street")), 20)
+        self.assertEqual(_spent(gm, MoveAction(destination="The Neighborhood")), 10)
+
+    def test_a_move_within_a_zone_costs_one_minute(self):
+        gm = GameManager()
+        self.assertEqual(_spent(gm, MoveAction(destination="the kitchen")), 1)
+        self.assertEqual(_spent(gm, MoveAction(destination="north")), 1)
+
+    def test_a_locked_door_stop_costs_the_walk_to_it(self):
+        gm = GameManager()
+        _resolve(gm, MoveAction(destination="out"))
+        gm.player.inventory.clear()
+        self.assertEqual(_spent(gm, MoveAction(destination="Your Apartment")), 1)
+
+    def test_zero_minute_verbs_cost_nothing(self):
+        gm = GameManager()
+        spent = _spent(
+            gm,
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+            SetFlagAction(flag_name="x", value=True),
+            UpdateConditionAction(field_name="hunger", raw_value="-10"),
+        )
+        self.assertEqual(spent, 0)
+
+    def test_a_refused_action_costs_nothing(self):
+        gm = GameManager()
+        facts = _resolve(gm, TakeAction(item_name="Unicorn"))
+        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertEqual(gm.narrative.minutes, 0)
+        self.assertEqual(len(facts), 1)
+
+    def test_a_none_turn_costs_one_minute(self):
+        gm = GameManager()
+        facts = _resolve(gm)
+        self.assertEqual(gm.narrative.minutes, 1)
+        self.assertEqual(facts, ["About 1 minute passes."])
+
+    def test_world_clock_follows_each_action(self):
+        gm = GameManager()
+        _resolve(gm, WaitAction(duration=Duration(minutes=75)))
+        self.assertEqual(gm.world.time, "09:15 AM")
+
+    def test_the_turn_fact_reports_the_summed_minutes(self):
+        gm = GameManager()
+        facts = _resolve(
+            gm,
+            MoveAction(destination="out"),
+            WaitAction(duration=Duration(minutes=30)),
+        )
+        self.assertEqual(gm.narrative.minutes, 40)
+        self.assertEqual(facts[-1], "About 40 minutes pass.")
+        self.assertEqual(len(facts), 3)
+
+    def test_the_minutes_fact_is_absent_when_nothing_took_time(self):
+        gm = GameManager()
+        facts = _resolve(gm, AddGoalAction(horizon="short_term", goal_text="Find water"))
+        self.assertFalse(any("pass" in fact for fact in facts))
+
+    def test_the_stat_engine_hand_off_receives_each_actions_minutes(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        handed: list[int] = []
+        core._advance_stats = lambda minutes: handed.append(minutes)  # pyright: ignore[reportPrivateUsage]
+        core.resolve([MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5))])
+        self.assertEqual(handed, [10, 5])
+
+
+class ClockEdgeCaseTests(unittest.TestCase):
+    """Spec 01, Edge cases."""
+
+    def test_wait_until_night_from_0800_lands_on_2200(self):
+        gm = GameManager()
+        _resolve(gm, WaitAction(duration=Duration(until_time_of_day="night")))
+        self.assertEqual((gm.narrative.day, gm.narrative.hour, gm.narrative.minute), (1, 22, 0))
+
+    def test_wait_until_morning_at_0700_lands_on_0600_next_day(self):
+        gm = GameManager()
+        gm.advance_clock(1440 - 480 + 7 * 60)  # 07:00 on day 2
+        _resolve(gm, WaitAction(duration=Duration(until_time_of_day="morning")))
+        self.assertEqual((gm.narrative.day, gm.narrative.hour, gm.narrative.minute), (3, 6, 0))
+
+    def test_wait_until_morning_while_in_the_morning_never_waits_zero(self):
+        gm = GameManager()
+        self.assertEqual(
+            _spent(gm, WaitAction(duration=Duration(until_time_of_day="morning"))), 22 * 60
+        )
+
+    def test_wait_until_a_clock_time_already_past_is_tomorrow(self):
+        gm = GameManager()
+        _resolve(gm, WaitAction(duration=Duration(until_minute_of_day=7 * 60)))
+        self.assertEqual((gm.narrative.day, gm.narrative.hour), (2, 7))
+
+    def test_a_wait_over_24_hours_is_clamped_and_says_so(self):
+        gm = GameManager()
+        facts = _resolve(gm, WaitAction(duration=Duration(minutes=30 * 60)))
+        self.assertEqual(gm.narrative.minutes, 1440)
+        self.assertEqual(facts[0], "Orton waits 24 hours, the most he can at once.")
+
+    def test_a_sleep_over_16_hours_is_clamped_and_says_so(self):
+        gm = GameManager()
+        facts = _resolve(gm, SleepAction(duration=Duration(minutes=20 * 60)))
+        self.assertEqual(gm.narrative.minutes, 960)
+        self.assertEqual(facts[0], "Orton sleeps 16 hours, the most he can at once.")
+
+    def test_a_short_sleep_runs_its_duration(self):
+        gm = GameManager()
+        _resolve(gm, SleepAction(duration=Duration(minutes=90)))
+        self.assertEqual(gm.narrative.minutes, 90)

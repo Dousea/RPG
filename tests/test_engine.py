@@ -5,7 +5,6 @@ Two LLM calls per turn now, not one: the parser proposes actions (script via
 narrator describes what already happened (script via `ScriptedLLM(story=...)`).
 """
 
-import copy
 import unittest
 
 import adapters.engine as engine_module
@@ -14,7 +13,6 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from modules.entity.item import ItemEntity
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
-from tests.test_persistence import V2_SAVE
 from tests.test_simulation import LETHAL_ITEM
 
 MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nUPDATE_RELATIONSHIP Emma affection +12\nADD_GOAL short_term Find a weapon"
@@ -317,14 +315,6 @@ class SaveLoadTests(EngineTestCase):
 
         reloaded = persistence.load(self.save_path)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
-
-    def test_import_route_migrates_a_v2_upload(self):
-        # GameEngine.import_save calls persistence.from_saved_data directly,
-        # so the /save/import route gets v2 -> v3 migration for free.
-        result = self.engine.import_save(copy.deepcopy(V2_SAVE))
-        self.assertIsNotNone(result)
-        self.assertEqual(result["current_location"], "Your Building")
-        self.assertEqual(result["current_place"], "the lobby")
 
 
 class DeathPersistenceTests(EngineTestCase):

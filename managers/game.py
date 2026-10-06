@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import config
+from data.clock import day_number, minute_of_day, time_of_day_at
 from data.items import ITEMS
 from data.locations import STARTING_ZONE_ID, ZONE_EXIT_NOUNS, build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
@@ -78,8 +79,6 @@ MAX_RECENT_EVENTS = config.game.max_recent_events
 
 # Once the recent-event buffer is this full, the older half is summarized.
 SUMMARY_THRESHOLD = config.game.summary_threshold
-
-TIMES_OF_DAY = ("morning", "afternoon", "evening", "night")
 
 # Words the model reaches for in place of a bare connection direction. Applied
 # only when the mapped direction is actually a connection of the current zone
@@ -217,15 +216,9 @@ def resolve_condition_value(field: str, raw: str, current: str) -> str | None:
     return CONDITION_SYNONYMS.get(field, {}).get(needle)
 
 
-# The game has one clock. `NarrativeState.day` and `.time_of_day` are it;
-# `World.time` and `World.date` are a wall-clock rendering of the same instant,
-# derived by `_sync_world_clock`, so the game master never sees a stale time.
-CLOCK_BY_TIME_OF_DAY = {
-    "morning": "08:00 AM",
-    "afternoon": "01:00 PM",
-    "evening": "07:00 PM",
-    "night": "11:00 PM",
-}
+# The game has one clock: `NarrativeState.minutes`. `World.time` and
+# `World.date` are a rendering of the same instant, derived by
+# `_sync_world_clock`, so the game master never sees a stale time.
 
 # The calendar date of day 1.
 WORLD_START_DATE = date(2023, 10, 1)
@@ -240,8 +233,7 @@ class NarrativeState:
     on PlayerEntity.
     """
 
-    day: int = 1
-    time_of_day: str = "morning"
+    minutes: int = 0
     apocalypse_stage: str = "Normal"
     goals: dict[str, list[str]] = field(default_factory=lambda: {"short_term": [], "long_term": []})
     flags: dict[str, bool] = field(default_factory=dict[str, bool])
@@ -264,6 +256,22 @@ class NarrativeState:
     # so reloading the page does not quietly resurrect him.
     game_over: bool = False
     death_cause: str = ""
+
+    @property
+    def day(self) -> int:
+        return day_number(self.minutes)
+
+    @property
+    def hour(self) -> int:
+        return minute_of_day(self.minutes) // 60
+
+    @property
+    def minute(self) -> int:
+        return minute_of_day(self.minutes) % 60
+
+    @property
+    def time_of_day(self) -> str:
+        return time_of_day_at(minute_of_day(self.minutes))
 
 
 @dataclass
@@ -351,11 +359,16 @@ class GameManager:
         Called on construction and whenever the narrative clock moves. Nothing
         else may write those two fields: they are a view, not a second clock.
         """
-        self.world.time = CLOCK_BY_TIME_OF_DAY.get(
-            self.narrative.time_of_day, CLOCK_BY_TIME_OF_DAY["morning"]
-        )
-        days_elapsed = max(self.narrative.day, 1) - 1
-        self.world.date = (WORLD_START_DATE + timedelta(days=days_elapsed)).isoformat()
+        narrative = self.narrative
+        hour_12 = narrative.hour % 12 or 12
+        suffix = "AM" if narrative.hour < 12 else "PM"
+        self.world.time = f"{hour_12:02d}:{narrative.minute:02d} {suffix}"
+        self.world.date = (WORLD_START_DATE + timedelta(days=narrative.day - 1)).isoformat()
+
+    def advance_clock(self, minutes: int) -> None:
+        """Move the one clock forward and re-render `World.time` / `World.date`."""
+        self.narrative.minutes += minutes
+        self._sync_world_clock()
 
     # === Lookup helpers ===
 
@@ -590,26 +603,8 @@ class GameManager:
 
     # === Action application ===
     #
-    # There is no `apply_action`/`_ACTION_HANDLERS` dispatch anymore: the
-    # Action Validator (managers/validator.py) and Simulation Core
-    # (managers/simulation.py) are the only path to mutating state from a
-    # proposed action, and they run before any prose exists rather than
-    # after. `_action_time_advance` and `_as_condition` remain because
-    # SimulationCore calls them directly -- the day-rollover and
-    # condition-mapping logic they hold didn't need to move.
-
-    def _action_time_advance(self, args: str) -> tuple[bool, str]:
-        target = args.strip().casefold()
-        if target not in TIMES_OF_DAY:
-            return False, f"Unknown time of day: '{args}'."
-        # Rolling *backwards* past night means a new day began. Strictly
-        # backwards: re-declaring the part of the day we are already in is a
-        # no-op, not midnight.
-        if TIMES_OF_DAY.index(target) < TIMES_OF_DAY.index(self.narrative.time_of_day):
-            self.narrative.day += 1
-        self.narrative.time_of_day = target
-        self._sync_world_clock()
-        return True, f"Time is now {target} (day {self.narrative.day})."
+    # State changes from proposed actions go through managers/validator.py and
+    # managers/simulation.py, before any prose exists.
 
     @staticmethod
     def _as_condition(name: str) -> CharacterCondition | None:

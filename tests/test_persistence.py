@@ -1,6 +1,5 @@
 """Persistence: full round trip, schema guarding, and tolerance of bad saves."""
 
-import copy
 import json
 import unittest
 from pathlib import Path
@@ -11,132 +10,20 @@ from modules.action import (
     AddGoalAction,
     AddRelationshipNoteAction,
     DiscoverFlagAction,
+    Duration,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
     SetFlagAction,
     StatusAddAction,
     TakeAction,
-    TimeAdvanceAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
+    WaitAction,
 )
-from modules.entity.item import ItemEntity
 from modules.quest import QuestState, QuestStatus
 from tests.support import IsolatedSaveTestCase, resolve_actions
-
-# A realistic v2 save, written by hand as main's v2 `to_dict` actually wrote
-# it (see `git show 7668674:adapters/persistence.py`) -- not produced by
-# calling today's `to_dict`, which now emits v3. Player and NPC still use
-# room ids; quests still have `quest_storage_room` and predate the current
-# roster; `narrative` has no `game_over`/`death_cause` at all.
-#
-# The crowbar appears twice on purpose: once as a hallway ground item (so the
-# four-room ground-item test has its fourth name, and so migration must NOT
-# duplicate zone_street's starting crowbar onto a world that already has
-# one), and once in the player's own inventory (so quest_supply_run's
-# `take:item_crowbar` is already satisfiable once seeded -- see
-# test_supply_run_reconciles_against_migrated_state).
-V2_SAVE = {
-    "version": 2,
-    "world": {
-        "time": "07:00 PM",
-        "date": "2023-10-03",
-        "ground_items": {
-            "location_id_hallway": [{"item_id": "item_crowbar", "hit_points": 50}],
-            "location_id_office": [{"item_id": "item_canned_beans", "hit_points": 5}],
-            "location_id_lobby": [{"item_id": "item_first_aid_kit", "hit_points": 20}],
-            "location_id_storage": [{"item_id": "item_storage_key", "hit_points": 10}],
-        },
-    },
-    "player": {
-        "entity_id": "player",
-        "name": "Orton",
-        "current_location_id": "location_id_lobby",
-        "hit_points": 80,
-        "experience_points": 0,
-        "level": 1,
-        "max_inventory_size": 20,
-        "hunger": 90,
-        "thirst": 90,
-        "morale": 90,
-        "attributes": {},
-        "inventory": [{"item_id": "item_crowbar", "hit_points": 50}],
-        "equipment": {},
-        "trait_ids": [],
-        "perk_ids": [],
-        "conditions": [],
-    },
-    "npcs": [
-        {
-            "npc_id": "npc_emma",
-            "name": "Emma",
-            "description": "A neighbour.",
-            "current_location_id": "location_id_storage",
-            "hit_points": 100,
-            "age": 29,
-            "faction": "neutral",
-            "personality": [],
-            "status": [],
-            "notes": "",
-            "romance_eligible": True,
-            "conditions": [],
-            "inventory": [],
-            "base_max_hit_points": 100,
-            "goals": [],
-            "knowledge": [],
-        }
-    ],
-    "relationships": {"affinities": {}, "trusts": {}, "reputations": {}},
-    "narrative": {
-        "day": 3,
-        "time_of_day": "evening",
-        "apocalypse_stage": "Normal",
-        "goals": {"short_term": [], "long_term": []},
-        "flags": {"PowerGrid": True},
-        "discovered_flags": ["PowerGrid"],
-        "player_status": [],
-        "conditions": {"sleep": "Rested", "infection_risk": "No"},
-        "pending_corrections": [],
-    },
-    "memory": {
-        "recent_events": ["Orton entered the lobby."],
-        "full_event_log": ["Orton entered the lobby."],
-        "summaries": [],
-    },
-    "quests": {
-        "quest_storage_room": {
-            "title": "Find the Storage Key",
-            "status": "active",
-            "objectives": ["take:item_storage_key"],
-            "objective_labels": {"take:item_storage_key": "Find the storage key"},
-            "completed_objectives": ["take:item_storage_key"],
-        },
-        "quest_custom_errand": {
-            "title": "Check the Office",
-            "status": "active",
-            "objectives": ["reach:location_id_office"],
-            "objective_labels": {"reach:location_id_office": "Go check the office"},
-            "completed_objectives": [],
-        },
-    },
-}
-
-# A v2 save with no items anywhere, to test in isolation that a zone v2
-# didn't have gets its normal starting items -- V2_SAVE above can't be used
-# for this, because its crowbar (already present in a room) must NOT be
-# duplicated onto zone_street, which is the opposite behaviour.
-V2_SAVE_NO_EXTRA_ITEMS = {
-    "version": 2,
-    "world": {"time": "12:00 PM", "date": "2023-10-01", "ground_items": {}},
-    "player": {"name": "Orton", "current_location_id": "location_id_hallway"},
-    "npcs": [],
-    "relationships": {},
-    "narrative": {"day": 1, "time_of_day": "morning"},
-    "memory": {},
-    "quests": {},
-}
 
 
 def played_game() -> GameManager:
@@ -156,7 +43,7 @@ def played_game() -> GameManager:
         AddGoalAction(horizon="long_term", goal_text="Leave the city"),
         SetFlagAction(flag_name="power_grid_stable", value=False),
         DiscoverFlagAction(flag_name="power_grid_stable"),
-        TimeAdvanceAction(time_of_day="evening"),
+        WaitAction(duration=Duration(until_time_of_day="evening")),
         StatusAddAction(status="panic"),
         NpcMoveAction(npc_name="Emma", destination="Your Building"),
         NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
@@ -257,7 +144,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(manager.get_affinity("player", "npc_emma"), 0)
 
     def test_narrative_state(self):
-        self.assertEqual(self.loaded.narrative.day, self.original.narrative.day)
+        self.assertEqual(self.loaded.narrative.minutes, self.original.narrative.minutes)
         self.assertEqual(self.loaded.narrative.time_of_day, "evening")
         self.assertIn("Find a weapon", self.loaded.narrative.goals["short_term"])
         self.assertIn("Leave the city", self.loaded.narrative.goals["long_term"])
@@ -271,16 +158,16 @@ class RoundTripTests(IsolatedSaveTestCase):
     def test_world_clock_is_rebuilt_from_the_narrative_clock(self):
         # It is derived state, so a save written before it existed -- or one hand
         # edited -- still loads with the two in agreement.
-        self.assertEqual(self.loaded.world.time, "07:00 PM")
+        self.assertEqual(self.loaded.world.time, "06:00 PM")
         self.assertEqual(self.loaded.world.date, "2023-10-01")
 
     def test_a_save_with_a_stale_world_clock_is_corrected_on_load(self):
         data = persistence.to_dict(self.original)
         data["world"]["time"] = "12:00 PM"
         data["world"]["date"] = "2023-10-01"
-        data["narrative"]["day"] = 4
+        data["narrative"]["minutes"] = 3 * 1440 + 600
         rebuilt = persistence.from_dict(data)
-        self.assertEqual(rebuilt.world.time, "07:00 PM")
+        self.assertEqual(rebuilt.world.time, "06:00 PM")
         self.assertEqual(rebuilt.world.date, "2023-10-04")
 
     def test_memory_tiers(self):
@@ -292,6 +179,27 @@ class RoundTripTests(IsolatedSaveTestCase):
         facts = resolve_actions(self.loaded, MoveAction(destination="in"))
         self.assertFalse(facts[0].startswith("Refused:"), facts[0])
         self.assertEqual(self.loaded.player.current_location_id, "zone_building")
+
+
+class ClockSaveTests(IsolatedSaveTestCase):
+    """Spec 01, Saves."""
+
+    def test_schema_version_is_4(self):
+        self.assertEqual(persistence.SCHEMA_VERSION, 4)
+
+    def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
+        gm = GameManager()
+        gm.narrative.minutes = 2 * 1440 + 95
+        persistence.save(gm, self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            narrative = json.load(handle)["narrative"]
+        self.assertEqual(narrative["minutes"], 2 * 1440 + 95)
+        self.assertNotIn("day", narrative)
+        self.assertNotIn("time_of_day", narrative)
+        loaded = persistence.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.narrative.minutes, 2 * 1440 + 95)
+        self.assertEqual(loaded.narrative.day, 3)
 
 
 class SaveFileTests(IsolatedSaveTestCase):
@@ -386,6 +294,14 @@ class BadSaveTests(IsolatedSaveTestCase):
         self.write(data)
         self.assertIsNone(persistence.load(self.save_path))
 
+    def test_a_v3_save_is_discarded_and_a_new_game_starts(self):
+        persistence.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["version"] = 3
+        self.write(data)
+        self.assertIsNone(persistence.load(self.save_path))
+
     def test_a_v1_save_is_discarded_cleanly_not_crashed(self):
         # v1 predates NpcEntity.goals/.knowledge and discovered_flags -- the
         # existing "unreadable save -> fresh game" policy handles this with
@@ -463,263 +379,9 @@ class V3FieldsRoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(loaded.narrative.death_cause, "Orton bled out from a knife wound.")
 
 
-class MigrationTests(IsolatedSaveTestCase):
-    """v2 saves name main's four rooms that preceded zones."""
+class HandEditedFieldTests(unittest.TestCase):
+    """Hand-edited values of the wrong type load as safe defaults."""
 
-    def write(self, data: dict) -> None:
-        with open(self.save_path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle)
-
-    def setUp(self):
-        super().setUp()
-        self.write(V2_SAVE)
-
-    def test_a_v2_save_loads_instead_of_being_discarded(self):
-        # The version gate discards a mismatch outright, which would have
-        # thrown away a real game over what is only a content change.
-        loaded = persistence.load(self.save_path)
-        self.assertIsNotNone(loaded)
-        self.assertEqual(loaded.player.current_location_id, "zone_building")
-        self.assertEqual(loaded.player.current_place, "the lobby")
-        self.assertEqual(loaded.narrative.day, 3)
-        self.assertEqual(loaded.memory.full_event_log, ["Orton entered the lobby."])
-
-    def test_ground_items_from_all_rooms_accumulate(self):
-        # Four room keys fold onto one zone, so items must accumulate; a
-        # plain rebuild would keep only whichever room was written last.
-        loaded = persistence.load(self.save_path)
-        names = sorted(
-            entity.item.name
-            for entity in loaded.world.locations["zone_building"].entities
-            if isinstance(entity, ItemEntity)
-        )
-        self.assertEqual(names, ["Canned Beans", "Crowbar", "First Aid Kit", "Storage Room Key"])
-
-    def test_npcs_are_remapped_too(self):
-        loaded = persistence.load(self.save_path)
-        self.assertEqual(loaded.resolve_npc("Emma").current_location_id, "zone_building")
-
-    def test_storage_quest_is_replaced_by_the_supply_run(self):
-        loaded = persistence.load(self.save_path)
-        self.assertNotIn("quest_storage_room", loaded.quests)
-        self.assertIn("quest_supply_run", loaded.quests)
-
-    def test_reach_keys_are_remapped(self):
-        loaded = persistence.load(self.save_path)
-        quest = loaded.quests["quest_custom_errand"]
-        self.assertIn("reach:zone_building", quest.objectives)
-        self.assertIn("reach:zone_building", quest.objective_labels)
-
-    def test_a_migrated_game_is_playable(self):
-        loaded = persistence.load(self.save_path)
-        self.assertIn("[SCENE]", loaded.build_narrator_prompt("look around"))
-        facts = resolve_actions(loaded, MoveAction(destination="The Street"))
-        self.assertFalse(facts[0].startswith("Refused:"), facts[0])
-
-        # The migrated player can also walk home -- the apartment key must
-        # have been granted, or he'd be locked out of his own home forever.
-        home = persistence.load(self.save_path)
-        facts = resolve_actions(home, MoveAction(destination="Your Apartment"))
-        self.assertFalse(facts[0].startswith("Refused:"), facts[0])
-        self.assertEqual(home.player.current_location_id, "zone_home")
-
-    def test_a_v1_save_is_discarded(self):
-        self.write({"version": 1, "player": {}, "narrative": {}})
-        self.assertIsNone(persistence.load(self.save_path))
-
-    def test_import_route_migrates_a_v2_upload(self):
-        # GameEngine.import_save calls from_saved_data directly, so the
-        # /save/import route gets migration for free -- covered end-to-end
-        # in tests/test_engine.py's test_import_route_migrates_a_v2_upload.
-        loaded = persistence.from_saved_data(copy.deepcopy(V2_SAVE))
-        self.assertIsNotNone(loaded)
-        self.assertEqual(loaded.player.current_location_id, "zone_building")
-
-    def test_flag_keys_are_normalized_on_migration(self):
-        # SET_FLAG/DISCOVER_FLAG normalize flag names, so a v2
-        # save's "PowerGrid" would otherwise sit beside a new "powergrid".
-        loaded = persistence.load(self.save_path)
-        self.assertEqual(loaded.narrative.flags.get("powergrid"), True)
-        self.assertIn("powergrid", loaded.narrative.discovered_flags)
-
-    def test_migration_does_not_mutate_its_input(self):
-        before = copy.deepcopy(V2_SAVE)
-        persistence.migrate_v2_to_v3(V2_SAVE)
-        self.assertEqual(V2_SAVE, before)
-
-    def test_new_zones_get_their_starting_items(self):
-        self.write(V2_SAVE_NO_EXTRA_ITEMS)
-        loaded = persistence.load(self.save_path)
-        street_names = {
-            e.item.name
-            for e in loaded.world.locations["zone_street"].entities
-            if isinstance(e, ItemEntity)
-        }
-        home_names = {
-            e.item.name
-            for e in loaded.world.locations["zone_home"].entities
-            if isinstance(e, ItemEntity)
-        }
-        self.assertIn("Crowbar", street_names)
-        self.assertIn("Canned Beans", home_names)
-        self.assertIn("Water Bottle", home_names)
-
-    def test_items_already_in_the_save_are_not_duplicated(self):
-        loaded = persistence.load(self.save_path)
-        street = loaded.world.locations["zone_street"]
-        self.assertNotIn(
-            "Crowbar", [e.item.name for e in street.entities if isinstance(e, ItemEntity)]
-        )
-        crowbar_count = sum(
-            1
-            for location in loaded.world.locations.values()
-            for e in location.entities
-            if isinstance(e, ItemEntity) and e.item.id == "item_crowbar"
-        )
-        self.assertEqual(crowbar_count, 1)
-
-    def test_migrated_player_is_given_the_apartment_key(self):
-        loaded = persistence.load(self.save_path)
-        self.assertIn("item_apartment_key", [e.item.id for e in loaded.player.inventory])
-
-    def test_key_is_not_duplicated_if_already_held(self):
-        save_with_key = copy.deepcopy(V2_SAVE)
-        save_with_key["player"]["inventory"].append(
-            {"item_id": "item_apartment_key", "hit_points": 10}
-        )
-        self.write(save_with_key)
-
-        loaded = persistence.load(self.save_path)
-        keys = [e for e in loaded.player.inventory if e.item.id == "item_apartment_key"]
-        self.assertEqual(len(keys), 1)
-
-    def test_supply_run_reconciles_against_migrated_state(self):
-        loaded = persistence.load(self.save_path)
-        quest = loaded.quests["quest_supply_run"]
-        self.assertIn("take:item_crowbar", quest.completed_objectives)
-
-    def test_v3_zone_ids_are_derived_from_the_world_not_hard_coded(self):
-        # `_V3_ZONE_IDS` must come from `build_starting_locations()`
-        # rather than a literal set that would silently go stale if a zone
-        # were added, renamed, or removed.
-        from data.locations import build_starting_locations
-
-        self.assertEqual(persistence._V3_ZONE_IDS, frozenset(build_starting_locations().keys()))
-
-
-class MigrationHardeningTests(unittest.TestCase):
-    """Malformed saves must degrade to loading, or a clean None, but never
-    raise; migration edge cases stay correct."""
-
-    # Five malformed v2 saves, each a mutation of the V2_SAVE fixture. Each
-    # must load cleanly, not just avoid crashing.
-    def test_malformed_v2_fields_degrade_to_loading_not_crash(self):
-        cases = {
-            "ground_items entry is null": lambda d: d["world"]["ground_items"].update(
-                {"location_id_office": None}
-            ),
-            "a quest's objectives is null": lambda d: d.update(
-                {"quests": {"q": {"objectives": None}}}
-            ),
-            "a quest's objective_labels is null": lambda d: d["quests"][
-                "quest_custom_errand"
-            ].update({"objective_labels": None}),
-            "a discovered flag is not a string": lambda d: d["narrative"].update(
-                {"discovered_flags": [5]}
-            ),
-            "flags is a list, not a dict": lambda d: d["narrative"].update({"flags": []}),
-        }
-        for description, mutate in cases.items():
-            with self.subTest(description):
-                data = copy.deepcopy(V2_SAVE)
-                mutate(data)
-                result = persistence.from_saved_data(data)  # must not raise
-                self.assertIsInstance(result, GameManager)
-
-    # A non-dict "quests" (v2 or v3) must be treated as empty -- seed
-    # and reconcile the whole roster, same as a missing key.
-    def test_null_quests_seeds_the_roster(self):
-        data = copy.deepcopy(V2_SAVE)
-        data["quests"] = None
-        loaded = persistence.from_saved_data(data)
-        self.assertIsNotNone(loaded)
-        for quest_id in ("quest_supply_run", "quest_marcus_trust", "quest_understand_the_crisis"):
-            self.assertIn(quest_id, loaded.quests)
-
-    def test_quests_as_a_list_seeds_the_roster(self):
-        data = copy.deepcopy(V2_SAVE)
-        data["quests"] = []
-        loaded = persistence.from_saved_data(data)
-        self.assertIsNotNone(loaded)
-        for quest_id in ("quest_supply_run", "quest_marcus_trust", "quest_understand_the_crisis"):
-            self.assertIn(quest_id, loaded.quests)
-
-    # player.inventory: null must not crash the apartment-key grant.
-    def test_null_player_inventory_still_grants_the_apartment_key(self):
-        data = copy.deepcopy(V2_SAVE)
-        data["player"]["inventory"] = None
-        loaded = persistence.from_saved_data(data)
-        self.assertIsNotNone(loaded)
-        self.assertIn("item_apartment_key", [e.item.id for e in loaded.player.inventory])
-
-    # Remapping can collapse two reach objectives onto one already-done
-    # zone; the quest must not be left ACTIVE forever.
-    def test_deduplicated_reach_objectives_completes_the_quest(self):
-        data = copy.deepcopy(V2_SAVE)
-        data["quests"] = {
-            "quest_two_room_errand": {
-                "title": "Check Both Rooms",
-                "status": "active",
-                "objectives": ["reach:location_id_office", "reach:location_id_lobby"],
-                "objective_labels": {
-                    "reach:location_id_office": "Check the office",
-                    "reach:location_id_lobby": "Check the lobby",
-                },
-                "completed_objectives": ["reach:location_id_office"],
-            }
-        }
-        loaded = persistence.from_saved_data(data)
-        self.assertIsNotNone(loaded)
-        quest = loaded.quests["quest_two_room_errand"]
-        self.assertEqual(quest.objectives, ["reach:zone_building"])
-        self.assertEqual(quest.status, QuestStatus.COMPLETED)
-
-    # An item under a location id that won't survive migration (not a
-    # v2 room, not already a v3 zone) must not suppress a new zone's own
-    # starting copy of it -- the original is dropped by from_dict either way.
-    def test_item_under_an_unmapped_location_does_not_suppress_a_new_zones_item(self):
-        data = copy.deepcopy(V2_SAVE_NO_EXTRA_ITEMS)
-        data["world"]["ground_items"] = {
-            "location_id_attic": [{"item_id": "item_crowbar", "hit_points": 50}]
-        }
-        loaded = persistence.from_saved_data(data)
-        self.assertIsNotNone(loaded)
-        street_names = [
-            e.item.name
-            for e in loaded.world.locations["zone_street"].entities
-            if isinstance(e, ItemEntity)
-        ]
-        self.assertIn("Crowbar", street_names)
-        crowbar_count = sum(
-            1
-            for location in loaded.world.locations.values()
-            for e in location.entities
-            if isinstance(e, ItemEntity) and e.item.id == "item_crowbar"
-        )
-        self.assertEqual(crowbar_count, 1)
-
-    # current_place must only be overwritten from a v2 room id; a
-    # non-room current_location_id keeps whatever current_place it already had.
-    def test_current_place_is_kept_for_a_non_room_location(self):
-        data = copy.deepcopy(V2_SAVE)
-        data["player"]["current_location_id"] = "zone_street"
-        data["player"]["current_place"] = "by the bus stop"
-        loaded = persistence.from_saved_data(data)
-        self.assertIsNotNone(loaded)
-        self.assertEqual(loaded.player.current_location_id, "zone_street")
-        self.assertEqual(loaded.player.current_place, "by the bus stop")
-
-    # bool()/str() are the wrong coercions for hand-edited values.
     def test_game_over_string_false_is_not_true(self):
         data = persistence.to_dict(GameManager())
         data["narrative"]["game_over"] = "false"

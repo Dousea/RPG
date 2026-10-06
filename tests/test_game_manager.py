@@ -22,6 +22,64 @@ from modules.action import (
 from tests.support import resolve_actions
 
 
+def _at(day: int, hour: int, minute: int) -> GameManager:
+    gm = GameManager()
+    gm.advance_clock((day - 1) * 1440 + hour * 60 + minute - 480)
+    return gm
+
+
+class ClockTests(unittest.TestCase):
+    """Spec 01, The clock."""
+
+    def test_minutes_zero_is_day_one_0800(self):
+        gm = GameManager()
+        self.assertEqual(gm.narrative.minutes, 0)
+        self.assertEqual((gm.narrative.day, gm.narrative.hour, gm.narrative.minute), (1, 8, 0))
+        self.assertEqual(gm.narrative.time_of_day, "morning")
+        self.assertEqual(gm.world.time, "08:00 AM")
+        self.assertEqual(gm.world.date, "2023-10-01")
+
+    def test_every_band_boundary(self):
+        cases = [
+            ((1, 22, 0), "night"),
+            ((2, 5, 59), "night"),
+            ((2, 6, 0), "morning"),
+            ((2, 11, 59), "morning"),
+            ((2, 12, 0), "afternoon"),
+            ((2, 17, 59), "afternoon"),
+            ((2, 18, 0), "evening"),
+            ((2, 21, 59), "evening"),
+            ((2, 22, 0), "night"),
+        ]
+        for (day, hour, minute), band in cases:
+            with self.subTest(day=day, hour=hour, minute=minute):
+                gm = _at(day, hour, minute)
+                self.assertEqual(gm.narrative.time_of_day, band)
+                self.assertEqual((gm.narrative.hour, gm.narrative.minute), (hour, minute))
+
+    def test_midnight_rolls_the_day_and_the_date(self):
+        before = _at(1, 23, 59)
+        after = _at(2, 0, 0)
+        self.assertEqual(before.narrative.day, 1)
+        self.assertEqual(after.narrative.day, 2)
+        self.assertEqual(before.world.date, "2023-10-01")
+        self.assertEqual(after.world.date, "2023-10-02")
+        self.assertEqual(after.narrative.minutes, before.narrative.minutes + 1)
+
+    def test_world_time_renders_to_the_minute(self):
+        self.assertEqual(_at(1, 0, 5).world.time, "12:05 AM")
+        self.assertEqual(_at(1, 12, 0).world.time, "12:00 PM")
+        self.assertEqual(_at(1, 15, 42).world.time, "03:42 PM")
+        self.assertEqual(_at(1, 23, 59).world.time, "11:59 PM")
+
+    def test_day_and_time_of_day_are_read_only(self):
+        gm = GameManager()
+        with self.assertRaises(AttributeError):
+            gm.narrative.day = 3  # pyright: ignore[reportAttributeAccessIssue]
+        with self.assertRaises(AttributeError):
+            gm.narrative.time_of_day = "night"  # pyright: ignore[reportAttributeAccessIssue]
+
+
 class StartingStateTests(unittest.TestCase):
     def setUp(self):
         self.gm = GameManager()
