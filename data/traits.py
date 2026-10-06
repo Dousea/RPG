@@ -961,3 +961,12 @@ CATCH_COLD_TRAIT_MULT = {  # spec 07
 }
 COLD_RECOVERY_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 0.5, RESILIENT_ID: 1.5}  # spec 07
 COLD_WORSENING_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 1.2, RESILIENT_ID: 0.8}  # spec 07
+GRACEFUL_ID = "graceful"  # spec 09
+CLUMSY_ID = "clumsy"  # spec 09
+INCONSPICUOUS_ID = "inconspicuous"  # spec 09
+CONSPICUOUS_ID = "conspicuous"  # spec 09
+THICK_SKINNED_ID = "thickskinned"  # spec 09
+THIN_SKINNED_ID = "thinskinned"  # spec 09
+KEEN_HEARING_ID = "keenhearing"  # spec 09
+HARD_OF_HEARING_ID = "hardofhearing"  # spec 09
+DEAF_ID = "deaf"  # spec 09

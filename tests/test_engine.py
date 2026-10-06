@@ -14,6 +14,7 @@ from adapters.save import files
 from data.presets import ORTON
 from modules.body import BodyLocation
 from modules.entity.item import ItemEntity
+from modules.entity.zombie import ZombieEntity, ZombieState
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 from tests.test_simulation import LETHAL_ITEM
 
@@ -98,6 +99,34 @@ class TurnTests(EngineTestCase):
         self.assertIsInstance(result["goals"]["short_term"], list)
         self.assertEqual(result["day"], 1)
         self.assertIn("current_place", result)
+
+    def test_snapshot_carries_threats_and_sneaking(self):
+        state = self.engine.state()
+        self.assertEqual(state["threats"], [])
+        self.assertIs(state["sneaking"], False)
+        manager = self.engine.game
+        manager.world.outbreak_started_at = 0
+        manager.player.sneaking = True
+        manager.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id=manager.player.current_location_id,
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.CHASING,
+            gap=3.0,
+        )
+        state = self.engine.state()
+        self.assertEqual(
+            state["threats"],
+            [{"id": "z1", "distance_word": "close", "state_word": "coming at you"}],
+        )
+        self.assertIs(state["sneaking"], True)
 
     def test_snapshot_lists_worn_clothing_with_wetness_words(self):
         self.engine.game.player.worn[BodyLocation.PANTS].wetness = 90.0

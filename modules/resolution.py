@@ -11,6 +11,7 @@ from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
 from .item import BaseItem
 from .location import Location
+from .pace import Pace
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class MoveToZone:
     location: Location
     place: str
     hops: int
+    pace: Pace = Pace.WALK
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,7 @@ class MoveBlocked:
     place: str
     hops: int
     target: Location
+    pace: Pace = Pace.WALK
 
 
 MoveOutcome = StayPut | ShuffleInZone | MoveToSpot | MoveToZone | MoveBlocked
@@ -68,6 +71,14 @@ class NewItem:
     """An item to create, not yet anywhere in the world."""
 
     item: BaseItem
+
+
+@dataclass(frozen=True)
+class TargetZombie:
+    """A zombie to attack, and the minutes the player needs to walk up to it."""
+
+    zombie_id: str
+    approach_minutes: int
 
 
 @dataclass(frozen=True)
@@ -98,5 +109,13 @@ class ExercisePlan:
 
 
 Resolution = (
-    MoveOutcome | HeldItem | NewItem | TargetNpc | NpcDestination | TimeSpan | ExercisePlan | None
+    MoveOutcome
+    | HeldItem
+    | NewItem
+    | TargetNpc
+    | TargetZombie
+    | NpcDestination
+    | TimeSpan
+    | ExercisePlan
+    | None
 )

@@ -13,6 +13,7 @@ from modules.action.types import (
     RemoveGoalAction,
     SetFlagAction,
     SleepAction,
+    StanceAction,
     TakeAction,
     TakeOffAction,
     UpdateConditionAction,
@@ -242,3 +243,33 @@ class WearParseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaceParseTests(unittest.TestCase):
+    """Spec 09, Pace: MOVE_TO gains a run pace; STANCE toggles sneaking."""
+
+    def test_move_to_defaults_to_walking(self):
+        action = parse_action_line("MOVE_TO the street")
+        self.assertEqual(action, MoveAction(destination="the street"))
+        assert isinstance(action, MoveAction)
+        self.assertFalse(action.run)
+
+    def test_move_to_with_run(self):
+        self.assertEqual(
+            parse_action_line("MOVE_TO the street run"),
+            MoveAction(destination="the street", run=True),
+        )
+        self.assertEqual(
+            parse_action_line("MOVE_TO out, running"), MoveAction(destination="out", run=True)
+        )
+
+    def test_a_lone_run_is_a_spot_not_a_pace(self):
+        self.assertEqual(parse_action_line("MOVE_TO run"), MoveAction(destination="run"))
+
+    def test_stance_sneak_and_stand(self):
+        self.assertEqual(parse_action_line("STANCE sneak"), StanceAction(sneaking=True))
+        self.assertEqual(parse_action_line("STANCE stand"), StanceAction(sneaking=False))
+
+    def test_a_bad_stance_is_a_parse_failure(self):
+        self.assertIsInstance(parse_action_line("STANCE crouch"), ParseFailure)
+        self.assertIsInstance(parse_action_line("STANCE"), ParseFailure)

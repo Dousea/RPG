@@ -4,7 +4,7 @@ import unittest
 
 from managers.context import ContextBuilder
 from managers.game import GameManager
-from modules.action.types import MoveAction
+from modules.action.types import MoveAction, StanceAction
 from tests.support import simulate
 
 
@@ -215,3 +215,50 @@ class ResidualFixExitPhraseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaceTests(unittest.TestCase):
+    """Spec 09, Pace: run and sneak change the hop cost; STANCE toggles sneaking."""
+
+    def minutes_for(self, gm: GameManager, *actions) -> int:
+        before = gm.narrative.minutes
+        simulate(gm, *actions)
+        return gm.narrative.minutes - before
+
+    def test_walking_hop_is_ten_minutes(self):
+        self.assertEqual(self.minutes_for(GameManager(), MoveAction(destination="out")), 10)
+
+    def test_running_hop_is_five_minutes(self):
+        gm = GameManager()
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out", run=True)), 5)
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+
+    def test_a_three_hop_run_is_fifteen_minutes(self):
+        gm = GameManager()
+        self.assertEqual(
+            self.minutes_for(gm, MoveAction(destination="zone_neighborhood", run=True)), 15
+        )
+
+    def test_sneaking_hop_is_twenty_minutes(self):
+        gm = GameManager()
+        simulate(gm, StanceAction(sneaking=True))
+        self.assertTrue(gm.player.sneaking)
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out")), 20)
+
+    def test_stance_costs_no_time(self):
+        gm = GameManager()
+        self.assertEqual(self.minutes_for(gm, StanceAction(sneaking=True)), 0)
+        self.assertEqual(self.minutes_for(gm, StanceAction(sneaking=False)), 0)
+        self.assertFalse(gm.player.sneaking)
+
+    def test_running_ends_sneaking(self):
+        gm = GameManager()
+        simulate(gm, StanceAction(sneaking=True))
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out", run=True)), 5)
+        self.assertFalse(gm.player.sneaking)
+
+    def test_a_blocked_walk_is_still_a_minute_at_least(self):
+        gm = GameManager()
+        simulate(gm, MoveAction(destination="out"))
+        gm.player.inventory.clear()
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="in")), 1)

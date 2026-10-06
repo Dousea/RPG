@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from .entity import BaseEntity
+from .entity.zombie import ZombieEntity
 
 
 @dataclass
@@ -23,6 +24,11 @@ class Location:
     indoors: bool = False
     # Which storey an indoor zone is on; upper floors hold heat differently (spec 06).
     floor: int = 0
+    # The farthest a zombie in the zone can be from the player, the zone's size in
+    # 8x8-tile chunks, and its per-chunk zombie intensity from 0 to 255 (spec 09).
+    size_tiles: int = 8
+    chunks: int = 1
+    zombie_intensity: int = 0
 
     def bed_type_at(self, place: str) -> str:
         """The bed type at a free-text spot inside this zone."""
@@ -51,3 +57,10 @@ class World:
     locations: dict[str, Location] = field(
         default_factory=dict[str, Location]
     )  # e.g., {"zone_home": Location(...)}
+    # Game minute the dead started walking; None before then, and no zombies exist (spec 09).
+    outbreak_started_at: int | None = None
+    zombies: dict[str, ZombieEntity] = field(default_factory=dict[str, ZombieEntity])
+    next_zombie_number: int = 1
+    last_redistribution_minute: int | None = None
+    # Zombies killed in each zone; the zone's population never grows back over them.
+    zombie_kills: dict[str, int] = field(default_factory=dict[str, int])

@@ -25,6 +25,7 @@ from modules.action.types import (
 )
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
+from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.quest import QuestState, QuestStatus
 from modules.stats import CharacterStat
 from tests.support import IsolatedSaveTestCase, resolve_actions
@@ -271,8 +272,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_11(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 11)
+    def test_schema_version_is_13(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 13)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -723,3 +724,67 @@ class HandEditedFieldTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ZombieSaveTests(IsolatedSaveTestCase):
+    """Spec 09, Saves: the outbreak time, zombies, next id, redistribution time and sneaking."""
+
+    def test_zombies_the_outbreak_and_sneaking_round_trip(self):
+        gm = GameManager()
+        gm.world.outbreak_started_at = 4300
+        gm.world.last_redistribution_minute = 5020
+        gm.world.next_zombie_number = 8
+        gm.world.zombie_kills = {"zone_street": 3}
+        gm.player.sneaking = True
+        gm.world.zombies["z7"] = ZombieEntity(
+            zombie_id="z7",
+            zone_id="zone_street",
+            health=2.25,
+            speed_type=2,
+            speed_mod=0.9,
+            lunger=True,
+            strength=3,
+            memory=800,
+            sight=3,
+            hearing=2,
+            state=ZombieState.ATTACKING,
+            gap=1.0,
+            facing_cos=0.5,
+            time_since_seen=360.0,
+            has_chased=True,
+            bonus_spot_time=540.0,
+            side=AttackSide.BEHIND,
+            sound_gap=12.5,
+        )
+        loaded = codec.from_dict(codec.to_dict(gm))
+        self.assertEqual(loaded.world.outbreak_started_at, 4300)
+        self.assertEqual(loaded.world.last_redistribution_minute, 5020)
+        self.assertEqual(loaded.world.next_zombie_number, 8)
+        self.assertEqual(loaded.world.zombie_kills, {"zone_street": 3})
+        self.assertTrue(loaded.player.sneaking)
+        self.assertEqual(loaded.world.zombies, gm.world.zombies)
+
+    def test_a_game_before_the_outbreak_has_no_zombies(self):
+        loaded = codec.from_dict(codec.to_dict(GameManager()))
+        self.assertIsNone(loaded.world.outbreak_started_at)
+        self.assertEqual(loaded.world.zombies, {})
+        self.assertFalse(loaded.player.sneaking)
+
+    def test_a_zombie_in_an_unknown_zone_is_dropped(self):
+        gm = GameManager()
+        gm.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_street",
+            health=1.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+        )
+        data = codec.to_dict(gm)
+        data["world"]["zombies"][0]["zone_id"] = "zone_moon"
+        loaded = codec.from_dict(data)
+        self.assertEqual(loaded.world.zombies, {})

@@ -24,6 +24,7 @@ from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects
+from managers.zombies import threat_views
 from modules.action.parser import parse_action_plan
 from modules.character.build import CharacterBuild
 from modules.character.skills import SkillState
@@ -269,6 +270,15 @@ class GameEngine:
             # Plain names, kept for callers that only need the roster.
             "npcs_present": [npc.name for npc in npcs_here],
             "npcs": [_npc_regard(manager, npc) for npc in npcs_here],
+            "threats": [
+                {
+                    "id": view.zombie_id,
+                    "distance_word": view.distance_word,
+                    "state_word": view.state_word,
+                }
+                for view in threat_views(manager)
+            ],
+            "sneaking": player.sneaking,
         }
 
 

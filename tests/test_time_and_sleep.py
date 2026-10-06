@@ -2,10 +2,12 @@
 
 import random
 import unittest
+from unittest.mock import patch
 
 from data.items import ITEMS
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from managers.zombies import MinuteReport
 from modules.action.types import (
     AddGoalAction,
     AttackAction,
@@ -282,12 +284,12 @@ class SleepSpanTests(unittest.TestCase):
         core = SimulationCore(gm, rng=random.Random(7))
         calls = {"n": 0}
 
-        def zombie_on_third_chunk() -> int:
+        def zombie_on_minute_thirty(*args: object) -> MinuteReport:
             calls["n"] += 1
-            return 1 if calls["n"] == 3 else 0
+            return MinuteReport(new_seen=1 if calls["n"] == 30 else 0)
 
-        core._new_zombies_seen = zombie_on_third_chunk  # pyright: ignore[reportPrivateUsage]
-        facts = core.resolve([SleepAction()])
+        with patch.object(core._loop, "run_minute", zombie_on_minute_thirty):  # pyright: ignore[reportPrivateUsage]
+            facts = core.resolve([SleepAction()])
         self.assertIn("A zombie wakes Orton in a panic.", facts)
         self.assertEqual(gm.narrative.minutes, 30)
         self.assertFalse(gm.player.asleep)
@@ -303,8 +305,8 @@ class SleepSpanTests(unittest.TestCase):
             gm = GameManager()
             gm.player.stats.set(CharacterStat.FATIGUE, 1)
             core = SimulationCore(gm, rng=random.Random(seed))
-            core._new_zombies_seen = lambda: 1  # pyright: ignore[reportPrivateUsage]
-            core.resolve([SleepAction()])
+            with patch.object(core._loop, "run_minute", lambda *args: MinuteReport(new_seen=1)):  # pyright: ignore[reportPrivateUsage]
+                core.resolve([SleepAction()])
             outcomes.append(gm.player.stats.get(CharacterStat.PANIC))
         self.assertNotEqual(outcomes[0], outcomes[1])
         for panic in outcomes:

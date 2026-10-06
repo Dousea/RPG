@@ -20,8 +20,10 @@ from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
+from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.quest import QuestState
 from modules.stats import CharacterStat
+from modules.weather import WeatherSample
 from tests.support import resolve_actions
 
 
@@ -574,3 +576,104 @@ class ExerciseParserPromptTests(unittest.TestCase):
 
     def test_the_parser_is_taught_the_verb(self):
         self.assertIn("EXERCISE", llm.PARSER_SYSTEM_PROMPT)
+
+
+def clear_sky(gm: GameManager, daylight: float = 1.0) -> None:
+    gm.climate.sample = lambda minutes: WeatherSample(  # type: ignore[method-assign]
+        15, 0.5, 0, 0, 0, 0, False, 0, daylight=daylight
+    )
+
+
+def add_zombie(gm: GameManager, gap: float, state: ZombieState, **fields) -> ZombieEntity:
+    number = gm.world.next_zombie_number
+    gm.world.next_zombie_number += 1
+    zombie = ZombieEntity(
+        zombie_id=f"z{number}",
+        zone_id=gm.player.current_location_id,
+        health=fields.pop("health", 1.7),
+        speed_type=2,
+        speed_mod=fields.pop("speed_mod", 0.91),
+        lunger=fields.pop("lunger", False),
+        strength=3,
+        memory=800,
+        sight=3,
+        hearing=3,
+        state=state,
+        gap=gap,
+        **fields,
+    )
+    gm.world.zombies[zombie.zombie_id] = zombie
+    return zombie
+
+
+def threats_block(prompt: str) -> str:
+    return prompt.split("[THREATS]")[1].split("\n[")[0]
+
+
+class ThreatsContextTests(unittest.TestCase):
+    """Spec 09, What the narrator and the player see: the [THREATS] block."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_street"
+        self.gm.world.outbreak_started_at = 0
+        clear_sky(self.gm)
+
+    def narrator_threats(self) -> str:
+        block = threats_block(ContextBuilder(self.gm).build_narrator_prompt("look"))
+        return block.split("number.)\n", 1)[1]
+
+    def test_perceived_zombies_are_listed_with_a_distance_word_and_what_they_do(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING)
+        add_zombie(self.gm, 12, ZombieState.IDLE)
+        add_zombie(self.gm, 18, ZombieState.IDLE)
+        block = self.narrator_threats()
+        self.assertIn("z1, close, coming at you", block)
+        self.assertIn("z2, nearby, hasn't noticed you", block)
+        self.assertIn("z3, far off, hasn't noticed you", block)
+
+    def test_the_distance_words(self):
+        for gap in (1, 5, 6, 15, 16):
+            add_zombie(self.gm, gap, ZombieState.IDLE)
+        words = [line.split(", ")[1] for line in self.narrator_threats().strip().splitlines()]
+        self.assertEqual(words, ["on you", "close", "nearby", "nearby", "far off"])
+
+    def test_a_zombie_behind_the_player_is_right_behind_them(self):
+        add_zombie(self.gm, 1, ZombieState.ATTACKING, side=AttackSide.BEHIND)
+        self.assertIn("z1, on you, right behind you", self.narrator_threats())
+
+    def test_a_lunger_that_has_chased_is_fast(self):
+        lunger = add_zombie(self.gm, 8, ZombieState.CHASING, lunger=True)
+        lunger.has_chased = True
+        self.assertIn("z1, nearby, coming at you fast", self.narrator_threats())
+
+    def test_never_health_speed_or_senses(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING, health=2.345, speed_mod=0.8765)
+        block = self.narrator_threats().casefold()
+        for forbidden in ("2.3", "0.87", "health", "speed", "sight", "hearing", "shambler", "poor"):
+            self.assertNotIn(forbidden, block)
+        self.assertNotRegex(block, r"\d\.\d")
+
+    def test_zombies_beyond_what_the_player_perceives_are_not_listed(self):
+        add_zombie(self.gm, 30, ZombieState.IDLE)
+        other = add_zombie(self.gm, 3, ZombieState.IDLE)
+        other.zone_id = "zone_building"
+        self.assertEqual(self.narrator_threats().strip(), "None")
+
+    def test_before_the_outbreak_there_is_nothing(self):
+        self.gm.world.outbreak_started_at = None
+        self.assertEqual(self.narrator_threats().strip(), "None")
+
+    def test_a_zombie_that_is_only_heard_is_never_described(self):
+        clear_sky(self.gm, daylight=0.0)
+        self.gm.player.traits.append("keenhearing")
+        add_zombie(self.gm, 6, ZombieState.IDLE)
+        block = self.narrator_threats()
+        self.assertIn("something shuffling nearby", block)
+        self.assertNotIn("z1", block)
+
+    def test_the_parser_sees_the_ids_and_distances_only(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING)
+        block = threats_block(ContextBuilder(self.gm).build_parser_prompt("look"))
+        self.assertIn("z1 (close)", block)
+        self.assertNotIn("coming at you", block)

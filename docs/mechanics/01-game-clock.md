@@ -98,7 +98,7 @@ Further rules.
   ([survival stats](02-survival-stats.md#turn-flow)). If the player dies part
   way through, only the minutes up to that point pass.
 - Running and sneaking hops cost 5 and 20 minutes each (`ZONE_HOP_RUNNING_MIN`,
-  `ZONE_HOP_SNEAKING_MIN`). No pace exists yet, so every hop costs 10.
+  `ZONE_HOP_SNEAKING_MIN`); see [Zombies](09-zombies.md#pace).
 
 Other rows named in `data/time_costs.py` (`SWING_MIN`, `QUICK_ACTION_MIN`,
 `WALK_TO_BARRIER_MIN`, `WINDOW_CLIMB_MIN`, `WEAR_MINUTES`, `TAKE_OFF_MINUTES`,

@@ -34,6 +34,8 @@ class PlayerEntity(BaseEntity):
     stats: Stats = field(default_factory=Stats)
     thermal: ThermalState = field(default_factory=ThermalState)
     asleep: bool = False
+    # Moving quietly: every walk is at sneak pace (spec 09).
+    sneaking: bool = False
     # HP the status effects have taken that has not yet added up to a whole point.
     fractional_hp_loss: float = 0.0
     # Well-fed timer: counts down while the player digests; drives Food Eaten.

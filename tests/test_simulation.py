@@ -1,12 +1,23 @@
 """Simulation Core: deterministic outcome resolution for accepted actions."""
 
+import dataclasses
 import random
 import unittest
 
+from adapters.save import codec
 from data.items import ITEMS
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.skills import SkillEngine
+from managers.validator import ActionValidator, Rejected
+from managers.zombies import (
+    MinuteReport,
+    PlayerMinute,
+    ZombieLoop,
+    enter_zone,
+    redistribution_due,
+    threat_views,
+)
 from modules.action.types import (
     AddGoalAction,
     AttackAction,
@@ -16,6 +27,8 @@ from modules.action.types import (
     NpcMoveAction,
     NpcStatusAction,
     SetFlagAction,
+    SleepAction,
+    StanceAction,
     TakeAction,
     TakeOffAction,
     UpdateInventoryAction,
@@ -24,12 +37,17 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
-from modules.body import BodyLocation
+from modules.body import BodyLocation, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
+from modules.character.skills import SkillState
+from modules.effect import StartOutbreakEffect
 from modules.entity.item import ItemEntity
-from modules.item import ConsumableItem
+from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
+from modules.item import ClothingItem, ConsumableItem
 from modules.modifier import HPModifier
 from modules.stats import CharacterStat
+from modules.weather import WeatherSample
 from tests.support import simulate
 
 # A test-local lethal item, not part of data/items.py: -500 HP guarantees
@@ -544,3 +562,487 @@ class TickWiringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def zombie_game(zone_id: str = "zone_street") -> GameManager:
+    """A game after the outbreak, with no zombies yet, the player standing in `zone_id`."""
+    gm = GameManager()
+    gm.player.current_location_id = zone_id
+    gm.world.outbreak_started_at = 0
+    gm.world.last_redistribution_minute = 0
+    clear = WeatherSample(
+        air_temperature=15,
+        humidity=0.5,
+        wind_intensity=0,
+        wind_angle=0,
+        cloud_intensity=0,
+        precipitation_intensity=0,
+        precipitation_is_snow=False,
+        fog_intensity=0,
+        daylight=1.0,
+    )
+    gm.climate.sample = lambda minutes: clear  # type: ignore[method-assign]
+    return gm
+
+
+def add_zombie(
+    gm: GameManager,
+    zone_id: str | None = None,
+    *,
+    gap: float,
+    state: ZombieState = ZombieState.IDLE,
+    facing_cos: float = 0.0,
+    speed_mod: float = 0.6,
+    lunger: bool = False,
+    health: float = 2.0,
+) -> ZombieEntity:
+    number = gm.world.next_zombie_number
+    gm.world.next_zombie_number += 1
+    zombie = ZombieEntity(
+        zombie_id=f"z{number}",
+        zone_id=zone_id or gm.player.current_location_id,
+        health=health,
+        speed_type=2 if lunger else 3,
+        speed_mod=speed_mod,
+        lunger=lunger,
+        strength=3,
+        memory=800,
+        sight=2,
+        hearing=2,
+        state=state,
+        gap=gap,
+        facing_cos=facing_cos,
+        sound_gap=gap,
+    )
+    gm.world.zombies[zombie.zombie_id] = zombie
+    return zombie
+
+
+class ZombieMinuteLoopTests(unittest.TestCase):
+    """Spec 09, The minute loop and Interruptions."""
+
+    def spent(self, gm: GameManager, *actions) -> tuple[int, list[str]]:
+        before = gm.narrative.minutes
+        facts = simulate(gm, *actions, rng=random.Random(1))
+        return gm.narrative.minutes - before, facts
+
+    def test_nothing_happens_before_the_outbreak(self):
+        gm = zombie_game()
+        gm.world.outbreak_started_at = None
+        add_zombie(gm, gap=3, state=ZombieState.ALERTED, facing_cos=1.0)
+        minutes, facts = self.spent(gm, WaitAction(duration=Duration(minutes=30)))
+        self.assertEqual(minutes, 30)
+        self.assertFalse(any("zombie" in fact.casefold() for fact in facts))
+
+    def test_a_wait_beside_a_zombie_facing_the_player_stops_in_the_first_minute(self):
+        gm = zombie_game()
+        control = codec.from_dict(codec.to_dict(gm))
+        simulate(control, WaitAction(duration=Duration(minutes=30)))
+        zombie = add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        start = gm.player.stats.get(CharacterStat.HUNGER)
+        minutes, facts = self.spent(gm, WaitAction(duration=Duration(minutes=30)))
+        self.assertEqual(minutes, 1)
+        self.assertEqual(zombie.state, ZombieState.CHASING)
+        self.assertTrue(any("notices" in fact for fact in facts))
+        one_minute = gm.player.stats.get(CharacterStat.HUNGER) - start
+        thirty_minutes = control.player.stats.get(CharacterStat.HUNGER) - start
+        self.assertAlmostEqual(one_minute, thirty_minutes / 30, delta=thirty_minutes / 300)
+
+    def test_an_interruption_cancels_the_rest_of_the_plan(self):
+        gm = zombie_game("zone_building")
+        add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        self.spent(gm, WaitAction(duration=Duration(minutes=30)), MoveAction(destination="out"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+
+    def test_walking_away_from_a_shambler_opens_the_gap_and_it_forgets(self):
+        gm = zombie_game("zone_building")
+        shambler = add_zombie(gm, gap=10, state=ZombieState.CHASING, facing_cos=1.0, speed_mod=0.6)
+        shambler.time_since_seen = 0
+        minutes, _ = self.spent(gm, MoveAction(destination="zone_neighborhood"))
+        self.assertEqual(minutes, 20)
+        self.assertEqual(shambler.state, ZombieState.IDLE)
+        self.assertGreater(shambler.gap, 20)
+
+    def test_a_lunger_keeps_the_gap(self):
+        gm = zombie_game("zone_building")
+        lunger = add_zombie(
+            gm, gap=10, state=ZombieState.CHASING, facing_cos=1.0, speed_mod=0.9, lunger=True
+        )
+        lunger.time_since_seen = 0
+        self.spent(gm, MoveAction(destination="zone_neighborhood"))
+        self.assertEqual(lunger.state, ZombieState.CHASING)
+        self.assertGreater(lunger.gap, 14)
+        self.assertLess(lunger.gap, 20)
+
+    def test_footsteps_alert_an_idle_zombie_in_earshot(self):
+        gm = zombie_game("zone_street")
+        zombie = add_zombie(gm, gap=5, state=ZombieState.IDLE)
+        self.spent(gm, MoveAction(destination="zone_neighborhood"))
+        self.assertNotEqual(zombie.state, ZombieState.IDLE)
+
+    def test_a_chaser_forgets_on_its_fifth_minute_unseen(self):
+        gm = zombie_game()
+        gm.climate.sample = lambda minutes: dataclasses.replace(  # type: ignore[method-assign]
+            WeatherSample(15, 0.5, 0, 0, 0, 0, False, 0, daylight=0.0)
+        )
+        chaser = add_zombie(gm, gap=100, state=ZombieState.CHASING, facing_cos=1.0)
+        chaser.time_since_seen = 0
+        self.spent(gm, WaitAction(duration=Duration(minutes=4)))
+        self.assertEqual(chaser.state, ZombieState.CHASING)
+        self.spent(gm, WaitAction(duration=Duration(minutes=1)))
+        self.assertEqual(chaser.state, ZombieState.IDLE)
+
+    def test_a_sleeper_is_woken_in_a_panic_when_a_zombie_notices_them(self):
+        gm = zombie_game("zone_building")
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        minutes, facts = self.spent(gm, SleepAction())
+        self.assertLess(minutes, 10)
+        self.assertIn("A zombie wakes Orton in a panic.", facts)
+        self.assertFalse(gm.player.asleep)
+
+    def test_the_population_is_redistributed_every_twelve_hours(self):
+        gm = zombie_game("zone_home")
+        self.spent(gm, WaitAction(duration=Duration(minutes=780)))
+        self.assertEqual(gm.world.last_redistribution_minute, 720)
+        zones = {z.zone_id for z in gm.world.zombies.values()}
+        self.assertIn("zone_neighborhood", zones)
+        self.assertNotIn("zone_home", zones)
+
+    def test_sneaking_past_zombies_that_never_notice_trains_sneaking(self):
+        gm = zombie_game("zone_street")
+        add_zombie(gm, gap=30, state=ZombieState.IDLE)
+        simulate(gm, StanceAction(sneaking=True))
+        simulate(gm, MoveAction(destination="zone_neighborhood"), rng=random.Random(2))
+        self.assertGreater(gm.player.skills["sneaking"].xp, 0)
+
+    def test_a_chaser_left_behind_stays_in_the_zone_the_player_left(self):
+        gm = zombie_game("zone_street")
+        shambler = add_zombie(gm, gap=15, state=ZombieState.CHASING, speed_mod=0.6)
+        shambler.time_since_seen = 0
+        self.spent(gm, MoveAction(destination="zone_building"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertGreater(shambler.gap, 20)
+        self.assertEqual(shambler.zone_id, "zone_street")
+
+    def test_a_chaser_keeping_pace_follows_the_player_into_the_new_zone(self):
+        gm = zombie_game("zone_street")
+        lunger = add_zombie(gm, gap=10, state=ZombieState.CHASING, speed_mod=0.9, lunger=True)
+        lunger.time_since_seen = 0
+        self.spent(gm, MoveAction(destination="zone_building"))
+        self.assertLessEqual(lunger.gap, 20)
+        self.assertEqual(lunger.zone_id, "zone_building")
+
+    def test_a_zombie_that_reaches_the_player_attacks_and_stops_the_action(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
+        zombie.time_since_seen = 0
+        minutes, facts = self.spent(gm, WaitAction(duration=Duration(minutes=30)))
+        self.assertEqual(minutes, 1)
+        self.assertEqual(zombie.state, ZombieState.ATTACKING)
+        self.assertEqual(zombie.side.value, "front")  # type: ignore[union-attr]
+        self.assertTrue(any("A zombie" in fact or "shoves" in fact for fact in facts))
+
+    def test_three_zombies_on_the_player_drag_them_down(self):
+        facts: list[str] = []
+        gm = zombie_game()
+        for seed in range(30):
+            gm = zombie_game()
+            for _ in range(3):
+                zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
+                zombie.time_since_seen = 0
+            facts = simulate(gm, WaitAction(duration=Duration(minutes=5)), rng=random.Random(seed))
+            if gm.narrative.game_over:
+                break
+        self.assertTrue(gm.narrative.game_over)
+        self.assertIn("dragged down by the dead", gm.narrative.death_cause)
+        self.assertTrue(any("has died" in fact for fact in facts))
+
+    def test_an_attack_wakes_a_sleeper(self):
+        gm = zombie_game("zone_building")
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
+        zombie.time_since_seen = 0
+        minutes, facts = self.spent(gm, SleepAction())
+        self.assertEqual(minutes, 1)
+        self.assertFalse(gm.player.asleep)
+        self.assertIn("A zombie wakes Orton in a panic.", facts)
+
+    def test_minutes_with_an_attacker_count_as_exercise(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
+        zombie.time_since_seen = 0
+        before = gm.player.stats.get(CharacterStat.ENDURANCE)
+        simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(3))
+        self.assertLess(gm.player.stats.get(CharacterStat.ENDURANCE), before)
+
+    def test_a_wound_lowers_health(self):
+        lost = 0
+        for seed in range(40):
+            gm = zombie_game()
+            zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
+            zombie.time_since_seen = 0
+            simulate(gm, WaitAction(duration=Duration(minutes=1)), rng=random.Random(seed))
+            lost += gm.player.max_hit_points - gm.player.hit_points
+        self.assertGreater(lost, 0)
+
+
+def put_on_armour(gm: GameManager) -> None:
+    """Clothing that stops every wound, so a fight's outcome doesn't depend on the dice."""
+    item = ClothingItem(
+        id="item_test_armour",
+        name="Test armour",
+        description="",
+        max_hit_points=100,
+        tags=[],
+        body_location=BodyLocation.JACKET,
+        covers=frozenset(BodyPart),
+        insulation=0.5,
+        wind_resistance=0.5,
+        water_resistance=0.5,
+        weight=1.0,
+        scratch_defense=100,
+        bite_defense=100,
+    )
+    gm.player.worn[BodyLocation.JACKET] = ItemEntity(item=item)
+
+
+class ZombieAttackActionTests(unittest.TestCase):
+    """Spec 09, Zombies going down: ATTACK on a zombie, approach minutes and removal."""
+
+    def attack(self, gm: GameManager, target: str, seed: int = 1) -> tuple[int, list[str]]:
+        before = gm.narrative.minutes
+        facts = simulate(gm, AttackAction(target_name=target), rng=random.Random(seed))
+        return gm.narrative.minutes - before, facts
+
+    def test_attacking_a_zombie_six_tiles_away_spends_the_approach_then_the_swing(self):
+        gm = zombie_game()
+        put_on_armour(gm)
+        zombie = add_zombie(gm, gap=6, health=3.0)
+        minutes, facts = self.attack(gm, zombie.zombie_id)
+        self.assertEqual(minutes, 3)
+        self.assertLess(zombie.health, 3.0)
+        self.assertFalse(any(fact.startswith("Refused") for fact in facts))
+
+    def test_a_zombie_next_to_the_player_costs_only_the_swing(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, health=3.0)
+        minutes, _ = self.attack(gm, zombie.zombie_id)
+        self.assertEqual(minutes, 1)
+
+    def test_the_word_zombie_means_the_nearest_one(self):
+        gm = zombie_game()
+        put_on_armour(gm)
+        far = add_zombie(gm, gap=12, health=3.0, state=ZombieState.CHASING)
+        far.time_since_seen = 0
+        near = add_zombie(gm, gap=2, health=3.0)
+        self.attack(gm, "zombie")
+        self.assertLess(near.health, 3.0)
+        self.assertEqual(far.health, 3.0)
+
+    def test_a_zombie_at_zero_health_is_removed_and_stays_gone(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, health=0.4)
+        _, facts = self.attack(gm, zombie.zombie_id)
+        self.assertNotIn(zombie.zombie_id, gm.world.zombies)
+        self.assertTrue(any("down" in fact for fact in facts))
+        simulate(gm, WaitAction(duration=Duration(minutes=60)))
+        self.assertNotIn(zombie.zombie_id, gm.world.zombies)
+
+    def test_a_zombie_that_is_not_here_is_refused(self):
+        gm = zombie_game()
+        add_zombie(gm, "zone_building", gap=3)
+        _, facts = self.attack(gm, "z1")
+        self.assertTrue(facts[0].startswith("Refused"))
+        _, facts = self.attack(gm, "zombie")
+        self.assertTrue(facts[0].startswith("Refused"))
+
+    def test_attacking_wakes_an_idle_zombie_and_it_hits_back(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, health=3.0)
+        self.attack(gm, zombie.zombie_id)
+        self.assertEqual(zombie.state, ZombieState.ATTACKING)
+
+    def test_a_fight_is_only_interrupted_by_a_wound_or_a_drag_down(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, health=3.0)
+        zombie.state = ZombieState.ATTACKING
+        zombie.time_since_seen = 0
+        zombie.side = AttackSide.FRONT
+        gm.player.skills["fitness"] = SkillState(level=10, xp=0)
+        gm.player.skills["strength"] = SkillState(level=10, xp=0)
+        self.assertFalse(gm.narrative.game_over)
+        minutes, _ = self.attack(gm, zombie.zombie_id)
+        self.assertEqual(minutes, 1)
+
+    def test_a_zombie_coming_into_view_is_counted_once_for_the_stats(self):
+        gm = zombie_game()
+        add_zombie(gm, gap=30, state=ZombieState.ALERTED, facing_cos=1.0)
+        counts: list[int] = []
+
+        class Recorder:
+            def apply(self, stats, hours, ctx):  # noqa: ANN001
+                counts.append(ctx.new_zombies_seen)
+
+        core = SimulationCore(gm, rng=random.Random(1))
+        core.stats_engine.register(Recorder())
+        core.resolve([WaitAction(duration=Duration(minutes=20))])
+        self.assertEqual(counts, [1])
+
+
+class StartOutbreakTests(unittest.TestCase):
+    """Spec 09, The outbreak: the story effect that starts it."""
+
+    def test_the_effect_stamps_the_minute_and_fills_the_zones(self):
+        gm = GameManager()
+        gm.advance_clock(3 * 1440 - 480 + 360)
+        SimulationCore(gm, rng=random.Random(1)).apply_story_effect(StartOutbreakEffect())
+        self.assertEqual(gm.world.outbreak_started_at, gm.narrative.minutes)
+        self.assertEqual(gm.world.last_redistribution_minute, gm.narrative.minutes)
+        zones = [zombie.zone_id for zombie in gm.world.zombies.values()]
+        self.assertGreater(len(zones), 20)
+        self.assertNotIn("zone_home", zones)
+
+    def test_zombies_in_the_players_zone_come_into_view_on_the_next_minute(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        core = SimulationCore(gm, rng=random.Random(1))
+        core.apply_story_effect(StartOutbreakEffect())
+        counts: list[int] = []
+
+        class Recorder:
+            def apply(self, stats, hours, ctx):  # noqa: ANN001
+                counts.append(ctx.new_zombies_seen)
+
+        core.stats_engine.register(Recorder())
+        core.resolve([WaitAction(duration=Duration(minutes=1))])
+        self.assertGreaterEqual(counts[0], 1)
+
+
+class ZombieFollowUpTests(unittest.TestCase):
+    """Spec 09: Hearing, Movement, Population and What the narrator and the player see."""
+
+    def run_wait(self, gm: GameManager, minutes: int) -> None:
+        simulate(gm, WaitAction(duration=Duration(minutes=minutes)), rng=random.Random(1))
+
+    def test_redistribution_is_due_at_twelve_hours_and_not_before(self):
+        gm = zombie_game()
+        self.assertFalse(redistribution_due(gm.world, 719))
+        self.assertTrue(redistribution_due(gm.world, 720))
+
+    def test_a_chaser_in_another_zone_stops_at_a_closed_door(self):
+        gm = zombie_game("zone_street")
+        gm.world.locations["zone_neighborhood"].entities.append(
+            DoorEntity(leads_to="zone_street", state=UnlockableEntityLockState.LOCKED)
+        )
+        chaser = add_zombie(
+            gm, "zone_neighborhood", gap=60, state=ZombieState.CHASING, facing_cos=1.0
+        )
+        chaser.time_since_seen = 0
+        self.run_wait(gm, 1)
+        self.assertEqual(chaser.state, ZombieState.IDLE)
+        self.assertEqual(chaser.zone_id, "zone_neighborhood")
+
+    def test_a_chaser_in_another_zone_closes_in_when_the_way_is_open(self):
+        gm = zombie_game("zone_street")
+        chaser = add_zombie(
+            gm, "zone_neighborhood", gap=60, state=ZombieState.CHASING, facing_cos=1.0
+        )
+        chaser.time_since_seen = 0
+        self.run_wait(gm, 1)
+        self.assertEqual(chaser.state, ZombieState.CHASING)
+        self.assertLess(chaser.gap, 60)
+
+    def test_a_zombie_alerted_in_the_players_zone_stays_when_the_player_leaves(self):
+        gm = zombie_game("zone_street")
+        zombie = add_zombie(gm, gap=30, state=ZombieState.ALERTED, facing_cos=-1.0)
+        zombie.sound_gap = 12
+        enter_zone(gm.world, "zone_neighborhood", "zone_street", random.Random(1))
+        gm.player.current_location_id = "zone_neighborhood"
+        self.run_wait(gm, 1)
+        self.assertEqual(zombie.zone_id, "zone_street")
+        self.assertEqual(zombie.state, ZombieState.IDLE)
+        self.assertEqual(zombie.sound_gap, 0)
+
+    def test_a_zombie_alerted_in_the_players_zone_stays_when_the_player_walks_away(self):
+        gm = zombie_game("zone_street")
+        zombie = add_zombie(gm, gap=60, state=ZombieState.ALERTED, facing_cos=-1.0)
+        zombie.sound_gap = 12
+        simulate(gm, MoveAction(destination="zone_neighborhood"), rng=random.Random(1))
+        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
+        self.assertEqual(zombie.zone_id, "zone_street")
+
+    def test_a_lunger_still_reads_fast_after_a_long_time_unseen(self):
+        gm = zombie_game("zone_street")
+        lunger = add_zombie(gm, gap=5, lunger=True, state=ZombieState.IDLE)
+        lunger.has_chased = True
+        lunger.time_since_seen = 600 * 180
+        words = {view.zombie_id: view.state_word for view in threat_views(gm)}
+        self.assertEqual(words[lunger.zombie_id], "coming at you fast")
+
+    def test_a_zombie_alerted_from_another_zone_still_crosses_in(self):
+        gm = zombie_game("zone_street")
+        zombie = add_zombie(
+            gm, "zone_neighborhood", gap=0, state=ZombieState.ALERTED, facing_cos=-1.0
+        )
+        zombie.sound_gap = 30
+        self.run_wait(gm, 5)
+        self.assertEqual(zombie.zone_id, "zone_street")
+
+    def test_a_lunger_reads_fast_once_it_has_chased(self):
+        gm = zombie_game("zone_street")
+        fresh = add_zombie(gm, gap=5, lunger=True, state=ZombieState.ALERTED)
+        chased = add_zombie(gm, gap=5, lunger=True, state=ZombieState.IDLE)
+        chased.has_chased = True
+        words = {view.zombie_id: view.state_word for view in threat_views(gm)}
+        self.assertNotIn("fast", words[fresh.zombie_id])
+        self.assertEqual(words[chased.zombie_id], "coming at you fast")
+
+    def test_noticing_the_player_sets_has_chased(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        self.run_wait(gm, 1)
+        self.assertEqual(zombie.state, ZombieState.CHASING)
+        self.assertTrue(zombie.has_chased)
+
+    def loop(self, gm: GameManager) -> ZombieLoop:
+        return ZombieLoop(gm, random.Random(1), SkillEngine())
+
+    def test_being_hit_sets_has_chased(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, health=3.0, state=ZombieState.ATTACKING)
+        self.loop(gm)._swing(PlayerMinute(swing_target=zombie.zombie_id), MinuteReport())
+        self.assertLess(zombie.health, 3.0)
+        self.assertTrue(zombie.has_chased)
+
+    def test_following_a_sound_up_to_the_player_sets_has_chased(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1.5, state=ZombieState.ALERTED)
+        zombie.sound_gap = 30
+        self.loop(gm)._follow_sound(zombie, 40)
+        self.assertEqual(zombie.state, ZombieState.CHASING)
+        self.assertTrue(zombie.has_chased)
+
+    def test_reaching_attack_range_sets_has_chased(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        self.loop(gm)._report_reach(PlayerMinute())
+        self.assertEqual(zombie.state, ZombieState.ATTACKING)
+        self.assertTrue(zombie.has_chased)
+
+    def test_a_lunger_that_chased_the_player_still_reads_fast_after_it_loses_them(self):
+        gm = zombie_game()
+        lunger = add_zombie(gm, gap=6, lunger=True, state=ZombieState.ALERTED, facing_cos=1.0)
+        self.run_wait(gm, 1)
+        self.assertEqual(lunger.state, ZombieState.CHASING)
+        lunger.state = ZombieState.IDLE
+        lunger.time_since_seen = 600 * 180
+        words = {view.zombie_id: view.state_word for view in threat_views(gm)}
+        self.assertEqual(words[lunger.zombie_id], "coming at you fast")
+
+    def test_a_zombie_the_player_cannot_perceive_is_not_a_target(self):
+        gm = zombie_game("zone_street")
+        far = add_zombie(gm, gap=39, health=3.0)
+        validator = ActionValidator(gm)
+        self.assertIsInstance(validator.validate(AttackAction(target_name=far.zombie_id)), Rejected)
+        self.assertIsInstance(validator.validate(AttackAction(target_name="zombie")), Rejected)

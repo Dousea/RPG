@@ -6,6 +6,14 @@ from dataclasses import dataclass
 @dataclass
 class MoveAction:
     destination: str
+    run: bool = False
+
+
+@dataclass
+class StanceAction:
+    """Start or stop sneaking; takes no time."""
+
+    sneaking: bool
 
 
 @dataclass
@@ -151,6 +159,7 @@ class NpcStatusAction:
 
 AnyAction = (
     MoveAction
+    | StanceAction
     | TakeAction
     | DropAction
     | WearAction

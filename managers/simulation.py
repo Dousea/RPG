@@ -12,19 +12,29 @@ this list; it only puts prose around facts the engine already decided.
 """
 
 import random
+from dataclasses import dataclass
 
 from data import exercises as ex_k
 from data import skills as skill_k
 from data import status_effects, survival
+from data import thermal as thermal_k
 from data.exercises import find_exercise
 from data.items import item_condition_word
 from data.thermal import Metabolic
-from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
+from data.time_costs import (
+    MULTIPLIED_ACTIONS,
+    NONE_TURN_MIN,
+    SWING_MIN,
+    WALK_TO_BARRIER_MIN,
+    action_minutes,
+    zone_hop_minutes,
+)
 from managers.climate import weather_change_facts
 from managers.combat import UNARMED_WEAPON, equipped_weapon, roll_damage
 from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.noise import Sound, cough_sound
 from managers.skills import SkillEngine, skill_levels
 from managers.stats.drivers import StatContext
 from managers.stats.engine import StatsEngine
@@ -37,6 +47,7 @@ from managers.stats.status_effects import (
 )
 from managers.thermoregulator import attack_metabolic
 from managers.validator import Accepted, ActionValidator, Rejected
+from managers.zombies import PlayerMinute, ZombieLoop, enter_zone, start_outbreak
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -51,6 +62,7 @@ from modules.action.types import (
     RemoveGoalAction,
     SetFlagAction,
     SleepAction,
+    StanceAction,
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
@@ -61,6 +73,7 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
+from modules.effect import AnyStoryEffect, StartOutbreakEffect
 from modules.entity.item import ItemEntity
 from modules.event import (
     ApplyItemEvent,
@@ -73,6 +86,7 @@ from modules.modifier import (
     HPModifier,
     ReputationModifier,
 )
+from modules.pace import Pace
 from modules.quest import QuestStatus
 from modules.resolution import (
     ExercisePlan,
@@ -84,6 +98,7 @@ from modules.resolution import (
     NpcDestination,
     ShuffleInZone,
     TargetNpc,
+    TargetZombie,
     TimeSpan,
 )
 from modules.stats import CharacterStat, StatusEffect
@@ -98,6 +113,19 @@ def _span_words(minutes: int) -> str:
     if rest:
         parts.append(f"{rest} minute{'s' if rest != 1 else ''}")
     return " ".join(parts)
+
+
+INTERRUPTED_PLAN_FACT = "The rest of the plan is dropped."
+INTERRUPTED_BY_ATTACK = "attacked"
+
+
+@dataclass(frozen=True)
+class Motion:
+    """How the player moves during a span of minutes."""
+
+    pace: Pace = Pace.STILL
+    approach_target: str | None = None
+    swing_target: str | None = None
 
 
 def _minutes_fact(minutes: int) -> str:
@@ -122,6 +150,9 @@ class SimulationCore:
         self._skill_facts: list[str] = []
         self._zombies_seen_this_chunk = 0
         self._weather_facts: list[str] = []
+        self._loop = ZombieLoop(manager, self._rng, self.skill_engine)
+        self._interruption = ""
+        self._pending_sounds: list[Sound] = []
 
     @property
     def _name(self) -> str:
@@ -148,43 +179,63 @@ class SimulationCore:
             spent, stat_facts = self._spend(NONE_TURN_MIN)
             total_minutes += spent
             facts.extend(stat_facts)
-        for action in actions:
+        for index, action in enumerate(actions):
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
                 facts.append(f"Refused: {type(result.action).__name__} -- {result.reason}")
-            else:
-                action_facts, minutes = self._resolve_one(result)
-                facts.extend(action_facts)
-                total_minutes += minutes
+                continue
+            self._interruption = ""
+            action_facts, minutes = self._resolve_one(result)
+            facts.extend(action_facts)
+            total_minutes += minutes
+            if self._interruption:
+                if index + 1 < len(actions):
+                    facts.append(INTERRUPTED_PLAN_FACT)
+                break
         if total_minutes:
             facts.append(_minutes_fact(total_minutes))
         return facts
+
+    def apply_story_effect(self, effect: AnyStoryEffect) -> None:
+        """Apply an effect a story beat fires."""
+        if isinstance(effect, StartOutbreakEffect):
+            manager = self.manager
+            start_outbreak(
+                manager.world,
+                manager.narrative.minutes,
+                manager.player.current_location_id,
+                self._rng,
+            )
+            self._loop.forget_visible()
 
     def _action_time_multiplier(self) -> float:
         """Pain, mood and cold slow timed actions; 1 until the health spec lands."""
         return 1.0
 
-    def _new_zombies_seen(self) -> int:
-        """Zombies newly in view this chunk; none until zombies exist."""
-        return 0
-
     def _stat_context(
-        self, action: AnyAction | None, *, asleep: bool = False, bed_type: str | None = None
+        self,
+        action: AnyAction | None,
+        *,
+        asleep: bool = False,
+        bed_type: str | None = None,
+        seen: int = 0,
+        exerting: bool = False,
+        pace: Pace = Pace.STILL,
     ) -> StatContext:
         manager = self.manager
         player = manager.player
         location = manager.current_location
-        self._zombies_seen_this_chunk = self._new_zombies_seen()
         return StatContext(
             asleep=asleep,
             resting=isinstance(action, WaitAction),
-            exercising=isinstance(action, AttackAction),
+            exercising=isinstance(action, AttackAction) or exerting or pace == Pace.RUN,
             walking=isinstance(action, MoveAction),
+            sneaking=player.sneaking,
             indoors=location.indoors,
             npcs_present=bool(manager.npcs_in_location(player.current_location_id)),
             bed_type=bed_type or location.bed_type_at(player.current_place),
             hours_survived=manager.narrative.minutes / 60,
-            new_zombies_seen=self._zombies_seen_this_chunk,
+            new_zombies_seen=seen,
             floor=location.floor,
             power_on=manager.world.power_on,
             metabolic=self._metabolic_target(action),
@@ -221,33 +272,100 @@ class SimulationCore:
         action: AnyAction | None = None,
         *,
         asleep: bool = False,
+        motion: Motion | None = None,
     ) -> tuple[int, list[str]]:
-        """Advance the stats, then the clock by the minutes that really passed.
+        """Run the zombies and the stats over `minutes`, then advance the clock.
 
-        Returns those minutes and the facts the stats produced. Once the player is
-        dead the clock still moves but the stats stay where they fell.
+        Each block of at most 10 minutes runs the zombie loop minute by minute, then
+        the stats over the minutes that passed; an interruption ends the span early.
+        Returns those minutes and the facts they produced. Once the player is dead
+        the clock still moves but the stats stay where they fell.
         """
         manager = self.manager
         if manager.narrative.game_over:
             manager.climate.advance_to(manager.narrative.minutes + minutes)
             manager.advance_clock(minutes)
             return minutes, []
-        self._weather_facts = []
-        stat_facts = self.stats_engine.advance(
-            manager.player,
-            minutes,
-            self._stat_context(action, asleep=asleep),
-            self._weather_for_chunk,
-        )
-        facts = self._weather_facts + stat_facts
-        spent = self.stats_engine.minutes_advanced
+        motion = motion or Motion()
+        facts: list[str] = []
+        spent = 0
         started = manager.narrative.minutes
-        manager.advance_clock(spent)
-        if self.stats_engine.death_cause:
-            facts[-1] = self._check_player_death(self.stats_engine.death_cause)
+        self._zombies_seen_this_chunk = 0
+        while spent < minutes and not self._interruption:
+            block = min(survival.MAX_CHUNK_MINUTES, minutes - spent)
+            ran, seen, exerting, loop_facts = self._zombie_minutes(block, asleep, motion)
+            facts.extend(loop_facts)
+            self._zombies_seen_this_chunk += seen
+            if manager.narrative.game_over:
+                manager.climate.advance_to(manager.narrative.minutes + ran)
+                manager.advance_clock(ran)
+                return spent + ran, facts
+            self._weather_facts = []
+            stat_facts = self.stats_engine.advance(
+                manager.player,
+                ran,
+                self._stat_context(
+                    action, asleep=asleep, seen=seen, exerting=exerting, pace=motion.pace
+                ),
+                self._weather_for_chunk,
+            )
+            facts.extend(self._weather_facts + stat_facts)
+            advanced = self.stats_engine.minutes_advanced
+            manager.advance_clock(advanced)
+            spent += advanced
+            self._pending_sounds.extend(self._coughs(stat_facts))
+            if self.stats_engine.death_cause:
+                facts[-1] = self._check_player_death(self.stats_engine.death_cause)
+                break
         if not manager.narrative.game_over:
             facts.extend(self._run_ticks(started, spent, walking=isinstance(action, MoveAction)))
         return spent, facts
+
+    def _coughs(self, stat_facts: list[str]) -> list[Sound]:
+        words = {
+            thermal_k.COUGH_FACT.format(name=self._name),
+            thermal_k.SNEEZE_FACT.format(name=self._name),
+        }
+        return [cough_sound() for fact in stat_facts if fact in words]
+
+    def _zombie_minutes(
+        self, block: int, asleep: bool, motion: Motion
+    ) -> tuple[int, int, bool, list[str]]:
+        """Run up to `block` minutes of the zombie loop; stops at an interruption or a death.
+
+        Returns the minutes run, the zombies newly seen, whether a zombie attacked and the facts.
+        """
+        manager = self.manager
+        seen = 0
+        exerting = False
+        facts: list[str] = []
+        ran = 0
+        while ran < block:
+            minute = PlayerMinute(
+                pace=Pace.STILL if asleep else motion.pace,
+                asleep=asleep,
+                approach_target=motion.approach_target,
+                swing_target=motion.swing_target,
+            )
+            sounds, self._pending_sounds = self._pending_sounds, []
+            report = self._loop.run_minute(manager.narrative.minutes + ran, minute, sounds)
+            ran += 1
+            seen += report.new_seen
+            exerting = exerting or report.attacked
+            facts.extend(report.facts)
+            if report.death_fact:
+                facts.append(self._check_player_death(report.death_fact))
+                break
+            if report.interrupted:
+                self._interruption = report.interruption_fact or INTERRUPTED_BY_ATTACK
+                if report.interruption_fact:
+                    facts.append(
+                        report.interruption_fact.format(
+                            name=self._name, object=manager.player.appearance.object
+                        )
+                    )
+                break
+        return ran, seen, exerting, facts
 
     def _run_ticks(self, started: int, spent: int, *, walking: bool) -> list[str]:
         """Run the 10-minute boundary hooks for each boundary the span crossed."""
@@ -266,6 +384,13 @@ class SimulationCore:
             return self._resolve_sleep(accepted)
         if isinstance(accepted.action, ExerciseAction):
             return self._resolve_exercise(accepted)
+        if isinstance(accepted.resolved, TargetZombie):
+            return self._resolve_zombie_attack(accepted)
+        if isinstance(accepted.action, MoveAction):
+            if accepted.action.run:
+                self.manager.player.sneaking = False
+            if isinstance(accepted.resolved, MoveToZone | MoveBlocked):
+                return self._resolve_walk(accepted)
         handler = self._RESOLVERS.get(type(accepted.action))
         if handler is None:
             return [f"No resolver registered for {type(accepted.action).__name__}."], 0
@@ -299,30 +424,13 @@ class SimulationCore:
     # === Movement ===
 
     def _resolve_move(self, accepted: Accepted) -> str:
-        """Apply the `MoveOutcome` `_validate_move` chose; MOVE_TO never fails.
+        """Apply a `MoveOutcome` that stays in the zone; MOVE_TO never fails.
 
-        Outcomes with a `place` replace `current_place` (an empty one clears
-        it); a stay or a shuffle leaves it as it was.
+        A spot replaces `current_place` (an empty one clears it); a stay or a
+        shuffle leaves it as it was. Zone changes go through `_resolve_walk`.
         """
         player = self.manager.player
         match accepted.resolved:
-            case MoveToZone(location=location, place=place):
-                player.current_place = place
-                player.current_location_id = location.id
-                where = f" ({place})" if place else ""
-                return self._with_quest_note(
-                    f"Move to {location.name}{where}: succeeded.", f"reach:{location.id}"
-                )
-            case MoveBlocked(location=stop, place=place, target=target):
-                player.current_place = place
-                fact = (
-                    f"Move to {target.name}: blocked -- the door to {target.name} is "
-                    f"locked and {self._name} has no key. {self._name} is in {stop.name}, {place}."
-                )
-                if stop.id != player.current_location_id:
-                    player.current_location_id = stop.id
-                    fact = self._with_quest_note(fact, f"reach:{stop.id}")
-                return fact
             case MoveToSpot(location=zone, place=place):
                 player.current_place = place
                 if place:
@@ -332,6 +440,87 @@ class SimulationCore:
                 return f"Moved {direction} within {zone.name}."
             case _:
                 return f"MOVE_TO had no destination; {self._name} stayed put."
+
+    def _resolve_walk(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Walk the route one hop at a time; an interruption stops the player where they are.
+
+        The player enters each zone for the last minute of its hop.
+        """
+        manager = self.manager
+        player = manager.player
+        resolved = accepted.resolved
+        assert isinstance(resolved, MoveToZone | MoveBlocked)
+        origin_id = player.current_location_id
+        route = manager.zone_path(origin_id, resolved.location.id) or []
+        spent = 0
+        spend_facts: list[str] = []
+        if not route:
+            spent, spend_facts = self._spend(WALK_TO_BARRIER_MIN, accepted.action)
+        for zone_id in route:
+            hop_spent, hop_facts = self._walk_hop(zone_id, accepted.action, resolved.pace)
+            spent += hop_spent
+            spend_facts.extend(hop_facts)
+            if self._interruption or manager.narrative.game_over:
+                break
+        interrupted = bool(self._interruption) or manager.narrative.game_over
+        fact = self._walk_fact(resolved, origin_id, interrupted)
+        return [self._check_player_death(fact), *spend_facts], spent
+
+    def _walk_hop(self, zone_id: str, action: AnyAction, pace: Pace) -> tuple[int, list[str]]:
+        """One hop: the first minutes in the zone being left, the last one in the new zone.
+
+        Before the outbreak nobody can tell, so the whole hop is spent in the new zone.
+        """
+        manager = self.manager
+        player = manager.player
+        motion = Motion(pace)
+        if not self._loop.active():
+            player.current_location_id = zone_id
+            player.current_place = ""
+            return self._spend(zone_hop_minutes(pace), action, motion=motion)
+        spent, facts = self._spend(zone_hop_minutes(pace) - 1, action, motion=motion)
+        if self._interruption or manager.narrative.game_over:
+            return spent, facts
+        previous_id = player.current_location_id
+        player.current_location_id = zone_id
+        player.current_place = ""
+        enter_zone(manager.world, zone_id, previous_id, self._rng)
+        last, last_facts = self._spend(1, action, motion=motion)
+        return spent + last, [*facts, *last_facts]
+
+    def _walk_fact(
+        self, resolved: MoveToZone | MoveBlocked, origin_id: str, interrupted: bool
+    ) -> str:
+        player = self.manager.player
+        here = self.manager.current_location
+        changed = here.id != origin_id
+        if interrupted:
+            fact = (
+                f"Move to {resolved.location.name}: interrupted -- {self._name} is in {here.name}."
+            )
+            if resolved.location.id == here.id and isinstance(resolved, MoveToZone):
+                fact = f"Move to {here.name}: interrupted on arrival."
+            return self._with_quest_note(fact, f"reach:{here.id}") if changed else fact
+        player.current_place = resolved.place
+        if isinstance(resolved, MoveToZone):
+            where = f" ({resolved.place})" if resolved.place else ""
+            return self._with_quest_note(
+                f"Move to {resolved.location.name}{where}: succeeded.",
+                f"reach:{resolved.location.id}",
+            )
+        fact = (
+            f"Move to {resolved.target.name}: blocked -- the door to {resolved.target.name} is "
+            f"locked and {self._name} has no key. {self._name} is in {here.name}, {resolved.place}."
+        )
+        return self._with_quest_note(fact, f"reach:{here.id}") if changed else fact
+
+    def _resolve_stance(self, accepted: Accepted) -> str:
+        action = accepted.action
+        assert isinstance(action, StanceAction), "only STANCE is routed here"
+        self.manager.player.sneaking = action.sneaking
+        if action.sneaking:
+            return f"{self._name} starts moving quietly."
+        return f"{self._name} stops sneaking."
 
     # === Items ===
 
@@ -452,6 +641,20 @@ class SimulationCore:
         return f"{entity.item.name} quantity is now {target_quantity}."
 
     # === Combat ===
+
+    def _resolve_zombie_attack(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Walk up to the zombie, then swing: the approach minutes come before the one swing."""
+        target = accepted.expect(TargetZombie)
+        facts: list[str] = []
+        spent = 0
+        if target.approach_minutes:
+            motion = Motion(Pace.WALK, approach_target=target.zombie_id)
+            spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
+        if self._interruption or self.manager.narrative.game_over:
+            return facts, spent
+        swing = Motion(Pace.STILL, swing_target=target.zombie_id)
+        swing_spent, swing_facts = self._spend(SWING_MIN, accepted.action, motion=swing)
+        return [*facts, *swing_facts], spent + swing_spent
 
     def _resolve_attack(self, accepted: Accepted) -> str:
         npc = accepted.expect(TargetNpc).npc
@@ -676,12 +879,16 @@ class SimulationCore:
                 facts.extend(
                     self.exercise_engine.do_rep(player, exercise, self.manager.narrative.minutes)
                 )
+            if self._interruption:
+                break
             if endurance_level(player) > ex_k.EXERCISE_ENDURANCE_STOP_LEVEL and spent < planned:
                 stopped = True
                 break
         if self.manager.narrative.game_over:
             return facts, spent
-        if stopped:
+        if self._interruption:
+            lead = f"You break off after {spent} minutes of {exercise.name.lower()}."
+        elif stopped:
             lead = "You stop, too exhausted to go on."
         else:
             lead = f"You finish {spent} minutes of {exercise.name.lower()}."
@@ -694,7 +901,7 @@ class SimulationCore:
         if self.manager.narrative.game_over:
             return ""
         player = self.manager.player
-        if self._zombies_seen_this_chunk > 0:
+        if self._zombies_seen_this_chunk > 0 or self._interruption:
             panic = self._rng.uniform(
                 survival.SLEEP_INTERRUPTION_PANIC_MIN, survival.SLEEP_INTERRUPTION_PANIC_MAX
             )
@@ -718,6 +925,7 @@ class SimulationCore:
 
     _RESOLVERS = {
         MoveAction: _resolve_move,
+        StanceAction: _resolve_stance,
         TakeAction: _resolve_take,
         DropAction: _resolve_drop,
         WearAction: _resolve_wear,

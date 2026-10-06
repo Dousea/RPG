@@ -607,6 +607,10 @@
 
                 <div class="screen" data-screen="nearby">
                     <h2 class="screen-title">Nearby</h2>
+                    <div class="section">
+                        <h3>Threats</h3>
+                        <div id="threat-list"></div>
+                    </div>
                 </div>
 
                 <div class="screen" data-screen="quests">
@@ -695,6 +699,7 @@
     const traitList = document.getElementById('trait-list');
     const npcList = document.getElementById('npc-list');
     const questList = document.getElementById('quest-list');
+    const threatList = document.getElementById('threat-list');
     const choiceOptions = document.getElementById('choice-options');
     const inputForm = document.getElementById('input-form');
     const playerInput = document.getElementById('player-input');
@@ -906,6 +911,9 @@
         (data.conditions || []).forEach(condition => {
             conditionChips.appendChild(el('span', 'tag bad', condition));
         });
+        if (data.sneaking) {
+            conditionChips.appendChild(el('span', 'tag', 'Sneaking'));
+        }
     }
 
     function renderStatusEffects(data) {
@@ -1063,6 +1071,23 @@
         }));
     }
 
+    function renderThreats(data) {
+        const threats = data.threats || [];
+        if (threats.length === 0) {
+            clearAndFill(threatList, [emptyNote('Nothing threatening in sight.')]);
+            return;
+        }
+        clearAndFill(threatList, threats.map(threat => {
+            const row = el('div', 'npc-entry');
+            const left = el('span');
+            left.appendChild(el('span', 'name', threat.id || 'Something unseen'));
+            if (threat.distance_word) left.appendChild(el('span', 'trust', threat.distance_word));
+            row.appendChild(left);
+            row.appendChild(el('span', 'tag bad', threat.state_word));
+            return row;
+        }));
+    }
+
     function renderQuests(data) {
         const quests = data.quests || [];
         if (quests.length === 0) {
@@ -1157,6 +1182,7 @@
         renderSkills(data);
         renderNamedEntries(traitList, data.traits, 'None recorded.');
         renderNpcs(data);
+        renderThreats(data);
         renderQuests(data);
         renderChoiceOptions(data);
         applyGameOverState(data);

@@ -26,6 +26,7 @@ from modules.action.types import (
     RemoveGoalAction,
     SetFlagAction,
     SleepAction,
+    StanceAction,
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
@@ -86,10 +87,26 @@ class _ActionParseError(ValueError):
     """Internal control flow only; callers see it folded into ParseFailure."""
 
 
+_RUN_SUFFIX_PATTERN = re.compile(r"(.*\S)[\s,]+(?:run|running)\.?", re.IGNORECASE)
+
+
 def _parse_move_to(args: str) -> MoveAction:
     if not args:
         raise _ActionParseError("MOVE_TO needs a destination.")
+    running = _RUN_SUFFIX_PATTERN.fullmatch(args)
+    if running:
+        return MoveAction(destination=running.group(1).rstrip(" ,"), run=True)
     return MoveAction(destination=args)
+
+
+_STANCES = {"sneak": True, "stand": False}
+
+
+def _parse_stance(args: str) -> StanceAction:
+    sneaking = _STANCES.get(normalize_key(args))
+    if sneaking is None:
+        raise _ActionParseError("STANCE needs 'sneak' or 'stand'.")
+    return StanceAction(sneaking=sneaking)
 
 
 def _parse_take(args: str) -> TakeAction:
@@ -340,6 +357,7 @@ def _parse_npc_status(args: str) -> NpcStatusAction:
 
 _PARSERS: dict[str, Callable[[str], AnyAction]] = {
     "MOVE_TO": _parse_move_to,
+    "STANCE": _parse_stance,
     "TAKE": _parse_take,
     "DROP": _parse_drop,
     "WEAR": _parse_wear,

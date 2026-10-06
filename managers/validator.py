@@ -29,6 +29,7 @@ from managers.exercise import endurance_level
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
 from managers.stats.status_effects import status_effect_level
+from managers.zombies import approach_minutes, perceived_now
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -44,6 +45,7 @@ from modules.action.types import (
     RemoveGoalAction,
     SetFlagAction,
     SleepAction,
+    StanceAction,
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
@@ -57,6 +59,7 @@ from modules.action.types import (
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ClothingItem, ConsumableItem
+from modules.pace import Pace
 from modules.resolution import (
     ExercisePlan,
     HeldItem,
@@ -69,11 +72,15 @@ from modules.resolution import (
     ShuffleInZone,
     StayPut,
     TargetNpc,
+    TargetZombie,
     TimeSpan,
 )
 from modules.stats import CharacterStat, StatusEffect
 
 GOAL_HORIZONS = ("short_term", "long_term")
+
+# Names that mean "the nearest zombie".
+ZOMBIE_WORDS = frozenset({"zombie", "the zombie", "a zombie", "zombies", "the zombies"})
 
 # Statuses that block the player from taking a physical action. Free text, not
 # an enum, because narrative status ("settled in") and simulated capability
@@ -141,6 +148,14 @@ class ActionValidator:
         return handler(self, action)
 
     # === Movement ===
+
+    def _walk_pace(self, action: MoveAction) -> Pace:
+        if action.run:
+            return Pace.RUN
+        return Pace.SNEAK if self.manager.player.sneaking else Pace.WALK
+
+    def _validate_stance(self, action: StanceAction) -> ValidationResult:
+        return Accepted(action)
 
     def _validate_move(self, action: MoveAction) -> ValidationResult:
         """Decide what a MOVE_TO *means*. This never rejects.
@@ -214,11 +229,14 @@ class ActionValidator:
                         place=f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
                         hops=path.index(hop_id),
                         target=target,
+                        pace=self._walk_pace(action),
                     ),
                 )
             hop_from = manager.world.locations[hop_id]
 
-        return Accepted(action, MoveToZone(target, place, hops=len(path)))
+        return Accepted(
+            action, MoveToZone(target, place, hops=len(path), pace=self._walk_pace(action))
+        )
 
     @staticmethod
     def _door_blocking(location, target_id: str) -> DoorEntity | None:
@@ -349,12 +367,34 @@ class ActionValidator:
         manager = self.manager
         if self._player_incapacitated():
             return Rejected(action, f"{self._name} is in no state to attack anything.")
+        zombie_target = self._zombie_target(action.target_name)
+        if zombie_target is not None:
+            return Accepted(action, zombie_target)
+        if self._names_a_zombie(action.target_name):
+            return Rejected(action, f"'{action.target_name}' is not here to attack.")
         npc = manager.resolve_npc(action.target_name)
         if npc is None or npc.current_location_id != manager.player.current_location_id:
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
         if npc.hit_points <= 0:
             return Rejected(action, f"{npc.name} is already down.")
         return Accepted(action, TargetNpc(npc))
+
+    def _names_a_zombie(self, name: str) -> bool:
+        needle = name.strip().casefold()
+        return needle in ZOMBIE_WORDS or needle in self.manager.world.zombies
+
+    def _zombie_target(self, name: str) -> TargetZombie | None:
+        """The perceived zombie `name` points at: its id, or the nearest for "zombie"."""
+        manager = self.manager
+        needle = name.strip().casefold()
+        here = [seen.zombie for seen in perceived_now(manager)]
+        if needle in ZOMBIE_WORDS:
+            pool = sorted(here, key=lambda z: (z.gap, int(z.zombie_id[1:])))
+        else:
+            pool = [zombie for zombie in here if zombie.zombie_id == needle]
+        if not pool:
+            return None
+        return TargetZombie(pool[0].zombie_id, approach_minutes(pool[0].gap))
 
     def _player_incapacitated(self) -> bool:
         statuses = {s.casefold() for s in self.manager.narrative.player_status}
@@ -520,6 +560,7 @@ class ActionValidator:
 
     _VALIDATORS = {
         MoveAction: _validate_move,
+        StanceAction: _validate_stance,
         TakeAction: _validate_take,
         DropAction: _validate_drop,
         WearAction: _validate_wear,

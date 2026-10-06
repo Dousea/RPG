@@ -24,6 +24,7 @@ from managers.climate import describe_weather
 from managers.game import GameManager
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
+from managers.zombies import threat_views
 from modules.entity.item import ItemEntity
 from modules.quest import QuestStatus
 
@@ -150,6 +151,25 @@ class ContextBuilder:
         if not active:
             return "Fine"
         return ", ".join(f"{name} ({level}/{STATUS_EFFECT_MAX_LEVEL})" for _, level, name in active)
+
+    def _threats_section(self) -> str:
+        """The zombies the player perceives, by id, distance and what they are doing."""
+        lines: list[str] = []
+        for view in threat_views(self.manager):
+            if view.zombie_id is None:
+                lines.append(f" - {view.state_word}")
+            else:
+                lines.append(f" - {view.zombie_id}, {view.distance_word}, {view.state_word}")
+        return "\n".join(lines) or "None"
+
+    def _parser_threats_section(self) -> str:
+        """Seen zombies by id and distance only, so the parser can aim ATTACK at one."""
+        lines = [
+            f" - {view.zombie_id} ({view.distance_word})"
+            for view in threat_views(self.manager)
+            if view.zombie_id is not None
+        ]
+        return "\n".join(lines) or "None"
 
     def _weather_section(self) -> str:
         """The outdoor weather in words, and whether the player is sheltered from it."""
@@ -348,6 +368,9 @@ door rather than refusing the move.)
 [WEATHER]
 {self._weather_section()}
 
+[THREATS]
+{self._parser_threats_section()}
+
 [EQUIPPED]
 {equipped_str}
 
@@ -394,6 +417,12 @@ give them numbers.)
 (The weather outside, in words. When {self._name} is sheltered, rain and wind do not
 reach {looks.object}, though {looks.subject} can still hear them.)
 {self._weather_section()}
+
+[THREATS]
+(The zombies {self._name} can see or hear, and what each is doing. Describe only
+these; never invent a zombie that is not listed, and never give a zombie a
+number.)
+{self._threats_section()}
 
 [ITEMS IN CURRENT LOCATION]
 

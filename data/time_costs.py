@@ -21,6 +21,7 @@ from modules.action.types import (
     RemoveGoalAction,
     SetFlagAction,
     SleepAction,
+    StanceAction,
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
@@ -34,6 +35,7 @@ from modules.action.types import (
 )
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
+from modules.pace import Pace
 from modules.resolution import (
     ExercisePlan,
     HeldItem,
@@ -42,6 +44,7 @@ from modules.resolution import (
     MoveToZone,
     Resolution,
     ShuffleInZone,
+    TargetZombie,
     TimeSpan,
 )
 
@@ -60,9 +63,23 @@ NONE_TURN_MIN = 1  # spec 01
 CostFunction = Callable[[AnyAction, Resolution], int]
 
 
-def zone_hop_minutes() -> int:
-    """Minutes per zone hop; every pace costs the walking figure until zombies land."""
-    return ZONE_HOP_MIN
+HOP_MINUTES_BY_PACE = {  # spec 09
+    Pace.WALK: ZONE_HOP_MIN,
+    Pace.RUN: ZONE_HOP_RUNNING_MIN,
+    Pace.SNEAK: ZONE_HOP_SNEAKING_MIN,
+}
+
+
+def zone_hop_minutes(pace: Pace = Pace.WALK) -> int:
+    """Minutes one zone hop takes at a pace."""
+    return HOP_MINUTES_BY_PACE[pace]
+
+
+def _attack_minutes(action: AnyAction, resolved: Resolution) -> int:
+    """The swing, plus the walk up to a zombie that is not yet in reach."""
+    if isinstance(resolved, TargetZombie):
+        return resolved.approach_minutes + SWING_MIN
+    return SWING_MIN
 
 
 def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
@@ -74,10 +91,10 @@ def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 def _move_minutes(action: AnyAction, resolved: Resolution) -> int:
     match resolved:
-        case MoveToZone(hops=hops):
-            return hops * zone_hop_minutes()
-        case MoveBlocked(hops=hops):
-            return max(hops * zone_hop_minutes(), WALK_TO_BARRIER_MIN)
+        case MoveToZone(hops=hops, pace=pace):
+            return hops * zone_hop_minutes(pace)
+        case MoveBlocked(hops=hops, pace=pace):
+            return max(hops * zone_hop_minutes(pace), WALK_TO_BARRIER_MIN)
         case MoveToSpot(place=place):
             return QUICK_ACTION_MIN if place else 0
         case ShuffleInZone():
@@ -98,13 +115,14 @@ def _exercise_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 
 TIME_COSTS: dict[type, int | CostFunction] = {
-    AttackAction: SWING_MIN,
+    AttackAction: _attack_minutes,
     TakeAction: QUICK_ACTION_MIN,
     DropAction: QUICK_ACTION_MIN,
     WearAction: WEAR_MINUTES,
     TakeOffAction: TAKE_OFF_MINUTES,
     UseItemAction: _use_item_minutes,
     MoveAction: _move_minutes,
+    StanceAction: 0,
     WaitAction: _spent_minutes,
     SleepAction: _spent_minutes,
     ExerciseAction: _exercise_minutes,

@@ -44,7 +44,7 @@ The defence, stomp and hearing fields are stored and not yet read.
 
 Wetness is 0 to 100 and belongs to the carried or worn item, not to the catalog
 entry, so it lives on the item entity. It is saved and clamped to 0 to 100 on load. Nothing changes it yet.
-The entity also holds `holes`, a set of body parts, empty until zombies can tear clothing. It is saved too.
+The entity also holds `holes`, a set of body parts, written when a zombie's wound tears the clothing ([Zombies](09-zombies.md)). It is saved too.
 
 `PlayerEntity.worn` maps each body location to the entity worn there. Hands and
 the backpack stay in `PlayerEntity.equipment`. `layers_for(part)` returns the

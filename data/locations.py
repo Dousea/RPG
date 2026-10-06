@@ -23,6 +23,7 @@ the next game after a reset.
 
 from data.climate import INDOORS_BY_ZONE
 from data.items import ITEMS
+from data.zombie_lore import ZONE_ZOMBIE_FIELDS
 from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.location import Location
@@ -174,6 +175,10 @@ def build_starting_locations() -> dict[str, Location]:
     for zone_id, indoors in INDOORS_BY_ZONE.items():
         locations[zone_id].indoors = indoors
     locations["zone_home"].floor = 1  # spec 06
+    for zone_id, (size_tiles, chunks, intensity) in ZONE_ZOMBIE_FIELDS.items():
+        locations[zone_id].size_tiles = size_tiles
+        locations[zone_id].chunks = chunks
+        locations[zone_id].zombie_intensity = intensity
 
     # Locked from the building side only: leaving the apartment needs no key.
     apartment_door = DoorEntity(

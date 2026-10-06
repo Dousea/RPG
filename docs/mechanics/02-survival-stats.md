@@ -47,15 +47,15 @@ It returns facts for every status effect that changed level, plus any HP loss.
 | --- | --- |
 | `asleep` | the `SLEEP` span |
 | `resting` | the action is `WAIT` |
-| `exercising` | the action is `ATTACK` |
+| `exercising` | the action is `ATTACK`, a zombie attacked this chunk, or the player ran |
 | `walking` | the action is `MOVE_TO` |
-| `sneaking` | false until zombies land |
+| `sneaking` | the player is sneaking |
 | `indoors` | false until weather defines it per zone |
 | `talking` | false until `TALK`, `ASK` and `GIVE` land |
 | `npcs_present` | any NPC shares the zone |
 | `bed_type` | from the zone and the player's spot ([Sleep](#sleep)) |
 | `hours_survived` | game minutes since the start, in hours |
-| `new_zombies_seen` | 0 until zombies land |
+| `new_zombies_seen` | zombies that came into view this chunk ([Zombies](09-zombies.md)) |
 | `weather` | none until weather lands |
 | `body` | energy, fluids and fatigue multipliers, all 1 until body temperature lands |
 | `skills` | each skill's level; Fitness reads 5 when none is recorded |
@@ -198,7 +198,7 @@ when those specs land.
 
 ### Panic
 
-- +7 for each zombie newly seen (always 0 until zombies land).
+- +7 for each zombie newly seen ([Zombies](09-zombies.md)).
 - Falls by (405 + 405 × min(5, months survived)) × h. A month is 30 game days.
   The decay is doubled while asleep.
 

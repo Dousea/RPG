@@ -43,6 +43,13 @@ class ItemConsumedEffect[T: BaseEntity = BaseEntity]:
     condition: Callable[[ConsumeItemEvent[T]], bool] = lambda _: True
 
 
+@dataclass(frozen=True)
+class StartOutbreakEffect:
+    """A story effect: the dead start walking at the current minute (spec 09)."""
+
+
+AnyStoryEffect = StartOutbreakEffect
+
 AnyEffect = (
     QuestCompletedEffect
     | WeaponDamageTakenEffect[Any, Any]

@@ -1,63 +1,16 @@
 # Zombie Survival Simulation
 
-> **Status: Planned.** No noise, light, visibility or scavenging model exists. See [Implementation Status](00-status.md).
+> **Status: Partial.** Noise, light and visibility are [mechanics 09](mechanics/09-zombies.md); the scavenging model below is not built. See [Implementation Status](00-status.md).
 
 ## Spatial Threat and Noise
 
-### 1. Spatial Threat and Noise
-
-Sound should be represented as an event rather than simply a number attached to the room.
-
-Example:
-
-```json
-{
-  "source": "pharmacy_backroom",
-  "sound_type": "gunshot",
-  "intensity": 92,
-  "timestamp": 18474
-}
-```
-
-Propagation can depend on:
-
-- distance;
-- doors;
-- walls;
-- terrain;
-- building structure;
-- weather;
-- sound type;
-- intensity.
-
-The system does not need physically accurate acoustics. It needs deterministic, understandable gameplay behavior.
+Implemented as radius-and-volume sounds in [mechanics 09](mechanics/09-zombies.md#noise).
 
 ---
 
 ## Light and Visibility
 
-### 2. Light and Visibility
-
-Treat light as a simulated property.
-
-```text
-room.light_level
-player.light_source
-weather.light_modifier
-line_of_sight
-cover
-```
-
-Light can affect:
-
-- player visibility;
-- zombie detection;
-- NPC detection;
-- ranged accuracy;
-- stealth success;
-- narration.
-
-The engine computes the result; the narrator describes it.
+Implemented as spotting and perception in [mechanics 09](mechanics/09-zombies.md#spotting).
 
 ---
 

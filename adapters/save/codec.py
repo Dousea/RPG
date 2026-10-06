@@ -40,6 +40,12 @@ from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
+from modules.entity.zombie import (
+    TIME_SINCE_SEEN_START,
+    AttackSide,
+    ZombieEntity,
+    ZombieState,
+)
 from modules.item import ClothingItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
@@ -49,7 +55,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 11  # spec 08
+SCHEMA_VERSION = 13  # spec 09
 
 MAX_ID_LENGTH = 40
 
@@ -213,6 +219,51 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
 # === Serialization ===
 
 
+def _zombie_to_dict(zombie: ZombieEntity) -> dict[str, Any]:
+    data = dataclasses.asdict(zombie)
+    data["state"] = zombie.state.value
+    data["side"] = zombie.side.value if zombie.side is not None else None
+    return data
+
+
+def _zombie_from_dict(data: dict[str, Any], zone_ids: Any) -> ZombieEntity | None:
+    zone_id = str(data.get("zone_id", ""))
+    if zone_id not in zone_ids:
+        logger.warning(f"Dropping zombie in unknown zone '{zone_id}'.")
+        return None
+    try:
+        state = ZombieState(data.get("state", ZombieState.IDLE.value))
+        raw_side = data.get("side")
+        side = AttackSide(raw_side) if raw_side is not None else None
+        return ZombieEntity(
+            zombie_id=_as_text(data["zombie_id"], MAX_ID_LENGTH),
+            zone_id=zone_id,
+            health=float(data["health"]),
+            speed_type=int(data["speed_type"]),
+            speed_mod=float(data["speed_mod"]),
+            lunger=_as_bool(data.get("lunger", False)),
+            strength=int(data["strength"]),
+            memory=int(data["memory"]),
+            sight=int(data["sight"]),
+            hearing=int(data["hearing"]),
+            state=state,
+            gap=float(data.get("gap", 0.0)),
+            facing_cos=float(data.get("facing_cos", 0.0)),
+            time_since_seen=float(data.get("time_since_seen", TIME_SINCE_SEEN_START)),
+            has_chased=_as_bool(data.get("has_chased", False)),
+            bonus_spot_time=float(data.get("bonus_spot_time", 0.0)),
+            side=side,
+            sound_gap=float(data.get("sound_gap", 0.0)),
+        )
+    except (KeyError, TypeError, ValueError):
+        logger.warning("Dropping a zombie with unreadable fields.")
+        return None
+
+
+def _optional_minute(value: Any) -> int | None:
+    return int(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
 def _weather_to_dict(climate: ClimateEngine) -> dict[str, Any]:
     period = climate.period
     front = climate.front
@@ -285,6 +336,11 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "date": manager.world.date,
             "seed": manager.world.seed,
             "power_on": manager.world.power_on,
+            "outbreak_started_at": manager.world.outbreak_started_at,
+            "last_redistribution_minute": manager.world.last_redistribution_minute,
+            "next_zombie_number": manager.world.next_zombie_number,
+            "zombie_kills": dict(manager.world.zombie_kills),
+            "zombies": [_zombie_to_dict(zombie) for zombie in manager.world.zombies.values()],
             # Locations themselves are static; only ground items move.
             "ground_items": {
                 location_id: [
@@ -305,6 +361,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "stats": player.stats.to_dict(),
             "thermal": player.thermal.to_dict(),
             "asleep": player.asleep,
+            "sneaking": player.sneaking,
             "fractional_hp_loss": player.fractional_hp_loss,
             "food_eaten_timer": player.food_eaten_timer,
             "appearance": {
@@ -436,7 +493,19 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         seed=int(world_data.get("seed", 0)),
         power_on=_as_bool(world_data.get("power_on", True)) if "power_on" in world_data else True,
         locations=locations,
+        outbreak_started_at=_optional_minute(world_data.get("outbreak_started_at")),
+        last_redistribution_minute=_optional_minute(world_data.get("last_redistribution_minute")),
+        next_zombie_number=int(world_data.get("next_zombie_number", 1)),
+        zombie_kills={
+            zone_id: int(count)
+            for zone_id, count in _as_dict(world_data.get("zombie_kills")).items()
+            if zone_id in locations
+        },
     )
+    for zombie_data in world_data.get("zombies", []):
+        zombie = _zombie_from_dict(_as_dict(zombie_data), locations)
+        if zombie is not None:
+            world.zombies[zombie.zombie_id] = zombie
 
     player = _player_from_dict(data.get("player", {}), locations)
     npcs = _npcs_from_dict(data.get("npcs", []))
@@ -618,6 +687,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         stats=Stats.from_dict(data.get("stats", {})),
         thermal=ThermalState.from_dict(_as_dict(data.get("thermal"))),
         asleep=_as_bool(data.get("asleep", False)),
+        sneaking=_as_bool(data.get("sneaking", False)),
         fractional_hp_loss=float(data.get("fractional_hp_loss", 0.0)),
         food_eaten_timer=float(data.get("food_eaten_timer", 0.0)),
         appearance=_appearance_from_dict(_as_dict(data.get("appearance"))),
