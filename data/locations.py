@@ -76,6 +76,8 @@ def build_starting_locations() -> dict[str, Location]:
                 "my place",
                 "my room",
             ],
+            bed_type="floor",  # spec 02
+            place_bed_types={"bedroom": "average_bed", "bed": "average_bed"},  # spec 02
         ),
         "zone_building": Location(
             id="zone_building",

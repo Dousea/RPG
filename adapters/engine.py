@@ -14,6 +14,7 @@ from adapters import llm, persistence
 from adapters.memory import SemanticMemory
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from managers.stats import active_status_effects
 from modules.action import parse_action_plan
 from modules.quest import QuestStatus
 
@@ -204,12 +205,11 @@ class GameEngine:
             "vitals": {
                 "health": player.hit_points,
                 "max_health": player.max_hit_points,
-                "hunger": player.hunger,
-                "thirst": player.thirst,
-                "morale": player.morale,
-                "sleep": narrative.conditions.get("sleep", "Rested"),
-                "infection_risk": narrative.conditions.get("infection_risk", "No"),
             },
+            "effects": [
+                {"type": status_effect.value, "level": level, "name": name}
+                for status_effect, level, name in active_status_effects(player.stats)
+            ],
             "level": player.level,
             "experience_points": player.experience_points,
             "attributes": {attr.value: value for attr, value in player.attributes.items()},

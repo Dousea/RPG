@@ -116,7 +116,7 @@ class StatusRemoveAction:
 
 @dataclass
 class UpdateConditionAction:
-    """hunger/thirst/morale/sleep/infection_risk only -- never health."""
+    """Parsed but always refused: the engine owns every survival stat."""
 
     field_name: str
     raw_value: str

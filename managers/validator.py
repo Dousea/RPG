@@ -15,6 +15,7 @@ re-derive the reason something was legal.
 from dataclasses import dataclass, field
 from typing import Any
 
+from data import survival
 from data.clock import (
     SLEEP_CAP_MIN,
     TIME_OF_DAY_START,
@@ -24,14 +25,12 @@ from data.clock import (
 from data.items import find_item_by_name
 from managers.game import (
     BARE_DIRECTIONS,
-    CONDITION_LADDERS,
     DIRECTION_SYNONYMS,
     MAX_PLACE_LENGTH,
     GameManager,
-    resolve_condition_value,
 )
+from managers.stats import status_effect_level
 from modules.action import (
-    NARRATIVE_CONDITION_FIELDS,
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
@@ -56,6 +55,7 @@ from modules.action import (
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ConsumableItem
+from modules.stats import CharacterStat, StatusEffect
 
 GOAL_HORIZONS = ("short_term", "long_term")
 
@@ -311,22 +311,11 @@ class ActionValidator:
         return Accepted(action, {})
 
     def _validate_update_condition(self, action: UpdateConditionAction) -> ValidationResult:
-        if action.field_name in NARRATIVE_CONDITION_FIELDS:
-            ladder = CONDITION_LADDERS[action.field_name]
-            current = self.manager.narrative.conditions.get(action.field_name, ladder[0])
-            rung = resolve_condition_value(action.field_name, action.raw_value, current)
-            if rung is None:
-                return Rejected(
-                    action,
-                    f"'{action.raw_value}' is not a valid {action.field_name}; "
-                    f"expected one of {', '.join(ladder)}.",
-                )
-            return Accepted(action, {"value": rung})
-        try:
-            int(action.raw_value)
-        except ValueError:
-            return Rejected(action, f"'{action.raw_value}' is not a number.")
-        return Accepted(action, {})
+        return Rejected(
+            action,
+            f"'{action.field_name}' is not something the narrator can set; "
+            "the engine moves survival stats with the clock.",
+        )
 
     # === Time ===
 
@@ -350,10 +339,29 @@ class ActionValidator:
         return self._timed(action, action.duration, WAIT_CAP_MIN)
 
     def _validate_sleep(self, action: SleepAction) -> ValidationResult:
-        if action.duration is None:
-            # Waking rules arrive with the stat engine; until then sleep runs to the cap.
-            return Accepted(action, {"minutes": SLEEP_CAP_MIN, "clamped": False})
-        return self._timed(action, action.duration, SLEEP_CAP_MIN)
+        refusal = self._sleep_refusal()
+        if refusal:
+            return Rejected(action, refusal)
+        if action.duration is not None:
+            return self._timed(action, action.duration, SLEEP_CAP_MIN)
+        minutes = SLEEP_CAP_MIN
+        now = self.manager.narrative.minutes
+        if self.manager.narrative.time_of_day == "night":
+            minutes = min(minutes, minutes_until(now, survival.SLEEP_DEFAULT_WAKE_MINUTE_OF_DAY))
+        return Accepted(action, {"minutes": minutes, "clamped": False})
+
+    def _sleep_refusal(self) -> str:
+        stats = self.manager.player.stats
+        panic = status_effect_level(StatusEffect.PANIC, stats.get(CharacterStat.PANIC))
+        if panic >= survival.SLEEP_REFUSED_PANIC_LEVEL:
+            return "Orton is too panicked to sleep."
+        pain = status_effect_level(StatusEffect.PAIN, stats.get(CharacterStat.PAIN))
+        if (
+            pain >= survival.SLEEP_REFUSED_PAIN_LEVEL
+            and stats.get(CharacterStat.FATIGUE) <= survival.SLEEP_PAIN_FATIGUE_EXCEPTION
+        ):
+            return "Orton is in too much pain to sleep."
+        return ""
 
     # === Goals ===
 

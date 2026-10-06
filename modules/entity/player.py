@@ -8,6 +8,7 @@ from ..character.equipment import (
 )
 from ..character.player import PlayerAttribute, PlayerPerk, PlayerTrait
 from ..character.state import CharacterCondition
+from ..stats import Stats
 from . import BaseEntity
 from .item import ItemEntity
 
@@ -28,9 +29,10 @@ class PlayerEntity(BaseEntity):
     level: int = 1
     max_inventory_size: int = 20
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
-    hunger: int = 100
-    thirst: int = 100
-    morale: int = 100
+    stats: Stats = field(default_factory=Stats)
+    asleep: bool = False
+    # HP the status effects have taken that has not yet added up to a whole point.
+    fractional_hp_loss: float = 0.0
     attributes: dict[PlayerAttribute, int] = field(
         default_factory=lambda: {
             PlayerAttribute.AGILITY: 3,

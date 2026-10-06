@@ -12,6 +12,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 """
 
 from managers.game import GameManager
+from managers.stats import active_status_effects
 from modules.quest import QuestStatus
 
 
@@ -243,6 +244,7 @@ door rather than refusing the move.)
         traits_str = "\n".join(f" - {trait.name}: {trait.description}" for trait in player.traits)
         perks_str = "\n".join(f" - {perk.name}: {perk.description}" for perk in player.perks)
         conditions_str = ", ".join(condition.name for condition in player.conditions)
+        status_effects_str = ", ".join(name for _, _, name in active_status_effects(player.stats))
 
         goals_str = ""
         if narrative.goals.get("short_term"):
@@ -254,11 +256,7 @@ door rather than refusing the move.)
 Name: {player.name}
 Level: {player.level} (XP: {player.experience_points})
 Health: {player.hit_points}/{player.max_hit_points}
-Hunger: {player.hunger}%
-Thirst: {player.thirst}%
-Morale: {player.morale}%
-Sleep: {narrative.conditions.get("sleep", "Rested")}
-Infection Risk: {narrative.conditions.get("infection_risk", "No")}
+Feeling: {status_effects_str if status_effects_str else "Fine"}
 Conditions: {conditions_str if conditions_str else "None"}
 Status: {", ".join(narrative.player_status) if narrative.player_status else "None"}
 Goals: {goals_str if goals_str else "None"}

@@ -17,12 +17,12 @@ from modules.action import (
     SetFlagAction,
     StatusAddAction,
     TakeAction,
-    UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     WaitAction,
 )
 from modules.quest import QuestState, QuestStatus
+from modules.stats import CharacterStat
 from tests.support import IsolatedSaveTestCase, resolve_actions
 
 
@@ -34,8 +34,6 @@ def played_game() -> GameManager:
         MoveAction(destination="out"),
         MoveAction(destination="out"),
         TakeAction(item_name="Crowbar"),
-        UpdateConditionAction(field_name="hunger", raw_value="70"),
-        UpdateConditionAction(field_name="sleep", raw_value="Exhausted"),
         UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=12),
         UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-2),
         AddRelationshipNoteAction(npc_name="Emma", note="Seemed shaken"),
@@ -53,6 +51,7 @@ def played_game() -> GameManager:
     # it only ever changes through combat or item effects. Set directly here
     # since this fixture is exercising persistence, not the action pipeline.
     gm.player.hit_points = 55
+    gm.player.stats.set(CharacterStat.HUNGER, 0.7)
     emma = gm.resolve_npc("Emma")
     emma.goals.append("find out who the new neighbor is")
     emma.knowledge.add("secret_bunker_location")
@@ -82,7 +81,7 @@ class RoundTripTests(IsolatedSaveTestCase):
     def test_player_position_and_condition(self):
         self.assertEqual(self.loaded.player.current_location_id, "zone_street")
         self.assertEqual(self.loaded.player.hit_points, 55)
-        self.assertEqual(self.loaded.player.hunger, 70)
+        self.assertEqual(self.loaded.player.stats.get(CharacterStat.HUNGER), 0.7)
 
     def test_hit_points_are_not_reset_to_max_on_load(self):
         # __post_init__ fills hit_points to max, so the saved value has to be
@@ -115,7 +114,6 @@ class RoundTripTests(IsolatedSaveTestCase):
 
     def test_conditions(self):
         self.assertIn("panic", [c.value for c in self.loaded.player.conditions])
-        self.assertEqual(self.loaded.narrative.conditions["sleep"], "Exhausted")
 
     def test_npc_state(self):
         emma = self.loaded.resolve_npc("Emma")
@@ -181,11 +179,36 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(self.loaded.player.current_location_id, "zone_building")
 
 
+class StatsSaveTests(IsolatedSaveTestCase):
+    """Spec 02, Stats (saves)."""
+
+    def test_a_v5_round_trip_keeps_stats_and_asleep_exactly(self):
+        gm = GameManager()
+        for index, stat in enumerate(CharacterStat):
+            gm.player.stats.set(stat, stat.min + (stat.max - stat.min) * (index + 1) / 37)
+        gm.player.asleep = True
+        gm.player.fractional_hp_loss = 0.25
+        persistence.save(gm, self.save_path)
+        loaded = persistence.load(self.save_path)
+        assert loaded is not None
+        for stat in CharacterStat:
+            self.assertEqual(loaded.player.stats.get(stat), gm.player.stats.get(stat))
+        self.assertTrue(loaded.player.asleep)
+        self.assertEqual(loaded.player.fractional_hp_loss, 0.25)
+
+    def test_the_old_survival_fields_are_not_saved(self):
+        persistence.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            player = json.load(handle)["player"]
+        for gone in ("hunger", "thirst", "morale"):
+            self.assertNotIn(gone, player)
+
+
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_4(self):
-        self.assertEqual(persistence.SCHEMA_VERSION, 4)
+    def test_schema_version_is_5(self):
+        self.assertEqual(persistence.SCHEMA_VERSION, 5)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -291,6 +314,14 @@ class BadSaveTests(IsolatedSaveTestCase):
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
         data["version"] = persistence.SCHEMA_VERSION + 1
+        self.write(data)
+        self.assertIsNone(persistence.load(self.save_path))
+
+    def test_a_v4_save_is_discarded_and_a_new_game_starts(self):
+        persistence.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["version"] = 4
         self.write(data)
         self.assertIsNone(persistence.load(self.save_path))
 

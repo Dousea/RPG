@@ -588,9 +588,6 @@
         const v = data.vitals || {};
         const rows = [
             ['Health', v.health, v.max_health],
-            ['Hunger', v.hunger, 100],
-            ['Thirst', v.thirst, 100],
-            ['Morale', v.morale, 100],
         ];
         vitals.innerHTML = '';
         rows.forEach(([label, value, max]) => {
@@ -609,11 +606,10 @@
         });
 
         conditionChips.innerHTML = '';
-        conditionChips.appendChild(el('span', 'tag', `Sleep: ${v.sleep || 'Rested'}`));
-        const infectionBad = v.infection_risk && v.infection_risk !== 'No';
-        conditionChips.appendChild(
-            el('span', `tag ${infectionBad ? 'bad' : ''}`.trim(), `Infection risk: ${v.infection_risk || 'No'}`)
-        );
+        (data.effects || []).forEach(effect => {
+            const severe = effect.level >= 3;
+            conditionChips.appendChild(el('span', `tag ${severe ? 'bad' : ''}`.trim(), effect.name));
+        });
         (data.conditions || []).forEach(condition => {
             conditionChips.appendChild(el('span', 'tag bad', condition));
         });

@@ -139,15 +139,10 @@ UPDATE_INVENTORY <item> ADD|REMOVE|UPDATE_CONDITION|UPDATE_QUANTITY <value>
 NPC_MOVE <npc> TO <zone>             NPC_STATUS <npc> ADD|REMOVE <status>
 ```
 
-`UPDATE_CONDITION` accepts `hunger`, `thirst`, `morale` (numeric; a leading
-`+`/`-` adjusts, a bare number sets) and `sleep`, `infection_risk` -- **not**
-`health`: player HP is never LLM-declarable (see docs/01-engine-authority.md).
-`sleep` and `infection_risk` are laddered, not free text
-(`managers/game.CONDITION_LADDERS`): a signed step (`+1`/`-1`) moves one rung
-from the current value (`sleep`: Rested/Tired/Drowsy/Exhausted;
-`infection_risk`: No/Low/Moderate/High/Infected), and a bare word sets it
-directly, matched through `CONDITION_SYNONYMS` where the model's wording
-isn't already a rung name. Player HP only changes through `ATTACK` (resolved
+`UPDATE_CONDITION` is always refused: the engine moves hunger, thirst, fatigue and
+the other survival stats with the clock (see
+[docs/mechanics/02-survival-stats.md](docs/mechanics/02-survival-stats.md)), and
+player HP is never LLM-declarable (see docs/01-engine-authority.md). Player HP only changes through `ATTACK` (resolved
 by the Simulation Core against equipped-weapon damage, with trait/perk
 reactions) or `USE_ITEM` (applies the item's own modifiers, e.g. a medkit's
 `HPModifier`). In practice `game_over` is **not reachable in normal play**:

@@ -15,11 +15,12 @@ this list; it only puts prose around facts the engine already decided.
 
 import random
 
+from data import survival
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.stats import StatContext, StatsEngine, status_effect_level
 from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action import (
-    NARRATIVE_CONDITION_FIELDS,
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
@@ -35,7 +36,6 @@ from modules.action import (
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
-    UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
@@ -58,6 +58,7 @@ from modules.modifier import (
     ReputationModifier,
 )
 from modules.quest import QuestStatus
+from modules.stats import CharacterStat, StatusEffect
 from modules.weapon import MeleeWeaponType
 
 # Fists deal a token amount of damage so an unarmed ATTACK still resolves
@@ -107,6 +108,8 @@ class SimulationCore:
         self.manager = manager
         self.validator = validator if validator is not None else ActionValidator(manager)
         self._rng = rng if rng is not None else random.Random()
+        self.stats_engine = StatsEngine()
+        self._zombies_seen_this_chunk = 0
 
     def resolve(self, actions: list[AnyAction]) -> list[str]:
         """Validate and resolve each action in order, one at a time.
@@ -120,16 +123,18 @@ class SimulationCore:
         crowbar wasn't reachable before the move happened.
         """
         facts: list[str] = []
-        total_minutes = NONE_TURN_MIN if not actions else 0
+        total_minutes = 0
         if not actions:
-            self._spend(NONE_TURN_MIN)
+            spent, stat_facts = self._spend(NONE_TURN_MIN)
+            total_minutes += spent
+            facts.extend(stat_facts)
         for action in actions:
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
                 facts.append(f"Refused: {type(result.action).__name__} -- {result.reason}")
             else:
-                fact, minutes = self._resolve_one(result)
-                facts.append(fact)
+                action_facts, minutes = self._resolve_one(result)
+                facts.extend(action_facts)
                 total_minutes += minutes
         if total_minutes:
             facts.append(_minutes_fact(total_minutes))
@@ -139,26 +144,69 @@ class SimulationCore:
         """Pain, mood and cold slow timed actions; 1 until the health spec lands."""
         return 1.0
 
-    def _spend(self, minutes: int) -> None:
-        """Advance the clock and hand the minutes to the stat engine."""
-        self.manager.advance_clock(minutes)
-        self._advance_stats(minutes)
+    def _new_zombies_seen(self) -> int:
+        """Zombies newly in view this chunk; none until zombies exist."""
+        return 0
 
-    def _advance_stats(self, minutes: int) -> None:
-        """Hand-off point for the stat engine; a no-op until survival stats land."""
+    def _stat_context(
+        self, action: AnyAction | None, *, asleep: bool = False, bed_type: str | None = None
+    ) -> StatContext:
+        manager = self.manager
+        player = manager.player
+        location = manager.current_location
+        self._zombies_seen_this_chunk = self._new_zombies_seen()
+        return StatContext(
+            asleep=asleep,
+            resting=isinstance(action, WaitAction),
+            exercising=isinstance(action, AttackAction),
+            walking=isinstance(action, MoveAction),
+            npcs_present=bool(manager.npcs_in_location(player.current_location_id)),
+            bed_type=bed_type or location.bed_type_at(player.current_place),
+            hours_survived=manager.narrative.minutes / 60,
+            new_zombies_seen=self._zombies_seen_this_chunk,
+        )
 
-    def _resolve_one(self, accepted: Accepted) -> tuple[str, int]:
-        """Resolve one accepted action; returns its fact and the minutes it took."""
+    def _spend(
+        self,
+        minutes: int,
+        action: AnyAction | None = None,
+        *,
+        asleep: bool = False,
+    ) -> tuple[int, list[str]]:
+        """Advance the stats, then the clock by the minutes that really passed.
+
+        Returns those minutes and the facts the stats produced. Once Orton is
+        dead the clock still moves but the stats stay where they fell.
+        """
+        manager = self.manager
+        if manager.narrative.game_over:
+            manager.advance_clock(minutes)
+            return minutes, []
+        facts = self.stats_engine.advance(
+            manager.player, minutes, self._stat_context(action, asleep=asleep)
+        )
+        spent = self.stats_engine.minutes_advanced
+        manager.advance_clock(spent)
+        if self.stats_engine.death_cause:
+            facts[-1] = self._check_player_death(self.stats_engine.death_cause)
+        return spent, facts
+
+    def _resolve_one(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Resolve one accepted action; returns its facts and the minutes it took."""
+        if isinstance(accepted.action, SleepAction):
+            return self._resolve_sleep(accepted)
         handler = self._RESOLVERS.get(type(accepted.action))
         if handler is None:
-            return f"No resolver registered for {type(accepted.action).__name__}.", 0
+            return [f"No resolver registered for {type(accepted.action).__name__}."], 0
         minutes = action_minutes(accepted.action, accepted.resolved)
         if isinstance(accepted.action, MULTIPLIED_ACTIONS):
             minutes = round(minutes * self._action_time_multiplier())
-        fact = handler(self, accepted)
+        facts = [self._check_player_death(handler(self, accepted))]
+        spent = 0
         if minutes:
-            self._spend(minutes)
-        return self._check_player_death(fact), minutes
+            spent, stat_facts = self._spend(minutes, accepted.action)
+            facts.extend(stat_facts)
+        return facts, spent
 
     def _check_player_death(self, fact: str) -> str:
         """End the game the moment Orton's HP reaches zero.
@@ -260,14 +308,15 @@ class SimulationCore:
         for modifier in item.modifiers:
             self._apply_modifier(player, modifier)
 
-        survival_note = ""
         if isinstance(item, ConsumableItem):
             event = ConsumeItemEvent(source=player, item=item)
             manager.player.inventory.remove(entity)
-            if item.nutrition or item.hydration:
-                player.hunger = max(0, min(player.hunger + item.nutrition, 100))
-                player.thirst = max(0, min(player.thirst + item.hydration, 100))
-                survival_note = f", hunger {player.hunger}, thirst {player.thirst}"
+            player.stats.remove(
+                CharacterStat.HUNGER, item.nutrition / survival.ITEM_POINTS_PER_STAT_UNIT
+            )
+            player.stats.remove(
+                CharacterStat.THIRST, item.hydration / survival.ITEM_POINTS_PER_STAT_UNIT
+            )
         else:
             event = ApplyItemEvent(source=player, item=item, target=player)
 
@@ -276,7 +325,7 @@ class SimulationCore:
 
         return (
             f"Use {item.name}: succeeded, "
-            f"Orton now at {player.hit_points}/{player.max_hit_points} HP{survival_note}."
+            f"Orton now at {player.hit_points}/{player.max_hit_points} HP."
         )
 
     def _resolve_update_inventory(self, accepted: Accepted) -> str:
@@ -513,22 +562,6 @@ class SimulationCore:
         manager.narrative.player_status.remove(action.status)
         return f"Removed status '{action.status}'."
 
-    def _resolve_update_condition(self, accepted: Accepted) -> str:
-        action: UpdateConditionAction = accepted.action
-        manager = self.manager
-        if action.field_name in NARRATIVE_CONDITION_FIELDS:
-            value = accepted.resolved["value"]
-            manager.narrative.conditions[action.field_name] = value
-            return f"{action.field_name} is now {value}."
-
-        attribute = action.field_name  # hunger / thirst / morale
-        if action.raw_value[0] in "+-":
-            new_value = getattr(manager.player, attribute) + int(action.raw_value)
-        else:
-            new_value = int(action.raw_value)
-        setattr(manager.player, attribute, max(0, min(new_value, 100)))
-        return f"{action.field_name} is now {getattr(manager.player, attribute)}."
-
     def _resolve_wait(self, accepted: Accepted) -> str:
         resolved = accepted.resolved
         spent = _span_words(resolved["minutes"])
@@ -536,12 +569,57 @@ class SimulationCore:
             return f"Orton waits {spent}, the most he can at once."
         return f"Orton waits {spent}."
 
-    def _resolve_sleep(self, accepted: Accepted) -> str:
+    def _resolve_sleep(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Sleep chunk by chunk until the time is up or something wakes Orton."""
         resolved = accepted.resolved
-        spent = _span_words(resolved["minutes"])
+        player = self.manager.player
+        wanted = resolved["minutes"]
+        player.asleep = True
+        spent = 0
+        facts: list[str] = []
+        wake_fact = ""
+        while spent < wanted and not self.manager.narrative.game_over:
+            chunk = min(survival.MAX_CHUNK_MINUTES, wanted - spent)
+            advanced, stat_facts = self._spend(chunk, accepted.action, asleep=True)
+            spent += advanced
+            facts.extend(stat_facts)
+            wake_fact = self._waking(spent)
+            if wake_fact:
+                break
+        player.asleep = False
+        words = _span_words(spent)
         if resolved["clamped"]:
-            return f"Orton sleeps {spent}, the most he can at once."
-        return f"Orton sleeps {spent}."
+            lead = f"Orton sleeps {words}, the most he can at once."
+        else:
+            lead = f"Orton sleeps {words}."
+        return [lead, *facts, *([wake_fact] if wake_fact else [])], spent
+
+    def _waking(self, slept_minutes: int) -> str:
+        """The fact for what wakes Orton after this chunk, or "" if nothing does."""
+        if self.manager.narrative.game_over:
+            return ""
+        player = self.manager.player
+        if self._zombies_seen_this_chunk > 0:
+            panic = self._rng.uniform(
+                survival.SLEEP_INTERRUPTION_PANIC_MIN, survival.SLEEP_INTERRUPTION_PANIC_MAX
+            )
+            player.stats.add(CharacterStat.PANIC, panic)
+            return "A zombie wakes Orton in a panic."
+        stats = player.stats
+        if status_effect_level(StatusEffect.HUNGRY, stats.get(CharacterStat.HUNGER)) >= (
+            survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
+        ):
+            return "Hunger wakes Orton."
+        if status_effect_level(StatusEffect.THIRST, stats.get(CharacterStat.THIRST)) >= (
+            survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
+        ):
+            return "Thirst wakes Orton."
+        if (
+            stats.get(CharacterStat.FATIGUE) <= 0
+            and slept_minutes >= survival.SLEEP_FATIGUE_WAKE_MIN_HOURS * 60
+        ):
+            return "Orton wakes fully rested."
+        return ""
 
     _RESOLVERS = {
         MoveAction: _resolve_move,
@@ -553,7 +631,6 @@ class SimulationCore:
         SleepAction: _resolve_sleep,
         StatusAddAction: _resolve_status_add,
         StatusRemoveAction: _resolve_status_remove,
-        UpdateConditionAction: _resolve_update_condition,
         AddGoalAction: _resolve_add_goal,
         RemoveGoalAction: _resolve_remove_goal,
         UpdateRelationshipAction: _resolve_update_relationship,

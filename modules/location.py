@@ -15,6 +15,18 @@ class Location:
     # Other names the game master calls this place. A zone stands in for many
     # rooms, so "hallway", "lobby" and "stairwell" all resolve to the building.
     aliases: list[str] = field(default_factory=list[str])
+    # What the player sleeps on here, and the spots inside the zone that
+    # override it: a word in `current_place` selects its bed type (spec 02).
+    bed_type: str = "floor"
+    place_bed_types: dict[str, str] = field(default_factory=dict[str, str])
+
+    def bed_type_at(self, place: str) -> str:
+        """The bed type at a free-text spot inside this zone."""
+        spot = place.casefold()
+        for word, bed_type in self.place_bed_types.items():
+            if word in spot:
+                return bed_type
+        return self.bed_type
 
 
 @dataclass

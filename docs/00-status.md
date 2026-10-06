@@ -26,6 +26,7 @@ what the game now does.
 | # | Mechanic | Status | Code |
 | --- | --- | --- | --- |
 | 01 | [Game Clock and Action Time](mechanics/01-game-clock.md) | Implemented | `data/clock.py`, `data/time_costs.py`, `managers/game.py`, `managers/simulation.py`, `managers/validator.py`, `modules/action.py` |
+| 02 | [Survival Stats](mechanics/02-survival-stats.md) | Implemented | `modules/stats.py`, `modules/units.py`, `data/survival.py`, `data/status_effects.py`, `managers/stats.py`, `managers/simulation.py`, `managers/validator.py`, `adapters/persistence.py` |
 
 ## The central divergence (resolved for engine authority; still open for scale)
 
@@ -183,8 +184,7 @@ apartment key specifically) can be neither `DROP`ped, `REMOVE`d, conjured
 back via `UPDATE_INVENTORY ... ADD`, nor moved off a quantity of one via
 `UPDATE_QUANTITY` — all are rejected, closing the soft-lock where discarding,
 deleting, or duplicating his own key stranded Orton outside his apartment
-forever (the door rebuilds `LOCKED` on every load). `UPDATE_CONDITION` stays
-allowed, since it never removes an item.
+forever (the door rebuilds `LOCKED` on every load).
 
 **`ADD_GOAL short_term:`/`short-term` no longer get dropped.** The horizon
 token arrived from the parser model as `short_term`, `Short Term`,
@@ -192,13 +192,8 @@ token arrived from the parser model as `short_term`, `Short Term`,
 rest silently failed to parse. `modules/action.normalize_key` now folds all
 of them to `short_term`/`long_term` before matching.
 
-**`infection_risk +1` is no longer stored as the literal string `"+1"`.**
-`sleep` and `infection_risk` are now laddered conditions
-(`managers/game.CONDITION_LADDERS`): a signed step (`+1`/`-1`) moves one rung
-along the ladder from the current value, and a bare word sets it directly
-(through `CONDITION_SYNONYMS` where the model's wording isn't already a rung
-name), instead of the free-text field just holding whatever string the model
-wrote.
+**`UPDATE_CONDITION` no longer sets any survival value.** The engine drives the
+survival stats from the clock; see [survival stats](mechanics/02-survival-stats.md).
 
 ### Open
 

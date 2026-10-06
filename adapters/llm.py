@@ -65,7 +65,6 @@ PARSER_SYSTEM_PROMPT = (
     "- SLEEP [duration]\n"
     "- STATUS_ADD status_name\n"
     "- STATUS_REMOVE status_name\n"
-    "- UPDATE_CONDITION hunger/thirst/morale/sleep/infection_risk value\n"
     "- ADD_GOAL short_term/long_term goal_text\n"
     "- REMOVE_GOAL short_term/long_term goal_text\n"
     "- UPDATE_RELATIONSHIP npc_name affection/trust +/-number\n"

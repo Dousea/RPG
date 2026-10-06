@@ -42,8 +42,8 @@ replace it.
 
 - `WAIT <duration>` passes time. It is capped at 24 hours per action.
 - `SLEEP [duration]` sleeps for at most the given duration, or with no duration
-  until woken. It is capped at 16 hours per action. Waking rules arrive with the
-  survival stats, so until then a `SLEEP` with no duration runs to the cap.
+  until woken. It is capped at 16 hours per action. What wakes the player is in
+  [survival stats](02-survival-stats.md#waking).
 
 A duration takes one of these forms. Case and spaces between parts do not
 matter.
@@ -93,8 +93,9 @@ Further rules.
 - The action-time multiplier (pain, mood, cold hands) is 1 until health lands,
   and it only scales the fixed costs of the timed verbs (`TAKE`, `DROP`,
   `USE_ITEM` and eating). Walking, `ATTACK`, `WAIT` and `SLEEP` never take it.
-- Every spent minute is also handed to the survival stat engine. That hand-off
-  does nothing yet.
+- Every spent minute is also handed to the survival stat engine
+  ([survival stats](02-survival-stats.md#turn-flow)). If the player dies part
+  way through, only the minutes up to that point pass.
 - Running and sneaking hops cost 5 and 20 minutes each (`ZONE_HOP_RUNNING_MIN`,
   `ZONE_HOP_SNEAKING_MIN`). No pace exists yet, so every hop costs 10.
 
@@ -114,14 +115,14 @@ facts the clock adds:
 
 ## Saves
 
-`SCHEMA_VERSION` is 4.
+`SCHEMA_VERSION` is 5 (see [survival stats](02-survival-stats.md#saves) for the other fields).
 
 - The save holds `narrative.minutes`.
 - `narrative.day` and `narrative.time_of_day` are not saved.
 - `World.time` and `World.date` are written for readability, but a load
   recomputes them from `minutes`.
 
-There is no migration. Any save whose version is not 4 is discarded and a new
+There is no migration. Any save whose version is not 5 is discarded and a new
 game starts.
 
 ## Edge cases
@@ -143,5 +144,5 @@ game starts.
   unknown verb.
 - `tests/test_simulation.py`: each table cost, refused actions, the `NONE` turn,
   the summed-minutes fact and the edge cases.
-- `tests/test_persistence.py`: a v4 round trip keeps `minutes`, and a v3 save
+- `tests/test_persistence.py`: a round trip keeps `minutes`, and a v3 or v4 save
   is discarded.

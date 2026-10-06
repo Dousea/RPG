@@ -42,10 +42,11 @@ from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
+from modules.stats import Stats
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4  # spec 01
+SCHEMA_VERSION = 5  # spec 02
 
 GAME_DATA_DIR = config.persistence.game_data_dir
 SAVE_FILE = os.path.join(GAME_DATA_DIR, config.persistence.save_file_name)
@@ -145,9 +146,9 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "experience_points": player.experience_points,
             "level": player.level,
             "max_inventory_size": player.max_inventory_size,
-            "hunger": player.hunger,
-            "thirst": player.thirst,
-            "morale": player.morale,
+            "stats": player.stats.to_dict(),
+            "asleep": player.asleep,
+            "fractional_hp_loss": player.fractional_hp_loss,
             "attributes": {
                 attribute.value: value for attribute, value in player.attributes.items()
             },
@@ -202,7 +203,6 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "flags": dict(narrative.flags),
             "discovered_flags": sorted(narrative.discovered_flags),
             "player_status": list(narrative.player_status),
-            "conditions": dict(narrative.conditions),
             "pending_corrections": list(narrative.pending_corrections),
             "game_over": narrative.game_over,
             "death_cause": narrative.death_cause,
@@ -270,11 +270,6 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         flags=narrative_data.get("flags", {}),
         discovered_flags=set(narrative_data.get("discovered_flags", [])),
         player_status=narrative_data.get("player_status", []),
-        conditions={
-            "sleep": "Rested",
-            "infection_risk": "No",
-            **narrative_data.get("conditions", {}),
-        },
         pending_corrections=narrative_data.get("pending_corrections", []),
         game_over=_as_bool(narrative_data.get("game_over", False)),
         death_cause=_as_text(narrative_data.get("death_cause", ""), DEATH_CAUSE_MAX_LENGTH),
@@ -433,9 +428,9 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
             for entity in (_item_entity_from_dict(i) for i in data.get("inventory", []))
             if entity is not None
         ],
-        hunger=data.get("hunger", 100),
-        thirst=data.get("thirst", 100),
-        morale=data.get("morale", 100),
+        stats=Stats.from_dict(data.get("stats", {})),
+        asleep=_as_bool(data.get("asleep", False)),
+        fractional_hp_loss=float(data.get("fractional_hp_loss", 0.0)),
         traits=[TRAITS[trait_id] for trait_id in data.get("trait_ids", []) if trait_id in TRAITS],
         perks=[PERKS[perk_id] for perk_id in data.get("perk_ids", []) if perk_id in PERKS],
         conditions=conditions,

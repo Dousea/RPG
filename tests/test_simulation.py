@@ -29,6 +29,7 @@ from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
 from modules.modifier import HPModifier
+from modules.stats import CharacterStat
 
 # A test-local lethal item, not part of data/items.py: -500 HP guarantees
 # Orton's hit points hit zero regardless of his current/max HP, without
@@ -292,13 +293,12 @@ class ItemResolutionTests(unittest.TestCase):
 
     def test_eating_refills_hunger_and_thirst(self):
         gm = GameManager()
-        gm.player.hunger = 50
-        gm.player.thirst = 50
+        gm.player.stats.set(CharacterStat.HUNGER, 0.5)
+        gm.player.stats.set(CharacterStat.THIRST, 0.5)
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_granola_bar"]))
-        facts = _resolve(gm, UseItemAction(item_name="Granola Bar"))
-        self.assertEqual(gm.player.hunger, 70)
-        self.assertEqual(gm.player.thirst, 45)
-        self.assertIn("hunger 70, thirst 45", facts[0])
+        _resolve(gm, UseItemAction(item_name="Granola Bar"))
+        self.assertAlmostEqual(gm.player.stats.get(CharacterStat.HUNGER), 0.30, delta=0.01)
+        self.assertAlmostEqual(gm.player.stats.get(CharacterStat.THIRST), 0.55, delta=0.01)
 
     def test_removing_or_reconjuring_the_apartment_key_is_refused(self):
         # REMOVE, UPDATE_QUANTITY 0 and UPDATE_QUANTITY 2 on a door key
@@ -472,62 +472,6 @@ class WorldStateResolutionTests(unittest.TestCase):
         _resolve(gm, NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"))
         self.assertIn("frightened", gm.resolve_npc("Emma").status)
 
-    def test_update_condition_hunger(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="hunger", raw_value="-10"))
-        self.assertEqual(gm.player.hunger, 90)
-
-
-class ConditionLadderResolutionTests(unittest.TestCase):
-    """infection_risk starts at 'No', sleep starts at 'Rested' (NarrativeState
-    defaults). A signed value steps the ladder; a rung name or synonym is
-    matched case-insensitively; anything else is Refused and leaves the
-    condition unchanged."""
-
-    def test_signed_step_advances_one_rung(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+1"))
-        self.assertEqual(gm.narrative.conditions["infection_risk"], "Low")
-
-    def test_signed_step_clamps_at_the_top_rung(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+10"))
-        self.assertEqual(gm.narrative.conditions["infection_risk"], "Infected")
-
-    def test_signed_step_clamps_at_the_bottom_rung(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="-1"))
-        self.assertEqual(gm.narrative.conditions["infection_risk"], "No")
-
-    def test_synonym_maps_to_its_rung(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="severe"))
-        self.assertEqual(gm.narrative.conditions["infection_risk"], "High")
-
-    def test_sleep_synonym_maps_to_its_rung(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="sleep", raw_value="fatigued"))
-        self.assertEqual(gm.narrative.conditions["sleep"], "Tired")
-
-    def test_sleep_accepts_a_rung_name_case_insensitively(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="sleep", raw_value="Exhausted"))
-        self.assertEqual(gm.narrative.conditions["sleep"], "Exhausted")
-
-    def test_unrecognized_value_is_refused_and_leaves_the_condition_unchanged(self):
-        gm = GameManager()
-        facts = SimulationCore(gm).resolve(
-            [UpdateConditionAction(field_name="infection_risk", raw_value="banana")]
-        )
-        self.assertTrue(facts[0].startswith("Refused:"))
-        self.assertIn("expected one of", facts[0])
-        self.assertEqual(gm.narrative.conditions["infection_risk"], "No")
-
-    def test_the_raw_signed_string_is_never_stored(self):
-        gm = GameManager()
-        _resolve(gm, UpdateConditionAction(field_name="infection_risk", raw_value="+1"))
-        self.assertNotEqual(gm.narrative.conditions["infection_risk"], "+1")
-
 
 class PlayerDeathResolutionTests(unittest.TestCase):
     """SimulationCore._check_player_death is the only producer of
@@ -686,11 +630,17 @@ class TimeCostTests(unittest.TestCase):
         facts = _resolve(gm, AddGoalAction(horizon="short_term", goal_text="Find water"))
         self.assertFalse(any("pass" in fact for fact in facts))
 
-    def test_the_stat_engine_hand_off_receives_each_actions_minutes(self):
+    def test_the_stat_engine_receives_each_actions_minutes(self):
         gm = GameManager()
         core = SimulationCore(gm)
         handed: list[int] = []
-        core._advance_stats = lambda minutes: handed.append(minutes)  # pyright: ignore[reportPrivateUsage]
+        advance = core.stats_engine.advance
+
+        def spy(player, minutes, ctx):
+            handed.append(minutes)
+            return advance(player, minutes, ctx)
+
+        core.stats_engine.advance = spy
         core.resolve([MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5))])
         self.assertEqual(handed, [10, 5])
 
@@ -728,11 +678,185 @@ class ClockEdgeCaseTests(unittest.TestCase):
 
     def test_a_sleep_over_16_hours_is_clamped_and_says_so(self):
         gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
         facts = _resolve(gm, SleepAction(duration=Duration(minutes=20 * 60)))
         self.assertEqual(gm.narrative.minutes, 960)
         self.assertEqual(facts[0], "Orton sleeps 16 hours, the most he can at once.")
 
     def test_a_short_sleep_runs_its_duration(self):
         gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
         _resolve(gm, SleepAction(duration=Duration(minutes=90)))
         self.assertEqual(gm.narrative.minutes, 90)
+
+
+class StatTurnTests(unittest.TestCase):
+    """Spec 02, Turn flow."""
+
+    def test_a_wait_moves_the_stats_and_reports_a_threshold_crossing(self):
+        gm = GameManager()
+        facts = _resolve(gm, WaitAction(duration=Duration(minutes=5 * 60)))
+        self.assertIn("Orton is now Peckish.", facts)
+        self.assertGreater(gm.player.stats.get(CharacterStat.HUNGER), 0.15)
+
+    def test_stat_facts_come_before_the_time_fact(self):
+        gm = GameManager()
+        facts = _resolve(gm, WaitAction(duration=Duration(minutes=5 * 60)))
+        self.assertTrue(facts[-1].startswith("About"))
+        self.assertLess(facts.index("Orton is now Peckish."), len(facts) - 1)
+
+    def test_a_refused_action_advances_no_stats(self):
+        gm = GameManager()
+        facts = SimulationCore(gm).resolve(
+            [UpdateConditionAction(field_name="hunger", raw_value="0")]
+        )
+        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertEqual(gm.player.stats.get(CharacterStat.HUNGER), 0)
+
+    def test_combat_minutes_are_exercise(self):
+        gm = GameManager()
+        _resolve(gm, MoveAction(destination="out"), MoveAction(destination="out"))
+        endurance_before = gm.player.stats.get(CharacterStat.ENDURANCE)
+        self.assertEqual(endurance_before, 1)
+        core = SimulationCore(gm)
+        context = core._stat_context(AttackAction(target_name="Emma"))  # pyright: ignore[reportPrivateUsage]
+        self.assertTrue(context.exercising)
+
+
+class SleepSpanTests(unittest.TestCase):
+    """Spec 02, Waking."""
+
+    def test_sleep_ends_when_fatigue_reaches_zero_after_an_hour(self):
+        gm = GameManager()
+        gm.player.current_place = "the bedroom"
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.2)
+        facts = _resolve(gm, SleepAction())
+        self.assertIn("Orton wakes fully rested.", facts)
+        self.assertEqual(gm.player.stats.get(CharacterStat.FATIGUE), 0)
+        self.assertGreaterEqual(gm.narrative.minutes, 60)
+        self.assertLess(gm.narrative.minutes, 6 * 60)
+        self.assertFalse(gm.player.asleep)
+
+    def test_a_rested_sleeper_still_sleeps_the_first_hour(self):
+        gm = GameManager()
+        _resolve(gm, SleepAction())
+        self.assertEqual(gm.narrative.minutes, 60)
+
+    def test_a_timed_sleep_stops_when_the_time_is_up(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        facts = _resolve(gm, SleepAction(duration=Duration(minutes=120)))
+        self.assertEqual(gm.narrative.minutes, 120)
+        self.assertEqual(facts[0], "Orton sleeps 2 hours.")
+
+    def test_open_sleep_at_night_wakes_at_nine(self):
+        gm = GameManager()
+        gm.advance_clock(14 * 60)  # 22:00
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        _resolve(gm, SleepAction())
+        self.assertEqual((gm.narrative.hour, gm.narrative.minute), (9, 0))
+
+    def test_the_bedroom_bed_beats_the_floor(self):
+        floor, bed = GameManager(), GameManager()
+        bed.player.current_place = "the bedroom"
+        for gm in (floor, bed):
+            gm.player.stats.set(CharacterStat.FATIGUE, 0.8)
+            _resolve(gm, SleepAction(duration=Duration(minutes=120)))
+        self.assertLess(
+            bed.player.stats.get(CharacterStat.FATIGUE),
+            floor.player.stats.get(CharacterStat.FATIGUE),
+        )
+        self.assertAlmostEqual(bed.player.stats.get(CharacterStat.FATIGUE), 0.8 - 0.28, delta=0.01)
+
+    def test_a_zombie_wakes_the_sleeper_and_raises_panic_by_30_to_60(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        core = SimulationCore(gm, rng=random.Random(7))
+        calls = {"n": 0}
+
+        def zombie_on_third_chunk() -> int:
+            calls["n"] += 1
+            return 1 if calls["n"] == 3 else 0
+
+        core._new_zombies_seen = zombie_on_third_chunk  # pyright: ignore[reportPrivateUsage]
+        facts = core.resolve([SleepAction()])
+        self.assertIn("A zombie wakes Orton in a panic.", facts)
+        self.assertEqual(gm.narrative.minutes, 30)
+        self.assertFalse(gm.player.asleep)
+        panic = gm.player.stats.get(CharacterStat.PANIC)
+        # The sighting's panic decays away within the chunk; the draw is what is left.
+        self.assertAlmostEqual(panic, random.Random(7).uniform(30, 60))
+        self.assertGreaterEqual(panic, 30)
+        self.assertLessEqual(panic, 60)
+
+    def test_the_interruption_panic_is_drawn_from_the_injected_rng(self):
+        outcomes = []
+        for seed in (1, 2):
+            gm = GameManager()
+            gm.player.stats.set(CharacterStat.FATIGUE, 1)
+            core = SimulationCore(gm, rng=random.Random(seed))
+            core._new_zombies_seen = lambda: 1  # pyright: ignore[reportPrivateUsage]
+            core.resolve([SleepAction()])
+            outcomes.append(gm.player.stats.get(CharacterStat.PANIC))
+        self.assertNotEqual(outcomes[0], outcomes[1])
+        for panic in outcomes:
+            self.assertGreaterEqual(panic, 30)
+            self.assertLessEqual(panic, 60)
+
+    def test_starving_wakes_a_sleeper(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        gm.player.stats.set(CharacterStat.HUNGER, 0.699)
+        gm.player.stats.set(CharacterStat.THIRST, 0)
+        facts = _resolve(gm, SleepAction(duration=Duration(minutes=6 * 60)))
+        self.assertIn("Hunger wakes Orton.", facts)
+        self.assertLess(gm.narrative.minutes, 6 * 60)
+
+    def test_dying_of_thirst_wakes_a_sleeper_before_it_can_kill(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        facts = _resolve(gm, SleepAction(duration=Duration(minutes=16 * 60)))
+        self.assertIn("Thirst wakes Orton.", facts)
+        self.assertFalse(gm.narrative.game_over)
+        self.assertGreater(gm.player.hit_points, 0)
+
+
+class StatDeathTests(unittest.TestCase):
+    """Spec 02, Edge cases."""
+
+    def test_death_by_thirst_ends_the_game_with_the_cause(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        facts = _resolve(gm, WaitAction(duration=Duration(minutes=12 * 60)))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertEqual(gm.narrative.death_cause, "Orton died of thirst.")
+        self.assertTrue(any("Orton has died" in fact for fact in facts))
+        self.assertEqual(gm.player.hit_points, 0)
+
+    def test_the_clock_stops_at_the_chunk_where_orton_died(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        _resolve(gm, WaitAction(duration=Duration(minutes=12 * 60)))
+        self.assertLess(gm.narrative.minutes, 6 * 60)
+        self.assertEqual(gm.narrative.minutes % 10, 0)
+
+    def test_later_actions_in_the_turn_are_refused(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        facts = _resolve(
+            gm,
+            WaitAction(duration=Duration(minutes=12 * 60)),
+            WaitAction(duration=Duration(minutes=5)),
+        )
+        self.assertTrue(any(f.startswith("Refused:") and "dead" in f for f in facts))
+
+    def test_death_while_asleep_is_not_possible_by_a_single_sleep_from_fine_health(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        _resolve(gm, SleepAction(duration=Duration(minutes=16 * 60)))
+        self.assertFalse(gm.narrative.game_over)
+
+
+if __name__ == "__main__":
+    unittest.main()

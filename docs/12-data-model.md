@@ -242,7 +242,7 @@ Richer than the document's `position / condition / inventory`:
 
 ```text
 name, entity_id, current_location_id
-hit_points (0-100), hunger, thirst, morale (0-100 each)
+hit_points (0-100), stats (survival stats), asleep
 experience_points, level
 inventory: list[ItemEntity]          max_inventory_size = 20
 attributes: {PlayerAttribute: int}   AGILITY STRENGTH INTELLIGENCE
@@ -257,9 +257,8 @@ There is **no stack count**. N copies of an item are N `ItemEntity` instances,
 which is why `UPDATE_INVENTORY ... UPDATE_QUANTITY` adds or removes instances
 to reach a target rather than setting a number.
 
-Two narrative condition tracks — `sleep` and `infection_risk` — are free text
-on `NarrativeState.conditions`, not fields on the player, because they have no
-numeric simulation behind them.
+Survival stats (hunger, thirst, fatigue and the rest) live in `PlayerEntity.stats`;
+see [survival stats](mechanics/02-survival-stats.md).
 
 ### Location
 

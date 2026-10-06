@@ -80,14 +80,6 @@
                     "endColumn": 52,
                     "lineCount": 1
                 }
-            },
-            {
-                "code": "reportAssignmentType",
-                "range": {
-                    "startColumn": 40,
-                    "endColumn": 55,
-                    "lineCount": 1
-                }
             }
         ],
         "./tests/test_context.py": [
@@ -542,14 +534,6 @@
                 "range": {
                     "startColumn": 61,
                     "endColumn": 67,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 37,
-                    "endColumn": 46,
                     "lineCount": 1
                 }
             },
@@ -1188,22 +1172,6 @@
                 "range": {
                     "startColumn": 13,
                     "endColumn": 23,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 32,
-                    "endColumn": 40,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 48,
-                    "endColumn": 54,
                     "lineCount": 1
                 }
             }

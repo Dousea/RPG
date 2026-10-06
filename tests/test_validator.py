@@ -18,6 +18,7 @@ from modules.action import (
     WaitAction,
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.stats import CharacterStat
 
 
 class ClockValidationTests(unittest.TestCase):
@@ -63,7 +64,7 @@ class ClockValidationTests(unittest.TestCase):
         assert isinstance(result, Accepted)
         self.assertEqual(result.resolved, {"minutes": 960, "clamped": True})
 
-    def test_an_open_sleep_runs_to_the_cap_until_wake_rules_exist(self):
+    def test_an_open_sleep_by_day_runs_to_the_cap(self):
         result = self.validator.validate(SleepAction())
         assert isinstance(result, Accepted)
         self.assertEqual(result.resolved["minutes"], 960)
@@ -383,24 +384,50 @@ class PlayerStatusValidationTests(unittest.TestCase):
         self.assertIsInstance(result, Rejected)
 
 
-class ConditionLadderValidationTests(unittest.TestCase):
+class UpdateConditionValidationTests(unittest.TestCase):
+    """Spec 02, LLM authority."""
+
+    def test_every_survival_field_is_rejected(self):
+        validator = ActionValidator(GameManager())
+        for field_name in ("hunger", "thirst", "morale", "sleep", "infection_risk"):
+            result = validator.validate(UpdateConditionAction(field_name=field_name, raw_value="1"))
+            self.assertIsInstance(result, Rejected, field_name)
+
+
+class SleepRefusalTests(unittest.TestCase):
+    """Spec 02, Waking."""
+
     def setUp(self):
         self.gm = GameManager()
         self.validator = ActionValidator(self.gm)
 
-    def test_a_rung_name_is_accepted_with_the_resolved_rung(self):
-        result = self.validator.validate(
-            UpdateConditionAction(field_name="sleep", raw_value="Exhausted")
-        )
-        self.assertIsInstance(result, Accepted)
-        self.assertEqual(result.resolved["value"], "Exhausted")
+    def test_sleep_is_refused_at_panic_level_one(self):
+        self.gm.player.stats.set(CharacterStat.PANIC, 7)
+        result = self.validator.validate(SleepAction())
+        assert isinstance(result, Rejected)
+        self.assertIn("panicked", result.reason)
 
-    def test_a_value_off_the_ladder_is_rejected(self):
-        result = self.validator.validate(
-            UpdateConditionAction(field_name="infection_risk", raw_value="banana")
-        )
-        self.assertIsInstance(result, Rejected)
-        self.assertIn("expected one of", result.reason)
+    def test_sleep_is_allowed_just_below_panic_level_one(self):
+        self.gm.player.stats.set(CharacterStat.PANIC, 6)
+        self.assertIsInstance(self.validator.validate(SleepAction()), Accepted)
+
+    def test_sleep_is_refused_at_pain_level_two_unless_very_tired(self):
+        self.gm.player.stats.set(CharacterStat.PAIN, 25)
+        self.gm.player.stats.set(CharacterStat.FATIGUE, 0.85)
+        self.assertIsInstance(self.validator.validate(SleepAction()), Rejected)
+        self.gm.player.stats.set(CharacterStat.FATIGUE, 0.86)
+        self.assertIsInstance(self.validator.validate(SleepAction()), Accepted)
+
+    def test_open_sleep_runs_to_the_cap_by_day(self):
+        result = self.validator.validate(SleepAction())
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.resolved["minutes"], 960)
+
+    def test_open_sleep_at_night_runs_to_nine(self):
+        self.gm.narrative.minutes = 14 * 60  # 22:00
+        result = self.validator.validate(SleepAction())
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.resolved["minutes"], 11 * 60)
 
 
 if __name__ == "__main__":

@@ -7,13 +7,11 @@ tests/test_validator.py and tests/test_simulation.py.
 import unittest
 
 from managers.game import (
-    CONDITION_LADDERS,
     MAX_RECENT_EVENTS,
     SUMMARY_THRESHOLD,
     GameManager,
 )
 from modules.action import (
-    NARRATIVE_CONDITION_FIELDS,
     MoveAction,
     NpcStatusAction,
     TakeAction,
@@ -390,15 +388,6 @@ class KnowledgeFirewallTests(unittest.TestCase):
             UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-45),
         )
         self.assertIn("Disposition: hostile (trust: broken)", self.gm.build_narrator_prompt("look"))
-
-
-class ConditionLadderDriftTests(unittest.TestCase):
-    def test_ladder_keys_match_the_declared_narrative_fields(self):
-        # modules/action.NARRATIVE_CONDITION_FIELDS gates parsing/validation
-        # of which fields are laddered at all; managers/game.CONDITION_LADDERS
-        # is what they're laddered against. Nothing enforces they agree except
-        # this test -- if they drift, one field silently stops being laddered.
-        self.assertEqual(tuple(CONDITION_LADDERS), NARRATIVE_CONDITION_FIELDS)
 
 
 class MemoryTests(unittest.TestCase):
