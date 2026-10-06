@@ -96,7 +96,9 @@ PARSER_JSON_SYSTEM_PROMPT = (
     '{"actions": [{"verb": "TAKE", "item": "Water Bottle"}, '
     '{"verb": "MOVE_TO", "destination": "out"}]}\n'
     "Input: 'Emma, will you come with me?'\n"
-    '{"actions": [{"verb": "ASK", "npc": "Emma", "request": "follow"}]}'
+    '{"actions": [{"verb": "ASK", "npc": "Emma", "request": "follow"}]}\n'
+    "Input: 'Emma, what's going on downstairs?'\n"
+    '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat"}]}'
 )
 
 NARRATOR_SYSTEM_PROMPT = (

@@ -7,7 +7,6 @@ from data.items import ITEMS
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from modules.action.parser import (
-    ASK_REQUEST_LABELS,
     TALK_APPROACH_LABELS,
     VERBS,
     ParseFailure,
@@ -28,6 +27,29 @@ def branches(schema: dict) -> dict[str, dict]:
         b["properties"]["verb"]["const"]: b
         for b in schema["properties"]["actions"]["items"]["anyOf"]
     }
+
+
+def ask_branches(schema: dict) -> list[dict]:
+    return [
+        b
+        for b in schema["properties"]["actions"]["items"]["anyOf"]
+        if b["properties"]["verb"]["const"] == "ASK"
+    ]
+
+
+def fits(branch: dict, entry: dict) -> bool:
+    properties = branch["properties"]
+    if not set(branch["required"]) <= set(entry) <= set(properties):
+        return False
+    for field, value in entry.items():
+        spec = properties[field]
+        if "const" in spec and value != spec["const"]:
+            return False
+        if "enum" in spec and value not in spec["enum"]:
+            return False
+        if "pattern" in spec and not re.search(spec["pattern"], value):
+            return False
+    return True
 
 
 def enum_of(branch: dict, field: str) -> list:
@@ -163,9 +185,25 @@ class ClosedFieldTests(unittest.TestCase):
         self.assertEqual(enum_of(names["TALK"], "approach"), list(TALK_APPROACH_LABELS))
         self.assertEqual(names["TALK"]["required"], ["verb", "npc", "approach"])
         self.assertEqual(names["TALK"]["properties"]["speech"], {"type": "string"})
-        self.assertEqual(enum_of(names["ASK"], "request"), list(ASK_REQUEST_LABELS))
         self.assertEqual(enum_of(names["GIVE"], "npc"), ["Emma", "Marcus"])
         self.assertEqual(enum_of(names["GIVE"], "item"), ["Apartment Key"])
+
+    def test_ask_offers_only_the_requests_the_scene_can_fill(self):
+        asks = ask_branches(ContextBuilder(building_scene()).build_plan_schema())
+        self.assertEqual(len(asks), 1)
+        self.assertEqual(enum_of(asks[0], "request"), ["follow", "stay"])
+        self.assertEqual(asks[0]["required"], ["verb", "npc", "request"])
+
+    def test_ask_for_an_item_or_a_topic_requires_one(self):
+        choices = SceneChoices(npcs=("Emma",), npc_items=("Bandage",), topics=("the_pharmacy",))
+        ask = VERBS["ASK"]
+        asks = ask_branches(build_plan_schema([ask], choices, MAX_ACTIONS))
+        by_request = {tuple(enum_of(b, "request")): b for b in asks}
+        self.assertEqual(list(by_request), [("follow", "stay"), ("give",), ("about",)])
+        self.assertEqual(by_request[("give",)]["required"], ["verb", "npc", "request", "item"])
+        self.assertEqual(enum_of(by_request[("give",)], "item"), ["Bandage"])
+        self.assertEqual(by_request[("about",)]["required"], ["verb", "npc", "request", "topic"])
+        self.assertEqual(enum_of(by_request[("about",)], "topic"), ["the_pharmacy"])
 
     def test_the_rest(self):
         names = branches(ContextBuilder(GameManager()).build_plan_schema())
@@ -321,14 +359,7 @@ class PlanReadingTests(unittest.TestCase):
             times_of_day=("morning", "night"),
         )
         schema = build_plan_schema(list(VERBS.values()), full, MAX_ACTIONS)
-        by_verb = branches(schema)
-        self.assertEqual(set(by_verb), set(VERBS))
+        all_branches = schema["properties"]["actions"]["items"]["anyOf"]
+        self.assertEqual({b["properties"]["verb"]["const"] for b in all_branches}, set(VERBS))
         for entry, _ in EQUIVALENTS:
-            branch = by_verb[entry["verb"]]
-            for field, value in entry.items():
-                spec = branch["properties"][field]
-                if "enum" in spec:
-                    self.assertIn(value, spec["enum"], (entry, field))
-                if "pattern" in spec:
-                    self.assertTrue(re.search(spec["pattern"], value), (entry, field))
-            self.assertTrue(set(branch["required"]) <= set(entry), entry)
+            self.assertTrue(any(fits(b, entry) for b in all_branches), entry)

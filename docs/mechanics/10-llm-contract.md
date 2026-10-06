@@ -192,8 +192,12 @@ empty list is `NONE`.
   `WEAR` fit in one plan), `BANDAGE` and `DISINFECT` an injured part that has no bandage
   and optionally a carried bandage or alcohol item, `REMOVE_BANDAGE` a bandaged part,
   `ATTACK` an NPC here, a seen zombie's id or `zombie` (offered only while a zombie is
-  seen), `SHOVE` a seen zombie's id, `TALK` and `ASK` an NPC here with the closed
-  approach or request labels. `WAIT` and `SLEEP` take a duration string the duration
+  seen), `SHOVE` a seen zombie's id, `TALK` an NPC here with the closed
+  approach labels, `ASK` an NPC here to follow or stay, and, only when there is one to
+  name, for an item an NPC here carries (`give`) or about a topic one of them can
+  discuss (`about`); those two requests require the item or the topic. The `ASK` line in
+  `[AVAILABLE ACTIONS]` lists the same requests and sends any other question to `TALK`
+  `chat`. `WAIT` and `SLEEP` take a duration string the duration
   grammar accepts. `MOVE_TO` takes any destination text and an optional `run`. A verb
   whose closed set is empty has no branch.
 - **The same path as the lines.** Each JSON action is turned into the action line the

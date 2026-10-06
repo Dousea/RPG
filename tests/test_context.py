@@ -9,7 +9,7 @@ from managers import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from modules.action.parser import ASK_REQUEST_LABELS, TALK_APPROACH_LABELS
+from modules.action.parser import TALK_APPROACH_LABELS
 from modules.action.types import (
     DropAction,
     Duration,
@@ -1225,8 +1225,26 @@ class ParserSystemPromptTests(unittest.TestCase):
         gm.player.current_location_id = "zone_building"
         prompt = ContextBuilder(gm).build_parser_prompt("look")
         actions = prompt.split("[AVAILABLE ACTIONS]")[1]
-        for label in (*TALK_APPROACH_LABELS, *ASK_REQUEST_LABELS):
+        for label in (*TALK_APPROACH_LABELS, "follow", "stay"):
             self.assertIn(label, actions)
+
+    def test_ask_lists_only_the_requests_the_scene_offers(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        ask = ask_line(ContextBuilder(gm).build_parser_prompt("look"))
+        self.assertIn("follow", ask)
+        self.assertNotIn("give", ask)
+        self.assertNotIn("about", ask)
+        self.assertIn("any other question is TALK chat", ask)
+
+    def test_ask_offers_give_when_an_npc_here_carries_something(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        npc = gm.npcs_in_location("zone_building")[0]
+        npc.inventory.append(ItemEntity(item=ITEMS["item_water_bottle"]))
+        ask = ask_line(ContextBuilder(gm).build_parser_prompt("look"))
+        self.assertIn("give <item>", ask)
+        self.assertNotIn("about", ask)
 
     def test_an_unlisted_verbs_labels_are_absent(self):
         gm = GameManager()
@@ -1239,6 +1257,11 @@ class ParserSystemPromptTests(unittest.TestCase):
         gm = GameManager()
         actions = ContextBuilder(gm).build_parser_prompt("look").split("[AVAILABLE ACTIONS]")[1]
         self.assertIn("- MOVE_TO <zone> -- ", actions)
+
+
+def ask_line(prompt: str) -> str:
+    actions = prompt.split("[AVAILABLE ACTIONS]")[1]
+    return next(line for line in actions.splitlines() if line.startswith("- ASK"))
 
 
 class NarratorBudgetTests(unittest.TestCase):

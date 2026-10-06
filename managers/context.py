@@ -437,10 +437,21 @@ Traits: {_lines(trait_lines) or "None"}
         lines: list[str] = []
         for verb in available_verbs(self.scene_keys()):
             kinds = "".join(f" <{kind}>" for kind in verb.target_kinds)
-            lines.append(f"- {verb.name}{kinds} -- {verb.gloss}")
+            gloss = self._ask_gloss() if verb.name == "ASK" else verb.gloss
+            lines.append(f"- {verb.name}{kinds} -- {gloss}")
             if verb.name == "TALK":
                 lines.extend(f"  {label}: {row.gloss}" for label, row in TALK_APPROACHES.items())
         return "\n".join(lines)
+
+    def _ask_gloss(self) -> str:
+        """The ASK requests this scene can fill, so the model never picks one it can't complete."""
+        choices = self.scene_choices()
+        requests = ["follow", "stay"]
+        if choices.npc_items:
+            requests.append("give <item> (an item the NPC carries)")
+        if choices.topics:
+            requests.append("about <topic> (a topic listed under the NPC)")
+        return f"ask an NPC to: {', '.join(requests)}; any other question is TALK chat"
 
     def _outfit_line(self) -> str:
         """Worn items outer to inner, with a wetness word for damp ones, never a number."""

@@ -132,8 +132,6 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
                 {"npc": _one_of(choices.npcs), "approach": _one_of(TALK_APPROACH_LABELS)},
                 {"speech": text},
             )
-        case "ASK":
-            return _ask_branch(name, choices)
         case "GIVE":
             if not choices.carried or not choices.npcs:
                 return None
@@ -163,24 +161,32 @@ def _first_aid_branch(
     return _branch(name, {"body_part": _one_of(parts)}, {"item": _one_of(items)} if items else None)
 
 
-def _ask_branch(name: str, choices: SceneChoices) -> JsonObject | None:
+def _ask_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
+    """One branch per kind of request, so a request for an item or a topic must name one."""
     if not choices.npcs:
-        return None
-    optional: JsonObject = {}
+        return []
+    npc = {"npc": _one_of(choices.npcs)}
+    plain = tuple(r for r in ASK_REQUEST_LABELS if r not in ("give", "about"))
+    asks = [_branch(name, {**npc, "request": _one_of(plain)})]
     if choices.npc_items:
-        optional["item"] = _one_of(choices.npc_items)
+        request = {"request": _one_of(("give",))}
+        asks.append(_branch(name, {**npc, **request, "item": _one_of(choices.npc_items)}))
     if choices.topics:
-        optional["topic"] = _one_of(choices.topics)
-    return _branch(
-        name, {"npc": _one_of(choices.npcs), "request": _one_of(ASK_REQUEST_LABELS)}, optional
-    )
+        request = {"request": _one_of(("about",))}
+        asks.append(_branch(name, {**npc, **request, "topic": _one_of(choices.topics)}))
+    return asks
+
+
+def _verb_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
+    if name == "ASK":
+        return _ask_branches(name, choices)
+    branch = _verb_branch(name, choices)
+    return [branch] if branch is not None else []
 
 
 def build_plan_schema(verbs: list[Verb], choices: SceneChoices, max_actions: int) -> JsonObject:
     """The schema of `{"actions": [...]}` with one branch per listed verb that has a choice to make."""
-    branches = [
-        branch for verb in verbs if (branch := _verb_branch(verb.name, choices)) is not None
-    ]
+    branches = [branch for verb in verbs for branch in _verb_branches(verb.name, choices)]
     actions: JsonObject = {"type": "array", "minItems": 0, "maxItems": max_actions}
     if branches:
         actions["items"] = {"anyOf": branches}
