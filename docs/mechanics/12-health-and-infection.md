@@ -564,7 +564,8 @@ badly hurt."). A sleeper is also woken when overall health is 10 or less.
   - "The scratch on the left hand has healed."
   - "Orton takes a painkiller."
   - "Orton is getting weaker."
-  - "Orton is weakening from hunger." (also thirst, fever, infection)
+  - "Orton is weakening from hunger." (also thirst, fever, infection), once per cause
+    per turn however many actions in it spend time
 - **`[CONDITION]`:** the status effects, now with Bleeding and Pain, then a line per injured
   or bandaged part: "left forearm: bite, bleeding", "left forearm: bite, bandaged
   (dirty)", "right hand: scratch, infected". *Infected* appears only on an unbandaged

@@ -169,7 +169,7 @@ def _got_worse(after: tuple[int, int], before: tuple[int, int]) -> bool:
 def _minutes_fact(minutes: int) -> str:
     if minutes == 1:
         return "About 1 minute passes."
-    return f"About {minutes} minutes pass."
+    return f"About {_span_words(minutes)} pass."
 
 
 class SimulationCore:
@@ -195,6 +195,7 @@ class SimulationCore:
         self._beats = beats if beats is not None else STORY_BEATS
         self._shouted = False
         self._spoke = False
+        self._stated_minutes = 0
         self._social = SocialManager(manager, self._rng)
         self._body = BodyEngine(self._rng)
         self._first_aid = FirstAid(self._rng, self.skill_engine)
@@ -225,6 +226,8 @@ class SimulationCore:
         total_minutes = 0
         self._shouted = False
         self._spoke = False
+        self._stated_minutes = 0
+        self._body.begin_turn()
         self.validator.begin_turn()
         if not actions and not refused:
             spent, stat_facts = self._spend(NONE_TURN_MINUTES)
@@ -254,7 +257,7 @@ class SimulationCore:
             spent, stat_facts = self._spend(NONE_TURN_MINUTES)
             total_minutes += spent
             facts.extend(stat_facts)
-        if total_minutes:
+        if total_minutes and total_minutes != self._stated_minutes:
             facts.append(_minutes_fact(total_minutes))
         return facts
 
@@ -449,7 +452,6 @@ class SimulationCore:
         started = manager.narrative.minutes
         span_levels = player_status_effect_levels(manager.player)
         self._zombies_seen_this_chunk = 0
-        self._body.begin_span()
         weakens = isinstance(action, WaitAction | SleepAction | ExerciseAction)
         while spent < minutes and not self._interruption:
             block = min(survival.MAX_CHUNK_MINUTES, minutes - spent)
@@ -1029,6 +1031,7 @@ class SimulationCore:
             lead = f"{self._name} waits {words}, the most {self._subject} can at once."
         else:
             lead = f"{self._name} waits {words}."
+        self._stated_minutes += spent
         return [lead, *facts], spent
 
     def _resolve_sleep(self, accepted: Accepted) -> tuple[list[str], int]:
@@ -1054,6 +1057,7 @@ class SimulationCore:
             lead = f"{self._name} sleeps {words}, the most {self._subject} can at once."
         else:
             lead = f"{self._name} sleeps {words}."
+        self._stated_minutes += spent
         return [lead, *facts, *([wake_fact] if wake_fact else [])], spent
 
     def _resolve_exercise(self, accepted: Accepted) -> tuple[list[str], int]:

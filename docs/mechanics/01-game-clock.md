@@ -111,8 +111,10 @@ mechanic lands.
 
 The turn's total becomes the last fact in the `[OUTCOMES]` block, so the
 narrator can pace its prose: "About 40 minutes pass." A single minute reads
-"About 1 minute passes." The fact is absent when the turn took no time. Other
-facts the clock adds:
+"About 1 minute passes.", and an hour or more reads in hours and minutes ("About 2
+hours 10 minutes pass."). The fact is absent when the turn took no time, and when
+the turn's wait and sleep facts already state all of its time (a turn that only
+waits). Other facts the clock adds:
 
 - "Orton waits 3 hours." and "Orton sleeps 8 hours." for the time spent.
 - "Orton waits 24 hours, the most he can at once." when a wait is clamped, and

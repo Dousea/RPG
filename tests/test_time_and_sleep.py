@@ -135,6 +135,27 @@ class TimeCostTests(unittest.TestCase):
         self.assertEqual(facts[-1], "About 40 minutes pass.")
         self.assertEqual(len(facts), 3)
 
+    def test_a_turn_over_an_hour_gives_its_total_in_hours_and_minutes(self):
+        gm = GameManager()
+        facts = simulate(
+            gm,
+            MoveAction(destination="out"),
+            WaitAction(duration=Duration(minutes=120)),
+        )
+        self.assertEqual(facts[-1], "About 2 hours 10 minutes pass.")
+
+    def test_a_lone_wait_states_its_time_once(self):
+        gm = GameManager()
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=90)))
+        self.assertEqual(facts, ["Orton waits 1 hour 30 minutes."])
+
+    def test_a_lone_sleep_states_its_time_once(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.9)
+        facts = simulate(gm, SleepAction(duration=Duration(minutes=60)))
+        self.assertEqual(facts[0], "Orton sleeps 1 hour.")
+        self.assertFalse([f for f in facts if f.startswith("About ")], facts)
+
     def test_the_minutes_fact_is_absent_when_nothing_took_time(self):
         gm = GameManager()
         facts = simulate(gm, AddGoalAction(horizon="short_term", goal_text="Find water"))
@@ -211,7 +232,9 @@ class StatTurnTests(unittest.TestCase):
 
     def test_stat_facts_come_before_the_time_fact(self):
         gm = GameManager()
-        facts = simulate(gm, WaitAction(duration=Duration(minutes=5 * 60)))
+        facts = simulate(
+            gm, MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5 * 60))
+        )
         self.assertTrue(facts[-1].startswith("About"))
         self.assertLess(facts.index("Orton is now Peckish."), len(facts) - 1)
 

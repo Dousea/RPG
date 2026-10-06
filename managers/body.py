@@ -257,8 +257,8 @@ class BodyEngine:
         self._reported: set[str] = set()
         self._losses: dict[str, float] = defaultdict(float)
 
-    def begin_span(self) -> None:
-        """Forget which weakening facts were already given."""
+    def begin_turn(self) -> None:
+        """Forget which weakening facts were already given, so each turn gives each once."""
         self._reported = set()
 
     def minute(self, player: PlayerEntity, hours_survived: float) -> list[str]:

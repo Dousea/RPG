@@ -63,7 +63,8 @@ class OutbreakBeatTests(unittest.TestCase):
         self.assertEqual(gm.world.outbreak_started_at, 2760)
         self.assertEqual(gm.world.fired_beats, {"outbreak_begins": 2760})
         self.assertIn(SIRENS, facts)
-        self.assertEqual(facts[-1], "About 27 minutes pass.")
+        self.assertEqual(facts[0], "Orton waits 27 minutes, then is interrupted.")
+        self.assertNotIn("About 27 minutes pass.", facts)
 
     def test_a_wait_it_cuts_short_reports_the_time_actually_waited(self):
         gm = GameManager()

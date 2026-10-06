@@ -1221,6 +1221,26 @@ class WeakeningInterruptionTests(unittest.TestCase):
         self.assertEqual(len(calls), 10)
 
 
+class WeakeningFactTests(unittest.TestCase):
+    """Spec 12, Weakening: the fact is given once per turn, however many actions spend time."""
+
+    def test_two_moves_while_dying_of_thirst_give_one_fact(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        facts = SimulationCore(gm).resolve(
+            [MoveAction(destination="out"), MoveAction(destination="in")]
+        )
+        self.assertEqual(facts.count("Orton is weakening from thirst."), 1, facts)
+
+    def test_the_next_turn_gives_it_again(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        core = SimulationCore(gm)
+        core.resolve([MoveAction(destination="out")])
+        facts = core.resolve([MoveAction(destination="in")])
+        self.assertIn("Orton is weakening from thirst.", facts)
+
+
 class WeakeningComparisonTests(unittest.TestCase):
     """Spec 12, The weakening interruption: either level rising counts."""
 
