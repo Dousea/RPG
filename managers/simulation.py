@@ -47,17 +47,19 @@ from modules.action.types import (
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
+    TakeOffAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
 from modules.entity.item import ItemEntity
 from modules.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
 )
-from modules.item import AppliableItem, ConsumableItem
+from modules.item import AppliableItem, ClothingItem, ConsumableItem
 from modules.modifier import (
     AffinityModifier,
     ConditionsModifier,
@@ -296,6 +298,22 @@ class SimulationCore:
         manager.player.inventory.remove(entity)
         manager.current_location.entities.append(entity)
         return f"Drop {entity.item.name}: succeeded."
+
+    def _resolve_wear(self, accepted: Accepted) -> str:
+        entity = accepted.expect(HeldItem).entity
+        item = entity.item
+        assert isinstance(item, ClothingItem), "_validate_wear checks this"
+        self.manager.player.inventory.remove(entity)
+        self.manager.player.worn[item.body_location] = entity
+        return f"Wear {item.name}: succeeded."
+
+    def _resolve_take_off(self, accepted: Accepted) -> str:
+        entity = accepted.expect(HeldItem).entity
+        item = entity.item
+        assert isinstance(item, ClothingItem), "only clothing is ever worn"
+        del self.manager.player.worn[item.body_location]
+        self.manager.player.inventory.append(entity)
+        return f"Take off {item.name}: succeeded."
 
     def _resolve_use_item(self, accepted: Accepted) -> str:
         manager = self.manager
@@ -608,6 +626,8 @@ class SimulationCore:
         MoveAction: _resolve_move,
         TakeAction: _resolve_take,
         DropAction: _resolve_drop,
+        WearAction: _resolve_wear,
+        TakeOffAction: _resolve_take_off,
         AttackAction: _resolve_attack,
         UseItemAction: _resolve_use_item,
         WaitAction: _resolve_wait,

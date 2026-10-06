@@ -668,7 +668,12 @@
             li.appendChild(el('span', 'label', slot.slot));
             li.appendChild(el('span', slot.item ? 'value' : 'value muted', slot.item ? `${slot.item} (${slot.condition})` : 'Empty'));
             return li;
-        }));
+        }).concat((data.worn || []).map(piece => {
+            const li = el('li', 'row-item');
+            li.appendChild(el('span', 'label', piece.location.replace('base:', '').replace(/_/g, ' ')));
+            li.appendChild(el('span', 'value', piece.wetness_word ? `${piece.name} (${piece.wetness_word})` : piece.name));
+            return li;
+        })));
     }
 
     function renderStanding(data) {

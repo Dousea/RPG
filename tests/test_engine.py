@@ -11,6 +11,7 @@ import adapters.engine as engine_module
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from adapters.save import files
+from modules.body import BodyLocation
 from modules.entity.item import ItemEntity
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 from tests.test_simulation import LETHAL_ITEM
@@ -95,6 +96,20 @@ class TurnTests(EngineTestCase):
         self.assertIsInstance(result["goals"]["short_term"], list)
         self.assertEqual(result["day"], 1)
         self.assertIn("current_place", result)
+
+    def test_snapshot_lists_worn_clothing_with_wetness_words(self):
+        self.engine.manager.player.worn[BodyLocation.PANTS].wetness = 90.0
+        worn = self.engine.state()["worn"]
+        self.assertEqual([entry["location"] for entry in worn][:2], ["base:sweater", "base:pants"])
+        by_name = {entry["name"]: entry for entry in worn}
+        self.assertEqual(
+            by_name["Jeans"], {"location": "base:pants", "name": "Jeans", "wetness_word": "soaked"}
+        )
+        self.assertEqual(by_name["T-shirt"]["wetness_word"], "")
+
+    def test_snapshot_equipment_holds_only_hands_and_shoulders(self):
+        slots = [entry["slot"] for entry in self.engine.state()["equipment"]]
+        self.assertEqual(slots, ["Right Hand", "Left Hand", "Shoulders"])
 
     def test_snapshot_has_game_over_false_by_default(self):
         result = self.engine.state()

@@ -2,6 +2,7 @@
 
 import unittest
 
+from data.items import ITEMS
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected, ValidationResult
 from modules.action.types import (
@@ -13,10 +14,14 @@ from modules.action.types import (
     SleepAction,
     StatusRemoveAction,
     TakeAction,
+    TakeOffAction,
     UpdateConditionAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
+from modules.body import BodyLocation
+from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.resolution import (
     HeldItem,
@@ -431,6 +436,80 @@ class SleepRefusalTests(unittest.TestCase):
         result = self.validator.validate(SleepAction())
         assert isinstance(result, Accepted)
         self.assertEqual(result.expect(TimeSpan).minutes, 11 * 60)
+
+
+class WearValidationTests(unittest.TestCase):
+    """Spec 05, Actions: WEAR and TAKE_OFF."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.worn.clear()
+        self.gm.player.inventory.clear()
+        self.validator = ActionValidator(self.gm)
+
+    def _carry(self, item_id: str) -> ItemEntity:
+        entity = ItemEntity(item=ITEMS[item_id])
+        self.gm.player.inventory.append(entity)
+        return entity
+
+    def _wear(self, item_id: str) -> ItemEntity:
+        entity = ItemEntity(item=ITEMS[item_id])
+        self.gm.player.worn[entity.item.body_location] = entity  # type: ignore[attr-defined]
+        return entity
+
+    def test_wear_accepts_a_carried_garment(self):
+        entity = self._carry("item_tshirt")
+        result = _accepted(self.validator.validate(WearAction(item_name="T-shirt")))
+        self.assertIs(result.expect(HeldItem).entity, entity)
+
+    def test_wear_refuses_what_is_not_carried(self):
+        result = self.validator.validate(WearAction(item_name="T-shirt"))
+        self.assertIsInstance(result, Rejected)
+
+    def test_wear_refuses_a_non_garment(self):
+        self._carry("item_crowbar")
+        result = self.validator.validate(WearAction(item_name="Crowbar"))
+        assert isinstance(result, Rejected)
+        self.assertIn("cannot be worn", result.reason)
+
+    def test_wear_refuses_an_occupied_location_naming_the_item(self):
+        self._wear("item_tshirt")
+        self._carry("item_tshirt")
+        result = self.validator.validate(WearAction(item_name="T-shirt"))
+        assert isinstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton is already wearing a T-shirt there.")
+
+    def test_plural_garments_take_no_article(self):
+        self._wear("item_jeans")
+        self._carry("item_jeans")
+        result = self.validator.validate(WearAction(item_name="Jeans"))
+        assert isinstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton is already wearing Jeans there.")
+
+    def test_wear_refuses_an_excluded_location_naming_the_blocker(self):
+        self.gm.player.worn[BodyLocation.FULLSUIT] = ItemEntity(item=ITEMS["item_black_jacket"])
+        self._carry("item_black_jacket")
+        result = self.validator.validate(WearAction(item_name="Black jacket"))
+        assert isinstance(result, Rejected)
+        self.assertIn("Black jacket", result.reason)
+
+    def test_take_off_accepts_a_worn_item(self):
+        entity = self._wear("item_jeans")
+        result = _accepted(self.validator.validate(TakeOffAction(item_name="Jeans")))
+        self.assertIs(result.expect(HeldItem).entity, entity)
+
+    def test_take_off_refuses_what_is_not_worn(self):
+        self._carry("item_jeans")
+        result = self.validator.validate(TakeOffAction(item_name="Jeans"))
+        self.assertIsInstance(result, Rejected)
+
+    def test_take_off_refuses_with_a_full_inventory(self):
+        self._wear("item_jeans")
+        self.gm.player.max_inventory_size = 1
+        self._carry("item_crowbar")
+        result = self.validator.validate(TakeOffAction(item_name="Jeans"))
+        assert isinstance(result, Rejected)
+        self.assertEqual(result.reason, "Inventory is full.")
 
 
 if __name__ == "__main__":

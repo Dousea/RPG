@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from adapters.save import codec, files
+from data.items import ITEMS
 from managers.game import GameManager
 from modules.action.types import (
     AddGoalAction,
@@ -21,6 +22,8 @@ from modules.action.types import (
     UpdateRelationshipAction,
     WaitAction,
 )
+from modules.body import BodyLocation, BodyPart
+from modules.entity.item import ItemEntity
 from modules.quest import QuestState, QuestStatus
 from modules.stats import CharacterStat
 from tests.support import IsolatedSaveTestCase, resolve_actions
@@ -228,8 +231,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_7(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 7)
+    def test_schema_version_is_8(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 8)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -244,6 +247,70 @@ class ClockSaveTests(IsolatedSaveTestCase):
         assert loaded is not None
         self.assertEqual(loaded.narrative.minutes, 2 * 1440 + 95)
         self.assertEqual(loaded.narrative.day, 3)
+
+
+class ClothingSaveTests(IsolatedSaveTestCase):
+    """Spec 05, Saves."""
+
+    def test_worn_items_and_wetness_round_trip(self):
+        gm = GameManager()
+        gm.player.worn[BodyLocation.TSHIRT].wetness = 37.5
+        gm.player.worn[BodyLocation.SHOES].hit_points = 10
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        worn = loaded.player.worn
+        self.assertEqual(set(worn), set(gm.player.worn))
+        self.assertEqual(worn[BodyLocation.TSHIRT].item.id, "item_tshirt")
+        self.assertEqual(worn[BodyLocation.TSHIRT].wetness, 37.5)
+        self.assertEqual(worn[BodyLocation.SHOES].hit_points, 10)
+
+    def test_carried_wet_clothes_keep_their_wetness(self):
+        gm = GameManager()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_black_jacket"], wetness=80.0))
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.player.inventory[-1].wetness, 80.0)
+
+    def test_wetness_cap_is_100_and_round_trips_exactly(self):
+        from data.items import WETNESS_MAX
+
+        self.assertEqual(WETNESS_MAX, 100)
+        gm = GameManager()
+        gm.player.worn[BodyLocation.TSHIRT].wetness = 100.0
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.player.worn[BodyLocation.TSHIRT].wetness, 100.0)
+
+    def test_wetness_above_the_cap_clamps_on_load(self):
+        data = codec.to_dict(GameManager())
+        data["player"]["worn"]["base:tshirt"]["wetness"] = 150
+        data["player"]["worn"]["base:shoes"]["wetness"] = -5
+        loaded = codec.from_dict(data)
+        self.assertEqual(loaded.player.worn[BodyLocation.TSHIRT].wetness, 100.0)
+        self.assertEqual(loaded.player.worn[BodyLocation.SHOES].wetness, 0.0)
+
+    def test_holes_round_trip(self):
+        gm = GameManager()
+        gm.player.worn[BodyLocation.TSHIRT].holes = {BodyPart.TORSO_UPPER}
+        loaded = codec.from_dict(codec.to_dict(gm))
+        self.assertEqual(loaded.player.worn[BodyLocation.TSHIRT].holes, {BodyPart.TORSO_UPPER})
+
+    def test_an_unknown_worn_location_is_dropped(self):
+        gm = GameManager()
+        data = codec.to_dict(gm)
+        data["player"]["worn"]["base:nonsense"] = {"item_id": "item_tshirt", "hit_points": 1}
+        loaded = codec.from_dict(data)
+        self.assertEqual(set(loaded.player.worn), set(gm.player.worn))
+
+    def test_a_worn_item_at_the_wrong_location_is_dropped(self):
+        gm = GameManager()
+        data = codec.to_dict(gm)
+        data["player"]["worn"] = {"base:shoes": {"item_id": "item_tshirt", "hit_points": 1}}
+        loaded = codec.from_dict(data)
+        self.assertEqual(loaded.player.worn, {})
 
 
 class WeatherSaveTests(IsolatedSaveTestCase):

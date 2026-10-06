@@ -1,15 +1,17 @@
 from dataclasses import dataclass
 
-from .character.equipment import (
-    AnyCharacterEquipmentSlot,
-    CharacterAccessorySlot,
-    CharacterArmorSlot,
-    CharacterHoldableSlot,
-)
+from .body import BodyLocation, BodyPart
+from .character.equipment import AnyCharacterEquipmentSlot, CharacterHoldableSlot
 from .modifier import AnyModifier
 from .weapon import MeleeWeaponType, RangedWeaponType
 
 DEFAULT_EAT_MINUTES = 5  # spec 03
+SCRATCH_DEFENSE_DEFAULT = 0  # spec 05
+BITE_DEFENSE_DEFAULT = 0  # spec 05
+NECK_PROTECTION_DEFAULT = 1.0  # spec 05
+STOMP_POWER_DEFAULT = 1.0  # spec 05
+HEARING_MODIFIER_DEFAULT = 1.0  # spec 05
+CORPSE_SICKNESS_DEFENSE_DEFAULT = 0  # spec 05
 
 
 @dataclass
@@ -31,23 +33,21 @@ class EquippableItem(BaseItem):
 
 
 @dataclass
-class ArmorItem(EquippableItem):
-    defense: int
+class ClothingItem(BaseItem):
+    """A wearable item; the damage-side stats are stored, not yet read."""
 
-    def __post_init__(self):
-        super().__post_init__()
-        if not all(isinstance(slot, CharacterArmorSlot) for slot in self.slots):
-            raise ValueError("Armor can only use ArmorSlot instances")
-
-
-@dataclass
-class AccessoryItem(EquippableItem):
-    modifiers: list[AnyModifier]
-
-    def __post_init__(self):
-        super().__post_init__()
-        if not all(isinstance(slot, CharacterAccessorySlot) for slot in self.slots):
-            raise ValueError("Accessory can only use AccessorySlot instances")
+    body_location: BodyLocation
+    covers: frozenset[BodyPart]
+    insulation: float
+    wind_resistance: float
+    water_resistance: float
+    weight: float
+    scratch_defense: int = SCRATCH_DEFENSE_DEFAULT
+    bite_defense: int = BITE_DEFENSE_DEFAULT
+    neck_protection: float = NECK_PROTECTION_DEFAULT
+    stomp_power: float = STOMP_POWER_DEFAULT
+    hearing_modifier: float = HEARING_MODIFIER_DEFAULT
+    corpse_sickness_defense: int = CORPSE_SICKNESS_DEFENSE_DEFAULT
 
 
 @dataclass

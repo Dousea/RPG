@@ -1,9 +1,11 @@
-from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
+from data.clothing_coverage import covered_parts
+from modules.body import BodyLocation
+from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.item import (
     AppliableItem,
-    ArmorItem,
     BaseItem,
+    ClothingItem,
     ConsumableItem,
     HoldableItem,
     MeleeWeaponItem,
@@ -16,6 +18,11 @@ from modules.weapon import MeleeWeaponType, RangedWeaponType
 # rather than worn, so the narrator gets a word, never the number.
 ITEM_WORN_MIN_FRACTION = 0.5
 
+WETNESS_MAX = 100  # spec 05
+WETNESS_WORD_MIN = 15  # spec 05
+WETNESS_WET_MIN = 40  # our band edge; the spec gives only the 15 floor
+WETNESS_SOAKED_MIN = 75  # our band edge, as above
+
 
 def item_condition_word(entity: ItemEntity) -> str:
     """The item's hit points as intact, worn, damaged or broken."""
@@ -26,6 +33,26 @@ def item_condition_word(entity: ItemEntity) -> str:
     if entity.hit_points >= entity.max_hit_points * ITEM_WORN_MIN_FRACTION:
         return "worn"
     return "damaged"
+
+
+ORTON_OUTFIT_IDS = (  # spec 05
+    "item_tshirt",
+    "item_hoodie",
+    "item_jeans",
+    "item_ankle_socks",
+    "item_trainers",
+)
+
+
+def wetness_word(wetness: float) -> str:
+    """Empty when the garment is dry enough to ignore, else a word for how wet it is."""
+    if wetness < WETNESS_WORD_MIN:
+        return ""
+    if wetness >= WETNESS_SOAKED_MIN:
+        return "soaked"
+    if wetness >= WETNESS_WET_MIN:
+        return "wet"
+    return "damp"
 
 
 ITEMS: dict[str, BaseItem] = {
@@ -142,14 +169,92 @@ ITEMS: dict[str, BaseItem] = {
         hunger_change=-0.40,
         thirst_change=0.10,
     ),
-    "item_worn_tshirt": ArmorItem(
-        id="item_worn_tshirt",
-        name="Worn T-Shirt",
-        description="Old and comfortable.",
+    "item_tshirt": ClothingItem(
+        id="item_tshirt",
+        name="T-shirt",
+        description="A plain cotton T-shirt.",
         max_hit_points=15,
-        tags=["clothing", "armor"],
-        slots=[CharacterArmorSlot.TORSO],
-        defense=2,
+        tags=["clothing"],
+        body_location=BodyLocation.TSHIRT,
+        covers=covered_parts("shirt"),
+        insulation=0.2,
+        wind_resistance=0.05,
+        water_resistance=0.0,
+        weight=1.0,
+    ),
+    "item_hoodie": ClothingItem(
+        id="item_hoodie",
+        name="Hoodie",
+        description="A white hoodie, hood down.",
+        max_hit_points=15,
+        tags=["clothing"],
+        body_location=BodyLocation.SWEATER,
+        covers=covered_parts("jumper"),
+        insulation=0.6,
+        wind_resistance=0.25,
+        water_resistance=0.0,
+        weight=1.0,
+        scratch_defense=10,
+        neck_protection=0.5,
+    ),
+    "item_jeans": ClothingItem(
+        id="item_jeans",
+        name="Jeans",
+        description="Faded denim jeans.",
+        max_hit_points=15,
+        tags=["clothing"],
+        body_location=BodyLocation.PANTS,
+        covers=covered_parts("trousers"),
+        insulation=0.7,
+        wind_resistance=0.55,
+        water_resistance=0.0,
+        weight=1.0,
+        scratch_defense=20,
+        bite_defense=10,
+    ),
+    "item_ankle_socks": ClothingItem(
+        id="item_ankle_socks",
+        name="Ankle socks",
+        description="A pair of short cotton socks.",
+        max_hit_points=5,
+        tags=["clothing"],
+        body_location=BodyLocation.SOCKS,
+        covers=covered_parts("shoes"),
+        insulation=0.15,
+        wind_resistance=0.1,
+        water_resistance=0.0,
+        weight=0.1,
+    ),
+    "item_trainers": ClothingItem(
+        id="item_trainers",
+        name="Trainers",
+        description="Worn running shoes.",
+        max_hit_points=24,
+        tags=["clothing"],
+        body_location=BodyLocation.SHOES,
+        covers=covered_parts("shoes"),
+        insulation=0.45,
+        wind_resistance=0.3,
+        water_resistance=0.0,
+        weight=1.0,
+        scratch_defense=10,
+        stomp_power=1.8,
+    ),
+    "item_black_jacket": ClothingItem(
+        id="item_black_jacket",
+        name="Black jacket",
+        description="A black leather jacket.",
+        max_hit_points=20,
+        tags=["clothing"],
+        body_location=BodyLocation.JACKET,
+        covers=covered_parts("jacket"),
+        insulation=0.4,
+        wind_resistance=0.6,
+        water_resistance=0.4,
+        weight=2.0,
+        scratch_defense=40,
+        bite_defense=20,
+        neck_protection=0.5,
     ),
     "item_first_aid_kit": AppliableItem(
         id="item_first_aid_kit",
@@ -169,6 +274,16 @@ ITEMS: dict[str, BaseItem] = {
         ],
     ),
 }
+
+
+def build_orton_outfit() -> dict[BodyLocation, ItemEntity]:
+    """Fresh entities for what Orton wears at the start of a game."""
+    outfit: dict[BodyLocation, ItemEntity] = {}
+    for item_id in ORTON_OUTFIT_IDS:
+        item = ITEMS[item_id]
+        assert isinstance(item, ClothingItem)
+        outfit[item.body_location] = ItemEntity(item=item)
+    return outfit
 
 
 def find_item_by_name(name: str) -> BaseItem | None:

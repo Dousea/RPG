@@ -10,7 +10,7 @@ from data.clock import (
     minute_of_day,
     time_of_day_at,
 )
-from data.items import ITEMS
+from data.items import ITEMS, build_orton_outfit
 from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
 from data.perks import PERKS
@@ -165,6 +165,7 @@ class GameManager:
                 perks=[
                     PERKS["PerkID_Charismatic"],
                 ],
+                worn=build_orton_outfit(),
             )
         )
         self.npcs = npcs if npcs is not None else build_starting_npcs()

@@ -122,6 +122,7 @@ never gets ahead of what the engine actually decided.
 
 ```
 TAKE <item>                          DROP <item>
+WEAR <item>                          TAKE_OFF <item>
 MOVE_TO <zone|in|out|spot>           ATTACK <target>
 USE_ITEM <item>                      WAIT <10m|2h|1h30m|until night|until HH:MM>
 SLEEP [duration]

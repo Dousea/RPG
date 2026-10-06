@@ -12,7 +12,7 @@ from typing import Any
 
 from data.climate import STAGE_PHRASES
 from data.clock import WORLD_START_MINUTE_OF_DAY
-from data.items import ITEMS
+from data.items import ITEMS, WETNESS_MAX
 from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import build_starting_npcs
 from data.perks import PERKS
@@ -28,17 +28,15 @@ from managers.game import (
     NarrativeState,
 )
 from managers.relationship import RelationshipManager
-from modules.character.equipment import (
-    CharacterAccessorySlot,
-    CharacterArmorSlot,
-    CharacterHoldableSlot,
-)
+from modules.body import BodyLocation, BodyPart
+from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.faction import CharacterFaction
 from modules.character.player import PlayerAttribute
 from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
+from modules.item import ClothingItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.stats import Stats
@@ -46,12 +44,12 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 7  # spec 04
+SCHEMA_VERSION = 8  # spec 05
 
 
-# Equipment slots are three separate enums; this resolves a saved slot name back
+# Equipment slots are two separate enums; this resolves a saved slot name back
 # to the right one.
-_SLOT_ENUMS = (CharacterHoldableSlot, CharacterArmorSlot, CharacterAccessorySlot)
+_SLOT_ENUMS = (CharacterHoldableSlot, CharacterArmorSlot)
 
 
 def _slot_from_value(value: str):
@@ -98,7 +96,12 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 
 def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
-    return {"item_id": entity.item.id, "hit_points": entity.hit_points}
+    return {
+        "item_id": entity.item.id,
+        "hit_points": entity.hit_points,
+        "wetness": entity.wetness,
+        "holes": sorted(part.value for part in entity.holes),
+    }
 
 
 def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
@@ -109,6 +112,12 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
     entity = ItemEntity(item=item)
     # __post_init__ sets full health; restore the saved condition over it.
     entity.hit_points = int(data.get("hit_points", entity.max_hit_points))
+    entity.wetness = min(max(float(data.get("wetness", 0.0)), 0.0), WETNESS_MAX)
+    for name in data.get("holes", []):
+        try:
+            entity.holes.add(BodyPart(name))
+        except ValueError:
+            logger.warning(f"Dropping unknown body part '{name}' from a hole.")
     return entity
 
 
@@ -216,6 +225,10 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "equipment": {
                 slot.value: (_item_entity_to_dict(entity) if entity else None)
                 for slot, entity in player.equipment.items()
+            },
+            "worn": {
+                location.value: _item_entity_to_dict(entity)
+                for location, entity in player.worn.items()
             },
             "trait_ids": [trait.id for trait in player.traits],
             "perk_ids": [perk.id for perk in player.perks],
@@ -373,7 +386,7 @@ def _reconcile_seeded_quests(
     """
     held = {
         entity.item.id
-        for entity in [*player.inventory, *player.equipment.values()]
+        for entity in [*player.inventory, *player.equipment.values(), *player.worn.values()]
         if entity is not None
     }
 
@@ -462,7 +475,6 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
     equipment: dict[Any, ItemEntity | None] = {
         **{slot: None for slot in CharacterHoldableSlot},
         **{slot: None for slot in CharacterArmorSlot},
-        **{slot: None for slot in CharacterAccessorySlot},
     }
     for slot_name, item_data in data.get("equipment", {}).items():
         slot = _slot_from_value(slot_name)
@@ -470,6 +482,21 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
             logger.warning(f"Dropping unknown equipment slot '{slot_name}'.")
             continue
         equipment[slot] = _item_entity_from_dict(item_data) if item_data else None
+
+    worn: dict[BodyLocation, ItemEntity] = {}
+    for location_name, item_data in data.get("worn", {}).items():
+        entity = _item_entity_from_dict(item_data) if item_data else None
+        try:
+            location = BodyLocation(location_name)
+        except ValueError:
+            logger.warning(f"Dropping unknown worn location '{location_name}'.")
+            continue
+        if entity is None:
+            continue
+        if not isinstance(entity.item, ClothingItem) or entity.item.body_location != location:
+            logger.warning(f"Dropping '{entity.item.id}' worn at '{location_name}'.")
+            continue
+        worn[location] = entity
 
     conditions = []
     for name in data.get("conditions", []):
@@ -502,6 +529,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
     if attributes:
         player.attributes = attributes
     player.equipment = equipment
+    player.worn = worn
     # Set last: __post_init__ filled hit_points to max.
     player.hit_points = int(data.get("hit_points", player.max_hit_points))
     return player

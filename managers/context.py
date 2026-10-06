@@ -13,7 +13,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 
 from collections.abc import Iterable
 
-from data.items import item_condition_word
+from data.items import item_condition_word, wetness_word
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from managers.climate import describe_weather
 from managers.game import GameManager
@@ -193,9 +193,19 @@ Goals: {self._goals_line() or "None"}
 Inventory: {_lines(f" - {_with_condition(entity)}" for entity in player.inventory) or "Empty"}
 Attributes: {_lines(f" - {attr.name}: {value}" for attr, value in player.attributes.items()) or "None"}
 Equipment: {_lines(equipment) or "None"}
+Wearing: {self._outfit_line()}
 Traits: {_lines(f" - {trait.name}: {trait.description}" for trait in player.traits) or "None"}
 Perks: {_lines(f" - {perk.name}: {perk.description}" for perk in player.perks) or "None"}
 """
+
+    def _outfit_line(self) -> str:
+        """Worn items outer to inner, with a wetness word for damp ones, never a number."""
+        pieces = []
+        for _, entity in self.manager.player.worn_outer_to_inner():
+            word = wetness_word(entity.wetness)
+            name = entity.item.name.lower()
+            pieces.append(f"{word} {name}" if word else name)
+        return ", ".join(pieces) or "Nothing"
 
     def _goals_line(self) -> str:
         goals = self.manager.narrative.goals
@@ -239,6 +249,7 @@ Flags: {self._discovered_flags_section()}
             "\n".join(f" - {entity.item.name}" for entity in player.inventory) or "Empty"
         )
         equipped = [entity.item.name for entity in player.equipment.values() if entity is not None]
+        equipped += [entity.item.name for _, entity in player.worn_outer_to_inner()]
         equipped_str = ", ".join(equipped) if equipped else "Nothing"
         npc_names = ", ".join(
             npc.name for npc in manager.npcs_in_location(player.current_location_id)

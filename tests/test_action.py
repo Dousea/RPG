@@ -14,11 +14,13 @@ from modules.action.types import (
     SetFlagAction,
     SleepAction,
     TakeAction,
+    TakeOffAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
 
 
@@ -220,6 +222,22 @@ class ParseActionPlanTests(unittest.TestCase):
         )
         self.assertEqual(len(failures), 1)
         self.assertEqual(failures[0].raw, "FROBNICATE x")
+
+
+class WearParseTests(unittest.TestCase):
+    """Spec 05, Actions: WEAR and TAKE_OFF."""
+
+    def test_wear(self):
+        self.assertEqual(
+            parse_action_line("WEAR Black jacket"), WearAction(item_name="Black jacket")
+        )
+
+    def test_take_off(self):
+        self.assertEqual(parse_action_line("TAKE_OFF Jeans"), TakeOffAction(item_name="Jeans"))
+
+    def test_wear_needs_an_item(self):
+        self.assertIsInstance(parse_action_line("WEAR"), ParseFailure)
+        self.assertIsInstance(parse_action_line("TAKE_OFF"), ParseFailure)
 
 
 if __name__ == "__main__":

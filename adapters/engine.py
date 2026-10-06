@@ -13,6 +13,7 @@ from typing import Any
 from adapters import llm
 from adapters.memory import SemanticMemory
 from adapters.save import codec, files
+from data.items import wetness_word
 from managers.climate import weather_summary
 from managers.context import ContextBuilder
 from managers.game import GameManager
@@ -220,6 +221,7 @@ class GameEngine:
                 for entity in player.inventory
             ],
             "equipment": _equipment(player),
+            "worn": _worn(player),
             "traits": [
                 {"name": trait.name, "description": trait.description} for trait in player.traits
             ],
@@ -268,6 +270,18 @@ def _equipment(player: PlayerEntity) -> list[dict[str, Any]]:
             "condition": _condition(entity) if entity is not None else None,
         }
         for slot, entity in player.equipment.items()
+    ]
+
+
+def _worn(player: PlayerEntity) -> list[dict[str, Any]]:
+    """Worn clothing outer to inner; wetness reaches the player as a word."""
+    return [
+        {
+            "location": location.value,
+            "name": entity.item.name,
+            "wetness_word": wetness_word(entity.wetness),
+        }
+        for location, entity in player.worn_outer_to_inner()
     ]
 
 

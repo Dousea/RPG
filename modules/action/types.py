@@ -19,6 +19,16 @@ class DropAction:
 
 
 @dataclass
+class WearAction:
+    item_name: str
+
+
+@dataclass
+class TakeOffAction:
+    item_name: str
+
+
+@dataclass
 class AttackAction:
     target_name: str
 
@@ -135,6 +145,8 @@ AnyAction = (
     MoveAction
     | TakeAction
     | DropAction
+    | WearAction
+    | TakeOffAction
     | AttackAction
     | UseItemAction
     | WaitAction

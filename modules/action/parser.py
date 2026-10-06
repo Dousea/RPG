@@ -28,11 +28,13 @@ from modules.action.types import (
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
+    TakeOffAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
 
 NARRATIVE_CONDITION_FIELDS = ("sleep", "infection_risk")
@@ -99,6 +101,18 @@ def _parse_drop(args: str) -> DropAction:
     if not args:
         raise _ActionParseError("DROP needs an item name.")
     return DropAction(item_name=args)
+
+
+def _parse_wear(args: str) -> WearAction:
+    if not args:
+        raise _ActionParseError("WEAR needs an item name.")
+    return WearAction(item_name=args)
+
+
+def _parse_take_off(args: str) -> TakeOffAction:
+    if not args:
+        raise _ActionParseError("TAKE_OFF needs an item name.")
+    return TakeOffAction(item_name=args)
 
 
 def _parse_attack(args: str) -> AttackAction:
@@ -315,6 +329,8 @@ _PARSERS: dict[str, Callable[[str], AnyAction]] = {
     "MOVE_TO": _parse_move_to,
     "TAKE": _parse_take,
     "DROP": _parse_drop,
+    "WEAR": _parse_wear,
+    "TAKE_OFF": _parse_take_off,
     "ATTACK": _parse_attack,
     "USE_ITEM": _parse_use_item,
     "WAIT": _parse_wait,

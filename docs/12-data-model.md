@@ -247,8 +247,8 @@ experience_points, level
 inventory: list[ItemEntity]          max_inventory_size = 20
 attributes: {PlayerAttribute: int}   AGILITY STRENGTH INTELLIGENCE
                                      WILLPOWER LUCK CHARISMA, all 3
-equipment: {slot: ItemEntity | None} three slot enums: holdable,
-                                     armor, accessory
+equipment: {slot: ItemEntity | None} hands and the backpack slot
+worn: {BodyLocation: ItemEntity}     clothing, see mechanics/05-clothing.md
 traits: list[PlayerTrait]            perks: list[PlayerPerk]
 conditions: list[CharacterCondition] POISONED STUNNED BURNED FROZEN PANIC
 ```

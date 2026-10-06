@@ -23,11 +23,13 @@ from modules.action.types import (
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
+    TakeOffAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
@@ -89,6 +91,8 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     AttackAction: SWING_MIN,
     TakeAction: QUICK_ACTION_MIN,
     DropAction: QUICK_ACTION_MIN,
+    WearAction: WEAR_MINUTES,
+    TakeOffAction: TAKE_OFF_MINUTES,
     UseItemAction: _use_item_minutes,
     MoveAction: _move_minutes,
     WaitAction: _spent_minutes,
@@ -108,7 +112,13 @@ TIME_COSTS: dict[type, int | CostFunction] = {
 }
 
 
-MULTIPLIED_ACTIONS: tuple[type, ...] = (TakeAction, DropAction, UseItemAction)  # spec 01
+MULTIPLIED_ACTIONS: tuple[type, ...] = (
+    TakeAction,
+    DropAction,
+    UseItemAction,
+    WearAction,
+    TakeOffAction,
+)  # spec 01
 
 
 def action_minutes(action: AnyAction, resolved: Resolution) -> int:

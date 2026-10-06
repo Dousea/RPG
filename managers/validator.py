@@ -16,6 +16,7 @@ re-derive the reason something was legal.
 from dataclasses import dataclass
 
 from data import survival
+from data.body_locations import EXCLUSIVE_LOCATIONS
 from data.clock import (
     SLEEP_CAP_MIN,
     TIME_OF_DAY_START,
@@ -43,14 +44,16 @@ from modules.action.types import (
     StatusAddAction,
     StatusRemoveAction,
     TakeAction,
+    TakeOffAction,
     UpdateConditionAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
-from modules.item import AppliableItem, ConsumableItem
+from modules.item import AppliableItem, ClothingItem, ConsumableItem
 from modules.resolution import (
     HeldItem,
     MoveBlocked,
@@ -72,6 +75,13 @@ GOAL_HORIZONS = ("short_term", "long_term")
 # an enum, because narrative status ("settled in") and simulated capability
 # ("unconscious") share one field (`NarrativeState.player_status`) today.
 INCAPACITATING_STATUSES = frozenset({"unconscious", "incapacitated", "restrained"})
+
+
+def _with_article(name: str) -> str:
+    """The name with "a" or "an"; plural names such as Jeans take none."""
+    if name.endswith("s") and not name.endswith("ss"):
+        return name
+    return f"{'an' if name[0].lower() in 'aeiou' else 'a'} {name}"
 
 
 @dataclass
@@ -227,6 +237,36 @@ class ActionValidator:
             return Rejected(action, f"No '{action.item_name}' in inventory to drop.")
         if self._is_door_key(entity.item.id):
             return Rejected(action, "Orton keeps his keys on him.")
+        return Accepted(action, HeldItem(entity))
+
+    def _validate_wear(self, action: WearAction) -> ValidationResult:
+        player = self.manager.player
+        entity = self.manager._find_item_entity(player.inventory, action.item_name)
+        if entity is None:
+            return Rejected(action, f"No '{action.item_name}' in inventory to wear.")
+        item = entity.item
+        if not isinstance(item, ClothingItem):
+            return Rejected(action, f"{item.name} cannot be worn.")
+        occupant = player.worn.get(item.body_location)
+        if occupant is not None:
+            return Rejected(
+                action, f"Orton is already wearing {_with_article(occupant.item.name)} there."
+            )
+        blocked = EXCLUSIVE_LOCATIONS.get(item.body_location, frozenset())
+        for location, worn in player.worn.items():
+            if location in blocked:
+                return Rejected(
+                    action, f"Orton cannot wear {item.name} while wearing {worn.item.name}."
+                )
+        return Accepted(action, HeldItem(entity))
+
+    def _validate_take_off(self, action: TakeOffAction) -> ValidationResult:
+        player = self.manager.player
+        entity = self.manager._find_item_entity(list(player.worn.values()), action.item_name)
+        if entity is None:
+            return Rejected(action, f"Orton is not wearing '{action.item_name}'.")
+        if len(player.inventory) >= player.max_inventory_size:
+            return Rejected(action, "Inventory is full.")
         return Accepted(action, HeldItem(entity))
 
     def _is_door_key(self, item_id: str) -> bool:
@@ -443,6 +483,8 @@ class ActionValidator:
         MoveAction: _validate_move,
         TakeAction: _validate_take,
         DropAction: _validate_drop,
+        WearAction: _validate_wear,
+        TakeOffAction: _validate_take_off,
         AttackAction: _validate_attack,
         UseItemAction: _validate_use_item,
         WaitAction: _validate_wait,

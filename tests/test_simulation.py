@@ -15,11 +15,14 @@ from modules.action.types import (
     NpcStatusAction,
     SetFlagAction,
     TakeAction,
+    TakeOffAction,
     UpdateInventoryAction,
     UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
+    WearAction,
 )
+from modules.body import BodyLocation
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
@@ -331,6 +334,66 @@ class WeatherWiringTests(unittest.TestCase):
         core.stats_engine.advance = advance
         _, facts = core._spend(10)
         self.assertEqual(facts, ["It starts to rain.", "STAT FACT"])
+
+
+class WearTimeMultiplierTests(unittest.TestCase):
+    """Spec 01, Time costs: the action-time multiplier scales WEAR and TAKE_OFF."""
+
+    def test_wear_and_take_off_are_multiplied_actions(self):
+        from data.time_costs import MULTIPLIED_ACTIONS
+
+        self.assertIn(WearAction, MULTIPLIED_ACTIONS)
+        self.assertIn(TakeOffAction, MULTIPLIED_ACTIONS)
+
+    def test_a_doubled_multiplier_doubles_the_wear_cost(self):
+        gm = GameManager()
+        gm.player.worn.clear()
+        gm.player.inventory.clear()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_tshirt"]))
+        core = SimulationCore(gm, rng=random.Random(0))
+        core._action_time_multiplier = lambda: 2.0  # type: ignore[method-assign]
+        before = gm.narrative.minutes
+        core.resolve([WearAction(item_name="T-shirt")])
+        self.assertEqual(gm.narrative.minutes - before, 2)
+
+
+class WearResolutionTests(unittest.TestCase):
+    """Spec 05, Actions: WEAR and TAKE_OFF cost 1 minute each."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.worn.clear()
+        self.gm.player.inventory.clear()
+
+    def _spent(self, action) -> int:
+        before = self.gm.narrative.minutes
+        simulate(self.gm, action)
+        return self.gm.narrative.minutes - before
+
+    def test_wear_moves_the_item_to_its_location_in_one_minute(self):
+        entity = ItemEntity(item=ITEMS["item_tshirt"])
+        self.gm.player.inventory.append(entity)
+        self.assertEqual(self._spent(WearAction(item_name="T-shirt")), 1)
+        self.assertEqual(self.gm.player.inventory, [])
+        self.assertIs(self.gm.player.worn[BodyLocation.TSHIRT], entity)
+
+    def test_take_off_moves_the_item_to_the_inventory_in_one_minute(self):
+        entity = ItemEntity(item=ITEMS["item_jeans"])
+        self.gm.player.worn[BodyLocation.PANTS] = entity
+        self.assertEqual(self._spent(TakeOffAction(item_name="Jeans")), 1)
+        self.assertEqual(self.gm.player.worn, {})
+        self.assertEqual(self.gm.player.inventory, [entity])
+
+    def test_a_refused_wear_costs_no_time_and_changes_nothing(self):
+        self.assertEqual(self._spent(WearAction(item_name="T-shirt")), 0)
+        self.assertEqual(self.gm.player.worn, {})
+
+    def test_wetness_travels_with_the_item(self):
+        entity = ItemEntity(item=ITEMS["item_tshirt"], wetness=40.0)
+        self.gm.player.inventory.append(entity)
+        simulate(self.gm, WearAction(item_name="T-shirt"))
+        simulate(self.gm, TakeOffAction(item_name="T-shirt"))
+        self.assertEqual(self.gm.player.inventory[0].wetness, 40.0)
 
 
 if __name__ == "__main__":

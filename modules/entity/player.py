@@ -1,13 +1,14 @@
 from dataclasses import dataclass, field
 
+from ..body import LAYER_ORDER, BodyLocation, BodyPart
 from ..character.equipment import (
     AnyCharacterEquipmentSlot,
-    CharacterAccessorySlot,
     CharacterArmorSlot,
     CharacterHoldableSlot,
 )
 from ..character.player import PlayerAttribute, PlayerPerk, PlayerTrait
 from ..character.state import CharacterCondition
+from ..item import ClothingItem
 from ..stats import Stats
 from . import BaseEntity
 from .item import ItemEntity
@@ -49,12 +50,24 @@ class PlayerEntity(BaseEntity):
         default_factory=lambda: {
             **{slot: None for slot in CharacterHoldableSlot},
             **{slot: None for slot in CharacterArmorSlot},
-            **{slot: None for slot in CharacterAccessorySlot},
         }
     )
+    worn: dict[BodyLocation, ItemEntity] = field(default_factory=dict[BodyLocation, ItemEntity])
     traits: list[PlayerTrait] = field(default_factory=list[PlayerTrait])
     perks: list[PlayerPerk] = field(default_factory=list[PlayerPerk])
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
+
+    def worn_outer_to_inner(self) -> list[tuple[BodyLocation, ItemEntity]]:
+        return sorted(self.worn.items(), key=lambda pair: LAYER_ORDER[pair[0]], reverse=True)
+
+    def layers_for(self, part: BodyPart) -> list[ItemEntity]:
+        """Worn items covering `part`, inner to outer."""
+        layers = [
+            (LAYER_ORDER[location], entity)
+            for location, entity in self.worn.items()
+            if isinstance(entity.item, ClothingItem) and part in entity.item.covers
+        ]
+        return [entity for _, entity in sorted(layers, key=lambda pair: pair[0])]
 
     @property
     def max_hit_points(self) -> int:

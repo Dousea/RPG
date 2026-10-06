@@ -58,6 +58,8 @@ PARSER_SYSTEM_PROMPT = (
     "[List any game actions implied by the input, one per line. Available actions:]\n"
     "- TAKE item_name\n"
     "- DROP item_name\n"
+    "- WEAR item_name (a carried garment; refused if something is already there)\n"
+    "- TAKE_OFF item_name (a worn garment)\n"
     "- MOVE_TO zone_name, in/out, or a specific spot (e.g. 'the kitchen')\n"
     "- ATTACK target_name\n"
     "- USE_ITEM item_name\n"
