@@ -7,7 +7,20 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from data import survival as k
-from data.status_effects import STATUS_EFFECT_THRESHOLDS
+from data.status_effects import (
+    BLEEDING_LEVEL_CAP,
+    CRIT_PENALTY_ENDURANCE,
+    CRIT_PENALTY_HEAVY_LOAD,
+    CRIT_PENALTY_PANIC,
+    DEFENCE_PENALTY_DRUNK,
+    DEFENCE_PENALTY_ENDURANCE,
+    DEFENCE_PENALTY_TIRED,
+    MELEE_DAMAGE_FLOOR,
+    PANIC_MELEE_PENALTY_PER_LEVEL,
+    STATUS_EFFECT_THRESHOLDS,
+    STRESS_MELEE_PENALTY_PER_LEVEL,
+    FOOD_EATEN_DRAIN_per_hour,
+)
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, Stats, StatusEffect
 
@@ -35,29 +48,110 @@ def sick_value(stats: Stats) -> float:
     return worst / 100 + stats.get(CharacterStat.SICKNESS)
 
 
-def status_effect_levels(stats: Stats, food_eaten_level: int = 0) -> dict[StatusEffect, int]:
-    """Every status effect's current level, in table order."""
+def bleeding_level(bleeding_parts: int, neck: bool) -> int:
+    """The Bleeding status effect level: bleeding body parts capped at 4, or 4 if the neck bleeds."""
+    if neck:
+        return BLEEDING_LEVEL_CAP
+    return min(bleeding_parts, BLEEDING_LEVEL_CAP)
+
+
+def status_effect_levels(
+    stats: Stats,
+    food_eaten_timer: float = 0.0,
+    hit_points: int | None = None,
+    bleeding: int = 0,
+) -> dict[StatusEffect, int]:
+    """Every status effect's current level, in table order.
+
+    Injured is off when `hit_points` is not given or is 0; `bleeding` is the
+    Bleeding level, 0 until the health spec supplies it.
+    """
     levels: dict[StatusEffect, int] = {}
     for status_effect, spec in STATUS_EFFECT_THRESHOLDS.items():
         if status_effect is StatusEffect.FOOD_EATEN:
-            levels[status_effect] = food_eaten_level
+            levels[status_effect] = status_effect_level(status_effect, food_eaten_timer)
         elif status_effect is StatusEffect.SICK:
             levels[status_effect] = status_effect_level(status_effect, sick_value(stats))
+        elif status_effect is StatusEffect.INJURED:
+            injured = hit_points is not None and hit_points > 0
+            levels[status_effect] = (
+                status_effect_level(status_effect, 100 - (hit_points or 0)) if injured else 0
+            )
+        elif status_effect is StatusEffect.BLEEDING:
+            levels[status_effect] = bleeding
         else:
             assert spec.stat is not None
             levels[status_effect] = status_effect_level(status_effect, stats.get(spec.stat))
     return levels
 
 
-def active_status_effects(
-    stats: Stats, food_eaten_level: int = 0
-) -> list[tuple[StatusEffect, int, str]]:
+def melee_status_effect_penalty(stats: Stats) -> float:
+    """Damage the Panic and Stress status effects subtract from a melee hit (level 2 and up)."""
+    penalty = 0.0
+    panic = status_effect_level(StatusEffect.PANIC, stats.get(CharacterStat.PANIC))
+    if panic >= 2:
+        penalty += PANIC_MELEE_PENALTY_PER_LEVEL * panic
+    stress = status_effect_level(StatusEffect.STRESS, stats.get(CharacterStat.STRESS))
+    if stress >= 2:
+        penalty += STRESS_MELEE_PENALTY_PER_LEVEL * stress
+    return penalty
+
+
+def damage_after_status_effects(damage: float, stats: Stats) -> float:
+    """A melee hit less the status effect penalty, floored at the minimum damage."""
+    reduced = damage - melee_status_effect_penalty(stats)
+    return MELEE_DAMAGE_FLOOR if reduced < 0 else reduced
+
+
+def crit_penalty(endurance: int, heavy_load: int, panic: int) -> float:
+    """Crit chance points lost to the Endurance, Heavy Load and Panic levels."""
+    return (
+        CRIT_PENALTY_ENDURANCE * endurance
+        + CRIT_PENALTY_HEAVY_LOAD * heavy_load
+        + CRIT_PENALTY_PANIC * panic
+    )
+
+
+def defence_penalty(endurance: int, tired: int, drunk: int) -> int:
+    """Defence points lost to the Endurance, Tired and Drunk levels."""
+    return (
+        DEFENCE_PENALTY_ENDURANCE * endurance
+        + DEFENCE_PENALTY_TIRED * tired
+        + DEFENCE_PENALTY_DRUNK * drunk
+    )
+
+
+def player_status_effect_levels(player: PlayerEntity) -> dict[StatusEffect, int]:
+    return status_effect_levels(player.stats, player.food_eaten_timer, player.hit_points)
+
+
+def food_eaten_level(player: PlayerEntity) -> int:
+    return status_effect_level(StatusEffect.FOOD_EATEN, player.food_eaten_timer)
+
+
+def active_status_effects(player: PlayerEntity) -> list[tuple[StatusEffect, int, str]]:
     """Status effects above level 0 as (type, level, name), in table order."""
     return [
         (status_effect, level, STATUS_EFFECT_THRESHOLDS[status_effect].names[level - 1])
-        for status_effect, level in status_effect_levels(stats, food_eaten_level).items()
+        for status_effect, level in player_status_effect_levels(player).items()
         if level > 0
     ]
+
+
+def level_change_facts(
+    before: dict[StatusEffect, int], after: dict[StatusEffect, int]
+) -> list[str]:
+    """One fact per status effect whose level changed, in table order."""
+    facts: list[str] = []
+    for status_effect, level in after.items():
+        if level == before[status_effect]:
+            continue
+        names = STATUS_EFFECT_THRESHOLDS[status_effect].names
+        if level == 0:
+            facts.append(f"Orton is no longer {names[before[status_effect] - 1]}.")
+        else:
+            facts.append(f"Orton is now {names[level - 1]}.")
+    return facts
 
 
 @dataclass(frozen=True)
@@ -345,21 +439,17 @@ class StatsEngine:
     def _advance_chunk(self, player: PlayerEntity, minutes: int, ctx: StatContext) -> list[str]:
         stats = player.stats
         hours = minutes * HOURS_PER_MINUTE
-        before = status_effect_levels(stats, ctx.food_eaten_level)
+        before = player_status_effect_levels(player)
+        ctx = dataclasses.replace(ctx, food_eaten_level=food_eaten_level(player))
         for driver in self._drivers:
             driver.apply(stats, hours, ctx)
-        after = status_effect_levels(stats, ctx.food_eaten_level)
-
-        facts: list[str] = []
-        for status_effect, level in after.items():
-            if level == before[status_effect]:
-                continue
-            names = STATUS_EFFECT_THRESHOLDS[status_effect].names
-            if level == 0:
-                facts.append(f"Orton is no longer {names[before[status_effect] - 1]}.")
-            else:
-                facts.append(f"Orton is now {names[level - 1]}.")
-        facts.extend(self._lose_health(player, after, hours))
+        player.food_eaten_timer = max(
+            0.0, player.food_eaten_timer - FOOD_EATEN_DRAIN_per_hour * hours
+        )
+        drivers_done = player_status_effect_levels(player)
+        health_facts = self._lose_health(player, drivers_done, hours)
+        facts = level_change_facts(before, player_status_effect_levels(player))
+        facts.extend(health_facts)
         return facts
 
     def _lose_health(

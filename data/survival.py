@@ -97,9 +97,6 @@ CORPSE_SICKNESS_FREE_CORPSES = 5  # spec 02
 CORPSE_SICKNESS_CORPSE_CAP = 20  # spec 02
 FOOD_SICKNESS_DECREASE_per_hour = per_hour_from_frame(0.0015)  # spec 02
 
-# Food and drink carry their effect on a 0-100 scale; the stats run 0-1.
-ITEM_POINTS_PER_STAT_UNIT = 100  # spec 02
-
 # Sleep
 BED_MULTIPLIERS = {  # spec 02
     "good_bed_pillow": 1.15,

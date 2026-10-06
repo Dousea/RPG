@@ -208,7 +208,9 @@ class GameEngine:
             },
             "effects": [
                 {"type": status_effect.value, "level": level, "name": name}
-                for status_effect, level, name in active_status_effects(player.stats)
+                for status_effect, level, name in sorted(
+                    active_status_effects(player), key=lambda entry: -entry[1]
+                )
             ],
             "level": player.level,
             "experience_points": player.experience_points,

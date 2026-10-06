@@ -9,6 +9,8 @@ from .character.equipment import (
 from .modifier import AnyModifier
 from .weapon import MeleeWeaponType, RangedWeaponType
 
+DEFAULT_EAT_MINUTES = 5  # spec 03
+
 
 @dataclass
 class BaseItem:
@@ -64,11 +66,17 @@ class HoldableItem(EquippableItem):
 @dataclass
 class ConsumableItem(HoldableItem):
     modifiers: list[AnyModifier]
-    # How far this refills the survival tracks, as percentage points. Dry food
-    # may carry a negative `hydration`, which is what makes water scarce rather
-    # than incidental.
-    nutrition: int = 0
-    hydration: int = 0
+    # Stat changes applied once on consuming. Hunger, thirst and stress are on
+    # the stats' 0-1 scale (negative lowers); unhappiness and boredom are points.
+    hunger_change: float = 0.0
+    thirst_change: float = 0.0
+    unhappy_change: float = 0.0
+    boredom_change: float = 0.0
+    stress_change: float = 0.0
+    alcoholic: bool = False
+    low_alcohol: bool = False
+    cooked: bool = False
+    eat_minutes: int = DEFAULT_EAT_MINUTES
 
 
 # Appliable is a type of Holdable that can apply effects when used.

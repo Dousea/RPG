@@ -15,10 +15,16 @@ this list; it only puts prose around facts the engine already decided.
 
 import random
 
-from data import survival
+from data import status_effects, survival
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
-from managers.stats import StatContext, StatsEngine, status_effect_level
+from managers.stats import (
+    StatContext,
+    StatsEngine,
+    level_change_facts,
+    player_status_effect_levels,
+    status_effect_level,
+)
 from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action import (
     AddGoalAction,
@@ -96,6 +102,23 @@ def _minutes_fact(minutes: int) -> str:
     if minutes == 1:
         return "About 1 minute passes."
     return f"About {minutes} minutes pass."
+
+
+def alcohol_intoxication(item: ConsumableItem, hunger: float) -> float:
+    """Intoxication one alcoholic item adds when drunk at the given hunger."""
+    portion = (
+        status_effects.ALCOHOL_WHOLE_ITEM_PORTION
+        if item.hunger_change
+        else status_effects.ALCOHOL_PARTIAL_PORTION
+    )
+    amount = status_effects.ALCOHOL_INTOXICATION_PER_PORTION * portion
+    if item.low_alcohol:
+        amount *= status_effects.ALCOHOL_LOW_MULT
+    if hunger > status_effects.ALCOHOL_HUNGER_HIGH:
+        amount *= status_effects.ALCOHOL_HUNGER_HIGH_MULT
+    elif hunger > status_effects.ALCOHOL_HUNGER_MID:
+        amount *= status_effects.ALCOHOL_HUNGER_MID_MULT
+    return amount
 
 
 class SimulationCore:
@@ -311,22 +334,45 @@ class SimulationCore:
         if isinstance(item, ConsumableItem):
             event = ConsumeItemEvent(source=player, item=item)
             manager.player.inventory.remove(entity)
-            player.stats.remove(
-                CharacterStat.HUNGER, item.nutrition / survival.ITEM_POINTS_PER_STAT_UNIT
-            )
-            player.stats.remove(
-                CharacterStat.THIRST, item.hydration / survival.ITEM_POINTS_PER_STAT_UNIT
-            )
+            consume_facts = self._consume(item)
         else:
+            consume_facts = []
             event = ApplyItemEvent(source=player, item=item, target=player)
 
         for modifier in manager._broadcast_event(event):
             self._apply_modifier(player, modifier)
 
-        return (
-            f"Use {item.name}: succeeded, "
-            f"Orton now at {player.hit_points}/{player.max_hit_points} HP."
+        return " ".join(
+            [
+                f"Use {item.name}: succeeded, "
+                f"Orton now at {player.hit_points}/{player.max_hit_points} HP.",
+                *consume_facts,
+            ]
         )
+
+    def _consume(self, item: ConsumableItem) -> list[str]:
+        """Apply every food field once, feed the well-fed timer and add alcohol.
+
+        Returns the facts for status effects whose level the meal changed.
+        """
+        player = self.manager.player
+        stats = player.stats
+        before = player_status_effect_levels(player)
+        if item.alcoholic:
+            stats.add(
+                CharacterStat.INTOXICATION,
+                alcohol_intoxication(item, stats.get(CharacterStat.HUNGER)),
+            )
+        stats.add(CharacterStat.HUNGER, item.hunger_change)
+        stats.add(CharacterStat.THIRST, item.thirst_change)
+        stats.add(CharacterStat.UNHAPPINESS, item.unhappy_change)
+        stats.add(CharacterStat.BOREDOM, item.boredom_change)
+        stats.add(CharacterStat.STRESS, item.stress_change)
+        fed = abs(item.hunger_change) * status_effects.FOOD_EATEN_PER_HUNGER
+        if item.cooked:
+            fed *= status_effects.FOOD_EATEN_COOKED_MULT
+        player.food_eaten_timer = min(status_effects.FOOD_EATEN_CAP, player.food_eaten_timer + fed)
+        return level_change_facts(before, player_status_effect_levels(player))
 
     def _resolve_update_inventory(self, accepted: Accepted) -> str:
         manager = self.manager

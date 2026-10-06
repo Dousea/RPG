@@ -46,7 +46,7 @@ from modules.stats import Stats
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 5  # spec 02
+SCHEMA_VERSION = 6  # spec 03
 
 GAME_DATA_DIR = config.persistence.game_data_dir
 SAVE_FILE = os.path.join(GAME_DATA_DIR, config.persistence.save_file_name)
@@ -149,6 +149,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "stats": player.stats.to_dict(),
             "asleep": player.asleep,
             "fractional_hp_loss": player.fractional_hp_loss,
+            "food_eaten_timer": player.food_eaten_timer,
             "attributes": {
                 attribute.value: value for attribute, value in player.attributes.items()
             },
@@ -431,6 +432,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         stats=Stats.from_dict(data.get("stats", {})),
         asleep=_as_bool(data.get("asleep", False)),
         fractional_hp_loss=float(data.get("fractional_hp_loss", 0.0)),
+        food_eaten_timer=float(data.get("food_eaten_timer", 0.0)),
         traits=[TRAITS[trait_id] for trait_id in data.get("trait_ids", []) if trait_id in TRAITS],
         perks=[PERKS[perk_id] for perk_id in data.get("perk_ids", []) if perk_id in PERKS],
         conditions=conditions,

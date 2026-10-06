@@ -38,7 +38,6 @@ WALK_TO_BARRIER_MIN = 1  # spec 01
 WINDOW_CLIMB_MIN = 1  # spec 01
 WEAR_MINUTES = 1  # spec 01
 TAKE_OFF_MINUTES = 1  # spec 01
-EAT_MINUTES_DEFAULT = 5  # spec 01
 ZONE_HOP_MIN = 10  # spec 01
 ZONE_HOP_RUNNING_MIN = 5  # spec 01
 ZONE_HOP_SNEAKING_MIN = 20  # spec 01
@@ -55,7 +54,7 @@ def zone_hop_minutes() -> int:
 
 def _use_item_minutes(action: AnyAction, resolved: dict[str, Any]) -> int:
     item = resolved["item_entity"].item
-    return EAT_MINUTES_DEFAULT if isinstance(item, ConsumableItem) else QUICK_ACTION_MIN
+    return item.eat_minutes if isinstance(item, ConsumableItem) else QUICK_ACTION_MIN
 
 
 def _move_minutes(action: AnyAction, resolved: dict[str, Any]) -> int:

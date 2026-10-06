@@ -75,7 +75,7 @@ the validator's resolved data and returns whole minutes.
 | --- | --- |
 | `ATTACK` | 1 per swing |
 | `TAKE`, `DROP` | 1 |
-| `USE_ITEM` on food or drink | 5 (`EAT_MINUTES_DEFAULT`) |
+| `USE_ITEM` on food or drink | the item's `eat_minutes` (default 5) |
 | `USE_ITEM` on anything else | 1 |
 | `MOVE_TO` another zone | 10 per hop |
 | `MOVE_TO` stopped at a locked door | 10 per hop walked, at least 1 |

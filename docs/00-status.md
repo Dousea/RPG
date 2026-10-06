@@ -27,6 +27,7 @@ what the game now does.
 | --- | --- | --- | --- |
 | 01 | [Game Clock and Action Time](mechanics/01-game-clock.md) | Implemented | `data/clock.py`, `data/time_costs.py`, `managers/game.py`, `managers/simulation.py`, `managers/validator.py`, `modules/action.py` |
 | 02 | [Survival Stats](mechanics/02-survival-stats.md) | Implemented | `modules/stats.py`, `modules/units.py`, `data/survival.py`, `data/status_effects.py`, `managers/stats.py`, `managers/simulation.py`, `managers/validator.py`, `adapters/persistence.py` |
+| 03 | [Status Effects and Consumption](mechanics/03-status-effects-and-consumption.md) | Implemented | `modules/stats.py`, `modules/item.py`, `data/status_effects.py`, `data/items.py`, `managers/stats.py`, `managers/simulation.py`, `managers/context.py`, `adapters/engine.py`, `adapters/persistence.py` |
 
 ## The central divergence (resolved for engine authority; still open for scale)
 

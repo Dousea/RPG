@@ -6,6 +6,7 @@ from managers.context import ContextBuilder
 from managers.game import GameManager
 from modules.action import DiscoverFlagAction, MoveAction, SetFlagAction
 from modules.quest import QuestState
+from modules.stats import CharacterStat
 from tests.support import resolve_actions
 
 
@@ -169,6 +170,45 @@ class QuestVisibilityTests(unittest.TestCase):
         prompt = self.builder.build_narrator_prompt("look")
         self.assertIn("[QUESTS]", prompt)
         self.assertIn("None", prompt)
+
+
+class ConditionBlockTests(unittest.TestCase):
+    """Spec 03, What the narrator and the player see."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def test_condition_lists_status_effects_by_name_and_level(self):
+        self.gm.player.stats.set(CharacterStat.HUNGER, 0.5)
+        self.gm.player.stats.set(CharacterStat.FATIGUE, 0.61)
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("[CONDITION]", prompt)
+        self.assertIn("Very Hungry (3/4), Drowsy (1/4)", prompt)
+
+    def test_condition_never_carries_a_raw_stat_value(self):
+        self.gm.player.stats.set(CharacterStat.HUNGER, 0.5123)
+        self.gm.player.stats.set(CharacterStat.THIRST, 0.3377)
+        self.gm.player.stats.set(CharacterStat.PANIC, 41.25)
+        prompt = self.builder.build_narrator_prompt("look")
+        condition = prompt.split("[CONDITION]")[1].split("[")[0]
+        for raw in ("0.5123", "0.3377", "41.25", "0.51", "0.34"):
+            self.assertNotIn(raw, condition)
+
+    def test_a_player_with_no_status_effects_reads_as_fine(self):
+        prompt = self.builder.build_narrator_prompt("look")
+        condition = prompt.split("[CONDITION]")[1].split("[DEEP MEMORY]")[0]
+        self.assertTrue(condition.strip().endswith("Fine"))
+
+    def test_the_parser_sees_the_same_status_effect_list(self):
+        self.gm.player.stats.set(CharacterStat.FATIGUE, 0.85)
+        prompt = self.builder.build_parser_prompt("sleep")
+        self.assertIn("Very Tired (3/4)", prompt)
+
+    def test_the_well_fed_timer_shows_as_a_status_effect(self):
+        self.gm.player.food_eaten_timer = 2000
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("Well Fed (2/4)", prompt)
 
 
 if __name__ == "__main__":

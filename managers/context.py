@@ -11,6 +11,7 @@ context, no memory) because it only proposes actions; the narrator gets full
 prose context plus this turn's already-decided [OUTCOMES].
 """
 
+from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from managers.game import GameManager
 from managers.stats import active_status_effects
 from modules.quest import QuestStatus
@@ -111,6 +112,13 @@ class ContextBuilder:
             return "(Nothing to correct)"
         return "\n".join(f" - {correction}" for correction in corrections)
 
+    def _condition_section(self) -> str:
+        """Every status effect at level 1 or above, by name and level; never a raw stat."""
+        active = active_status_effects(self.manager.player)
+        if not active:
+            return "Fine"
+        return ", ".join(f"{name} ({level}/{STATUS_EFFECT_MAX_LEVEL})" for _, level, name in active)
+
     @staticmethod
     def _outcomes_section(outcome_facts: list[str] | None) -> str:
         if not outcome_facts:
@@ -204,6 +212,9 @@ door rather than refusing the move.)
 [INVENTORY]
 {inventory_str}
 
+[CONDITION]
+{self._condition_section()}
+
 [EQUIPPED]
 {equipped_str}
 
@@ -244,7 +255,6 @@ door rather than refusing the move.)
         traits_str = "\n".join(f" - {trait.name}: {trait.description}" for trait in player.traits)
         perks_str = "\n".join(f" - {perk.name}: {perk.description}" for perk in player.perks)
         conditions_str = ", ".join(condition.name for condition in player.conditions)
-        status_effects_str = ", ".join(name for _, _, name in active_status_effects(player.stats))
 
         goals_str = ""
         if narrative.goals.get("short_term"):
@@ -256,7 +266,6 @@ door rather than refusing the move.)
 Name: {player.name}
 Level: {player.level} (XP: {player.experience_points})
 Health: {player.hit_points}/{player.max_hit_points}
-Feeling: {status_effects_str if status_effects_str else "Fine"}
 Conditions: {conditions_str if conditions_str else "None"}
 Status: {", ".join(narrative.player_status) if narrative.player_status else "None"}
 Goals: {goals_str if goals_str else "None"}
@@ -284,6 +293,11 @@ Flags: {self._discovered_flags_section()}
 
         return f"""[CHARACTER]
 {char_context}
+
+[CONDITION]
+(Orton's body and mood right now, as levels out of 4. Describe them; do not
+give them numbers.)
+{self._condition_section()}
 
 [DEEP MEMORY]
 (Past events recalled as relevant to what the player just did)

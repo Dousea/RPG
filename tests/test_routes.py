@@ -8,6 +8,7 @@ import adapters.engine as engine_module
 import app as app_module
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
+from modules.stats import CharacterStat
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
 ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
@@ -69,6 +70,32 @@ class IndexTests(RouteTestCase):
             b'id="load-input"',
         ):
             self.assertIn(element_id, response.data)
+
+
+class StatusEffectPayloadTests(RouteTestCase):
+    """Spec 03, What the narrator and the player see."""
+
+    def test_play_carries_status_effects_and_no_hunger_or_thirst(self):
+        stats = self.engine.manager.player.stats
+        stats.set(CharacterStat.HUNGER, 0.5)
+        stats.set(CharacterStat.FATIGUE, 0.61)
+        stats.set(CharacterStat.THIRST, 0.13)
+        payload = self.client.post("/play", json={"input": "look"}).get_json()
+        self.assertEqual(
+            [(m["type"], m["name"]) for m in payload["effects"]][:3],
+            [("hungry", "Very Hungry"), ("thirst", "Slightly Thirsty"), ("tired", "Drowsy")],
+        )
+        self.assertEqual(payload["effects"][0]["level"], 3)
+        for gone in ("hunger", "thirst"):
+            self.assertNotIn(gone, payload)
+            self.assertNotIn(gone, payload["vitals"])
+
+    def test_state_lists_status_effects_highest_level_first(self):
+        stats = self.engine.manager.player.stats
+        stats.set(CharacterStat.THIRST, 0.13)
+        stats.set(CharacterStat.HUNGER, 0.5)
+        levels = [m["level"] for m in self.client.get("/state").get_json()["effects"]]
+        self.assertEqual(levels, sorted(levels, reverse=True))
 
 
 class StateTests(RouteTestCase):

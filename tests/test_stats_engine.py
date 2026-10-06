@@ -53,9 +53,10 @@ class AwakeDriverTests(unittest.TestCase):
 
     def test_hunger_well_fed_idle_does_not_grow_and_exercising_doubles(self):
         player = make_player()
-        run(player, 6, food_eaten_level=1)
+        player.food_eaten_timer = 10000
+        run(player, 6)
         self.assertEqual(player.stats.get(S.HUNGER), 0)
-        run(player, 6, food_eaten_level=1, exercising=True)
+        run(player, 6, exercising=True)
         self.assertAlmostEqual(player.stats.get(S.HUNGER), 0.006912, places=6)
 
     def test_hunger_is_scaled_by_the_energy_multiplier(self):
@@ -296,7 +297,8 @@ class SleepTests(unittest.TestCase):
 
     def test_asleep_hunger_is_zero_while_well_fed(self):
         player = make_player()
-        run(player, 60, asleep=True, food_eaten_level=1)
+        player.food_eaten_timer = 11000
+        run(player, 60, asleep=True)
         self.assertEqual(player.stats.get(S.HUNGER), 0)
 
     def test_asleep_endurance_regen(self):
@@ -359,6 +361,15 @@ class HealthLossTests(unittest.TestCase):
         engine, _ = run(player, 60)
         self.assertAlmostEqual(engine.health_lost, 3.56, delta=0.01)
         self.assertEqual(player.hit_points, 100 - 3)
+
+    def test_health_loss_crossing_the_injured_threshold_gives_one_fact(self):
+        """Spec 03, Status effects: Injured reads HP after the status effects took their share."""
+        player = make_player()
+        player.hit_points = 81
+        player.stats.set(S.HUNGER, 0.8)
+        _, facts = run(player, 60)
+        self.assertEqual(player.hit_points, 78)
+        self.assertEqual(facts.count("Orton is now A Little Hurt."), 1)
 
     def test_dying_of_thirst_for_an_hour_costs_17_82_hp(self):
         player = make_player()
@@ -424,7 +435,7 @@ class HealthLossTests(unittest.TestCase):
 
 
 class EngineTests(unittest.TestCase):
-    """Spec 02, Layout."""
+    """Spec 02, Layout; spec 03, Status effects (level-change facts, the well-fed timer)."""
 
     def test_advance_600_matches_ten_advance_60(self):
         one, many = make_player(), make_player()
@@ -465,6 +476,25 @@ class EngineTests(unittest.TestCase):
         player.stats.set(S.INTOXICATION, 10.1)
         _, facts = run(player, 10)
         self.assertEqual(facts, ["Orton is no longer Tipsy."])
+
+    def test_the_well_fed_timer_drains_10800_per_hour(self):
+        player = make_player()
+        player.food_eaten_timer = 11000
+        run(player, 60)
+        self.assertAlmostEqual(player.food_eaten_timer, 200)
+
+    def test_the_timer_never_goes_below_zero_and_running_out_is_one_fact(self):
+        player = make_player()
+        player.food_eaten_timer = 900
+        _, facts = run(player, 10)
+        self.assertEqual(player.food_eaten_timer, 0)
+        self.assertEqual(facts, ["Orton is no longer Well Fed."])
+
+    def test_a_crossing_in_the_middle_of_a_long_span_is_one_fact(self):
+        player = make_player()
+        player.stats.set(S.HUNGER, 0.149)
+        _, facts = run(player, 60)
+        self.assertEqual(facts.count("Orton is now Peckish."), 1)
 
     def test_facts_hold_no_digits(self):
         player = make_player()

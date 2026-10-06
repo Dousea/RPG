@@ -7,6 +7,7 @@ gives that level. Endurance is inverted: a value at or below a column.
 from dataclasses import dataclass
 
 from modules.stats import CharacterStat, StatusEffect
+from modules.units import per_hour_from_frame
 
 
 @dataclass(frozen=True)
@@ -79,4 +80,38 @@ STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
         (0, 1600, 3200, 4800),
         ("Well Fed", "Well Fed", "Well Fed", "Well Fed"),
     ),
+    StatusEffect.INJURED: StatusEffectspec(
+        None,
+        (20, 40, 60, 75),
+        ("A Little Hurt", "Injured", "Severe Injuries", "Critical Injuries"),
+    ),
+    StatusEffect.BLEEDING: StatusEffectspec(  # level is the bleeding-part count, so 1 part is level 1
+        None,
+        (0, 1, 2, 3),
+        ("Minor Bleeding", "Bleeding", "Severe Bleeding", "Massive Blood Loss"),
+    ),
 }
+
+STATUS_EFFECT_MAX_LEVEL = 4  # spec 03
+BLEEDING_LEVEL_CAP = 4  # spec 03
+FOOD_EATEN_PER_HUNGER = 13000  # spec 03: timer units per 1.0 hunger
+FOOD_EATEN_COOKED_MULT = 2  # spec 03
+FOOD_EATEN_CAP = 11000  # spec 03: timer units
+FOOD_EATEN_DRAIN_per_hour = per_hour_from_frame(1)  # spec 03: 1 timer unit per frame
+PANIC_MELEE_PENALTY_PER_LEVEL = 0.1  # spec 03: Panic level 2 and up
+STRESS_MELEE_PENALTY_PER_LEVEL = 0.1  # spec 03: Stress level 2 and up
+MELEE_DAMAGE_FLOOR = 0.1  # spec 03
+CRIT_PENALTY_ENDURANCE = 5  # spec 03: per level
+CRIT_PENALTY_HEAVY_LOAD = 5  # spec 03: per level
+CRIT_PENALTY_PANIC = 1.3  # spec 03: per level
+DEFENCE_PENALTY_ENDURANCE = 2  # spec 03: per level
+DEFENCE_PENALTY_TIRED = 3  # spec 03: per level
+DEFENCE_PENALTY_DRUNK = 2  # spec 03: per level
+ALCOHOL_INTOXICATION_PER_PORTION = 400  # spec 03
+ALCOHOL_WHOLE_ITEM_PORTION = 2  # spec 03: a whole item that has a hunger change
+ALCOHOL_PARTIAL_PORTION = 1  # spec 03: an item with no hunger change
+ALCOHOL_LOW_MULT = 0.25  # spec 03
+ALCOHOL_HUNGER_HIGH = 0.8  # spec 03
+ALCOHOL_HUNGER_HIGH_MULT = 1.25  # spec 03
+ALCOHOL_HUNGER_MID = 0.6  # spec 03
+ALCOHOL_HUNGER_MID_MULT = 1.1  # spec 03

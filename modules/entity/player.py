@@ -33,6 +33,8 @@ class PlayerEntity(BaseEntity):
     asleep: bool = False
     # HP the status effects have taken that has not yet added up to a whole point.
     fractional_hp_loss: float = 0.0
+    # Well-fed timer: counts down while the player digests; drives Food Eaten.
+    food_eaten_timer: float = 0.0
     attributes: dict[PlayerAttribute, int] = field(
         default_factory=lambda: {
             PlayerAttribute.AGILITY: 3,

@@ -76,13 +76,9 @@ ITEMS: dict[str, BaseItem] = {
             CharacterHoldableSlot.LEFT_HAND,
         ],
         is_two_handed=False,
-        modifiers=[
-            HPModifier(
-                amount=10,
-            )
-        ],
-        nutrition=35,
-        hydration=5,
+        modifiers=[],
+        hunger_change=-0.35,
+        thirst_change=-0.05,
     ),
     "item_water_bottle": ConsumableItem(
         id="item_water_bottle",
@@ -96,8 +92,7 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        nutrition=0,
-        hydration=45,
+        thirst_change=-0.45,
     ),
     "item_granola_bar": ConsumableItem(
         id="item_granola_bar",
@@ -111,10 +106,9 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        nutrition=20,
-        # Dry food costs water. This is the one interaction that makes the
-        # water bottle worth carrying rather than an afterthought.
-        hydration=-5,
+        hunger_change=-0.20,
+        # Dry food costs water: it makes the water bottle worth carrying.
+        thirst_change=0.05,
     ),
     "item_instant_noodles": ConsumableItem(
         id="item_instant_noodles",
@@ -128,8 +122,8 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        nutrition=40,
-        hydration=-10,
+        hunger_change=-0.40,
+        thirst_change=0.10,
     ),
     "item_worn_tshirt": ArmorItem(
         id="item_worn_tshirt",

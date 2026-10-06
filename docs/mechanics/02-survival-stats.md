@@ -88,8 +88,8 @@ death the clock still moves but the stats stay where they fell.
   stats with the clock."
 - `PlayerEntity.hunger`, `.thirst` and `.morale` are gone. The player has
   `stats` and `asleep`.
-- Only drivers and eating change stats. Eating lowers hunger by `nutrition / 100`
-  and thirst by `hydration / 100`.
+- Only drivers and eating change stats. What eating does is in
+  [03 Status Effects and Consumption](03-status-effects-and-consumption.md).
 
 ## Stats
 
@@ -114,22 +114,7 @@ death the clock still moves but the stats stay where they fell.
 
 Only the player has stats.
 
-Status effect levels run 0 to 4. A value strictly above a threshold gives that level.
-Endurance is inverted: a value at or below a threshold gives the level.
-
-| Status effect | Stat | L1 | L2 | L3 | L4 | Names |
-| --- | --- | --- | --- | --- | --- | --- |
-| Hungry | hunger | 0.15 | 0.25 | 0.45 | 0.70 | Peckish, Hungry, Very Hungry, Starving |
-| Thirst | thirst | 0.12 | 0.25 | 0.70 | 0.84 | Slightly Thirsty, Thirsty, Parched, Dying of Thirst |
-| Tired | fatigue | 0.60 | 0.70 | 0.80 | 0.90 | Drowsy, Tired, Very Tired, Ridiculously Tired |
-| Endurance | endurance (at or below) | 0.75 | 0.50 | 0.25 | 0.10 | Moderate Exertion, High Exertion, Excessive Exertion, Exhausted |
-| Stress | stress | 0.25 | 0.50 | 0.75 | 0.90 | Anxious, Agitated, Stressed, Nervous Wreck |
-| Panic | panic | 6 | 30 | 65 | 80 | Slight Panic, Panic, Strong Panic, Extreme Panic |
-| Bored | boredom | 25 | 50 | 75 | 90 | Bit Bored, Bored, Very Bored, Extremely Bored |
-| Unhappy | unhappiness | 20 | 45 | 60 | 80 | Sad, Very Sad, Depressed, Severely Depressed |
-| Pain | pain | 10 | 20 | 50 | 75 | Minor Pain, Pain, Severe Pain, Agony |
-| Drunk | intoxication | 10 | 30 | 50 | 70 | Tipsy, Drunk, Very Drunk, Hammered |
-| Sick | max(food sickness, infection) ÷ 100 + sickness | 0.25 | 0.50 | 0.75 | 0.90 | Queasy, Nauseous, Sick, Fever |
+The status effect thresholds and level names are in [03 Status Effects and Consumption](03-status-effects-and-consumption.md#status-effects).
 
 ## Converting rates to game hours
 
@@ -302,13 +287,14 @@ cause, and later actions in the turn are refused.
 
 - The `[OUTCOMES]` block gets one fact per status effect change: "Orton is now
   Peckish." or "Orton is no longer Peckish." It never holds a stat value.
-- The character block shows `Feeling:` with the active status effect names, or "Fine".
+- The narrator and parser prompts carry a `[CONDITION]` block with the active
+  status effects ([03](03-status-effects-and-consumption.md#what-the-narrator-and-the-player-see)).
 - `/play` carries `effects: [{type, level, name}]` for status effects above level 0. The
   `vitals` object holds health only. The page shows each status effect as a tag.
 
 ## Saves
 
-`SCHEMA_VERSION` is 5. The player saves `stats` (every stat by name), `asleep`
+`SCHEMA_VERSION` is 6 (spec 03 adds the well-fed timer). The player saves `stats` (every stat by name), `asleep`
 and `fractional_hp_loss`. The old `hunger`, `thirst` and `morale` fields and
 the narrative `conditions` are gone. A save of any other version is discarded.
 

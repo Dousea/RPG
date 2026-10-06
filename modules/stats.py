@@ -117,3 +117,5 @@ class StatusEffect(Enum):
     DRUNK = "drunk"
     SICK = "sick"
     FOOD_EATEN = "food_eaten"
+    INJURED = "injured"
+    BLEEDING = "bleeding"

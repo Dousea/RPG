@@ -3,8 +3,19 @@
 import unittest
 
 from data import survival
+from managers.stats import (
+    active_status_effects,
+    bleeding_level,
+    crit_penalty,
+    damage_after_status_effects,
+    defence_penalty,
+    melee_status_effect_penalty,
+    status_effect_level,
+    status_effect_levels,
+)
 from modules import units
-from modules.stats import CharacterStat, Stats
+from modules.entity.player import PlayerEntity
+from modules.stats import CharacterStat, Stats, StatusEffect
 
 RANGES = {
     CharacterStat.HUNGER: (0, 1, 0),
@@ -117,6 +128,119 @@ class RateConversionTests(unittest.TestCase):
         self.assertAlmostEqual(survival.STARVING_HP_LOSS_per_hour, 3.564, places=3)
         self.assertAlmostEqual(survival.DYING_OF_THIRST_HP_LOSS_per_hour, 17.82, places=3)
         self.assertAlmostEqual(survival.FEVER_HP_LOSS_per_hour, 178.2, places=3)
+
+
+class StatusEffectThresholdTests(unittest.TestCase):
+    """Spec 03, Status effects."""
+
+    ROWS = {
+        StatusEffect.HUNGRY: (0.15, 0.25, 0.45, 0.70),
+        StatusEffect.THIRST: (0.12, 0.25, 0.70, 0.84),
+        StatusEffect.TIRED: (0.60, 0.70, 0.80, 0.90),
+        StatusEffect.STRESS: (0.25, 0.50, 0.75, 0.90),
+        StatusEffect.PANIC: (6, 30, 65, 80),
+        StatusEffect.BORED: (25, 50, 75, 90),
+        StatusEffect.UNHAPPY: (20, 45, 60, 80),
+        StatusEffect.PAIN: (10, 20, 50, 75),
+        StatusEffect.DRUNK: (10, 30, 50, 70),
+        StatusEffect.SICK: (0.25, 0.50, 0.75, 0.90),
+        StatusEffect.INJURED: (20, 40, 60, 75),
+        StatusEffect.FOOD_EATEN: (0, 1600, 3200, 4800),
+    }
+
+    def test_each_column_is_strict_for_every_rising_status_effect(self):
+        for status_effect, columns in self.ROWS.items():
+            self.assertEqual(
+                status_effect_level(status_effect, columns[0] - 0.01 if columns[0] else -1), 0
+            )
+            for level, column in enumerate(columns, start=1):
+                with self.subTest(status_effect=status_effect, level=level):
+                    self.assertEqual(status_effect_level(status_effect, column), level - 1)
+                    self.assertEqual(status_effect_level(status_effect, column + 0.001), level)
+
+    def test_endurance_is_inverted_and_inclusive(self):
+        for level, column in enumerate((0.75, 0.50, 0.25, 0.10), start=1):
+            with self.subTest(level=level):
+                self.assertEqual(status_effect_level(StatusEffect.ENDURANCE, column), level)
+                self.assertEqual(
+                    status_effect_level(StatusEffect.ENDURANCE, column + 0.001), level - 1
+                )
+
+    def test_hunger_exactly_0_15_is_level_0_and_just_above_is_level_1(self):
+        self.assertEqual(status_effect_level(StatusEffect.HUNGRY, 0.15), 0)
+        self.assertEqual(status_effect_level(StatusEffect.HUNGRY, 0.1501), 1)
+
+    def test_endurance_exactly_0_75_is_level_1(self):
+        self.assertEqual(status_effect_level(StatusEffect.ENDURANCE, 0.75), 1)
+
+    def test_food_eaten_timer_levels(self):
+        self.assertEqual(status_effect_level(StatusEffect.FOOD_EATEN, 0), 0)
+        self.assertEqual(status_effect_level(StatusEffect.FOOD_EATEN, 1), 1)
+        self.assertEqual(status_effect_level(StatusEffect.FOOD_EATEN, 1601), 2)
+        self.assertEqual(status_effect_level(StatusEffect.FOOD_EATEN, 3201), 3)
+        self.assertEqual(status_effect_level(StatusEffect.FOOD_EATEN, 4801), 4)
+
+    def test_bleeding_level_is_the_bleeding_parts_capped_at_four(self):
+        self.assertEqual(bleeding_level(0, neck=False), 0)
+        self.assertEqual(bleeding_level(3, neck=False), 3)
+        self.assertEqual(bleeding_level(9, neck=False), 4)
+        self.assertEqual(bleeding_level(1, neck=True), 4)
+
+    def test_injured_reads_lost_hp_and_is_off_at_zero_hp(self):
+        player = PlayerEntity(name="T", current_location_id="x")
+        player.hit_points = 80
+        self.assertEqual(
+            dict((m, lv) for m, lv, _ in active_status_effects(player)).get(
+                StatusEffect.INJURED, 0
+            ),
+            0,
+        )
+        player.hit_points = 79
+        names = {m: n for m, _, n in active_status_effects(player)}
+        self.assertEqual(names[StatusEffect.INJURED], "A Little Hurt")
+        player.hit_points = 0
+        self.assertNotIn(StatusEffect.INJURED, {m for m, _, _ in active_status_effects(player)})
+
+
+class StatusEffectEffectTests(unittest.TestCase):
+    """Spec 03, What status effects do."""
+
+    @staticmethod
+    def _stats(panic_level: int, stress_level: int) -> Stats:
+        stats = Stats()
+        stats.set(CharacterStat.PANIC, {0: 0, 1: 7, 2: 31, 3: 66, 4: 81}[panic_level])
+        stats.set(CharacterStat.STRESS, {0: 0, 1: 0.3, 2: 0.51, 3: 0.76, 4: 0.91}[stress_level])
+        return stats
+
+    def test_panic_2_and_stress_3_subtract_half_a_point(self):
+        self.assertAlmostEqual(melee_status_effect_penalty(self._stats(2, 3)), 0.5)
+
+    def test_panic_1_and_stress_1_change_nothing(self):
+        self.assertEqual(melee_status_effect_penalty(self._stats(1, 1)), 0)
+
+    def test_the_hit_never_goes_below_the_floor(self):
+        self.assertEqual(damage_after_status_effects(0.2, self._stats(4, 4)), 0.1)
+        self.assertAlmostEqual(damage_after_status_effects(1.0, self._stats(2, 3)), 0.5)
+
+    def test_stress_2_alone_subtracts_0_2(self):
+        self.assertAlmostEqual(melee_status_effect_penalty(self._stats(0, 2)), 0.2)
+
+    def test_a_small_hit_is_reduced_not_raised_to_the_floor(self):
+        self.assertAlmostEqual(damage_after_status_effects(0.55, self._stats(2, 3)), 0.05)
+
+    def test_a_hit_the_penalty_drives_negative_becomes_0_1(self):
+        self.assertAlmostEqual(damage_after_status_effects(0.45, self._stats(2, 3)), 0.1)
+
+    def test_bleeding_level_is_reported_when_supplied(self):
+        levels = status_effect_levels(Stats(), bleeding=2)
+        self.assertEqual(levels[StatusEffect.BLEEDING], 2)
+        self.assertEqual(status_effect_levels(Stats())[StatusEffect.BLEEDING], 0)
+
+    def test_crit_penalty_per_level(self):
+        self.assertAlmostEqual(crit_penalty(endurance=2, heavy_load=1, panic=3), 10 + 5 + 3.9)
+
+    def test_defence_penalty_per_level(self):
+        self.assertEqual(defence_penalty(endurance=2, tired=1, drunk=3), 4 + 3 + 6)
 
 
 if __name__ == "__main__":

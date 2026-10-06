@@ -204,11 +204,32 @@ class StatsSaveTests(IsolatedSaveTestCase):
             self.assertNotIn(gone, player)
 
 
+class WellFedSaveTests(IsolatedSaveTestCase):
+    """Spec 03, Consuming (saves)."""
+
+    def test_the_well_fed_timer_round_trips(self):
+        gm = GameManager()
+        gm.player.food_eaten_timer = 4321.5
+        persistence.save(gm, self.save_path)
+        loaded = persistence.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.player.food_eaten_timer, 4321.5)
+
+    def test_a_v5_save_is_discarded(self):
+        persistence.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["version"] = 5
+        with open(self.save_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        self.assertIsNone(persistence.load(self.save_path))
+
+
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_5(self):
-        self.assertEqual(persistence.SCHEMA_VERSION, 5)
+    def test_schema_version_is_6(self):
+        self.assertEqual(persistence.SCHEMA_VERSION, 6)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
