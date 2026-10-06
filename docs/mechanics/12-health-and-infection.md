@@ -39,7 +39,7 @@ Three rules shape everything below:
 | The limp on the player's pace and the walk up to a zombie | `managers/zombies.py` |
 | The refusals | `managers/validator.py` |
 | `[CONDITION]` part lines, `[INVENTORY]` uses, the `hurt` scene key | `managers/context.py` |
-| `body` in the page payload and the Health screen | `adapters/engine.py`, `templates/index.html` |
+| `body` in the page payload and the Health screen | `adapters/engine.py`, `static/app.js` |
 | The saved body and zombie-infection fields | `adapters/save/codec.py` |
 
 **Not built here.** Deep wounds, glass, bullets, burns, fractures, splints and

@@ -1,8 +1,9 @@
 # UI Layout
 
-> **Status: Partial.** `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts and the creation screen exist; screens whose mechanics haven't landed stay hidden, and [What the page lacks today](#what-the-page-lacks-today) lists the rest. See [Implementation Status](00-status.md).
+> **Status: Partial.** `templates/index.html`, `static/app.js`, `static/style.css`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts and the creation screen exist; screens whose mechanics haven't landed stay hidden, and [What the page lacks today](#what-the-page-lacks-today) lists the rest. See [Implementation Status](00-status.md).
 
-The browser page is one HTML file that renders the snapshot the engine returns.
+The browser page is one HTML template with its script and stylesheet, and it
+renders the snapshot the engine returns.
 This document says which screen each snapshot field belongs to, how it is
 shown, and the rules every screen keeps. Each mechanic says *what* reaches the
 player; this document says *where*.
@@ -47,20 +48,19 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 
 ```text
 ┌ header ─────────────────────────────────────────────────────────┐
-│ Title   [Day 3] [Evening] [Light rain, 9 °C] ...   Save Load Reset │
-├─────────────────────────────────────────────────────────────────┤
-│ death banner (only after death)                                  │
-├──────────────────────────────┬──────────────────────────────────┤
-│ story log                    │ location: name — place           │
-│                              │ description                      │
-│ > player input               │ ┌ tabs ────────────────────────┐ │
-│ narrator prose               │ │ Status Health Inventory ...  │ │
-│ ...                          │ │ panel                        │ │
-│                              │ └──────────────────────────────┘ │
-├──────────────────────────────┴──────────────────────────────────┤
-│ [option] [option] [option]                                      │
-│ > What do you do?                                         [Act] │
-└─────────────────────────────────────────────────────────────────┘
+│ Title  Day 3  Evening  9 °C  [Outbreak day 2]   Save Load Reset │
+├────────────────────────────────────────┬────────────────────────┤
+│ Location name                          │ Status Health ...      │
+│ place                                  │ ────────────────────── │
+│ description                            │ panel                  │
+│ death banner (only after death)        │                        │
+│                                        │                        │
+│ ▎player input                          │                        │
+│ narrator prose                         │                        │
+│ ...                                    │                        │
+│ [option] [option] [option]             │                        │
+│ What do you do?                  [Act] │                        │
+└────────────────────────────────────────┴────────────────────────┘
 ```
 
 | Region | Shows | Fields |
@@ -70,10 +70,24 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 | Story log | each turn's input echo and prose, appended | `story_text` |
 | Location | where the player stands | `current_location`, `current_place`, `location_description` |
 | Tabs | the screens below | everything else |
-| Footer | suggestions, then the free-text input | `options` |
+| Input | suggestions, then the free-text input | `options` |
+
+The story column holds the scene: where the player stands, what happened and
+what they do next, kept to a readable measure. The tabs take the full height
+beside it.
 
 Once `game_over` is set the input and option buttons are disabled; only reset
 and load bring the page back.
+
+## The colour code
+
+Every screen speaks one colour code, the four colours of a triage tag: green
+is fine, yellow needs watching, red is urgent, black is grave. A tag's colour
+carries severity, so a status effect, a wound flag, a threat or a disposition
+never needs a number to say how bad it is. Status effects are yellow below
+level 3, red at 3 and black at 4; a positive one is green. Yellow is also the
+colour of the player's own hand: the focus ring, the input and its echo in the
+log.
 
 ## Screens
 

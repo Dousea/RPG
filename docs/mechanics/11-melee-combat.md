@@ -32,7 +32,7 @@ Two rules shape everything below:
 | Which item is in the hands | `managers/combat.py` |
 | Hit XP | `managers/skills.py` |
 | `[THREATS]`, `[INVENTORY]` and `[CONDITION]` | `managers/context.py` |
-| `held` and `zombie_kills` in the page payload | `adapters/engine.py`, `templates/index.html` |
+| `held` and `zombie_kills` in the page payload | `adapters/engine.py`, `static/app.js` |
 | Saving weapon condition, zombie hits and the kill count | `adapters/save/codec.py` |
 
 ## Weapons

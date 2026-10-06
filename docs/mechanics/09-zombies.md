@@ -34,7 +34,7 @@ infection and the limp belong to the [health mechanic](12-health-and-infection.m
 | Running the loop before each stat chunk, interruptions, pace on a walk | `managers/simulation.py` |
 | Zombie ids, `STANCE` and pace in the validator | `managers/validator.py` |
 | The `[THREATS]` block | `managers/context.py` |
-| `threats` and `sneaking` in the page payload | `adapters/engine.py`, `templates/index.html` |
+| `threats` and `sneaking` in the page payload | `adapters/engine.py`, `static/app.js` |
 | Saving the outbreak | `adapters/save/codec.py` |
 
 ## Settings
