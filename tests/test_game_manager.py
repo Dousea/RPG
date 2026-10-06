@@ -12,8 +12,8 @@ from managers.game import (
     SUMMARY_THRESHOLD,
     GameManager,
 )
-from modules.action.types import MoveAction, NpcStatusAction, TakeAction, UpdateRelationshipAction
-from tests.support import resolve_actions
+from modules.action.types import MoveAction, TakeAction
+from tests.support import adjust_regard, npc_of, resolve_actions
 
 
 def _at(day: int, hour: int, minute: int) -> GameManager:
@@ -235,12 +235,12 @@ class StartingStateTests(unittest.TestCase):
         # Locations and NPCs are per-game, so a dropped item or an NPC's status
         # must not leak into the next game.
         first = GameManager()
+        npc_of(first, "Emma").status.append("frightened")
         resolve_actions(
             first,
             MoveAction(destination="out"),
             MoveAction(destination="out"),
             TakeAction(item_name="Crowbar"),
-            NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
         )
 
         second = GameManager()
@@ -330,7 +330,7 @@ class ParserPromptTests(unittest.TestCase):
             "[ITEMS HERE]",
             "[NPCS HERE]",
             "[INVENTORY]",
-            "[EQUIPPED]",
+            "[WORN]",
             "[PLAYER INPUT]",
         ):
             self.assertIn(section, prompt)
@@ -364,11 +364,7 @@ class KnowledgeFirewallTests(unittest.TestCase):
         return prompt.split("[NPCS PRESENT]")[1].split("[SUMMARY OF PAST EVENTS]")[0]
 
     def test_raw_relationship_scores_never_reach_the_prompt(self):
-        resolve_actions(
-            self.gm,
-            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=37),
-            UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=42),
-        )
+        adjust_regard(self.gm, "npc_emma", affection=37, trust=42)
         section = self._npcs_section()
 
         self.assertIn("Emma", section)
@@ -376,11 +372,7 @@ class KnowledgeFirewallTests(unittest.TestCase):
             self.assertNotIn(leak, section)
 
     def test_scores_are_reported_as_bands(self):
-        resolve_actions(
-            self.gm,
-            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=50),
-            UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=45),
-        )
+        adjust_regard(self.gm, "npc_emma", affection=50, trust=45)
         self.assertIn(
             "Disposition: friendly (trust: solid)",
             ContextBuilder(self.gm).build_narrator_prompt("look"),
@@ -391,11 +383,7 @@ class KnowledgeFirewallTests(unittest.TestCase):
             "Disposition: neutral (trust: unformed)",
             ContextBuilder(self.gm).build_narrator_prompt("look"),
         )
-        resolve_actions(
-            self.gm,
-            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=-50),
-            UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-45),
-        )
+        adjust_regard(self.gm, "npc_emma", affection=-50, trust=-45)
         self.assertIn(
             "Disposition: hostile (trust: broken)",
             ContextBuilder(self.gm).build_narrator_prompt("look"),

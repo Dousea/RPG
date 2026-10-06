@@ -8,27 +8,22 @@ from pathlib import Path
 from adapters.save import codec, files
 from data.items import ITEMS
 from managers.game import GameManager
+from managers.simulation import SimulationCore
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
-    DiscoverFlagAction,
     Duration,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
-    SetFlagAction,
-    StatusAddAction,
     TakeAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
     WaitAction,
 )
 from modules.body import BodyLocation, BodyPart
+from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.quest import QuestState, QuestStatus
 from modules.stats import CharacterStat
-from tests.support import IsolatedSaveTestCase, resolve_actions
+from tests.support import IsolatedSaveTestCase, adjust_regard, npc_of, resolve_actions, simulate
 
 
 def played_game() -> GameManager:
@@ -39,19 +34,19 @@ def played_game() -> GameManager:
         MoveAction(destination="out"),
         MoveAction(destination="out"),
         TakeAction(item_name="Crowbar"),
-        UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=12),
-        UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-2),
         AddRelationshipNoteAction(npc_name="Emma", note="Seemed shaken"),
         AddGoalAction(horizon="short_term", goal_text="Find a weapon"),
-        AddGoalAction(horizon="long_term", goal_text="Leave the city"),
-        SetFlagAction(flag_name="power_grid_stable", value=False),
-        DiscoverFlagAction(flag_name="power_grid_stable"),
-        WaitAction(duration=Duration(until_time_of_day="evening")),
-        StatusAddAction(status="panic"),
-        NpcMoveAction(npc_name="Emma", destination="Your Building"),
-        NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
-        UpdateInventoryAction(item_name="First Aid Kit", operation="ADD", value="1"),
     )
+    resolve_actions(
+        gm,
+        AddGoalAction(horizon="long_term", goal_text="Leave the city"),
+        WaitAction(duration=Duration(until_time_of_day="evening")),
+    )
+    adjust_regard(gm, "npc_emma", affection=12, trust=-2)
+    gm.narrative.flags["power_grid_stable"] = False
+    SimulationCore(gm).discover_flag("power_grid_stable")
+    gm.player.conditions.append(CharacterCondition.PANIC)
+    npc_of(gm, "Emma").status.append("frightened")
     # Health is retired as an LLM-declarable action (docs/01-engine-authority.md);
     # it only ever changes through combat or item effects. Set directly here
     # since this fixture is exercising persistence, not the action pipeline.
@@ -272,8 +267,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_13(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 13)
+    def test_schema_version_is_14(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 14)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -788,3 +783,77 @@ class ZombieSaveTests(IsolatedSaveTestCase):
         data["world"]["zombies"][0]["zone_id"] = "zone_moon"
         loaded = codec.from_dict(data)
         self.assertEqual(loaded.world.zombies, {})
+
+
+class SocialSaveTests(IsolatedSaveTestCase):
+    """Spec 10, Saves."""
+
+    def played(self) -> GameManager:
+        gm = GameManager()
+        npc_of(gm, "Emma").following = True
+        log = gm.narrative.social_log
+        log.day = 2
+        log.record_use("npc_emma", "chat")
+        log.record_use("npc_emma", "chat")
+        log.record_use("npc_emma", "give")
+        log.refuse("npc_emma", "follow", 95)
+        log.told_topics.add("outbreak_news")
+        gm.world.fired_beats["outbreak_begins"] = 2760
+        return gm
+
+    def reload(self, gm: GameManager) -> GameManager:
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        return loaded
+
+    def test_following_round_trips(self):
+        loaded = self.reload(self.played())
+        self.assertIs(npc_of(loaded, "Emma").following, True)
+        self.assertIs(npc_of(loaded, "Marcus").following, False)
+
+    def test_the_social_log_round_trips(self):
+        loaded = self.reload(self.played())
+        log = loaded.narrative.social_log
+        self.assertEqual(log.day, 2)
+        self.assertEqual(log.counts, {"npc_emma|chat": 2, "npc_emma|give": 1})
+        self.assertEqual(log.refusals, {"npc_emma|follow": 95})
+        self.assertEqual(log.told_topics, {"outbreak_news"})
+
+    def test_fired_beats_round_trip(self):
+        loaded = self.reload(self.played())
+        self.assertEqual(loaded.world.fired_beats, {"outbreak_begins": 2760})
+
+    def test_the_social_log_is_saved_with_narrative_as_keyed_json(self):
+        data = codec.to_dict(self.played())
+        self.assertEqual(
+            data["narrative"]["social_log"],
+            {
+                "day": 2,
+                "counts": {"npc_emma|chat": 2, "npc_emma|give": 1},
+                "refusals": {"npc_emma|follow": 95},
+                "told_topics": ["outbreak_news"],
+            },
+        )
+
+    def test_the_dropped_narrative_fields_are_not_saved(self):
+        narrative = codec.to_dict(GameManager())["narrative"]
+        for dropped in ("player_status", "apocalypse_stage", "conditions"):
+            self.assertNotIn(dropped, narrative)
+
+    def test_a_fired_beat_stays_fired_after_a_reload(self):
+        gm = GameManager()
+        gm.advance_clock(2750)
+        simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
+        loaded = self.reload(gm)
+        self.assertEqual(loaded.world.outbreak_started_at, 2760)
+        simulate(loaded, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
+        self.assertEqual(loaded.world.outbreak_started_at, 2760)
+        self.assertEqual(loaded.world.fired_beats, {"outbreak_begins": 2760})
+
+    def test_a_garbled_social_log_loads_empty(self):
+        data = codec.to_dict(GameManager())
+        data["narrative"]["social_log"] = {"counts": "nope", "refusals": 3, "told_topics": 7}
+        loaded = codec.from_dict(data)
+        log = loaded.narrative.social_log
+        self.assertEqual((log.counts, log.refusals, log.told_topics), ({}, {}, set()))

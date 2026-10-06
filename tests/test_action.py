@@ -2,23 +2,33 @@
 
 import unittest
 
-from modules.action.parser import ParseFailure, parse_action_line, parse_action_plan
+from adapters import llm
+from managers.game import GameManager
+from managers.simulation import SimulationCore
+from managers.validator import ActionValidator
+from modules.action.parser import (
+    ASK_REQUEST_LABELS,
+    TALK_APPROACH_LABELS,
+    VERBS,
+    ParseFailure,
+    available_verbs,
+    parse_action_line,
+    parse_action_plan,
+)
 from modules.action.types import (
     AddGoalAction,
+    AskAction,
     AttackAction,
     Duration,
+    GiveAction,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
     RemoveGoalAction,
-    SetFlagAction,
+    ShoutAction,
     SleepAction,
     StanceAction,
     TakeAction,
     TakeOffAction,
-    UpdateConditionAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
+    TalkAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -67,11 +77,6 @@ class ClockActionTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 
-    def test_time_advance_is_an_unknown_action(self):
-        result = parse_action_line("TIME_ADVANCE evening")
-        assert isinstance(result, ParseFailure)
-        self.assertIn("Unknown action verb", result.reason)
-
 
 class ParseActionLineTests(unittest.TestCase):
     def test_move_to(self):
@@ -89,37 +94,10 @@ class ParseActionLineTests(unittest.TestCase):
             UseItemAction(item_name="First Aid Kit"),
         )
 
-    def test_update_condition_health_is_retired(self):
-        result = parse_action_line("UPDATE_CONDITION health +9999")
-        assert isinstance(result, ParseFailure)
-        self.assertIn("not an available action", result.reason)
-
-    def test_update_condition_hunger_still_works(self):
-        self.assertEqual(
-            parse_action_line("UPDATE_CONDITION hunger -10"),
-            UpdateConditionAction(field_name="hunger", raw_value="-10"),
-        )
-
     def test_unknown_verb(self):
         result = parse_action_line("FROBNICATE the widget")
         assert isinstance(result, ParseFailure)
         self.assertIn("Unknown action verb", result.reason)
-
-    def test_update_relationship(self):
-        self.assertEqual(
-            parse_action_line("UPDATE_RELATIONSHIP Emma affection +12"),
-            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=12),
-        )
-
-    def test_update_relationship_unknown_axis(self):
-        result = parse_action_line("UPDATE_RELATIONSHIP Emma loyalty +1")
-        self.assertIsInstance(result, ParseFailure)
-
-    def test_update_relationship_affinity_is_an_affection_synonym(self):
-        self.assertEqual(
-            parse_action_line("UPDATE_RELATIONSHIP Emma affinity +5"),
-            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=5),
-        )
 
     def test_add_goal_normalizes_a_colon_suffixed_horizon(self):
         self.assertEqual(
@@ -154,51 +132,10 @@ class ParseActionLineTests(unittest.TestCase):
             AddGoalAction(horizon="someday", goal_text="Find water"),
         )
 
-    def test_set_flag_normalizes_name_and_yes_no_value(self):
-        self.assertEqual(
-            parse_action_line("SET_FLAG Power-Grid yes"),
-            SetFlagAction(flag_name="power_grid", value=True),
-        )
-
-    def test_set_flag_rejects_an_unrecognized_value(self):
-        result = parse_action_line("SET_FLAG x maybe")
-        self.assertIsInstance(result, ParseFailure)
-
-    def test_update_condition_normalizes_field_name_and_strips_punctuation(self):
-        self.assertEqual(
-            parse_action_line("UPDATE_CONDITION Infection_Risk +1."),
-            UpdateConditionAction(field_name="infection_risk", raw_value="+1"),
-        )
-
-    def test_update_inventory(self):
-        self.assertEqual(
-            parse_action_line("UPDATE_INVENTORY Canned Beans UPDATE_QUANTITY 3"),
-            UpdateInventoryAction(item_name="Canned Beans", operation="UPDATE_QUANTITY", value="3"),
-        )
-
-    def test_npc_move_needs_the_to_separator(self):
-        result = parse_action_line("NPC_MOVE Emma Lobby")
-        self.assertIsInstance(result, ParseFailure)
-
-    def test_npc_move(self):
-        self.assertEqual(
-            parse_action_line("NPC_MOVE Emma TO Lobby"),
-            NpcMoveAction(npc_name="Emma", destination="Lobby"),
-        )
-
-    def test_npc_status(self):
-        self.assertEqual(
-            parse_action_line("NPC_STATUS Emma ADD frightened"),
-            NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"),
-        )
-
     def test_malformed_line_never_raises(self):
         for line in (
-            "UPDATE_RELATIONSHIP",
-            "NPC_STATUS ADD",
-            "UPDATE_INVENTORY",
-            "SET_FLAG",
             "ADD_GOAL",
+            "ADD_RELATIONSHIP_NOTE",
         ):
             result = parse_action_line(line)
             assert isinstance(result, ParseFailure)
@@ -273,3 +210,212 @@ class PaceParseTests(unittest.TestCase):
     def test_a_bad_stance_is_a_parse_failure(self):
         self.assertIsInstance(parse_action_line("STANCE crouch"), ParseFailure)
         self.assertIsInstance(parse_action_line("STANCE"), ParseFailure)
+
+
+class VerbRegistryTests(unittest.TestCase):
+    """Spec 10, Verbs: one registry of verbs."""
+
+    EXPECTED = {
+        "MOVE_TO",
+        "STANCE",
+        "WAIT",
+        "SLEEP",
+        "TAKE",
+        "DROP",
+        "USE_ITEM",
+        "WEAR",
+        "TAKE_OFF",
+        "EXERCISE",
+        "ATTACK",
+        "SHOUT",
+        "ADD_GOAL",
+        "REMOVE_GOAL",
+        "ADD_RELATIONSHIP_NOTE",
+    }
+    REMOVED = (
+        "TIME_ADVANCE",
+        "UPDATE_CONDITION",
+        "UPDATE_RELATIONSHIP",
+        "SET_FLAG",
+        "DISCOVER_FLAG",
+        "NPC_MOVE",
+        "NPC_STATUS",
+        "STATUS_ADD",
+        "STATUS_REMOVE",
+        "UPDATE_INVENTORY",
+    )
+
+    def test_the_registry_holds_the_verbs_of_specs_01_to_09_and_shout(self):
+        self.assertEqual(self.EXPECTED, set(VERBS) & self.EXPECTED)
+        self.assertTrue(set(VERBS) >= self.EXPECTED)
+
+    def test_every_verb_in_the_registry_has_a_validator_and_a_resolver(self):
+        self.assertEqual(set(VERBS), set(ActionValidator._VALIDATORS))
+        self.assertEqual(set(VERBS), set(SimulationCore._RESOLVERS))
+
+    def test_each_removed_verb_is_a_parse_failure(self):
+        for verb in self.REMOVED:
+            with self.subTest(verb=verb):
+                result = parse_action_line(f"{verb} something 3")
+                assert isinstance(result, ParseFailure)
+                self.assertIn("not an available action", result.reason)
+
+    def test_a_verb_of_a_later_spec_is_a_parse_failure_until_it_lands(self):
+        for line in ("EQUIP Crowbar", "BANDAGE left hand", "OPEN door", "REPAIR knife"):
+            with self.subTest(line=line):
+                self.assertIsInstance(parse_action_line(line), ParseFailure)
+
+    def test_shout_takes_no_arguments(self):
+        self.assertEqual(parse_action_line("SHOUT"), ShoutAction())
+        self.assertEqual(parse_action_line("shout for help"), ShoutAction())
+
+    def test_fixed_costs_in_the_registry_match_the_time_cost_table(self):
+        self.assertEqual(VERBS["STANCE"].minutes, 0)
+        self.assertEqual(VERBS["TAKE"].minutes, 1)
+        self.assertEqual(VERBS["ATTACK"].minutes, 1)
+        self.assertEqual(VERBS["SHOUT"].minutes, 0)
+        self.assertEqual(VERBS["ADD_GOAL"].minutes, 0)
+        self.assertIsNone(VERBS["WAIT"].minutes)
+        self.assertIsNone(VERBS["MOVE_TO"].minutes)
+
+    def test_every_verb_parses_its_own_example(self):
+        examples = {
+            "MOVE_TO": "MOVE_TO out",
+            "STANCE": "STANCE sneak",
+            "WAIT": "WAIT 10m",
+            "SLEEP": "SLEEP",
+            "TAKE": "TAKE Crowbar",
+            "DROP": "DROP Crowbar",
+            "USE_ITEM": "USE_ITEM Water Bottle",
+            "WEAR": "WEAR Jeans",
+            "TAKE_OFF": "TAKE_OFF Jeans",
+            "EXERCISE": "EXERCISE Push-ups 10",
+            "ATTACK": "ATTACK z1",
+            "SHOUT": "SHOUT",
+            "ADD_GOAL": "ADD_GOAL short_term Find water",
+            "REMOVE_GOAL": "REMOVE_GOAL short_term Find water",
+            "ADD_RELATIONSHIP_NOTE": "ADD_RELATIONSHIP_NOTE Emma kind",
+        }
+        for name, line in examples.items():
+            with self.subTest(verb=name):
+                self.assertNotIsInstance(parse_action_line(line), ParseFailure)
+                self.assertEqual(VERBS[name].parse(line.partition(" ")[2]).verb, name)
+
+    def test_the_parser_prompt_drops_the_story_vocabulary(self):
+        self.assertNotIn("STORY VOCABULARY", llm.PARSER_SYSTEM_PROMPT)
+        self.assertNotIn("Orton", llm.PARSER_SYSTEM_PROMPT)
+
+
+class SocialParseTests(unittest.TestCase):
+    """Spec 10, Verbs: TALK, ASK and GIVE."""
+
+    def test_talk_takes_a_name_and_an_approach(self):
+        self.assertEqual(
+            parse_action_line("TALK Emma compliment"),
+            TalkAction(npc_name="Emma", approach="compliment"),
+        )
+        self.assertEqual(
+            parse_action_line("TALK Mary Ann Flirt."),
+            TalkAction(npc_name="Mary Ann", approach="flirt"),
+        )
+
+    def test_talk_accepts_only_the_eight_approaches(self):
+        for approach in TALK_APPROACH_LABELS:
+            with self.subTest(approach=approach):
+                self.assertEqual(
+                    parse_action_line(f"TALK Emma {approach}"),
+                    TalkAction(npc_name="Emma", approach=approach),
+                )
+        self.assertEqual(len(TALK_APPROACH_LABELS), 8)
+        for line in ("TALK Emma gossip", "TALK Emma", "TALK", "TALK chat"):
+            with self.subTest(line=line):
+                self.assertIsInstance(parse_action_line(line), ParseFailure)
+
+    def test_ask_accepts_only_the_four_requests(self):
+        self.assertEqual(set(ASK_REQUEST_LABELS), {"follow", "stay", "give", "about"})
+        self.assertEqual(
+            parse_action_line("ASK Emma follow"),
+            AskAction(npc_name="Emma", request="follow"),
+        )
+        self.assertEqual(
+            parse_action_line("ASK Emma stay"), AskAction(npc_name="Emma", request="stay")
+        )
+        self.assertEqual(
+            parse_action_line("ASK Emma give Water Bottle"),
+            AskAction(npc_name="Emma", request="give", argument="Water Bottle"),
+        )
+        self.assertEqual(
+            parse_action_line("ASK Jen about outbreak_news"),
+            AskAction(npc_name="Jen", request="about", argument="outbreak_news"),
+        )
+        for line in ("ASK Emma dance", "ASK Emma give", "ASK Jen about", "ASK Emma", "ASK"):
+            with self.subTest(line=line):
+                self.assertIsInstance(parse_action_line(line), ParseFailure)
+
+    def test_give_takes_an_item_and_an_npc(self):
+        self.assertEqual(
+            parse_action_line("GIVE Water Bottle Emma"),
+            GiveAction(item_name="Water Bottle", npc_name="Emma"),
+        )
+        self.assertEqual(
+            parse_action_line("GIVE Water Bottle to Mary Ann"),
+            GiveAction(item_name="Water Bottle", npc_name="Mary Ann"),
+        )
+        for line in ("GIVE", "GIVE Emma"):
+            with self.subTest(line=line):
+                self.assertIsInstance(parse_action_line(line), ParseFailure)
+
+    def test_the_social_verbs_cost_five_minutes_in_the_registry(self):
+        for name in ("TALK", "ASK", "GIVE"):
+            self.assertEqual(VERBS[name].minutes, 5)
+
+
+ALWAYS_LISTED = [
+    "MOVE_TO",
+    "STANCE",
+    "WAIT",
+    "SLEEP",
+    "EXERCISE",
+    "SHOUT",
+    "ADD_GOAL",
+    "ADD_RELATIONSHIP_NOTE",
+]
+
+
+class SceneFilteringTests(unittest.TestCase):
+    """Spec 10, Scene filtering."""
+
+    def names(self, *keys: str) -> list[str]:
+        return [verb.name for verb in available_verbs(frozenset(keys))]  # type: ignore[arg-type]
+
+    def test_an_empty_scene_lists_the_eight_always_listed_verbs(self):
+        self.assertEqual(self.names(), ALWAYS_LISTED)
+
+    def test_each_key_adds_exactly_its_verbs_in_registry_order(self):
+        expected = {
+            "goals": ["REMOVE_GOAL"],
+            "items_here": ["TAKE"],
+            "carried": ["DROP", "USE_ITEM"],
+            "wearable_carried": ["WEAR"],
+            "worn": ["TAKE_OFF"],
+            "npcs_here": ["ATTACK", "TALK", "ASK", "GIVE"],
+            "threats": ["ATTACK"],
+        }
+        for key, added in expected.items():
+            with self.subTest(key=key):
+                listed = self.names(key)
+                self.assertEqual(set(listed), set(ALWAYS_LISTED) | set(added))
+                self.assertEqual(listed, [name for name in VERBS if name in listed])
+
+    def test_every_key_present_lists_every_verb(self):
+        keys = {key for verb in VERBS.values() for key in verb.listed_when}
+        self.assertEqual(self.names(*keys), list(VERBS))
+
+    def test_a_verb_that_is_not_listed_still_parses(self):
+        self.assertNotIn("TAKE", self.names())
+        self.assertEqual(parse_action_line("TAKE Crowbar"), TakeAction(item_name="Crowbar"))
+
+    def test_a_verb_that_is_not_listed_reaches_the_validator(self):
+        gm = GameManager()
+        facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")])
+        self.assertTrue(facts[0].startswith("Refused:"))

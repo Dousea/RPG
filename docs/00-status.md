@@ -33,7 +33,8 @@ what the game now does.
 | 06 | [Body Temperature, Wetness and Colds](mechanics/06-body-temperature.md) | Implemented | `modules/thermal.py`, `modules/stats.py`, `modules/location.py`, `modules/entity/player.py`, `data/thermal.py`, `data/climate.py`, `data/status_effects.py`, `data/traits.py`, `data/locations.py`, `managers/thermoregulator.py`, `managers/wetness.py`, `managers/cold.py`, `managers/climate.py`, `managers/stats/engine.py`, `managers/stats/drivers.py`, `managers/stats/status_effects.py`, `managers/simulation.py`, `adapters/save/codec.py` |
 | 07 | [Character Creation](mechanics/07-character-creation.md) | Implemented | `modules/character/appearance.py`, `modules/character/build.py`, `modules/character/definitions.py`, `modules/entity/player.py`, `data/occupations.py`, `data/traits.py`, `data/creation.py`, `data/clothing_selection.py`, `data/names.py`, `data/presets.py`, `managers/creation.py`, `managers/stats/drivers.py`, `managers/cold.py`, `managers/context.py`, `managers/game.py`, `adapters/creation_payload.py`, `adapters/engine.py`, `adapters/llm.py`, `adapters/save/codec.py`, `app.py`, `templates/index.html` |
 | 08 | [Skills](mechanics/08-skills.md) | Implemented | `modules/character/skills.py`, `modules/character/exercise.py`, `modules/entity/player.py`, `modules/item.py`, `modules/resolution.py`, `modules/action/types.py`, `modules/action/parser.py`, `data/skills.py`, `data/exercises.py`, `data/items.py`, `data/time_costs.py`, `managers/skills.py`, `managers/exercise.py`, `managers/stats/drivers.py`, `managers/thermoregulator.py`, `managers/simulation.py`, `managers/validator.py`, `managers/creation.py`, `managers/game.py`, `managers/context.py`, `adapters/engine.py`, `adapters/llm.py`, `adapters/save/codec.py`, `templates/index.html` |
-| 09 | [Zombies](mechanics/09-zombies.md) | Implemented | `modules/entity/zombie.py`, `modules/location.py`, `modules/pace.py`, `modules/effect.py`, `modules/resolution.py`, `modules/action/types.py`, `modules/action/parser.py`, `data/zombie_lore.py`, `data/locations.py`, `data/time_costs.py`, `managers/zombies.py`, `managers/noise.py`, `managers/zombie_attack.py`, `managers/simulation.py`, `managers/validator.py`, `managers/context.py`, `adapters/engine.py`, `adapters/llm.py`, `adapters/save/codec.py`, `templates/index.html` |
+| 09 | [Zombies](mechanics/09-zombies.md) | Implemented | `modules/entity/zombie.py`, `modules/location.py`, `modules/pace.py`, `modules/story.py`, `modules/resolution.py`, `modules/action/types.py`, `modules/action/parser.py`, `data/zombie_lore.py`, `data/locations.py`, `data/time_costs.py`, `managers/zombies.py`, `managers/noise.py`, `managers/zombie_attack.py`, `managers/simulation.py`, `managers/validator.py`, `managers/context.py`, `adapters/engine.py`, `adapters/llm.py`, `adapters/save/codec.py`, `templates/index.html` |
+| 10 | [LLM Contract](mechanics/10-llm-contract.md) | Implemented | `modules/action/parser.py`, `modules/action/types.py`, `modules/action/words.py`, `modules/entity/npc.py`, `modules/location.py`, `modules/resolution.py`, `modules/social.py`, `modules/story.py`, `data/social.py`, `data/topics.py`, `data/story_beats.py`, `data/time_costs.py`, `data/zombie_lore.py`, `data/quests.py`, `data/npcs.py`, `managers/social.py`, `managers/story.py`, `managers/game.py`, `managers/validator.py`, `managers/simulation.py`, `managers/context.py`, `adapters/llm.py`, `adapters/engine.py`, `adapters/save/codec.py`, `templates/index.html`, `evals/parser_cases.yaml`, `scripts/eval_parser.py` |
 
 ## The central divergence (resolved for engine authority; still open for scale)
 
@@ -96,7 +97,7 @@ this one.
 | [08 Time and Scheduling](08-time-and-scheduling.md) | Planned | `data/clock.py`, `managers/game.py` `NarrativeState` | The player-facing minute clock is [mechanics 01](mechanics/01-game-clock.md). NPC and world scheduling, sub-tick frequencies and everything else in this document is not built. |
 | [09 Zombie Survival](09-zombie-survival.md) | Partial | `managers/zombies.py`, `managers/noise.py` | Noise, light and visibility are [mechanics 09](mechanics/09-zombies.md). No scavenging model. |
 | [10 Combat and Stealth](10-combat-and-stealth.md) | Partial | `managers/simulation.py` `_resolve_attack`, `modules/event.py`, `modules/modifier.py` | `ATTACK` is a real action: it resolves through the event/modifier pipeline, applies equipped-weapon damage with jitter, and both "dealt" and "taken" trait reactions actually fire for any entity carrying an effect-bearing trait (the player's traits are ids and carry none). No stealth, no ranged distance/line-of-sight, no armor mitigation yet — this is base damage resolution, not the full document. |
-| [11 Knowledge Firewall](11-knowledge-firewall.md) | Partial | `managers/context.py`, `NarrativeState.discovered_flags`, `NpcEntity.knowledge`/`.goals` | Affinity/trust are still banded, and world flags are now filtered too: a flag only reaches the narrator prompt once a `DISCOVER_FLAG` action has marked it discovered, separately from the engine setting its value. `NpcEntity.knowledge` exists but is deliberately never rendered (no dialogue system consumes it yet); NPC `status` and `notes` still go out unfiltered. The document's *As Implemented* section should be read alongside this. |
+| [11 Knowledge Firewall](11-knowledge-firewall.md) | Partial | `managers/context.py`, `NarrativeState.discovered_flags`, `NpcEntity.knowledge`/`.goals` | Affinity/trust are still banded, and world flags are now filtered too: a flag only reaches the narrator prompt once the engine has marked it discovered (a topic told), separately from setting its value. `NpcEntity.knowledge` exists but is deliberately never rendered (no dialogue system consumes it yet); NPC `status` and `notes` still go out unfiltered. The document's *As Implemented* section should be read alongside this. |
 | [12 Data Model and Persistence](12-data-model.md) | Partial | `modules/`, `adapters/save/codec.py`, `modules/quest.py` | Exit requirements now exist (`DoorEntity` wired into `data/locations.py`, checked by `ActionValidator`) — in practice the only one is the apartment door (building → home), locked, keyed to `item_apartment_key`. Door lock state is not persisted; it is part of the static map and always reloads locked. NPCs carry `goals`/`knowledge` fields. Persistence is still a full snapshot, not base + mutations, and quest state (see doc 07) is a flat checklist, not the model this document describes. |
 | [13 Context and Memory](13-context-and-memory.md) | Partial | `managers/context.py` `ContextBuilder`, `adapters/memory.py` | The context builder is now its own module (`managers/context.py`), independently testable, and the parser gets a *separate, minimal* context from the narrator's full one — a step toward selectivity. It still sends the whole local world to the narrator every turn, and memory layers remain compressive (recent / vector-recalled / summarized), not spatial (global / zone / location / scene). |
 | [14 LLM Roles](14-llm-roles.md) | Partial | `adapters/llm.py` `query_parser`/`query_narrator` | Two calls, two roles, two system prompts — parser proposes actions only, narrator only narrates and no longer has an `ACTIONS:` section to fill at all. The narrator's *constraints* (don't invent HP/inventory/combat results) are stated in its system prompt and structurally reinforced (it has nothing to declare state through), but still not mechanically enforced against a malicious or careless model. |
@@ -156,7 +157,7 @@ attacker just because they're also part of the event).
 
 **The prompt leaks less.** World flags are now filtered the same way
 relationship scores are: a flag only reaches the narrator once a
-`DISCOVER_FLAG` action has marked it discovered, separate from the engine
+the engine has marked it discovered (a topic told), separate from the engine
 setting its value. `NpcEntity.knowledge`/`.goals` exist as real fields.
 
 ### Fixed (zones)
@@ -180,19 +181,11 @@ in, instead of silently teleporting him to whichever zone happened to claim
 that word globally. Only names that unambiguously mean one specific zone
 (e.g. `"my apartment"`, `"Lobby"`, `"the pharmacy"`) remain real aliases.
 
-**`NPC_MOVE` resolves strictly and can be refused.** Unlike the player's
-forgiving `MOVE_TO`, `NPC_MOVE` goes through `GameManager.resolve_zone_exact`
-— id, display name, or an exact alias only, with no connection directions
-and no whole-word fallback — because an NPC has no free-text spot for a
-vague phrase to soft-land in. It is also refused into `zone_home` unless
-Orton himself is already there: his apartment door is locked from the
-building side and nobody else holds a key. Separately, any item that is the
-`key_id` of a `DoorEntity` anywhere in the world (not hard-coded to the
-apartment key specifically) can be neither `DROP`ped, `REMOVE`d, conjured
-back via `UPDATE_INVENTORY ... ADD`, nor moved off a quantity of one via
-`UPDATE_QUANTITY` — all are rejected, closing the soft-lock where discarding,
-deleting, or duplicating his own key stranded Orton outside his apartment
-forever (the door rebuilds `LOCKED` on every load).
+**The apartment door stays locked to NPCs.** Only a follower enters `zone_home`, with
+the player; see [the LLM contract](mechanics/10-llm-contract.md#asking). A door key
+can be neither `DROP`ped nor `GIVE`n away, closing the soft-lock where discarding
+his own key stranded Orton outside his apartment forever (the door rebuilds
+`LOCKED` on every load).
 
 **`ADD_GOAL short_term:`/`short-term` no longer get dropped.** The horizon
 token arrived from the parser model as `short_term`, `Short Term`,
@@ -225,25 +218,10 @@ against what that save had already achieved), and `ContextBuilder` renders
 active quests and their checked-off objectives to the narrator in a
 `[QUESTS]` section, so the LLM has something to narrate progress against.
 
-The live constraint on writing quests is which namespace an objective key
-bottoms out in. `take:`/`reach:`/`defeat:` reference ids the engine owns and
-enumerates, so a typo is caught by a test. `discover:`/`npc_status:`
-reference names the *parser model invents* from player input, so there is no
-set to check against and a near miss (`outbreak_cause` for
-`apocalypse_cause`) fails silently and permanently. `data/quests.py` closes
-that namespace by hand — declaring `STORY_FLAGS`/`NPC_STATUSES`, with
-`adapters/llm.py` building the parser's vocabulary block from those
-declarations and `tests/test_quests.py` asserting the roster stays inside it
-— so adding such an objective means declaring its name too.
-
-That is a stopgap, and document 07's *As Implemented* section records the
-decision that supersedes it: these flags and statuses need **engine
-producers** (a condition on world state; a `RelationshipManager` trust band
-crossing) rather than a parser instruction, because a flag that gates quest
-progress is state, and per document 01 the LLM never decides state. Until
-that exists, two of the three seeded quests depend on the model spelling a
-name exactly right — which the vocabulary block makes likely and cannot make
-certain.
+Every `discover:` and `npc_status:` objective has an engine producer: a topic an
+NPC tells, or the derived `trusts_player` status (see
+[the LLM contract](mechanics/10-llm-contract.md)). `tests/test_topics.py` checks that
+the roster stays inside them.
 
 **Scale is still unaddressed.** Everything above holds at the game's current
 size — four zones, three NPCs. Documents 05 (world generation), 06

@@ -8,23 +8,24 @@ from managers import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from modules.action.parser import ASK_REQUEST_LABELS, TALK_APPROACH_LABELS
 from modules.action.types import (
-    DiscoverFlagAction,
     DropAction,
     Duration,
     MoveAction,
-    SetFlagAction,
     WaitAction,
+    WearAction,
 )
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
+from modules.item import ClothingItem
 from modules.quest import QuestState
 from modules.stats import CharacterStat
 from modules.weather import WeatherSample
-from tests.support import resolve_actions
+from tests.support import adjust_regard, npc_of, resolve_actions
 
 
 class WorldFlagFirewallTests(unittest.TestCase):
@@ -36,32 +37,26 @@ class WorldFlagFirewallTests(unittest.TestCase):
         self.builder = ContextBuilder(self.gm)
 
     def test_an_undiscovered_flag_never_reaches_the_narrator_prompt(self):
-        resolve_actions(self.gm, SetFlagAction(flag_name="power_grid_stable", value=False))
+        self.gm.narrative.flags["power_grid_stable"] = False
         prompt = self.builder.build_narrator_prompt("look")
         self.assertNotIn("power_grid_stable", prompt)
 
     def test_a_discovered_flag_reaches_the_narrator_prompt(self):
-        resolve_actions(
-            self.gm,
-            SetFlagAction(flag_name="power_grid_stable", value=False),
-            DiscoverFlagAction(flag_name="power_grid_stable"),
-        )
+        self.gm.narrative.flags["power_grid_stable"] = False
+        SimulationCore(self.gm).discover_flag("power_grid_stable")
         prompt = self.builder.build_narrator_prompt("look")
         self.assertIn("power_grid_stable=False", prompt)
 
     def test_discovering_a_flag_that_was_never_set_is_harmless(self):
-        resolve_actions(self.gm, DiscoverFlagAction(flag_name="never_set"))
+        self.gm.narrative.discovered_flags.add("never_set")
         prompt = self.builder.build_narrator_prompt("look")
         # Nothing to show -- the flag has no value -- but this must not raise.
         self.assertIn("Flags: None", prompt)
 
     def test_setting_the_same_flag_twice_does_not_undiscover_it(self):
-        resolve_actions(
-            self.gm,
-            SetFlagAction(flag_name="power_grid_stable", value=False),
-            DiscoverFlagAction(flag_name="power_grid_stable"),
-            SetFlagAction(flag_name="power_grid_stable", value=True),
-        )
+        self.gm.narrative.flags["power_grid_stable"] = False
+        SimulationCore(self.gm).discover_flag("power_grid_stable")
+        self.gm.narrative.flags["power_grid_stable"] = True
         prompt = self.builder.build_narrator_prompt("look")
         self.assertIn("power_grid_stable=True", prompt)
 
@@ -72,11 +67,8 @@ class ParserPromptFirewallTests(unittest.TestCase):
         self.builder = ContextBuilder(self.gm)
 
     def test_parser_prompt_carries_no_relationship_or_flag_data_at_all(self):
-        resolve_actions(
-            self.gm,
-            SetFlagAction(flag_name="power_grid_stable", value=False),
-            DiscoverFlagAction(flag_name="power_grid_stable"),
-        )
+        self.gm.narrative.flags["power_grid_stable"] = False
+        SimulationCore(self.gm).discover_flag("power_grid_stable")
         prompt = self.builder.build_parser_prompt("look")
         self.assertNotIn("power_grid_stable", prompt)
         self.assertNotIn("Disposition", prompt)
@@ -230,7 +222,7 @@ class ConditionBlockTests(unittest.TestCase):
 
     def test_a_player_with_no_status_effects_reads_as_fine(self):
         prompt = self.builder.build_narrator_prompt("look")
-        condition = prompt.split("[CONDITION]")[1].split("[DEEP MEMORY]")[0]
+        condition = prompt.split("[CONDITION]")[1].split("[QUESTS]")[0]
         self.assertTrue(condition.strip().endswith("Fine"))
 
     def test_the_parser_sees_the_same_status_effect_list(self):
@@ -349,7 +341,10 @@ class WeatherBlockTests(unittest.TestCase):
         self.builder = ContextBuilder(self.gm)
 
     def _weather_block(self, prompt: str) -> str:
-        return prompt.split("[WEATHER]")[1].split("\n\n[")[0]
+        if "[WEATHER]" in prompt:
+            return prompt.split("[WEATHER]")[1].split("\n\n[")[0]
+        section = prompt.split("[TIME AND WEATHER]")[1].split("[CURRENT LOCATION]")[0]
+        return section[section.index("Sky:") :]
 
     def test_narrator_block_has_no_raw_numbers(self):
         self.gm.climate.start_period(0, 0.9)
@@ -575,7 +570,8 @@ class ExerciseParserPromptTests(unittest.TestCase):
         self.assertIn("a dumbbell", self.prompt("item_dumbbell"))
 
     def test_the_parser_is_taught_the_verb(self):
-        self.assertIn("EXERCISE", llm.PARSER_SYSTEM_PROMPT)
+        actions = self.prompt().split("[AVAILABLE ACTIONS]")[1]
+        self.assertIn("- EXERCISE <text> -- ", actions)
 
 
 def clear_sky(gm: GameManager, daylight: float = 1.0) -> None:
@@ -677,3 +673,337 @@ class ThreatsContextTests(unittest.TestCase):
         block = threats_block(ContextBuilder(self.gm).build_parser_prompt("look"))
         self.assertIn("z1 (close)", block)
         self.assertNotIn("coming at you", block)
+
+
+def _positions(prompt: str, headers: list[str]) -> list[int]:
+    positions = []
+    text = "\n" + prompt
+    for header in headers:
+        line = f"\n{header}\n"
+        assert text.count(line) == 1, header
+        positions.append(text.index(line))
+    return positions
+
+
+class ParserBlockOrderTests(unittest.TestCase):
+    """Spec 10, What the parser sees."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_building"
+        self.builder = ContextBuilder(self.gm)
+
+    def test_the_blocks_appear_in_the_stated_order(self):
+        prompt = self.builder.build_parser_prompt("look")
+        headers = [
+            "[CHARACTER]",
+            "[LOCATION]",
+            "[EXITS]",
+            "[ZONES]",
+            "[ITEMS HERE]",
+            "[NPCS HERE]",
+            "[THREATS]",
+            "[INVENTORY]",
+            "[WORN]",
+            "[CONDITION]",
+            "[WEATHER]",
+            "[EXERCISES]",
+            "[AVAILABLE ACTIONS]",
+            "[PLAYER INPUT]",
+        ]
+        positions = _positions(prompt, headers)
+        self.assertEqual(positions, sorted(positions))
+
+    def test_blocks_of_later_specs_are_omitted_until_they_land(self):
+        prompt = self.builder.build_parser_prompt("look")
+        self.assertNotIn("[DOORS AND WINDOWS]", prompt)
+        self.assertNotIn("[CORPSES]", prompt)
+
+    def test_character_is_the_name_and_pronouns_only(self):
+        block = (
+            self.builder.build_parser_prompt("look").split("[CHARACTER]")[1].split("[LOCATION]")[0]
+        )
+        self.assertIn("Orton (he/him)", block)
+        for word in ("Occupation", "Backstory", "Traits", "Skills"):
+            self.assertNotIn(word, block)
+
+    def test_npcs_here_shows_following_and_topics_but_no_bands(self):
+        npc_of(self.gm, "Emma").following = True
+        block = (
+            self.builder.build_parser_prompt("look").split("[NPCS HERE]")[1].split("[THREATS]")[0]
+        )
+        self.assertIn("Emma (following you)", block)
+        self.assertIn("Marcus", block)
+        self.assertNotIn("Marcus (following you)", block)
+        for word in ("Disposition", "trust", "friendly", "neutral"):
+            self.assertNotIn(word, block)
+
+    def test_a_topic_is_listed_under_its_npc_once_it_is_available(self):
+        self.gm.player.current_location_id = "zone_neighborhood"
+        block = (
+            self.builder.build_parser_prompt("look").split("[NPCS HERE]")[1].split("[THREATS]")[0]
+        )
+        self.assertNotIn("outbreak_news", block)
+        self.gm.world.outbreak_started_at = 0
+        block = (
+            self.builder.build_parser_prompt("look").split("[NPCS HERE]")[1].split("[THREATS]")[0]
+        )
+        self.assertIn("Topic outbreak_news: what the news says about the outbreak", block)
+
+    def test_an_item_an_npc_holds_is_listed_so_it_can_be_asked_for(self):
+        npc_of(self.gm, "Emma").inventory.append(ItemEntity(item=ITEMS["item_water_bottle"]))
+        block = (
+            self.builder.build_parser_prompt("look").split("[NPCS HERE]")[1].split("[THREATS]")[0]
+        )
+        self.assertIn("Holds: Water Bottle", block)
+
+    def test_the_condition_block_names_sneaking(self):
+        self.gm.player.sneaking = True
+        block = (
+            self.builder.build_parser_prompt("look").split("[CONDITION]")[1].split("[WEATHER]")[0]
+        )
+        self.assertIn("sneaking", block)
+
+    def test_worn_clothing_has_its_own_block(self):
+        block = self.builder.build_parser_prompt("look").split("[WORN]")[1].split("[CONDITION]")[0]
+        self.assertIn("Jeans", block)
+        self.assertNotIn(
+            "Jeans",
+            self.builder.build_parser_prompt("look").split("[INVENTORY]")[1].split("[WORN]")[0],
+        )
+
+
+class NarratorBlockOrderTests(unittest.TestCase):
+    """Spec 10, What the narrator sees."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_building"
+        self.builder = ContextBuilder(self.gm)
+
+    def test_the_blocks_appear_in_the_stated_order_memory_first(self):
+        prompt = self.builder.build_narrator_prompt("look", ["a fact"], ["a memory"])
+        headers = [
+            "[CHARACTER]",
+            "[DEEP MEMORY]",
+            "[SUMMARY OF PAST EVENTS]",
+            "[RECENT EVENTS]",
+            "[TIME AND WEATHER]",
+            "[CURRENT LOCATION]",
+            "[ITEMS IN CURRENT LOCATION]",
+            "[NEARBY LOCATIONS]",
+            "[NPCS PRESENT]",
+            "[THREATS]",
+            "[CONDITION]",
+            "[QUESTS]",
+            "[OUTCOMES]",
+            "[CONTINUITY]",
+            "[SCENE]",
+        ]
+        positions = _positions(prompt, headers)
+        self.assertEqual(positions, sorted(positions))
+
+    def test_time_and_weather_says_before_the_outbreak(self):
+        block = self.builder.build_narrator_prompt("look").split("[TIME AND WEATHER]")[1]
+        self.assertIn("before the outbreak", block.split("[CURRENT LOCATION]")[0])
+
+    def test_time_and_weather_counts_the_days_of_the_outbreak(self):
+        self.gm.advance_clock(2760)
+        self.gm.world.outbreak_started_at = 2760
+        block = self.builder.build_narrator_prompt("look").split("[TIME AND WEATHER]")[1]
+        self.assertIn("outbreak day 1", block.split("[CURRENT LOCATION]")[0])
+        self.gm.advance_clock(1440)
+        block = self.builder.build_narrator_prompt("look").split("[TIME AND WEATHER]")[1]
+        self.assertIn("outbreak day 2", block.split("[CURRENT LOCATION]")[0])
+
+    def test_the_old_apocalypse_line_is_gone(self):
+        self.assertNotIn("Apocalypse", self.builder.build_narrator_prompt("look"))
+
+    def test_character_has_none_of_the_removed_lines(self):
+        block = (
+            self.builder.build_narrator_prompt("look")
+            .split("[CHARACTER]")[1]
+            .split("[DEEP MEMORY]")[0]
+        )
+        for line in (
+            "Level:",
+            "Health:",
+            "Hunger:",
+            "Thirst:",
+            "Morale:",
+            "Sleep:",
+            "Infection Risk:",
+            "Status:",
+            "Conditions:",
+        ):
+            self.assertNotIn(line, block)
+
+    def test_character_keeps_name_pronouns_occupation_goals_and_outfit(self):
+        block = (
+            self.builder.build_narrator_prompt("look")
+            .split("[CHARACTER]")[1]
+            .split("[DEEP MEMORY]")[0]
+        )
+        for line in ("Name: Orton", "Pronouns: he/him", "Occupation:", "Goals:", "Wearing:"):
+            self.assertIn(line, block)
+
+    def test_npcs_present_says_who_is_following(self):
+        npc_of(self.gm, "Emma").following = True
+        block = (
+            self.builder.build_narrator_prompt("look")
+            .split("[NPCS PRESENT]")[1]
+            .split("[THREATS]")[0]
+        )
+        self.assertIn("Following Orton", block)
+        self.assertEqual(block.count("Following Orton"), 1)
+
+    def test_condition_names_sleep_and_sneaking_and_item_conditions(self):
+        from modules.character.state import CharacterCondition
+
+        self.gm.player.sneaking = True
+        self.gm.player.asleep = True
+        self.gm.player.conditions.append(CharacterCondition.POISONED)
+        block = (
+            self.builder.build_narrator_prompt("look").split("[CONDITION]")[1].split("[QUESTS]")[0]
+        )
+        for word in ("asleep", "sneaking", "poisoned"):
+            self.assertIn(word, block)
+
+    def test_no_block_carries_a_stat_value_a_relationship_score_or_hp(self):
+        gm = self.gm
+        gm.player.stats.set(CharacterStat.HUNGER, 0.7371)
+        gm.player.stats.set(CharacterStat.STRESS, 0.4242)
+        gm.player.hit_points = 61
+        adjust_regard(gm, "npc_emma", affection=37, trust=42)
+        prompt = self.builder.build_narrator_prompt("look")
+        state = prompt.split("[TIME AND WEATHER]")[1].split("[OUTCOMES]")[0]
+        for leak in ("0.7371", "0.74", "0.4242", "61", "37", "42", "HP", "Health", "hit points"):
+            self.assertNotIn(leak, state)
+        for header in ("[CHARACTER]", "[NPCS PRESENT]", "[CONDITION]"):
+            self.assertNotIn("0.7371", prompt.split(header)[1].split("\n\n[")[0])
+
+    def test_recent_events_say_that_facts_in_parentheses_are_true(self):
+        self.gm.memory.recent_events.append("Orton waved. (Facts: Emma responds warmly.)")
+        block = (
+            self.builder.build_narrator_prompt("look")
+            .split("[RECENT EVENTS]")[1]
+            .split("[TIME AND WEATHER]")[0]
+        )
+        self.assertIn("(Facts: Emma responds warmly.)", block)
+        self.assertIn("win over the rest", block)
+
+
+ALWAYS = {
+    "MOVE_TO",
+    "STANCE",
+    "WAIT",
+    "SLEEP",
+    "EXERCISE",
+    "SHOUT",
+    "ADD_GOAL",
+    "ADD_RELATIONSHIP_NOTE",
+}
+
+
+def listed_in_prompt(prompt: str) -> set[str]:
+    block = prompt.split("[AVAILABLE ACTIONS]")[1].split("[PLAYER INPUT]")[0]
+    return set(llm.listed_verbs(block))
+
+
+class SceneKeyTests(unittest.TestCase):
+    """Spec 10, Scene filtering."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_street"
+        self.gm.player.inventory.clear()
+        self.gm.player.worn.clear()
+        self.gm.current_location.entities.clear()
+        self.builder = ContextBuilder(self.gm)
+
+    def test_a_bare_scene_has_no_keys_and_lists_the_eight_verbs(self):
+        self.assertEqual(self.builder.scene_keys(), frozenset())
+        self.assertEqual(listed_in_prompt(self.builder.build_parser_prompt("look")), ALWAYS)
+
+    def test_an_npc_here_gives_npcs_here(self):
+        self.gm.player.current_location_id = "zone_building"
+        self.gm.current_location.entities.clear()
+        self.assertEqual(self.builder.scene_keys(), frozenset({"npcs_here"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"TALK", "ASK", "GIVE", "ATTACK"})
+
+    def test_a_perceived_zombie_gives_threats(self):
+        self.gm.world.outbreak_started_at = 0
+        add_zombie(self.gm, 3, ZombieState.CHASING)
+        self.assertEqual(self.builder.scene_keys(), frozenset({"threats"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"ATTACK"})
+
+    def test_a_ground_item_gives_items_here(self):
+        item = ITEMS["item_apartment_key"]
+        self.gm.current_location.entities.append(ItemEntity(item=item))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"items_here"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"TAKE"})
+
+    def test_a_carried_item_gives_carried(self):
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"carried"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM"})
+
+    def test_a_goal_gives_goals(self):
+        self.gm.narrative.goals["short_term"].append("Find water")
+        self.assertEqual(self.builder.scene_keys(), frozenset({"goals"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"REMOVE_GOAL"})
+
+    def test_a_carried_garment_gives_wearable_carried_and_carried(self):
+        clothing = next(i for i in ITEMS.values() if isinstance(i, ClothingItem))
+        self.gm.player.inventory.append(ItemEntity(item=clothing))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"carried", "wearable_carried"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM", "WEAR"})
+
+    def test_a_worn_item_gives_worn(self):
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_jeans"]))
+        resolve_actions(self.gm, WearAction(item_name="Jeans"))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"worn"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"TAKE_OFF"})
+
+
+class ParserSystemPromptTests(unittest.TestCase):
+    """Spec 10, Scene filtering: the system prompt is fixed."""
+
+    def test_the_system_prompt_lists_no_verbs(self):
+        self.assertEqual(llm.listed_verbs(llm.PARSER_SYSTEM_PROMPT), [])
+
+    def test_the_system_prompt_is_the_same_whatever_the_scene(self):
+        before = llm.PARSER_SYSTEM_PROMPT
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        ContextBuilder(gm).build_parser_prompt("look")
+        gm.player.current_location_id = "zone_street"
+        ContextBuilder(gm).build_parser_prompt("look")
+        self.assertEqual(llm.PARSER_SYSTEM_PROMPT, before)
+
+    def test_a_listed_verb_prints_its_closed_labels_in_full(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        prompt = ContextBuilder(gm).build_parser_prompt("look")
+        actions = prompt.split("[AVAILABLE ACTIONS]")[1]
+        for label in (*TALK_APPROACH_LABELS, *ASK_REQUEST_LABELS):
+            self.assertIn(label, actions)
+
+    def test_an_unlisted_verbs_labels_are_absent(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        actions = ContextBuilder(gm).build_parser_prompt("look").split("[AVAILABLE ACTIONS]")[1]
+        self.assertNotIn("compliment", actions)
+        self.assertNotIn("TALK", actions)
+
+    def test_the_block_prints_argument_kinds_and_gloss(self):
+        gm = GameManager()
+        actions = ContextBuilder(gm).build_parser_prompt("look").split("[AVAILABLE ACTIONS]")[1]
+        self.assertIn("- MOVE_TO <zone> -- ", actions)

@@ -83,7 +83,7 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 
 | Screen | Sections | Fields | Exists |
 | --- | --- | --- | --- |
-| Status | status effects, conditions, effects, goals | `effects`, `conditions`, `status_effects`, `sneaking` (spec 09), `goals` | yes, with the health bar |
+| Status | status effects, conditions, goals | `effects`, `conditions`, `sneaking` (spec 09), `goals` | yes, with the health bar |
 | Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (spec 12, 17) | no |
 | Inventory | held item, equipped slots, carried items | `held` (spec 11, 15), `equipment`, `inventory` | yes, without `held` |
 | Clothing | worn items, outer to inner, by body location | `worn` | yes |
@@ -218,7 +218,7 @@ A mechanic that adds or changes a snapshot field:
 
 | Gap | Fix |
 | --- | --- |
-| Header shows `apocalypse_stage` | replaced by `outbreak_day` in spec 10 |
+| Header shows the outbreak stage | now `outbreak_day` (spec 10): "Before the outbreak" or "Outbreak day N" |
 | Health bar shows hit points as a percentage | removed with spec 12; until then it is the one number grandfathered in |
 | Inventory and equipment show item condition as `n/max` | condition word with spec 11 |
 

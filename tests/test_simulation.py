@@ -24,15 +24,11 @@ from modules.action.types import (
     DropAction,
     Duration,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
-    SetFlagAction,
+    ShoutAction,
     SleepAction,
     StanceAction,
     TakeAction,
     TakeOffAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -40,13 +36,13 @@ from modules.action.types import (
 from modules.body import BodyLocation, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
 from modules.character.skills import SkillState
-from modules.effect import StartOutbreakEffect
 from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem, ConsumableItem
 from modules.modifier import HPModifier
 from modules.stats import CharacterStat
+from modules.story import StartOutbreak
 from modules.weather import WeatherSample
 from tests.support import simulate
 
@@ -110,100 +106,12 @@ class ItemResolutionTests(unittest.TestCase):
         self.assertAlmostEqual(gm.player.stats.get(CharacterStat.HUNGER), 0.30, delta=0.01)
         self.assertAlmostEqual(gm.player.stats.get(CharacterStat.THIRST), 0.55, delta=0.01)
 
-    def test_removing_or_reconjuring_the_apartment_key_is_refused(self):
-        # REMOVE, UPDATE_QUANTITY 0 and UPDATE_QUANTITY 2 on a door key
-        # must all be refused before SimulationCore ever mutates state --
-        # the key count must stay exactly 1 throughout.
-        gm = GameManager()  # starts holding item_apartment_key
-        facts = simulate(
-            gm,
-            UpdateInventoryAction(item_name="Apartment Key", operation="REMOVE", value=""),
-            UpdateInventoryAction(
-                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="0"
-            ),
-            UpdateInventoryAction(
-                item_name="Apartment Key", operation="UPDATE_QUANTITY", value="2"
-            ),
-        )
-        self.assertTrue(all(f.startswith("Refused:") for f in facts))
-        self.assertEqual([e.item.name for e in gm.player.inventory], ["Apartment Key"])
-
 
 class WorldStateResolutionTests(unittest.TestCase):
     def test_add_goal(self):
         gm = GameManager()
         simulate(gm, AddGoalAction(horizon="short_term", goal_text="Find a weapon"))
         self.assertIn("Find a weapon", gm.narrative.goals["short_term"])
-
-    def test_set_flag(self):
-        gm = GameManager()
-        simulate(gm, SetFlagAction(flag_name="power_grid_stable", value=False))
-        self.assertIs(gm.narrative.flags["power_grid_stable"], False)
-
-    def test_update_relationship(self):
-        gm = GameManager()
-        simulate(gm, UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=12))
-        self.assertEqual(gm.relationship_manager.get_affinity("npc_emma", "player"), 12)
-
-    def test_npc_move(self):
-        gm = GameManager()
-        simulate(gm, NpcMoveAction(npc_name="Emma", destination="Your Building"))
-        self.assertEqual(gm.resolve_npc("Emma").current_location_id, "zone_building")
-
-    def test_npc_move_accepts_an_alias(self):
-        gm = GameManager()
-        simulate(gm, NpcMoveAction(npc_name="Emma", destination="Lobby"))
-        self.assertEqual(gm.resolve_npc("Emma").current_location_id, "zone_building")
-
-    def test_npc_move_still_rejects_unknown_zones(self):
-        # MOVE_TO soft-lands an unknown name into the player's free-text
-        # spot, but NPCs have no such field -- if resolution were relaxed for
-        # them too, an invented zone would scatter them somewhere
-        # unreachable.
-        gm = GameManager()
-        before = gm.resolve_npc("Emma").current_location_id
-        facts = simulate(gm, NpcMoveAction(npc_name="Emma", destination="Atlantis"))
-        self.assertTrue(facts[0].startswith("Refused:"))
-        self.assertEqual(gm.resolve_npc("Emma").current_location_id, before)
-
-    def test_npc_move_rejects_her_apartment_as_an_unknown_location(self):
-        # NPC_MOVE resolves strictly via resolve_zone_exact -- no
-        # whole-word fallback -- so a phrase that only MOVE_TO could ever
-        # soft-land is simply unknown here.
-        gm = GameManager()
-        facts = simulate(gm, NpcMoveAction(npc_name="Emma", destination="her apartment"))
-        self.assertTrue(facts[0].startswith("Refused:"))
-
-    def test_npc_move_rejects_a_bare_out_direction(self):
-        # resolve_zone_exact does no connection directions either --
-        # NPC_MOVE is strict, not the player's forgiving MOVE_TO.
-        gm = GameManager()
-        facts = simulate(gm, NpcMoveAction(npc_name="Jen", destination="out"))
-        self.assertTrue(facts[0].startswith("Refused:"))
-
-    def test_npc_move_into_home_is_refused_while_player_is_elsewhere(self):
-        # Orton's apartment is locked; nobody gets in unless he's there
-        # to let them in.
-        gm = GameManager()
-        gm.player.current_location_id = "zone_building"
-        facts = simulate(gm, NpcMoveAction(npc_name="Emma", destination="Your Apartment"))
-        self.assertTrue(facts[0].startswith("Refused:"))
-        self.assertIn(
-            "Orton's apartment is locked; nobody gets in unless he's there to let them in.",
-            facts[0],
-        )
-
-    def test_npc_move_into_home_is_accepted_while_player_is_there(self):
-        gm = GameManager()
-        gm.player.current_location_id = "zone_home"
-        facts = simulate(gm, NpcMoveAction(npc_name="Emma", destination="Your Apartment"))
-        self.assertFalse(facts[0].startswith("Refused:"))
-        self.assertEqual(gm.resolve_npc("Emma").current_location_id, "zone_home")
-
-    def test_npc_status(self):
-        gm = GameManager()
-        simulate(gm, NpcStatusAction(npc_name="Emma", operation="ADD", status="frightened"))
-        self.assertIn("frightened", gm.resolve_npc("Emma").status)
 
 
 class PlayerDeathResolutionTests(unittest.TestCase):
@@ -285,25 +193,6 @@ class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
         fact = self._first_fact(UseItemAction(item_name="First Aid Kit"))
         self.assertIn("Orton is unhurt", fact)
-
-    def test_an_item_condition_update_reads_as_a_word(self):
-        fact = self._first_fact(
-            UpdateInventoryAction(
-                item_name="Apartment Key", operation="UPDATE_CONDITION", value="3"
-            )
-        )
-        self.assertEqual(fact, "Apartment Key is now damaged.")
-
-    def test_relationship_updates_read_as_bands(self):
-        relationships = self.gm.relationship_manager
-        fact = self._first_fact(
-            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=5)
-        )
-        disposition = relationships.get_disposition("npc_emma", "player")
-        self.assertEqual(fact, f"Emma now feels {disposition} toward Orton.")
-        fact = self._first_fact(UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-5))
-        trust = relationships.get_trust_level("npc_emma", "player")
-        self.assertEqual(fact, f"Emma's trust in Orton is now {trust}.")
 
 
 class WeatherWiringTests(unittest.TestCase):
@@ -896,7 +785,7 @@ class StartOutbreakTests(unittest.TestCase):
     def test_the_effect_stamps_the_minute_and_fills_the_zones(self):
         gm = GameManager()
         gm.advance_clock(3 * 1440 - 480 + 360)
-        SimulationCore(gm, rng=random.Random(1)).apply_story_effect(StartOutbreakEffect())
+        SimulationCore(gm, rng=random.Random(1)).apply_story_effect(StartOutbreak())
         self.assertEqual(gm.world.outbreak_started_at, gm.narrative.minutes)
         self.assertEqual(gm.world.last_redistribution_minute, gm.narrative.minutes)
         zones = [zombie.zone_id for zombie in gm.world.zombies.values()]
@@ -907,7 +796,7 @@ class StartOutbreakTests(unittest.TestCase):
         gm = GameManager()
         gm.player.current_location_id = "zone_street"
         core = SimulationCore(gm, rng=random.Random(1))
-        core.apply_story_effect(StartOutbreakEffect())
+        core.apply_story_effect(StartOutbreak())
         counts: list[int] = []
 
         class Recorder:
@@ -1046,3 +935,128 @@ class ZombieFollowUpTests(unittest.TestCase):
         validator = ActionValidator(gm)
         self.assertIsInstance(validator.validate(AttackAction(target_name=far.zombie_id)), Rejected)
         self.assertIsInstance(validator.validate(AttackAction(target_name="zombie")), Rejected)
+
+
+class PlanTests(unittest.TestCase):
+    """Spec 10, Plans."""
+
+    def test_a_sixth_action_is_refused(self):
+        gm = GameManager()
+        goals = [AddGoalAction(horizon="short_term", goal_text=f"Goal {n}") for n in range(7)]
+        facts = simulate(gm, *goals)
+        self.assertEqual(len(gm.narrative.goals["short_term"]), 5)
+        refusals = [fact for fact in facts if fact.startswith("Refused:")]
+        self.assertEqual(refusals, ["Refused: Too much at once; Orton does the first five things."])
+
+    def test_exactly_five_actions_all_resolve(self):
+        gm = GameManager()
+        goals = [AddGoalAction(horizon="short_term", goal_text=f"Goal {n}") for n in range(5)]
+        facts = simulate(gm, *goals)
+        self.assertEqual(len(gm.narrative.goals["short_term"]), 5)
+        self.assertEqual([fact for fact in facts if fact.startswith("Refused:")], [])
+
+    def test_a_six_action_plan_resolves_the_first_five_and_refuses_the_sixth(self):
+        gm = GameManager()
+        goals = [AddGoalAction(horizon="short_term", goal_text=f"Goal {n}") for n in range(6)]
+        facts = simulate(gm, *goals)
+        self.assertEqual(gm.narrative.goals["short_term"], [f"Goal {n}" for n in range(5)])
+        self.assertEqual(
+            [fact for fact in facts if fact.startswith("Refused:")],
+            ["Refused: Too much at once; Orton does the first five things."],
+        )
+
+    def test_a_refused_action_does_not_stop_the_plan(self):
+        gm = GameManager()
+        facts = simulate(
+            gm,
+            TakeAction(item_name="Unicorn"),
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+        )
+        self.assertTrue(facts[0].startswith("Refused:"))
+        self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
+
+    def test_an_interrupted_action_cancels_the_rest_with_one_fact(self):
+        gm = zombie_game("zone_building")
+        add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        facts = simulate(
+            gm,
+            WaitAction(duration=Duration(minutes=30)),
+            TakeAction(item_name="knife"),
+            DropAction(item_name="bag"),
+            rng=random.Random(1),
+        )
+        self.assertEqual(
+            [fact for fact in facts if "never gets to" in fact],
+            ["Orton never gets to: take the knife, drop the bag."],
+        )
+        self.assertEqual(sum("Refused" in fact for fact in facts), 0)
+
+    def test_an_interruption_in_the_last_action_cancels_nothing(self):
+        gm = zombie_game("zone_building")
+        add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
+        self.assertFalse(any("never gets to" in fact for fact in facts))
+
+    def test_a_none_turn_costs_one_minute(self):
+        gm = GameManager()
+        facts = simulate(gm)
+        self.assertEqual(gm.narrative.minutes, 1)
+        self.assertEqual(facts, ["About 1 minute passes."])
+
+    def test_a_turn_of_only_refused_lines_costs_nothing(self):
+        gm = GameManager()
+        facts = SimulationCore(gm).resolve([], refused=2)
+        self.assertEqual(gm.narrative.minutes, 0)
+        self.assertEqual(facts, [])
+
+    def test_a_turn_of_only_refused_actions_costs_nothing(self):
+        gm = GameManager()
+        simulate(gm, TakeAction(item_name="Unicorn"), TakeAction(item_name="Dragon"))
+        self.assertEqual(gm.narrative.minutes, 0)
+
+
+class ShoutTests(unittest.TestCase):
+    """Spec 10, SHOUT."""
+
+    def sounds_after(self, gm: GameManager, *actions) -> list[tuple[float, float]]:
+        core = SimulationCore(gm, rng=random.Random(1))
+        heard: list[tuple[float, float]] = []
+        real = core._loop.run_minute
+
+        def spy(now, minute, extra_sounds=()):
+            heard.extend((sound.radius, sound.volume) for sound in extra_sounds)
+            return real(now, minute, extra_sounds)
+
+        core._loop.run_minute = spy  # type: ignore[method-assign]
+        core.resolve(list(actions))
+        return heard
+
+    def test_a_shout_is_a_sound_of_radius_30_and_volume_30(self):
+        gm = zombie_game("zone_street")
+        self.assertEqual(self.sounds_after(gm, ShoutAction()), [(30, 30)])
+
+    def test_a_sneaking_shout_is_radius_6_and_volume_6(self):
+        gm = zombie_game("zone_street")
+        gm.player.sneaking = True
+        self.assertEqual(self.sounds_after(gm, ShoutAction()), [(6, 6)])
+
+    def test_a_shout_alone_costs_the_one_minute_floor(self):
+        gm = zombie_game("zone_street")
+        simulate(gm, ShoutAction(), rng=random.Random(1))
+        self.assertEqual(gm.narrative.minutes, 1)
+
+    def test_a_shout_beside_a_timed_action_adds_no_time_of_its_own(self):
+        gm = zombie_game("zone_street")
+        simulate(gm, ShoutAction(), WaitAction(duration=Duration(minutes=10)), rng=random.Random(1))
+        self.assertEqual(gm.narrative.minutes, 10)
+
+    def test_a_shout_after_a_timed_action_adds_no_time_of_its_own(self):
+        gm = zombie_game("zone_street")
+        simulate(gm, WaitAction(duration=Duration(minutes=10)), ShoutAction(), rng=random.Random(1))
+        self.assertEqual(gm.narrative.minutes, 10)
+
+    def test_a_shout_wakes_an_idle_zombie_in_range(self):
+        gm = zombie_game("zone_street")
+        zombie = add_zombie(gm, gap=25, state=ZombieState.IDLE)
+        simulate(gm, ShoutAction(), rng=random.Random(1))
+        self.assertNotEqual(zombie.state, ZombieState.IDLE)

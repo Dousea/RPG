@@ -200,7 +200,7 @@ before they reach the prompt; nothing else is filtered by what the player could
 know. See [document 11](11-knowledge-firewall.md).
 
 **Global, zone and location memory do not exist.** World-scale truths live in
-`NarrativeState.apocalypse_stage` (one string) and `flags` (booleans). There is
+the world's outbreak start (`World.outbreak_started_at`) and `flags` (booleans). There is
 no per-zone or per-location memory of any kind.
 
 ---

@@ -49,13 +49,14 @@ from modules.entity.zombie import (
 from modules.item import ClothingItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
+from modules.social import SocialLog
 from modules.stats import Stats
 from modules.thermal import ThermalState
 from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 13  # spec 09
+SCHEMA_VERSION = 14  # spec 10
 
 MAX_ID_LENGTH = 40
 
@@ -137,6 +138,26 @@ def _known_trait_ids(values: Any) -> list[str]:
 
 def _int_map(value: Any) -> dict[str, int]:
     return {str(key): int(amount) for key, amount in _as_dict(value).items()}
+
+
+def _social_log_to_dict(log: SocialLog) -> dict[str, Any]:
+    return {
+        "day": log.day,
+        "counts": dict(log.counts),
+        "refusals": dict(log.refusals),
+        "told_topics": sorted(log.told_topics),
+    }
+
+
+def _social_log_from_dict(value: Any) -> SocialLog:
+    data = _as_dict(value)
+    topics = data.get("told_topics")
+    return SocialLog(
+        day=int(data.get("day", 1)),
+        counts=_int_map(data.get("counts")),
+        refusals=_int_map(data.get("refusals")),
+        told_topics={str(topic) for topic in topics} if isinstance(topics, list) else set(),
+    )
 
 
 def _float_map(value: Any, allowed: Any) -> dict[str, float]:
@@ -340,6 +361,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "last_redistribution_minute": manager.world.last_redistribution_minute,
             "next_zombie_number": manager.world.next_zombie_number,
             "zombie_kills": dict(manager.world.zombie_kills),
+            "fired_beats": dict(manager.world.fired_beats),
             "zombies": [_zombie_to_dict(zombie) for zombie in manager.world.zombies.values()],
             # Locations themselves are static; only ground items move.
             "ground_items": {
@@ -414,6 +436,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 "base_max_hit_points": npc.base_max_hit_points,
                 "goals": list(npc.goals),
                 "knowledge": sorted(npc.knowledge),
+                "following": npc.following,
             }
             for npc in manager.npcs.values()
         ],
@@ -434,14 +457,13 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
         "weather": _weather_to_dict(manager.climate),
         "narrative": {
             "minutes": narrative.minutes,
-            "apocalypse_stage": narrative.apocalypse_stage,
             "goals": {k: list(v) for k, v in narrative.goals.items()},
             "flags": dict(narrative.flags),
             "discovered_flags": sorted(narrative.discovered_flags),
-            "player_status": list(narrative.player_status),
             "pending_corrections": list(narrative.pending_corrections),
             "game_over": narrative.game_over,
             "death_cause": narrative.death_cause,
+            "social_log": _social_log_to_dict(narrative.social_log),
         },
         "memory": {
             "recent_events": list(memory.recent_events),
@@ -496,6 +518,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         outbreak_started_at=_optional_minute(world_data.get("outbreak_started_at")),
         last_redistribution_minute=_optional_minute(world_data.get("last_redistribution_minute")),
         next_zombie_number=int(world_data.get("next_zombie_number", 1)),
+        fired_beats=_int_map(world_data.get("fired_beats")),
         zombie_kills={
             zone_id: int(count)
             for zone_id, count in _as_dict(world_data.get("zombie_kills")).items()
@@ -515,14 +538,13 @@ def from_dict(data: dict[str, Any]) -> GameManager:
     default_goals = {"short_term": [], "long_term": []}
     narrative = NarrativeState(
         minutes=narrative_data.get("minutes", 0),
-        apocalypse_stage=narrative_data.get("apocalypse_stage", "Normal"),
         goals={**default_goals, **narrative_data.get("goals", {})},
         flags=narrative_data.get("flags", {}),
         discovered_flags=set(narrative_data.get("discovered_flags", [])),
-        player_status=narrative_data.get("player_status", []),
         pending_corrections=narrative_data.get("pending_corrections", []),
         game_over=_as_bool(narrative_data.get("game_over", False)),
         death_cause=_as_text(narrative_data.get("death_cause", ""), DEATH_CAUSE_MAX_LENGTH),
+        social_log=_social_log_from_dict(narrative_data.get("social_log")),
     )
 
     memory_data = data.get("memory", {})
@@ -750,6 +772,7 @@ def _npcs_from_dict(entries: list[dict[str, Any]]) -> dict[str, NpcEntity]:
             base_max_hit_points=entry.get("base_max_hit_points", 100),
             goals=entry.get("goals", []),
             knowledge=set(entry.get("knowledge", [])),
+            following=_as_bool(entry.get("following", False)),
         )
         npc.hit_points = int(entry.get("hit_points", npc.max_hit_points))
         npcs[npc.npc_id] = npc

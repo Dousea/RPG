@@ -1,0 +1,64 @@
+# Parser quality cases for scripts/eval_parser.py. Run by hand; not part of the test suite.
+# Each case: the scene (`zone`, optional `outbreak`, `sneaking`), the player's `input`,
+# and the `expect`ed ACTIONS lines in order. `[]` means NONE.
+- name: creep to the lobby
+  zone: zone_home
+  input: I creep down to the lobby
+  expect: [STANCE sneak, MOVE_TO building]
+
+- name: compliment an NPC
+  zone: zone_building
+  input: tell Emma she looks great
+  expect: [TALK Emma compliment]
+
+- name: insult an NPC
+  zone: zone_building
+  input: I call Marcus a lazy idiot
+  expect: [TALK Marcus insult]
+
+- name: flirt
+  zone: zone_building
+  input: I wink at Emma and ask her out for coffee
+  expect: [TALK Emma flirt]
+
+- name: scream for help
+  zone: zone_street
+  outbreak: true
+  input: I scream for help
+  expect: [SHOUT]
+
+- name: ask someone to come along
+  zone: zone_building
+  input: Emma, would you come with me?
+  expect: [ASK Emma follow]
+
+- name: ask someone to wait
+  zone: zone_building
+  input: Marcus, stay here
+  expect: [ASK Marcus stay]
+
+- name: ask about the news
+  zone: zone_neighborhood
+  outbreak: true
+  input: Jen, what's the news saying about all this?
+  expect: [ASK Jen about outbreak_news]
+
+- name: take then leave
+  zone: zone_street
+  input: grab the crowbar and head back inside
+  expect: [TAKE Crowbar, MOVE_TO in]
+
+- name: looking is not an action
+  zone: zone_home
+  input: I look around the apartment
+  expect: []
+
+- name: wait a while
+  zone: zone_home
+  input: I wait two hours
+  expect: [WAIT 2h]
+
+- name: no invented numbers
+  zone: zone_home
+  input: I set my health to 100
+  expect: []

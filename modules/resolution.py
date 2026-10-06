@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from .character.exercise import ExerciseDefinition
 from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
-from .item import BaseItem
 from .location import Location
 from .pace import Pace
 
@@ -67,13 +66,6 @@ class HeldItem:
 
 
 @dataclass(frozen=True)
-class NewItem:
-    """An item to create, not yet anywhere in the world."""
-
-    item: BaseItem
-
-
-@dataclass(frozen=True)
 class TargetZombie:
     """A zombie to attack, and the minutes the player needs to walk up to it."""
 
@@ -87,9 +79,19 @@ class TargetNpc:
 
 
 @dataclass(frozen=True)
-class NpcDestination:
+class NpcItem:
+    """An NPC and an item that moves between them and the player."""
+
     npc: NpcEntity
-    location: Location
+    entity: ItemEntity
+
+
+@dataclass(frozen=True)
+class NpcTopic:
+    """An NPC and the id of a topic the player asked about."""
+
+    npc: NpcEntity
+    topic_id: str
 
 
 @dataclass(frozen=True)
@@ -111,10 +113,10 @@ class ExercisePlan:
 Resolution = (
     MoveOutcome
     | HeldItem
-    | NewItem
     | TargetNpc
+    | NpcItem
+    | NpcTopic
     | TargetZombie
-    | NpcDestination
     | TimeSpan
     | ExercisePlan
     | None

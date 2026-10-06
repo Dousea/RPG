@@ -7,28 +7,24 @@ already decided.
 
 from collections.abc import Callable
 
+from modules.action.parser import TALK_TURN_MINUTES
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
+    AskAction,
     AttackAction,
-    DiscoverFlagAction,
     DropAction,
     ExerciseAction,
+    GiveAction,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
     RemoveGoalAction,
-    SetFlagAction,
+    ShoutAction,
     SleepAction,
     StanceAction,
-    StatusAddAction,
-    StatusRemoveAction,
     TakeAction,
     TakeOffAction,
-    UpdateConditionAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
+    TalkAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -57,8 +53,8 @@ TAKE_OFF_MINUTES = 1  # spec 01
 ZONE_HOP_MIN = 10  # spec 01
 ZONE_HOP_RUNNING_MIN = 5  # spec 01
 ZONE_HOP_SNEAKING_MIN = 20  # spec 01
-TALK_MIN = 5  # spec 01
-NONE_TURN_MIN = 1  # spec 01
+MAX_PLAN_ACTIONS = 5  # spec 10: actions resolved per turn
+NONE_TURN_MINUTES = 1  # spec 10
 
 CostFunction = Callable[[AnyAction, Resolution], int]
 
@@ -126,18 +122,13 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     WaitAction: _spent_minutes,
     SleepAction: _spent_minutes,
     ExerciseAction: _exercise_minutes,
-    StatusAddAction: 0,
-    StatusRemoveAction: 0,
-    UpdateConditionAction: 0,
+    ShoutAction: 0,
+    TalkAction: TALK_TURN_MINUTES,
+    AskAction: TALK_TURN_MINUTES,
+    GiveAction: TALK_TURN_MINUTES,
     AddGoalAction: 0,
     RemoveGoalAction: 0,
-    UpdateRelationshipAction: 0,
     AddRelationshipNoteAction: 0,
-    SetFlagAction: 0,
-    DiscoverFlagAction: 0,
-    UpdateInventoryAction: 0,
-    NpcMoveAction: 0,
-    NpcStatusAction: 0,
 }
 
 

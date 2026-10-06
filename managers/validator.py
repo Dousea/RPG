@@ -13,6 +13,7 @@ already looked up (the target NPC, the item entity, the destination zone) as a
 re-derive the reason something was legal.
 """
 
+import re
 from dataclasses import dataclass
 
 from data import exercises as ex
@@ -24,39 +25,39 @@ from data.clock import (
     WAIT_CAP_MIN,
     minutes_until,
 )
-from data.items import ITEMS, find_item_by_name
+from data.items import ITEMS
+from data.topics import TOPICS
 from managers.exercise import endurance_level
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
+from managers.social import locked_out
 from managers.stats.status_effects import status_effect_level
+from managers.story import visible_topics
 from managers.zombies import approach_minutes, perceived_now
+from modules.action.parser import TALK_APPROACH_LABELS
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
+    AskAction,
     AttackAction,
-    DiscoverFlagAction,
     DropAction,
     Duration,
     ExerciseAction,
+    GiveAction,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
     RemoveGoalAction,
-    SetFlagAction,
+    ShoutAction,
     SleepAction,
     StanceAction,
-    StatusAddAction,
-    StatusRemoveAction,
     TakeAction,
     TakeOffAction,
-    UpdateConditionAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
+    TalkAction,
     UseItemAction,
     WaitAction,
     WearAction,
 )
+from modules.entity.npc import NpcEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ClothingItem, ConsumableItem
 from modules.pace import Pace
@@ -66,8 +67,8 @@ from modules.resolution import (
     MoveBlocked,
     MoveToSpot,
     MoveToZone,
-    NewItem,
-    NpcDestination,
+    NpcItem,
+    NpcTopic,
     Resolution,
     ShuffleInZone,
     StayPut,
@@ -79,13 +80,10 @@ from modules.stats import CharacterStat, StatusEffect
 
 GOAL_HORIZONS = ("short_term", "long_term")
 
+ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
+
 # Names that mean "the nearest zombie".
 ZOMBIE_WORDS = frozenset({"zombie", "the zombie", "a zombie", "zombies", "the zombies"})
-
-# Statuses that block the player from taking a physical action. Free text, not
-# an enum, because narrative status ("settled in") and simulated capability
-# ("unconscious") share one field (`NarrativeState.player_status`) today.
-INCAPACITATING_STATUSES = frozenset({"unconscious", "incapacitated", "restrained"})
 
 
 def _with_article(name: str) -> str:
@@ -122,6 +120,7 @@ ValidationResult = Accepted | Rejected
 class ActionValidator:
     def __init__(self, manager: GameManager):
         self.manager = manager
+        self._talked_to: set[str] = set()
 
     @property
     def _name(self) -> str:
@@ -142,7 +141,7 @@ class ActionValidator:
             # than dispatched. SimulationCore._check_player_death is the only
             # place that sets this flag; the LLM cannot trigger it.
             return Rejected(action, f"{self._name} is dead; nothing more can happen.")
-        handler = self._VALIDATORS.get(type(action))
+        handler = self._VALIDATORS.get(action.verb)
         if handler is None:
             return Rejected(action, f"No validator registered for {type(action).__name__}.")
         return handler(self, action)
@@ -320,53 +319,10 @@ class ActionValidator:
             return Rejected(action, f"{entity.item.name} cannot be used this way.")
         return Accepted(action, HeldItem(entity))
 
-    def _validate_update_inventory(self, action: UpdateInventoryAction) -> ValidationResult:
-        manager = self.manager
-        if action.operation == "ADD":
-            item = find_item_by_name(action.item_name)
-            if item is None:
-                return Rejected(action, f"Unknown item: '{action.item_name}'.")
-            if self._is_door_key(item.id):
-                return Rejected(action, f"{self._name} can't conjure a key; it has to be found.")
-            if len(manager.player.inventory) >= manager.player.max_inventory_size:
-                return Rejected(action, "Inventory is full.")
-            return Accepted(action, NewItem(item))
-
-        entity = manager._find_item_entity(manager.player.inventory, action.item_name)
-        if entity is None:
-            return Rejected(action, f"No '{action.item_name}' in inventory.")
-        if action.operation not in ("REMOVE", "UPDATE_CONDITION", "UPDATE_QUANTITY"):
-            return Rejected(action, f"Unknown inventory operation: '{action.operation}'.")
-
-        # REMOVE and UPDATE_QUANTITY are the other two ways an item can
-        # leave (or multiply in) the inventory besides DROP/ADD -- REMOVE
-        # deletes the entity outright (simulation.py), and UPDATE_QUANTITY 0
-        # deletes it the same way while UPDATE_QUANTITY >1 duplicates it. A
-        # door key must be as protected from these as it already is from
-        # DROP/ADD. UPDATE_CONDITION never removes an item, so it stays
-        # unprotected.
-        if action.operation == "REMOVE" and self._is_door_key(entity.item.id):
-            return Rejected(action, self._keeps_keys())
-        if action.operation in ("UPDATE_CONDITION", "UPDATE_QUANTITY"):
-            try:
-                value = int(action.value)
-            except ValueError:
-                return Rejected(action, f"'{action.value}' is not a number.")
-            if action.operation == "UPDATE_QUANTITY" and self._is_door_key(entity.item.id):
-                if value < 1:
-                    return Rejected(action, self._keeps_keys())
-                if value > 1:
-                    return Rejected(
-                        action, f"{self._name} can't conjure a key; it has to be found."
-                    )
-        return Accepted(action, HeldItem(entity))
-
     # === Combat ===
 
     def _validate_attack(self, action: AttackAction) -> ValidationResult:
         manager = self.manager
-        if self._player_incapacitated():
-            return Rejected(action, f"{self._name} is in no state to attack anything.")
         zombie_target = self._zombie_target(action.target_name)
         if zombie_target is not None:
             return Accepted(action, zombie_target)
@@ -395,27 +351,6 @@ class ActionValidator:
         if not pool:
             return None
         return TargetZombie(pool[0].zombie_id, approach_minutes(pool[0].gap))
-
-    def _player_incapacitated(self) -> bool:
-        statuses = {s.casefold() for s in self.manager.narrative.player_status}
-        return bool(INCAPACITATING_STATUSES & statuses)
-
-    # === Status / conditions ===
-
-    def _validate_status_add(self, action: StatusAddAction) -> ValidationResult:
-        return Accepted(action)
-
-    def _validate_status_remove(self, action: StatusRemoveAction) -> ValidationResult:
-        if action.status not in self.manager.narrative.player_status:
-            return Rejected(action, f"Player did not have status '{action.status}'.")
-        return Accepted(action)
-
-    def _validate_update_condition(self, action: UpdateConditionAction) -> ValidationResult:
-        return Rejected(
-            action,
-            f"'{action.field_name}' is not something the narrator can set; "
-            "the engine moves survival stats with the clock.",
-        )
 
     # === Time ===
 
@@ -499,14 +434,6 @@ class ActionValidator:
             return Rejected(action, f"No such {action.horizon} goal: '{action.goal_text}'.")
         return Accepted(action)
 
-    # === Relationships ===
-
-    def _validate_update_relationship(self, action: UpdateRelationshipAction) -> ValidationResult:
-        npc = self.manager.resolve_npc(action.npc_name)
-        if npc is None:
-            return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        return Accepted(action, TargetNpc(npc))
-
     def _validate_add_relationship_note(
         self, action: AddRelationshipNoteAction
     ) -> ValidationResult:
@@ -515,71 +442,94 @@ class ActionValidator:
             return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
         return Accepted(action, TargetNpc(npc))
 
-    # === World flags ===
+    # === Talking to people ===
 
-    def _validate_set_flag(self, action: SetFlagAction) -> ValidationResult:
-        return Accepted(action)
+    def begin_turn(self) -> None:
+        self._talked_to.clear()
 
-    def _validate_discover_flag(self, action: DiscoverFlagAction) -> ValidationResult:
-        return Accepted(action)
+    def note_talked(self, npc_id: str) -> None:
+        self._talked_to.add(npc_id)
 
-    # === NPCs ===
-
-    def _validate_npc_move(self, action: NpcMoveAction) -> ValidationResult:
+    def _npc_here(self, name: str) -> NpcEntity | str:
+        """The NPC `name` points at if they are in the player's zone, else the refusal."""
         manager = self.manager
-        npc = manager.resolve_npc(action.npc_name)
+        npc = manager.resolve_npc(name)
         if npc is None:
-            return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        # Strict resolution only -- no connection directions, no
-        # whole-word fallback. NPCs have no free-text spot for a vague phrase
-        # to soft-land in, unlike the player's MOVE_TO.
-        location = manager.resolve_zone_exact(action.destination)
-        if location is None:
-            return Rejected(action, f"Unknown location: '{action.destination}'.")
-        # The apartment door is locked from the building side (see
-        # data/locations.py); nobody else has a key. An NPC can only be
-        # placed there while the player is home to let them in.
-        if location.id == "zone_home" and manager.player.current_location_id != "zone_home":
-            looks = manager.player.appearance
-            return Rejected(
-                action,
-                f"{self._name}'s apartment is locked; nobody gets in unless "
-                f"{looks.subject}'s there to let them in.",
-            )
-        return Accepted(action, NpcDestination(npc, location))
+            if ZOMBIE_ID_PATTERN.fullmatch(name.strip()) or self._names_a_zombie(name):
+                return f"{name.strip()} isn't listening."
+            return f"{name.strip()} isn't here."
+        if npc.current_location_id != manager.player.current_location_id:
+            return f"{npc.name} isn't here."
+        return npc
 
-    def _validate_npc_status(self, action: NpcStatusAction) -> ValidationResult:
-        npc = self.manager.resolve_npc(action.npc_name)
-        if npc is None:
-            return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
-        if action.operation not in ("ADD", "REMOVE"):
-            return Rejected(action, f"Unknown NPC_STATUS operation: '{action.operation}'.")
-        if action.operation == "REMOVE" and action.status not in npc.status:
-            return Rejected(action, f"{npc.name} did not have status '{action.status}'.")
+    def _validate_talk(self, action: TalkAction) -> ValidationResult:
+        npc = self._npc_here(action.npc_name)
+        if isinstance(npc, str):
+            return Rejected(action, npc)
+        if action.approach not in TALK_APPROACH_LABELS:
+            return Rejected(action, f"'{action.approach}' is not a way to talk.")
+        if npc.npc_id in self._talked_to:
+            return Rejected(action, f"{self._name} has already spoken to {npc.name} this turn.")
         return Accepted(action, TargetNpc(npc))
 
+    def _validate_give(self, action: GiveAction) -> ValidationResult:
+        npc = self._npc_here(action.npc_name)
+        if isinstance(npc, str):
+            return Rejected(action, npc)
+        entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
+        if entity is None:
+            return Rejected(action, f"No '{action.item_name}' in inventory to give.")
+        if self._is_door_key(entity.item.id):
+            return Rejected(action, self._keeps_keys())
+        return Accepted(action, NpcItem(npc, entity))
+
+    def _validate_ask(self, action: AskAction) -> ValidationResult:
+        npc = self._npc_here(action.npc_name)
+        if isinstance(npc, str):
+            return Rejected(action, npc)
+        match action.request:
+            case "follow" | "stay":
+                if action.request == "follow" and locked_out(self.manager, npc, "follow"):
+                    return Rejected(action, f"{npc.name} has already said no.")
+                return Accepted(action, TargetNpc(npc))
+            case "give":
+                entity = self.manager._find_item_entity(npc.inventory, action.argument)
+                if entity is None:
+                    return Rejected(action, f"{npc.name} has no {action.argument} to give.")
+                if locked_out(self.manager, npc, "give"):
+                    return Rejected(action, f"{npc.name} has already said no.")
+                if len(self.manager.player.inventory) >= self.manager.player.max_inventory_size:
+                    return Rejected(action, "Inventory is full.")
+                return Accepted(action, NpcItem(npc, entity))
+            case "about":
+                topic = TOPICS.get(action.argument)
+                if topic is None or topic not in visible_topics(self.manager, npc):
+                    return Rejected(action, f"{npc.name} has nothing to say about that.")
+                return Accepted(action, NpcTopic(npc, topic.topic_id))
+        return Rejected(action, f"'{action.request}' is not something to ask for.")
+
+    # === Noise ===
+
+    def _validate_shout(self, action: ShoutAction) -> ValidationResult:
+        return Accepted(action)
+
     _VALIDATORS = {
-        MoveAction: _validate_move,
-        StanceAction: _validate_stance,
-        TakeAction: _validate_take,
-        DropAction: _validate_drop,
-        WearAction: _validate_wear,
-        TakeOffAction: _validate_take_off,
-        AttackAction: _validate_attack,
-        UseItemAction: _validate_use_item,
-        WaitAction: _validate_wait,
-        SleepAction: _validate_sleep,
-        ExerciseAction: _validate_exercise,
-        StatusAddAction: _validate_status_add,
-        StatusRemoveAction: _validate_status_remove,
-        UpdateConditionAction: _validate_update_condition,
-        AddGoalAction: _validate_add_goal,
-        RemoveGoalAction: _validate_remove_goal,
-        UpdateRelationshipAction: _validate_update_relationship,
-        AddRelationshipNoteAction: _validate_add_relationship_note,
-        SetFlagAction: _validate_set_flag,
-        DiscoverFlagAction: _validate_discover_flag,
-        UpdateInventoryAction: _validate_update_inventory,
-        NpcMoveAction: _validate_npc_move,
-        NpcStatusAction: _validate_npc_status,
+        "MOVE_TO": _validate_move,
+        "STANCE": _validate_stance,
+        "TAKE": _validate_take,
+        "DROP": _validate_drop,
+        "WEAR": _validate_wear,
+        "TAKE_OFF": _validate_take_off,
+        "ATTACK": _validate_attack,
+        "USE_ITEM": _validate_use_item,
+        "WAIT": _validate_wait,
+        "SLEEP": _validate_sleep,
+        "EXERCISE": _validate_exercise,
+        "SHOUT": _validate_shout,
+        "TALK": _validate_talk,
+        "ASK": _validate_ask,
+        "GIVE": _validate_give,
+        "ADD_GOAL": _validate_add_goal,
+        "REMOVE_GOAL": _validate_remove_goal,
+        "ADD_RELATIONSHIP_NOTE": _validate_add_relationship_note,
     }

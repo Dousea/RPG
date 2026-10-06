@@ -10,14 +10,14 @@ from managers.simulation import SimulationCore
 from managers.zombies import MinuteReport
 from modules.action.types import (
     AddGoalAction,
+    AddRelationshipNoteAction,
     AttackAction,
     DropAction,
     Duration,
     MoveAction,
-    SetFlagAction,
     SleepAction,
+    StanceAction,
     TakeAction,
-    UpdateConditionAction,
     UseItemAction,
     WaitAction,
 )
@@ -101,8 +101,8 @@ class TimeCostTests(unittest.TestCase):
         spent = _spent(
             gm,
             AddGoalAction(horizon="short_term", goal_text="Find water"),
-            SetFlagAction(flag_name="x", value=True),
-            UpdateConditionAction(field_name="hunger", raw_value="-10"),
+            AddRelationshipNoteAction(npc_name="Emma", note="kind"),
+            StanceAction(sneaking=True),
         )
         self.assertEqual(spent, 0)
 
@@ -217,9 +217,7 @@ class StatTurnTests(unittest.TestCase):
 
     def test_a_refused_action_advances_no_stats(self):
         gm = GameManager()
-        facts = SimulationCore(gm).resolve(
-            [UpdateConditionAction(field_name="hunger", raw_value="0")]
-        )
+        facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")])
         self.assertTrue(facts[0].startswith("Refused:"))
         self.assertEqual(gm.player.stats.get(CharacterStat.HUNGER), 0)
 

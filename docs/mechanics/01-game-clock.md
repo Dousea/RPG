@@ -37,8 +37,8 @@ They live in `data/clock.py`, with the arithmetic over them.
 
 ## Actions
 
-`TIME_ADVANCE` is gone. The parser reports it as an unknown verb. Two verbs
-replace it.
+`TIME_ADVANCE` is gone. The parser refuses it as not an available action. Two
+verbs replace it.
 
 - `WAIT <duration>` passes time. It is capped at 24 hours per action.
 - `SLEEP [duration]` sleeps for at most the given duration, or with no duration
@@ -102,7 +102,7 @@ Further rules.
 
 Other rows named in `data/time_costs.py` (`SWING_MIN`, `QUICK_ACTION_MIN`,
 `WALK_TO_BARRIER_MIN`, `WINDOW_CLIMB_MIN`, `WEAR_MINUTES`, `TAKE_OFF_MINUTES`,
-`TALK_MIN`, `NONE_TURN_MIN`) are constants; each verb joins the table when its
+`TALK_TURN_MINUTES`, `NONE_TURN_MINUTES`) are constants; each verb joins the table when its
 mechanic lands.
 
 The turn's total becomes the last fact in the `[OUTCOMES]` block, so the
@@ -141,8 +141,8 @@ game starts.
 - `tests/test_game_manager.py`: every band boundary, the midnight roll, and
   `World.time` / `World.date`.
 - `tests/test_action.py` and `tests/test_validator.py`: every duration form,
-  malformed durations, the caps, `until` landing times, and `TIME_ADVANCE` as an
-  unknown verb.
+  malformed durations, the caps, `until` landing times, and `TIME_ADVANCE` as a
+  refused verb.
 - `tests/test_time_and_sleep.py`: each table cost, refused actions, the `NONE` turn,
   the summed-minutes fact and the edge cases.
 - `tests/test_persistence.py`: a round trip keeps `minutes`, and a v3 or v4 save

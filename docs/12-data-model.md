@@ -254,8 +254,7 @@ conditions: list[CharacterCondition] POISONED STUNNED BURNED FROZEN PANIC
 ```
 
 There is **no stack count**. N copies of an item are N `ItemEntity` instances,
-which is why `UPDATE_INVENTORY ... UPDATE_QUANTITY` adds or removes instances
-to reach a target rather than setting a number.
+which is why `GIVE` and `ASK ... give` move one instance at a time.
 
 Survival stats (hunger, thirst, fatigue and the rest) live in `PlayerEntity.stats`;
 see [survival stats](mechanics/02-survival-stats.md).

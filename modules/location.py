@@ -64,3 +64,5 @@ class World:
     last_redistribution_minute: int | None = None
     # Zombies killed in each zone; the zone's population never grows back over them.
     zombie_kills: dict[str, int] = field(default_factory=dict[str, int])
+    # Story beats that have fired, by id, with the game minute they fired (spec 10).
+    fired_beats: dict[str, int] = field(default_factory=dict[str, int])

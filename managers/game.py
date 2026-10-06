@@ -20,7 +20,6 @@ from managers.creation import new_player
 from managers.events import apply_event_modifiers, broadcast_event
 from managers.relationship import RelationshipManager
 from modules.character.build import CharacterBuild
-from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
@@ -28,6 +27,7 @@ from modules.event import AnyEvent
 from modules.location import Location, World
 from modules.modifier import AffinityModifier
 from modules.quest import QuestState
+from modules.social import SocialLog
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class NarrativeState:
     """
 
     minutes: int = 0
-    apocalypse_stage: str = "Normal"
+    social_log: SocialLog = field(default_factory=SocialLog)
     goals: dict[str, list[str]] = field(default_factory=lambda: {"short_term": [], "long_term": []})
     flags: dict[str, bool] = field(default_factory=dict[str, bool])
     # Flags the player has actually learned in the story, as opposed to ones
@@ -77,7 +77,6 @@ class NarrativeState:
     # narrator prompt (managers/context.py) -- doc 11's knowledge firewall
     # applied to world flags, not just relationship scores.
     discovered_flags: set[str] = field(default_factory=set[str])
-    player_status: list[str] = field(default_factory=list[str])
     # Defensive fallback only, never the normal path: actions are validated
     # and simulated *before* narration, so a refusal already reaches the
     # narrator as an [OUTCOMES] fact (managers/context.py). This holds the one
@@ -206,12 +205,23 @@ class GameManager:
 
     # === Lookup helpers ===
 
+    def outbreak_day(self) -> int | None:
+        """The day of the outbreak (1 on the day it began), or None before it."""
+        started = self.world.outbreak_started_at
+        if started is None:
+            return None
+        return self.narrative.day - day_number(started) + 1
+
     @property
     def current_location(self) -> Location:
         return self.world.locations[self.player.current_location_id]
 
     def npcs_in_location(self, location_id: str) -> list[NpcEntity]:
         return [npc for npc in self.npcs.values() if npc.current_location_id == location_id]
+
+    def move_npc(self, npc: NpcEntity, location: Location) -> None:
+        """Put an NPC in a zone. Checks nothing: callers apply the rules about who may go where."""
+        npc.current_location_id = location.id
 
     def resolve_npc(self, name: str) -> NpcEntity | None:
         """Resolve an NPC by display name or id, case-insensitively."""
@@ -262,18 +272,6 @@ class GameManager:
         if len(pending) < SUMMARY_THRESHOLD:
             return []
         return pending[:SUMMARY_THRESHOLD]
-
-    # === Action application ===
-    #
-    # State changes from proposed actions go through managers/validator.py and
-    # managers/simulation.py, before any prose exists.
-
-    @staticmethod
-    def _as_condition(name: str) -> CharacterCondition | None:
-        try:
-            return CharacterCondition(name.strip().casefold())
-        except ValueError:
-            return None
 
     # === Event pipeline ===
 

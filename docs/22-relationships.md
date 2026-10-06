@@ -42,7 +42,7 @@ if any one of them flips:
 
 - the starting values in `data/npcs.py` (`STARTING_RELATIONSHIPS`), seeded in
   `GameManager.__init__`;
-- the `UPDATE_RELATIONSHIP` action handler in `managers/game.py`;
+- the social resolvers in `managers/social.py`;
 - the disposition line the prompt builder writes for each NPC present.
 
 There is no enforcement of this convention in code. It is a convention.
@@ -61,11 +61,11 @@ would *rely* on them. The narrative layer moves them independently, which is the
 point: a survivor can be fond of Orton and still not hand him the keys, or
 depend on him professionally while resenting him.
 
-`UPDATE_RELATIONSHIP <npc> affection|trust <+/-N>` is the only way either value
-changes at present. Affection goes through an `AffinityModifier` (so it shares
-the path used by the trait/perk pipeline, see
-[document 23](23-traits-perks-modifiers.md)); trust goes through
-`adjust_trust` directly, because no modifier type carries trust yet.
+The model no longer chooses either value. `TALK`, `GIVE` and `ASK` move them, by
+amounts the engine owns: see [Talking to people](mechanics/10-llm-contract.md#talking-to-people).
+Affection goes through an `AffinityModifier` (so it shares the path used by the
+trait/perk pipeline, see [document 23](23-traits-perks-modifiers.md)); trust goes
+through `adjust_trust` directly, because no modifier type carries trust yet.
 
 ## Disposition is derived, never stored
 

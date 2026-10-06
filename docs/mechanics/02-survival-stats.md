@@ -86,9 +86,10 @@ death the clock still moves but the stats stay where they fell.
 
 ## LLM authority
 
-- `UPDATE_CONDITION` is still parsed, but the validator refuses every field
-  (hunger, thirst, morale, sleep, infection risk): "the engine moves survival
-  stats with the clock."
+- `UPDATE_CONDITION` is gone: the parser refuses it as not an available action
+  ([LLM contract](10-llm-contract.md#verbs)), so the model cannot set hunger,
+  thirst, morale, sleep or infection risk. The engine moves survival stats with
+  the clock.
 - `PlayerEntity.hunger`, `.thirst` and `.morale` are gone. The player has
   `stats` and `asleep`.
 - Only drivers and eating change stats. What eating does is in
@@ -320,7 +321,7 @@ the narrative `conditions` are gone. A save of any other version is discarded.
   exactly one fact per status effect change.
 - `tests/test_time_and_sleep.py`: stats advance per action, the sleep wake causes,
   death by thirst with its cause, and the clock stopping at the death chunk.
-- `tests/test_validator.py`: every `UPDATE_CONDITION` field refused, `SLEEP`
+- `tests/test_validator.py`: `SLEEP`
   refused at Panic level 1 and at Pain level 2, the open-sleep span.
 - `tests/test_persistence.py`: a round trip keeps `stats`, `asleep` and
   `fractional_hp_loss` exactly, and a v4 save is discarded.

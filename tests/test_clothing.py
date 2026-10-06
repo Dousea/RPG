@@ -310,14 +310,14 @@ class OutfitLineTests(unittest.TestCase):
 
     def test_the_parser_sees_worn_clothing(self):
         prompt = self.builder.build_parser_prompt("take off my jeans")
-        equipped = prompt.split("[EQUIPPED]")[1].split("[PLAYER INPUT]")[0]
+        equipped = prompt.split("[WORN]")[1].split("[CONDITION]")[0]
         self.assertIn("Jeans", equipped)
         self.assertIn("Hoodie", equipped)
 
     def test_the_parser_sees_carried_clothing(self):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_black_jacket"]))
         prompt = self.builder.build_parser_prompt("put on the jacket")
-        self.assertIn("Black jacket", prompt.split("[INVENTORY]")[1].split("[CONDITION]")[0])
+        self.assertIn("Black jacket", prompt.split("[INVENTORY]")[1].split("[WORN]")[0])
 
 
 if __name__ == "__main__":

@@ -15,10 +15,10 @@ from data.presets import ORTON
 from modules.body import BodyLocation
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
-from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
+from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM, npc_of
 from tests.test_simulation import LETHAL_ITEM
 
-MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nUPDATE_RELATIONSHIP Emma affection +12\nADD_GOAL short_term Find a weapon"
+MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
 MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
 
 
@@ -58,8 +58,8 @@ class TurnTests(EngineTestCase):
     def test_turn_records_the_event_in_both_tiers(self):
         self.engine.play("go out")
         memory = self.engine.game.memory
-        self.assertIn("Orton entered the building", memory.full_event_log)
-        self.assertIn("Orton entered the building", memory.recent_events)
+        self.assertTrue(memory.full_event_log[-1].startswith("Orton entered the building"))
+        self.assertEqual(memory.recent_events[0], memory.full_event_log[-1])
 
     def test_turn_reindexes_memory(self):
         self.engine.play("go out")
@@ -90,7 +90,6 @@ class TurnTests(EngineTestCase):
         self.assertIsNotNone(reloaded)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
         self.assertIn("Find a weapon", reloaded.narrative.goals["short_term"])
-        self.assertEqual(reloaded.relationship_manager.get_affinity("npc_emma", "player"), 12)
 
     def test_snapshot_shape(self):
         result = self.engine.play("go out")
@@ -297,7 +296,9 @@ class FailureTests(EngineTestCase):
         result = self.engine.play("go out")
         self.assertEqual(result["story_text"], "You walk out into the building.")
         self.assertEqual(self.engine.game.memory.summaries, [])
-        self.assertIn("Orton entered the building", self.engine.game.memory.full_event_log)
+        self.assertTrue(
+            self.engine.game.memory.full_event_log[-1].startswith("Orton entered the building")
+        )
 
 
 class LifecycleTests(EngineTestCase):
@@ -409,3 +410,79 @@ class DeathPersistenceTests(EngineTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MemoryFactsTests(EngineTestCase):
+    """Spec 10, Memory and Plans."""
+
+    def test_each_event_log_entry_is_the_event_then_the_turns_facts(self):
+        self.engine.play("go out")
+        entry = self.engine.game.memory.full_event_log[-1]
+        self.assertTrue(entry.startswith("Orton entered the building (Facts: "), entry)
+        self.assertTrue(entry.endswith("About 10 minutes pass.)"), entry)
+        self.assertIn("Move to Your Building", entry)
+        self.assertIn("Find a weapon", entry)
+
+    def test_the_recent_buffer_carries_the_same_entry(self):
+        self.engine.play("go out")
+        memory = self.engine.game.memory
+        self.assertEqual(memory.recent_events[0], memory.full_event_log[-1])
+
+    def test_refused_lines_are_facts_in_the_entry(self):
+        self.llm.actions = "ACTIONS:\nFROBNICATE the widget"
+        self.engine.play("do something weird")
+        entry = self.engine.game.memory.full_event_log[-1]
+        self.assertIn("(Facts: Refused: 'FROBNICATE the widget'", entry)
+
+    def test_a_turn_of_only_refused_lines_costs_no_time(self):
+        self.llm.actions = "ACTIONS:\nFROBNICATE the widget"
+        self.engine.play("do something weird")
+        self.assertEqual(self.engine.game.narrative.minutes, 0)
+
+    def test_a_none_turn_costs_one_minute(self):
+        self.llm.actions = "ACTIONS:\nNONE"
+        self.engine.play("look around")
+        self.assertEqual(self.engine.game.narrative.minutes, 1)
+        self.assertTrue(
+            self.engine.game.memory.full_event_log[-1].endswith("(Facts: About 1 minute passes.)")
+        )
+
+    def test_the_narrator_failure_records_the_facts_verbatim(self):
+        self.llm.error = None
+
+        def failing(prompt: str) -> str:
+            raise LLMError("narrator offline")
+
+        engine_module.llm.query_narrator = failing
+        self.engine.play("go out")
+        entry = self.engine.game.memory.full_event_log[-1]
+        self.assertNotIn("(Facts:", entry)
+        self.assertIn("About 10 minutes pass.", entry)
+
+
+class PayloadTests(EngineTestCase):
+    """Spec 10, What the player sees."""
+
+    def test_outbreak_day_is_none_before_the_outbreak(self):
+        state = self.engine.state()
+        self.assertIsNone(state["outbreak_day"])
+        self.assertNotIn("apocalypse_stage", state)
+
+    def test_outbreak_day_counts_from_one(self):
+        manager = self.engine.game
+        manager.advance_clock(2760)
+        manager.world.outbreak_started_at = 2760
+        self.assertEqual(self.engine.state()["outbreak_day"], 1)
+        manager.advance_clock(1440)
+        self.assertEqual(self.engine.state()["outbreak_day"], 2)
+
+    def test_each_npc_carries_following(self):
+        manager = self.engine.game
+        manager.player.current_location_id = "zone_building"
+        npc_of(manager, "Emma").following = True
+        by_name = {npc["name"]: npc for npc in self.engine.state()["npcs"]}
+        self.assertIs(by_name["Emma"]["following"], True)
+        self.assertIs(by_name["Marcus"]["following"], False)
+
+    def test_the_payload_drops_the_player_status_list(self):
+        self.assertNotIn("status_effects", self.engine.state())

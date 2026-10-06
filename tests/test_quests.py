@@ -2,20 +2,18 @@
 
 import unittest
 
-from adapters.llm import PARSER_SYSTEM_PROMPT
 from data.items import ITEMS
-from data.quests import NPC_STATUSES, STORY_FLAGS, build_starting_quests
+from data.quests import build_starting_quests
 from managers.game import GameManager
+from managers.simulation import SimulationCore
 from modules.action.types import (
+    AddGoalAction,
     AttackAction,
-    DiscoverFlagAction,
     MoveAction,
-    NpcStatusAction,
-    SetFlagAction,
     TakeAction,
 )
 from modules.quest import QuestState, QuestStatus
-from tests.support import resolve_actions
+from tests.support import adjust_regard, resolve_actions
 
 
 class QuestAdvancementTests(unittest.TestCase):
@@ -25,12 +23,12 @@ class QuestAdvancementTests(unittest.TestCase):
             quest_id="find_the_bunker",
             objectives=["discover:bunker_location"],
         )
-        facts = resolve_actions(gm, DiscoverFlagAction(flag_name="bunker_location"))
+        note = SimulationCore(gm).discover_flag("bunker_location")
 
         quest = gm.quests["find_the_bunker"]
         self.assertEqual(quest.status, QuestStatus.COMPLETED)
         self.assertIn("discover:bunker_location", quest.completed_objectives)
-        self.assertIn("completed", facts[0])
+        self.assertIn("completed", note)
 
     def test_defeating_an_npc_completes_a_matching_objective(self):
         gm = GameManager()
@@ -72,36 +70,36 @@ class QuestAdvancementTests(unittest.TestCase):
             quest_id="marcus_likes_me",
             objectives=["npc_status:npc_marcus:trusts_player"],
         )
-        resolve_actions(
-            gm, NpcStatusAction(npc_name="Marcus", operation="ADD", status="trusts_player")
-        )
+        adjust_regard(gm, "npc_marcus", trust=40)
+        resolve_actions(gm, AddGoalAction(horizon="short_term", goal_text="Rest"))
         self.assertEqual(gm.quests["marcus_likes_me"].status, QuestStatus.COMPLETED)
 
     def test_a_quest_with_multiple_objectives_needs_all_of_them(self):
         gm = GameManager()
         gm.quests["multi"] = QuestState(quest_id="multi", objectives=["discover:a", "discover:b"])
-        resolve_actions(gm, DiscoverFlagAction(flag_name="a"))
+        core = SimulationCore(gm)
+        core.discover_flag("a")
         self.assertEqual(gm.quests["multi"].status, QuestStatus.ACTIVE)
 
-        resolve_actions(gm, DiscoverFlagAction(flag_name="b"))
+        core.discover_flag("b")
         self.assertEqual(gm.quests["multi"].status, QuestStatus.COMPLETED)
 
     def test_unrelated_actions_do_not_touch_unrelated_quests(self):
         gm = GameManager()
         gm.quests["unrelated"] = QuestState(quest_id="unrelated", objectives=["discover:x"])
-        resolve_actions(gm, SetFlagAction(flag_name="y", value=True))
+        SimulationCore(gm).discover_flag("y")
         self.assertEqual(gm.quests["unrelated"].status, QuestStatus.ACTIVE)
         self.assertEqual(gm.quests["unrelated"].completed_objectives, [])
 
     def test_a_completed_quest_is_not_reopened_by_repeated_discovery(self):
         gm = GameManager()
         gm.quests["once"] = QuestState(quest_id="once", objectives=["discover:x"])
-        resolve_actions(gm, DiscoverFlagAction(flag_name="x"))
+        core = SimulationCore(gm)
+        core.discover_flag("x")
         self.assertEqual(gm.quests["once"].status, QuestStatus.COMPLETED)
 
         # Discovering it again must not re-fire the completion note or crash.
-        facts = resolve_actions(gm, DiscoverFlagAction(flag_name="x"))
-        self.assertNotIn("completed", facts[0])
+        self.assertNotIn("completed", core.discover_flag("x"))
 
 
 class StartingQuestContentTests(unittest.TestCase):
@@ -137,26 +135,6 @@ class StartingQuestContentTests(unittest.TestCase):
                 elif objective.startswith("npc_status:"):
                     npc_id = objective.removeprefix("npc_status:").split(":", 1)[0]
                     self.assertIn(npc_id, self.gm.npcs)
-
-    def test_flag_and_status_objectives_reference_the_declared_vocabulary(self):
-        # The one check the id-namespace tests above cannot make for us.
-        # Flag names and NPC statuses come from whatever the parser model
-        # invents, so an objective keyed on a name the parser was never
-        # taught is unwinnable with nothing to catch it -- STORY_FLAGS /
-        # NPC_STATUSES exist to close that namespace, and this asserts the
-        # roster stays inside it.
-        for quest in build_starting_quests().values():
-            for objective in quest.objectives:
-                if objective.startswith("discover:"):
-                    self.assertIn(objective.removeprefix("discover:"), STORY_FLAGS)
-                elif objective.startswith("npc_status:"):
-                    status = objective.removeprefix("npc_status:").split(":", 1)[1]
-                    self.assertIn(status, NPC_STATUSES)
-
-    def test_the_parser_is_taught_every_declared_name(self):
-        # The vocabulary is only useful if it actually reaches the model.
-        for name in (*STORY_FLAGS, *NPC_STATUSES):
-            self.assertIn(name, PARSER_SYSTEM_PROMPT)
 
     def test_a_new_game_starts_with_the_seeded_quests_active(self):
         for quest_id, quest in self.gm.quests.items():

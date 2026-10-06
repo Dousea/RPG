@@ -9,11 +9,12 @@ the LLM interprets intent and writes prose; it never decides state.
 """
 
 import logging
+import re
 
 import requests
 
 import config
-from data.quests import NPC_STATUSES, STORY_FLAGS
+from data.time_costs import MAX_PLAN_ACTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -23,24 +24,13 @@ LM_STUDIO_URL = config.llm.base_url
 MODEL_NAME = config.llm.model_name
 
 
-def _vocabulary_lines(vocabulary: dict[str, str]) -> str:
-    return "".join(f"  {name} -- {when}\n" for name, when in sorted(vocabulary.items()))
+_VERB_LINE = re.compile(r"^- ([A-Z_]+)\b", re.MULTILINE)
 
 
-# Built from data/quests.py rather than written out here, so a quest keyed on
-# a story flag can't drift away from the name the parser was taught. These are
-# static names, not game state -- no firewall concern (the parser learns that
-# the flag *exists*, never whether it is set; see ContextBuilder).
-STORY_VOCABULARY = (
-    "STORY VOCABULARY: the game tracks these exact names. When the input "
-    "clearly matches one, use the name spelled exactly as given -- a near "
-    "miss is silently ignored by the engine. Any other name is fine for an "
-    "incidental fact, but these are the ones that matter.\n"
-    "DISCOVER_FLAG names:\n"
-    f"{_vocabulary_lines(STORY_FLAGS)}"
-    "NPC_STATUS names:\n"
-    f"{_vocabulary_lines(NPC_STATUSES)}"
-)
+def listed_verbs(prompt: str) -> list[str]:
+    """The verbs a parser prompt lists, in order."""
+    return _VERB_LINE.findall(prompt)
+
 
 PARSER_SYSTEM_PROMPT = (
     "You are the intent parser for a text-based zombie apocalypse RPG. The "
@@ -53,38 +43,20 @@ PARSER_SYSTEM_PROMPT = (
     "'look around', propose NONE -- looking is not an action that changes "
     "anything. Never invent an action they did not ask for, and never propose "
     "an outcome (damage numbers, how an NPC reacts) -- only the action "
-    "itself; the engine decides what happens.\n\n"
+    "itself; the engine decides what happens. Use only names the blocks list: "
+    "items, zones, NPCs, zombie ids.\n\n"
     "Respond with ONLY an actions block, in this exact format:\n\n"
     "ACTIONS:\n"
-    "[List any game actions implied by the input, one per line. Available actions:]\n"
-    "- TAKE item_name\n"
-    "- DROP item_name\n"
-    "- WEAR item_name (a carried garment; refused if something is already there)\n"
-    "- TAKE_OFF item_name (a worn garment)\n"
-    "- MOVE_TO zone_name, in/out, or a specific spot (e.g. 'the kitchen'); add 'run' "
-    "at the end to run\n"
-    "- STANCE sneak/stand (start or stop moving quietly)\n"
-    "- ATTACK target_name (a zombie id from [THREATS], or 'zombie' for the nearest)\n"
-    "- USE_ITEM item_name\n"
-    "- EXERCISE exercise_name [10-60 minutes, in steps of 10] (from [EXERCISES])\n"
-    "- WAIT duration (10m, 2h, 1h30m, until night, until 14:30)\n"
-    "- SLEEP [duration]\n"
-    "- STATUS_ADD status_name\n"
-    "- STATUS_REMOVE status_name\n"
-    "- ADD_GOAL short_term/long_term goal_text\n"
-    "- REMOVE_GOAL short_term/long_term goal_text\n"
-    "- UPDATE_RELATIONSHIP npc_name affection/trust +/-number\n"
-    "- ADD_RELATIONSHIP_NOTE npc_name note_text\n"
-    "- SET_FLAG flag_name true/false\n"
-    "- DISCOVER_FLAG flag_name (the character has just learned this world fact)\n"
-    "- UPDATE_INVENTORY item_name ADD/REMOVE/UPDATE_CONDITION/UPDATE_QUANTITY value\n"
-    "- NPC_MOVE npc_name TO zone_name\n"
-    "- NPC_STATUS npc_name ADD/REMOVE status_name\n"
-    "[If no actions are implied, write: NONE]\n\n"
-    "Note: there is no action for dealing or taking damage directly, and no "
-    "way to set health -- ATTACK is how combat starts; the engine computes "
-    "the result.\n\n"
-    f"{STORY_VOCABULARY}\n"
+    "[List any game actions implied by the input, one per line, at most "
+    f"{MAX_PLAN_ACTIONS}, each starting with a verb from [AVAILABLE ACTIONS]. "
+    "If no actions are implied, write: NONE]\n\n"
+    "Everything the character says to an NPC is one TALK. Pick the approach "
+    "that fits; the engine decides what it is worth. ASK 'give <item>' names an "
+    "item the NPC holds; ASK 'about <topic>' names a topic listed under that NPC "
+    "in [NPCS HERE].\n\n"
+    "Note: there is no action for dealing or taking damage directly, for "
+    "setting health, stats, flags or relationships, or for moving other "
+    "characters -- the engine does all of that.\n\n"
     "Example:\n"
     "Input: 'I grab the water bottle and head out'\n"
     "ACTIONS:\n"
@@ -105,17 +77,34 @@ NARRATOR_SYSTEM_PROMPT = (
     "- Allow downtime: conversations, bonding, vulnerability, arguments\n"
     "- Present choices but allow custom responses\n"
     "- Romance should evolve naturally based on character interactions\n\n"
+    "The blocks run from memory to the present. [DEEP MEMORY], [SUMMARY OF PAST EVENTS] "
+    "and [RECENT EVENTS] are the past; everything after them is how things stand now. "
+    "When memory and the current blocks disagree, the current blocks win. In memory, "
+    "facts in parentheses are true; the rest of an entry is only someone's account.\n\n"
     "[OUTCOMES] tells you exactly what happened this turn -- movement, combat, "
-    "item use, everything the engine already decided before you were asked to "
-    "write anything. Narrate what is there. Never contradict it, never invent "
-    "your own HP/inventory/combat numbers, and never describe something "
-    "labeled 'Refused' as having succeeded -- write around it instead. If "
-    "[OUTCOMES] says the character has died, narrate their death as final -- this is "
-    "the end of the story, not a setback they recover from -- and write "
-    "OPTIONS: NONE\n\n"
-    "[THREATS] lists the zombies the character can see or hear, by id, how far "
-    "off and what each is doing. Describe only those; never invent a zombie that "
-    "is not listed, and never give one a number.\n\n"
+    "item use, talk, everything the engine already decided before you were asked to "
+    "write anything. Narrate what is there. Never contradict it and never invent "
+    "your own HP, inventory or combat numbers. RULES:\n"
+    "- Anything marked 'Refused' did not happen; write around it. An interrupted "
+    "action stops where its fact says, and what the fact says was cancelled never "
+    "happens.\n"
+    "- Zombies: every zombie in the prose is in [THREATS]; never invent one and never "
+    "give one a number. Before the outbreak nobody on screen is one of the walking "
+    "dead; rumours and news are fine.\n"
+    "- Corpses: every body in the prose is in [CORPSES] and is dead until an "
+    "[OUTCOMES] fact says it rises.\n"
+    "- People: every person present is in [NPCS PRESENT]. Others can be remembered or "
+    "mentioned, never met.\n"
+    "- Items: the character holds only what [CHARACTER]'s Inventory, Equipment and "
+    "Wearing say. Nothing appears in anyone's hands that those lines do not put there.\n"
+    "- NPC reactions follow the reaction fact and the bands: a talk that 'seems "
+    "unmoved' is not a breakthrough, and one where someone 'bristles' is not a warm "
+    "moment.\n"
+    "- NPC knowledge: an NPC states facts about the world only from the blocks. A "
+    "topic's fact is said only when [OUTCOMES] says it was told. Opinions, feelings and "
+    "small talk are yours to write.\n"
+    "- If [OUTCOMES] says the character has died, narrate their death as final -- "
+    "this is the end of the story, not a setback -- and write OPTIONS: NONE\n\n"
     "[QUESTS] lists what the character is currently working toward. Use it for "
     "motivation and flavor -- you may not declare a quest objective complete "
     "yourself; that only happens through [OUTCOMES].\n\n"
@@ -157,7 +146,8 @@ NARRATOR_SYSTEM_PROMPT = (
 
 SUMMARIZER_SYSTEM_PROMPT = (
     "You are a story summarizer. Condense the following events into a single, "
-    "concise narrative paragraph."
+    "concise narrative paragraph. Facts in parentheses, such as '(Facts: ...)', are "
+    "true and win over the rest of an entry; keep them and never contradict them."
 )
 
 

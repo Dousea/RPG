@@ -1,10 +1,16 @@
-"""The typed actions the parser LLM may propose, as the validator and simulation see them."""
+"""The typed actions the parser LLM may propose, as the validator and simulation see them.
+
+Each action names its verb (`verb`), the key into `modules.action.parser.VERBS` and the
+validator and resolver tables.
+"""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 @dataclass
 class MoveAction:
+    verb: ClassVar[str] = "MOVE_TO"
     destination: str
     run: bool = False
 
@@ -13,36 +19,43 @@ class MoveAction:
 class StanceAction:
     """Start or stop sneaking; takes no time."""
 
+    verb: ClassVar[str] = "STANCE"
     sneaking: bool
 
 
 @dataclass
 class TakeAction:
+    verb: ClassVar[str] = "TAKE"
     item_name: str
 
 
 @dataclass
 class DropAction:
+    verb: ClassVar[str] = "DROP"
     item_name: str
 
 
 @dataclass
 class WearAction:
+    verb: ClassVar[str] = "WEAR"
     item_name: str
 
 
 @dataclass
 class TakeOffAction:
+    verb: ClassVar[str] = "TAKE_OFF"
     item_name: str
 
 
 @dataclass
 class AttackAction:
+    verb: ClassVar[str] = "ATTACK"
     target_name: str
 
 
 @dataclass
 class UseItemAction:
+    verb: ClassVar[str] = "USE_ITEM"
     item_name: str
 
 
@@ -61,6 +74,7 @@ class Duration:
 
 @dataclass
 class WaitAction:
+    verb: ClassVar[str] = "WAIT"
     duration: Duration
 
 
@@ -68,6 +82,7 @@ class WaitAction:
 class SleepAction:
     """`duration` is None for sleeping until woken."""
 
+    verb: ClassVar[str] = "SLEEP"
     duration: Duration | None = None
 
 
@@ -75,86 +90,63 @@ class SleepAction:
 class ExerciseAction:
     """`minutes` is None for the default."""
 
+    verb: ClassVar[str] = "EXERCISE"
     exercise_name: str
     minutes: int | None = None
 
 
 @dataclass
-class StatusAddAction:
-    status: str
+class ShoutAction:
+    """A shout into the world; it takes no time of its own."""
+
+    verb: ClassVar[str] = "SHOUT"
 
 
 @dataclass
-class StatusRemoveAction:
-    status: str
+class TalkAction:
+    """Say something to an NPC in one of the closed `TALK` approaches."""
+
+    verb: ClassVar[str] = "TALK"
+    npc_name: str
+    approach: str
 
 
 @dataclass
-class UpdateConditionAction:
-    """Parsed but always refused: the engine owns every survival stat."""
+class AskAction:
+    """A request of an NPC; `argument` is the item for `give`, the topic for `about`."""
 
-    field_name: str
-    raw_value: str
+    verb: ClassVar[str] = "ASK"
+    npc_name: str
+    request: str
+    argument: str = ""
+
+
+@dataclass
+class GiveAction:
+    verb: ClassVar[str] = "GIVE"
+    item_name: str
+    npc_name: str
 
 
 @dataclass
 class AddGoalAction:
+    verb: ClassVar[str] = "ADD_GOAL"
     horizon: str
     goal_text: str
 
 
 @dataclass
 class RemoveGoalAction:
+    verb: ClassVar[str] = "REMOVE_GOAL"
     horizon: str
     goal_text: str
 
 
 @dataclass
-class UpdateRelationshipAction:
-    npc_name: str
-    axis: str
-    amount: int
-
-
-@dataclass
 class AddRelationshipNoteAction:
+    verb: ClassVar[str] = "ADD_RELATIONSHIP_NOTE"
     npc_name: str
     note: str
-
-
-@dataclass
-class SetFlagAction:
-    flag_name: str
-    value: bool
-
-
-@dataclass
-class DiscoverFlagAction:
-    """The player has learned a world flag's state, whatever it is. Setting a
-    flag (engine ground truth) and discovering it (player knowledge) are
-    separate actions -- see docs/11-knowledge-firewall.md."""
-
-    flag_name: str
-
-
-@dataclass
-class UpdateInventoryAction:
-    item_name: str
-    operation: str  # ADD / REMOVE / UPDATE_CONDITION / UPDATE_QUANTITY
-    value: str
-
-
-@dataclass
-class NpcMoveAction:
-    npc_name: str
-    destination: str
-
-
-@dataclass
-class NpcStatusAction:
-    npc_name: str
-    operation: str  # ADD / REMOVE
-    status: str
 
 
 AnyAction = (
@@ -169,16 +161,11 @@ AnyAction = (
     | WaitAction
     | SleepAction
     | ExerciseAction
-    | StatusAddAction
-    | StatusRemoveAction
-    | UpdateConditionAction
+    | ShoutAction
+    | TalkAction
+    | AskAction
+    | GiveAction
     | AddGoalAction
     | RemoveGoalAction
-    | UpdateRelationshipAction
     | AddRelationshipNoteAction
-    | SetFlagAction
-    | DiscoverFlagAction
-    | UpdateInventoryAction
-    | NpcMoveAction
-    | NpcStatusAction
 )

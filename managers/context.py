@@ -18,14 +18,18 @@ from data.items import ITEMS, item_condition_word, wetness_word
 from data.names import SKIN_TONE_WORDS
 from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
+from data.social import TALK_APPROACHES
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from data.traits import TRAITS
 from managers.climate import describe_weather
 from managers.game import GameManager
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
+from managers.story import visible_topics
 from managers.zombies import threat_views
+from modules.action.parser import SceneKey, available_verbs
 from modules.entity.item import ItemEntity
+from modules.item import ClothingItem
 from modules.quest import QuestStatus
 
 
@@ -116,6 +120,8 @@ class ContextBuilder:
                 f" - {npc.name}{f' ({npc.age})' if npc.age is not None else ''}: {npc.description}"
             )
             lines.append(f"   Disposition: {disposition} (trust: {trust_level})")
+            if npc.following:
+                lines.append(f"   Following {self._name}")
             if npc.status:
                 lines.append(f"   Status: {', '.join(npc.status)}")
             if npc.personality:
@@ -145,12 +151,24 @@ class ContextBuilder:
             return "(Nothing to correct)"
         return "\n".join(f" - {correction}" for correction in corrections)
 
-    def _condition_section(self) -> str:
-        """Every status effect at level 1 or above, by name and level; never a raw stat."""
-        active = active_status_effects(self.manager.player)
-        if not active:
-            return "Fine"
-        return ", ".join(f"{name} ({level}/{STATUS_EFFECT_MAX_LEVEL})" for _, level, name in active)
+    def _condition_section(self, *, narrator: bool = False) -> str:
+        """Every status effect at level 1 or above, by name and level, and what the body is doing.
+
+        Never a raw stat. The narrator also hears whether the character sleeps and any
+        condition an item put on them.
+        """
+        player = self.manager.player
+        parts = [
+            f"{name} ({level}/{STATUS_EFFECT_MAX_LEVEL})"
+            for _, level, name in active_status_effects(player)
+        ]
+        if narrator and player.asleep:
+            parts.append("asleep")
+        if player.sneaking:
+            parts.append("sneaking")
+        if narrator:
+            parts.extend(condition.value for condition in player.conditions)
+        return ", ".join(parts) or "Fine"
 
     def _threats_section(self) -> str:
         """The zombies the player perceives, by id, distance and what they are doing."""
@@ -184,12 +202,8 @@ class ContextBuilder:
         return "\n".join(f" - {fact}" for fact in outcome_facts)
 
     def _discovered_flags_section(self) -> str:
-        """Only flags the player has actually discovered -- doc 11's complaint was
-        that every world flag went out unfiltered regardless of whether
-        anything in the story had ever revealed it to the player. A flag
-        becomes visible here only once a `DISCOVER_FLAG` action has marked it
-        as such; setting a flag's value and discovering it are separate acts,
-        so the engine can hold ground truth the player doesn't know yet."""
+        """Only flags the player has discovered, so the engine can hold ground truth the
+        player doesn't know yet: setting a flag and discovering it are separate acts."""
         narrative = self.manager.narrative
         visible = {
             name: value
@@ -226,7 +240,6 @@ class ContextBuilder:
 
     def _character_section(self) -> str:
         player = self.manager.player
-        narrative = self.manager.narrative
         equipment = (
             f" - {slot.name}: {_with_condition(entity) if entity else 'None'}"
             for slot, entity in player.equipment.items()
@@ -242,8 +255,6 @@ Occupation: {self._occupation_line()}
 Appearance: {self._appearance_line()}
 Backstory: {looks.backstory or "None"}
 Skills: {self._skills_line()}
-Conditions: {", ".join(condition.name for condition in player.conditions) or "None"}
-Status: {", ".join(narrative.player_status) or "None"}
 Goals: {self._goals_line() or "None"}
 Inventory: {_lines(f" - {_with_condition(entity)}" for entity in player.inventory) or "Empty"}
 Equipment: {_lines(equipment) or "None"}
@@ -275,6 +286,38 @@ Traits: {_lines(trait_lines) or "None"}
         )
         return f"{names}\nCarrying: {' and '.join(items) or 'nothing to lift'}"
 
+    def scene_keys(self) -> frozenset[SceneKey]:
+        """The kinds of thing the scene holds, from the same state the blocks render."""
+        manager = self.manager
+        player = manager.player
+        keys: set[SceneKey] = set()
+        goals = manager.narrative.goals
+        if any(goals.values()):
+            keys.add("goals")
+        if manager._ground_items():
+            keys.add("items_here")
+        if player.inventory:
+            keys.add("carried")
+        if any(isinstance(entity.item, ClothingItem) for entity in player.inventory):
+            keys.add("wearable_carried")
+        if self._worn_section() != "Nothing":
+            keys.add("worn")
+        if manager.npcs_in_location(player.current_location_id):
+            keys.add("npcs_here")
+        if any(view.zombie_id is not None for view in threat_views(manager)):
+            keys.add("threats")
+        return frozenset(keys)
+
+    def _available_actions_section(self) -> str:
+        """The verbs the scene lists, each with its argument kinds, gloss and closed labels."""
+        lines: list[str] = []
+        for verb in available_verbs(self.scene_keys()):
+            kinds = "".join(f" <{kind}>" for kind in verb.target_kinds)
+            lines.append(f"- {verb.name}{kinds} -- {verb.gloss}")
+            if verb.name == "TALK":
+                lines.extend(f"  {label}: {row.gloss}" for label, row in TALK_APPROACHES.items())
+        return "\n".join(lines)
+
     def _outfit_line(self) -> str:
         """Worn items outer to inner, with a wetness word for damp ones, never a number."""
         pieces = []
@@ -295,13 +338,11 @@ Traits: {_lines(trait_lines) or "None"}
 
     def _location_section(self) -> str:
         manager = self.manager
-        narrative = manager.narrative
         return f"""
 Current Location: {manager.current_location.name}
 Specific spot: {manager.player.current_place or "(nowhere in particular)"}
 Description: {manager.current_location.description}
-Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
-Apocalypse Stage: {narrative.apocalypse_stage}
+Sheltered: {"yes" if manager.current_location.indoors else "no"}
 Flags: {self._discovered_flags_section()}
 """
 
@@ -311,6 +352,42 @@ Flags: {self._discovered_flags_section()}
             return "(No relevant memories surfaced)"
         return _lines(f" - {memory}" for memory in deep_memories)
 
+    def _outbreak_line(self) -> str:
+        day = self.manager.outbreak_day()
+        return "before the outbreak" if day is None else f"outbreak day {day}"
+
+    def _time_and_weather_section(self) -> str:
+        manager = self.manager
+        narrative = manager.narrative
+        looks = manager.player.appearance
+        return f"""Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {manager.world.date}
+It is {self._outbreak_line()}.
+(The weather outside, in words. When {self._name} is sheltered, rain and wind do not
+reach {looks.object}, though {looks.subject} can still hear them.)
+{self._weather_section()}"""
+
+    def _parser_npcs_section(self) -> str:
+        """NPC names, whether each follows the player, and what each can be asked about."""
+        manager = self.manager
+        npcs = manager.npcs_in_location(manager.player.current_location_id)
+        if not npcs:
+            return "No one else is here."
+        lines: list[str] = []
+        for npc in npcs:
+            lines.append(f" - {npc.name}{' (following you)' if npc.following else ''}")
+            held = ", ".join(entity.item.name for entity in npc.inventory)
+            if held:
+                lines.append(f"   Holds: {held}")
+            for topic in visible_topics(manager, npc):
+                lines.append(f"   Topic {topic.topic_id}: {topic.gloss}")
+        return "\n".join(lines)
+
+    def _worn_section(self) -> str:
+        player = self.manager.player
+        worn = [entity.item.name for entity in player.equipment.values() if entity is not None]
+        worn += [entity.item.name for _, entity in player.worn_outer_to_inner()]
+        return ", ".join(worn) if worn else "Nothing"
+
     # === Parser prompt ===
 
     def build_parser_prompt(self, player_input: str) -> str:
@@ -318,23 +395,16 @@ Flags: {self._discovered_flags_section()}
 
         The parser only needs to know what is reachable/visible right now to
         propose actions -- it does not narrate, so it gets none of the prose
-        context (memory, summaries, disposition bands) the narrator needs.
+        context (memory, summaries, relationship bands) the narrator needs.
         """
         manager = self.manager
         player = manager.player
         inventory_str = (
             "\n".join(f" - {entity.item.name}" for entity in player.inventory) or "Empty"
         )
-        equipped = [entity.item.name for entity in player.equipment.values() if entity is not None]
-        equipped += [entity.item.name for _, entity in player.worn_outer_to_inner()]
-        equipped_str = ", ".join(equipped) if equipped else "Nothing"
-        npc_names = ", ".join(
-            npc.name for npc in manager.npcs_in_location(player.current_location_id)
-        )
-
         looks = player.appearance
         return f"""[CHARACTER]
-{player.name} ({looks.subject}/{looks.object}), {self._occupation_line()}. Say "{looks.subject}" and "{looks.object}", never "they", for this character.
+{player.name} ({looks.subject}/{looks.object}). Say "{looks.subject}" and "{looks.object}", never "they", for this character.
 
 [LOCATION]
 {manager.current_location.name}: {manager.current_location.description}
@@ -357,10 +427,16 @@ door rather than refusing the move.)
 {self._current_items_section().rstrip()}
 
 [NPCS HERE]
-{npc_names if npc_names else "No one else is here."}
+{self._parser_npcs_section()}
+
+[THREATS]
+{self._parser_threats_section()}
 
 [INVENTORY]
 {inventory_str}
+
+[WORN]
+{self._worn_section()}
 
 [CONDITION]
 {self._condition_section()}
@@ -368,14 +444,11 @@ door rather than refusing the move.)
 [WEATHER]
 {self._weather_section()}
 
-[THREATS]
-{self._parser_threats_section()}
-
-[EQUIPPED]
-{equipped_str}
-
 [EXERCISES]
 {self._exercise_section()}
+
+[AVAILABLE ACTIONS]
+{self._available_actions_section()}
 
 [PLAYER INPUT]
 {player_input}"""
@@ -390,39 +463,34 @@ door rather than refusing the move.)
     ) -> str:
         """Assemble the full LLM prompt for the narrator call.
 
-        `outcome_facts` are what the Action Validator and Simulation Core
-        already decided this turn -- movement, combat, item use, everything
-        doc 01 says the engine must be authoritative over. The narrator
-        describes them; it does not decide them. `deep_memories` are
-        semantically retrieved past events supplied by the memory layer.
+        Memory comes first, so current state and this turn's outcomes, which come
+        later, win. `outcome_facts` are what the Action Validator and Simulation Core
+        already decided this turn; the narrator describes them and decides nothing.
+        `deep_memories` are semantically retrieved past events supplied by the memory layer.
         """
-        looks = self.manager.player.appearance
         return f"""[CHARACTER]
 {self._character_section()}
-
-[CONDITION]
-({self._name}'s body and mood right now, as levels out of 4. Describe them; do not
-give them numbers.)
-{self._condition_section()}
 
 [DEEP MEMORY]
 (Past events recalled as relevant to what the player just did)
 
 {self._deep_memory_section(deep_memories)}
 
+[SUMMARY OF PAST EVENTS]
+(A narrative overview of the long-term past)
+
+{self._summary_section().rstrip()}
+
+[RECENT EVENTS]
+(What just happened; facts in parentheses are true and win over the rest)
+
+{self._events_section().rstrip()}
+
+[TIME AND WEATHER]
+{self._time_and_weather_section()}
+
 [CURRENT LOCATION]
 {self._location_section()}
-
-[WEATHER]
-(The weather outside, in words. When {self._name} is sheltered, rain and wind do not
-reach {looks.object}, though {looks.subject} can still hear them.)
-{self._weather_section()}
-
-[THREATS]
-(The zombies {self._name} can see or hear, and what each is doing. Describe only
-these; never invent a zombie that is not listed, and never give a zombie a
-number.)
-{self._threats_section()}
 
 [ITEMS IN CURRENT LOCATION]
 
@@ -436,20 +504,21 @@ number.)
 
 {self._npcs_present_section().rstrip()}
 
+[THREATS]
+(The zombies {self._name} can see or hear, and what each is doing. Describe only
+these; never invent a zombie that is not listed, and never give a zombie a
+number.)
+{self._threats_section()}
+
+[CONDITION]
+({self._name}'s body and mood right now, as levels out of 4. Describe them; do not
+give them numbers.)
+{self._condition_section(narrator=True)}
+
 [QUESTS]
 (What {self._name} is currently working toward, engine-tracked. [x] is complete.)
 
 {self._quests_section().rstrip()}
-
-[SUMMARY OF PAST EVENTS]
-(A narrative overview of the long-term past)
-
-{self._summary_section().rstrip()}
-
-[RECENT EVENTS]
-(What just happened)
-
-{self._events_section().rstrip()}
 
 [OUTCOMES]
 (What actually happened this turn, already decided by the engine. Narrate

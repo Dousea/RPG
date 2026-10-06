@@ -1,6 +1,6 @@
 # Knowledge, Visibility, and Information Security
 
-> **Status: Partial.** Two filters now exist, in `managers/context.py`: relationship scores are banded, never sent as integers, and world flags only reach the narrator once a `DISCOVER_FLAG` action has separately marked them discovered. The knowledge *model* below — world truth split from per-actor knowledge — still does not exist as a general mechanism: `NpcEntity.knowledge` is a real field now (see [document 12](12-data-model.md)), but nothing reads it yet, since there is no dialogue system to gate against it. See the *As Implemented* section at the end for what is and is not filtered, and [Implementation Status](00-status.md).
+> **Status: Partial.** Two filters now exist, in `managers/context.py`: relationship scores are banded, never sent as integers, and world flags only reach the narrator once the engine has separately marked them discovered (a topic told, or a story beat). The knowledge *model* below — world truth split from per-actor knowledge — still does not exist as a general mechanism: `NpcEntity.knowledge` is a real field now (see [document 12](12-data-model.md)), but nothing reads it yet, since there is no dialogue system to gate against it. See the *As Implemented* section at the end for what is and is not filtered, and [Implementation Status](00-status.md).
 
 Separate world truth from knowledge.
 
@@ -68,8 +68,8 @@ being re-invented by each consumer.
 **World flags only leave once discovered.** `NarrativeState.flags` is the
 engine's ground truth; `NarrativeState.discovered_flags` is a separate set,
 and `ContextBuilder._discovered_flags_section` only renders a flag that is in
-both. Setting a flag's value (`SET_FLAG`) and marking it known to the player
-(`DISCOVER_FLAG`) are two different actions, so the engine can hold a fact
+both. Setting a flag's value and marking it known to the player (a topic an NPC
+tells, or a story beat) are two different steps, so the engine can hold a fact
 that is simulation-true before the story has revealed it — the case this
 document's example (`traveler_is_heir`) is actually about.
 

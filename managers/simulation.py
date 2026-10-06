@@ -11,24 +11,30 @@ prompt describes. The narrator is never the source of truth for anything in
 this list; it only puts prose around facts the engine already decided.
 """
 
+import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from data import exercises as ex_k
 from data import skills as skill_k
 from data import status_effects, survival
 from data import thermal as thermal_k
+from data import zombie_lore as lore_k
 from data.exercises import find_exercise
-from data.items import item_condition_word
+from data.npcs import TRUSTS_PLAYER, TRUSTS_PLAYER_BANDS
+from data.story_beats import STORY_BEATS, Beat
 from data.thermal import Metabolic
 from data.time_costs import (
+    MAX_PLAN_ACTIONS,
     MULTIPLIED_ACTIONS,
-    NONE_TURN_MIN,
+    NONE_TURN_MINUTES,
     SWING_MIN,
     WALK_TO_BARRIER_MIN,
     action_minutes,
     zone_hop_minutes,
 )
+from data.topics import TOPICS
 from managers.climate import weather_change_facts
 from managers.combat import UNARMED_WEAPON, equipped_weapon, roll_damage
 from managers.events import broadcast_event
@@ -36,6 +42,7 @@ from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.noise import Sound, cough_sound
 from managers.skills import SkillEngine, skill_levels
+from managers.social import SocialManager
 from managers.stats.drivers import StatContext
 from managers.stats.engine import StatsEngine
 from managers.stats.status_effects import (
@@ -45,6 +52,7 @@ from managers.stats.status_effects import (
     player_status_effect_levels,
     status_effect_level,
 )
+from managers.story import clock_minutes, holds
 from managers.thermoregulator import attack_metabolic
 from managers.validator import Accepted, ActionValidator, Rejected
 from managers.zombies import PlayerMinute, ZombieLoop, enter_zone, start_outbreak
@@ -52,29 +60,17 @@ from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
+    AskAction,
     AttackAction,
-    DiscoverFlagAction,
-    DropAction,
     ExerciseAction,
+    GiveAction,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
     RemoveGoalAction,
-    SetFlagAction,
-    SleepAction,
     StanceAction,
-    StatusAddAction,
-    StatusRemoveAction,
-    TakeAction,
-    TakeOffAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
-    UseItemAction,
+    TalkAction,
     WaitAction,
-    WearAction,
 )
-from modules.effect import AnyStoryEffect, StartOutbreakEffect
-from modules.entity.item import ItemEntity
+from modules.action.words import describe_action
 from modules.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
@@ -94,14 +90,23 @@ from modules.resolution import (
     MoveBlocked,
     MoveToSpot,
     MoveToZone,
-    NewItem,
-    NpcDestination,
+    NpcItem,
+    NpcTopic,
     ShuffleInZone,
     TargetNpc,
     TargetZombie,
     TimeSpan,
 )
 from modules.stats import CharacterStat, StatusEffect
+from modules.story import (
+    AddNpcStatus,
+    DiscoverFlag,
+    Effect,
+    MoveNpc,
+    RemoveNpcStatus,
+    SetFlag,
+    StartOutbreak,
+)
 from modules.weather import WeatherSample
 
 
@@ -115,8 +120,12 @@ def _span_words(minutes: int) -> str:
     return " ".join(parts)
 
 
-INTERRUPTED_PLAN_FACT = "The rest of the plan is dropped."
+logger = logging.getLogger(__name__)
+
+SOCIAL_ACTIONS = (TalkAction, AskAction, GiveAction)
+TOO_MANY_ACTIONS_FACT = "Too much at once; {name} does the first five things."
 INTERRUPTED_BY_ATTACK = "attacked"
+INTERRUPTED_BY_BEAT = "story beat"
 
 
 @dataclass(frozen=True)
@@ -140,6 +149,7 @@ class SimulationCore:
         manager: GameManager,
         validator: ActionValidator | None = None,
         rng: random.Random | None = None,
+        beats: dict[str, Beat] | None = None,
     ):
         self.manager = manager
         self.validator = validator if validator is not None else ActionValidator(manager)
@@ -153,6 +163,10 @@ class SimulationCore:
         self._loop = ZombieLoop(manager, self._rng, self.skill_engine)
         self._interruption = ""
         self._pending_sounds: list[Sound] = []
+        self._beats = beats if beats is not None else STORY_BEATS
+        self._shouted = False
+        self._spoke = False
+        self._social = SocialManager(manager, self._rng)
 
     @property
     def _name(self) -> str:
@@ -162,7 +176,7 @@ class SimulationCore:
     def _subject(self) -> str:
         return self.manager.player.appearance.subject
 
-    def resolve(self, actions: list[AnyAction]) -> list[str]:
+    def resolve(self, actions: list[AnyAction], *, refused: int = 0) -> list[str]:
         """Validate and resolve each action in order, one at a time.
 
         Order matters within a turn: an earlier action can change whether a
@@ -172,14 +186,22 @@ class SimulationCore:
         already resolved -- never against one upfront snapshot of the whole
         list, which would reject "move north, take crowbar" because the
         crowbar wasn't reachable before the move happened.
+
+        `refused` counts the lines the parser already refused: a turn with no
+        actions and none of those is a `NONE` turn and costs a minute.
         """
         facts: list[str] = []
         total_minutes = 0
-        if not actions:
-            spent, stat_facts = self._spend(NONE_TURN_MIN)
+        self._shouted = False
+        self._spoke = False
+        self.validator.begin_turn()
+        if not actions and not refused:
+            spent, stat_facts = self._spend(NONE_TURN_MINUTES)
             total_minutes += spent
             facts.extend(stat_facts)
-        for index, action in enumerate(actions):
+        if len(actions) > MAX_PLAN_ACTIONS:
+            facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
+        for index, action in enumerate(actions[:MAX_PLAN_ACTIONS]):
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
                 facts.append(f"Refused: {type(result.action).__name__} -- {result.reason}")
@@ -188,25 +210,117 @@ class SimulationCore:
             action_facts, minutes = self._resolve_one(result)
             facts.extend(action_facts)
             total_minutes += minutes
+            if not self.manager.narrative.game_over:
+                facts.extend(self._after_action())
             if self._interruption:
-                if index + 1 < len(actions):
-                    facts.append(INTERRUPTED_PLAN_FACT)
+                cancelled = [describe_action(a) for a in actions[index + 1 : MAX_PLAN_ACTIONS]]
+                if cancelled:
+                    facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
                 break
+        if self._shouted and not total_minutes and not self.manager.narrative.game_over:
+            spent, stat_facts = self._spend(NONE_TURN_MINUTES)
+            total_minutes += spent
+            facts.extend(stat_facts)
         if total_minutes:
             facts.append(_minutes_fact(total_minutes))
         return facts
 
-    def apply_story_effect(self, effect: AnyStoryEffect) -> None:
-        """Apply an effect a story beat fires."""
-        if isinstance(effect, StartOutbreakEffect):
-            manager = self.manager
-            start_outbreak(
-                manager.world,
-                manager.narrative.minutes,
-                manager.player.current_location_id,
-                self._rng,
-            )
-            self._loop.forget_visible()
+    def discover_flag(self, flag: str) -> str:
+        """Mark a world flag as known to the player; returns any quest progress it caused."""
+        narrative = self.manager.narrative
+        narrative.flags.setdefault(flag, True)
+        narrative.discovered_flags.add(flag)
+        return self._advance_quests(f"discover:{flag}")
+
+    def apply_story_effect(self, effect: Effect) -> str:
+        """Apply an effect a story beat fires; returns any quest progress it caused."""
+        manager = self.manager
+        match effect:
+            case StartOutbreak():
+                start_outbreak(
+                    manager.world,
+                    manager.narrative.minutes,
+                    manager.player.current_location_id,
+                    self._rng,
+                )
+                self._loop.forget_visible()
+            case SetFlag(flag=flag):
+                manager.narrative.flags[flag] = True
+            case DiscoverFlag(flag=flag):
+                return self.discover_flag(flag)
+            case MoveNpc(npc_id=npc_id, zone_id=zone_id):
+                npc = manager.npcs.get(npc_id)
+                zone = manager.world.locations.get(zone_id)
+                if npc is None or zone is None:
+                    logger.warning(f"Beat effect moves unknown NPC or zone: {npc_id}, {zone_id}.")
+                else:
+                    manager.move_npc(npc, zone)
+            case AddNpcStatus(npc_id=npc_id, status=status):
+                npc = manager.npcs.get(npc_id)
+                if npc is not None and status not in npc.status:
+                    npc.status.append(status)
+                    return self._advance_quests(f"npc_status:{npc_id}:{status}")
+            case RemoveNpcStatus(npc_id=npc_id, status=status):
+                npc = manager.npcs.get(npc_id)
+                if npc is not None and status in npc.status:
+                    npc.status.remove(status)
+        return ""
+
+    def _fire_beats(self, *, clock_only: bool) -> list[str]:
+        """Fire every unfired beat whose condition now holds.
+
+        Beats with a clock condition are checked at minute boundaries (`clock_only`);
+        after each resolved action every unfired beat is, which also catches a clock
+        beat whose minute passed in a turn that spent no time.
+        """
+        manager = self.manager
+        facts: list[str] = []
+        for beat in self._beats.values():
+            if beat.beat_id in manager.world.fired_beats:
+                continue
+            if (clock_only and not clock_minutes(beat.when)) or not holds(beat.when, manager):
+                continue
+            manager.world.fired_beats[beat.beat_id] = manager.narrative.minutes
+            facts.append(beat.fact)
+            for effect in beat.effects:
+                note = self.apply_story_effect(effect)
+                if note:
+                    facts.append(note)
+            if beat.interrupts:
+                self._interruption = INTERRUPTED_BY_BEAT
+        return facts
+
+    def _next_clock_beat_in(self) -> int | None:
+        """Minutes until the nearest unfired clock beat, or None."""
+        now = self.manager.narrative.minutes
+        due = [
+            minute - now
+            for beat in self._beats.values()
+            if beat.beat_id not in self.manager.world.fired_beats
+            for minute in clock_minutes(beat.when)
+            if minute > now
+        ]
+        return min(due, default=None)
+
+    def _derive_statuses(self) -> list[str]:
+        """Recompute `trusts_player` from each NPC's trust band; returns quest progress facts."""
+        facts: list[str] = []
+        relationships = self.manager.relationship_manager
+        player_id = self.manager.player.entity_id
+        for npc in self.manager.npcs.values():
+            band = relationships.get_trust_level(npc.npc_id, player_id)
+            earned = band in TRUSTS_PLAYER_BANDS
+            if earned and TRUSTS_PLAYER not in npc.status:
+                npc.status.append(TRUSTS_PLAYER)
+                note = self._advance_quests(f"npc_status:{npc.npc_id}:{TRUSTS_PLAYER}")
+                if note:
+                    facts.append(note)
+            elif not earned and TRUSTS_PLAYER in npc.status:
+                npc.status.remove(TRUSTS_PLAYER)
+        return facts
+
+    def _after_action(self) -> list[str]:
+        return [*self._derive_statuses(), *self._fire_beats(clock_only=False)]
 
     def _action_time_multiplier(self) -> float:
         """Pain, mood and cold slow timed actions; 1 until the health spec lands."""
@@ -227,6 +341,7 @@ class SimulationCore:
         location = manager.current_location
         return StatContext(
             asleep=asleep,
+            talking=isinstance(action, SOCIAL_ACTIONS),
             resting=isinstance(action, WaitAction),
             exercising=isinstance(action, AttackAction) or exerting or pace == Pace.RUN,
             walking=isinstance(action, MoveAction),
@@ -293,6 +408,9 @@ class SimulationCore:
         self._zombies_seen_this_chunk = 0
         while spent < minutes and not self._interruption:
             block = min(survival.MAX_CHUNK_MINUTES, minutes - spent)
+            beat_in = self._next_clock_beat_in()
+            if beat_in is not None:
+                block = min(block, beat_in)
             ran, seen, exerting, loop_facts = self._zombie_minutes(block, asleep, motion)
             facts.extend(loop_facts)
             self._zombies_seen_this_chunk += seen
@@ -313,6 +431,7 @@ class SimulationCore:
             advanced = self.stats_engine.minutes_advanced
             manager.advance_clock(advanced)
             spent += advanced
+            facts.extend(self._fire_beats(clock_only=True))
             self._pending_sounds.extend(self._coughs(stat_facts))
             if self.stats_engine.death_cause:
                 facts[-1] = self._check_player_death(self.stats_engine.death_cause)
@@ -348,6 +467,7 @@ class SimulationCore:
                 swing_target=motion.swing_target,
             )
             sounds, self._pending_sounds = self._pending_sounds, []
+            self._shouted = False
             report = self._loop.run_minute(manager.narrative.minutes + ran, minute, sounds)
             ran += 1
             seen += report.new_seen
@@ -380,10 +500,6 @@ class SimulationCore:
 
     def _resolve_one(self, accepted: Accepted) -> tuple[list[str], int]:
         """Resolve one accepted action; returns its facts and the minutes it took."""
-        if isinstance(accepted.action, SleepAction):
-            return self._resolve_sleep(accepted)
-        if isinstance(accepted.action, ExerciseAction):
-            return self._resolve_exercise(accepted)
         if isinstance(accepted.resolved, TargetZombie):
             return self._resolve_zombie_attack(accepted)
         if isinstance(accepted.action, MoveAction):
@@ -391,14 +507,21 @@ class SimulationCore:
                 self.manager.player.sneaking = False
             if isinstance(accepted.resolved, MoveToZone | MoveBlocked):
                 return self._resolve_walk(accepted)
-        handler = self._RESOLVERS.get(type(accepted.action))
+        handler = self._RESOLVERS.get(accepted.action.verb)
         if handler is None:
-            return [f"No resolver registered for {type(accepted.action).__name__}."], 0
+            return [f"No resolver registered for {accepted.action.verb}."], 0
+        self._skill_facts = []
+        result = handler(self, accepted)
+        if isinstance(result, tuple):
+            return result
+        lines = [result] if isinstance(result, str) else result
         minutes = action_minutes(accepted.action, accepted.resolved)
         if isinstance(accepted.action, MULTIPLIED_ACTIONS):
             minutes = round(minutes * self._action_time_multiplier())
-        self._skill_facts = []
-        facts = [self._check_player_death(handler(self, accepted)), *self._skill_facts]
+        if isinstance(accepted.action, SOCIAL_ACTIONS):
+            minutes = 0 if self._spoke else minutes
+            self._spoke = True
+        facts = [self._check_player_death(lines[0]), *lines[1:], *self._skill_facts]
         spent = 0
         if minutes:
             spent, stat_facts = self._spend(minutes, accepted.action)
@@ -466,6 +589,20 @@ class SimulationCore:
         fact = self._walk_fact(resolved, origin_id, interrupted)
         return [self._check_player_death(fact), *spend_facts], spent
 
+    def _enter_zone(self, zone_id: str) -> None:
+        """Put the player in a zone; every follower who was with them arrives at once."""
+        manager = self.manager
+        player = manager.player
+        followers = [
+            npc
+            for npc in manager.npcs.values()
+            if npc.following and npc.current_location_id == player.current_location_id
+        ]
+        player.current_location_id = zone_id
+        player.current_place = ""
+        for npc in followers:
+            manager.move_npc(npc, manager.world.locations[zone_id])
+
     def _walk_hop(self, zone_id: str, action: AnyAction, pace: Pace) -> tuple[int, list[str]]:
         """One hop: the first minutes in the zone being left, the last one in the new zone.
 
@@ -475,15 +612,13 @@ class SimulationCore:
         player = manager.player
         motion = Motion(pace)
         if not self._loop.active():
-            player.current_location_id = zone_id
-            player.current_place = ""
+            self._enter_zone(zone_id)
             return self._spend(zone_hop_minutes(pace), action, motion=motion)
         spent, facts = self._spend(zone_hop_minutes(pace) - 1, action, motion=motion)
         if self._interruption or manager.narrative.game_over:
             return spent, facts
         previous_id = player.current_location_id
-        player.current_location_id = zone_id
-        player.current_place = ""
+        self._enter_zone(zone_id)
         enter_zone(manager.world, zone_id, previous_id, self._rng)
         last, last_facts = self._spend(1, action, motion=motion)
         return spent + last, [*facts, *last_facts]
@@ -612,34 +747,6 @@ class SimulationCore:
         player.food_eaten_timer = min(status_effects.FOOD_EATEN_CAP, player.food_eaten_timer + fed)
         return level_change_facts(self._name, before, player_status_effect_levels(player))
 
-    def _resolve_update_inventory(self, accepted: Accepted) -> str:
-        manager = self.manager
-        action: UpdateInventoryAction = accepted.action
-
-        if action.operation == "ADD":
-            item = accepted.expect(NewItem).item
-            manager.player.inventory.append(ItemEntity(item=item))
-            return f"Added {item.name} to inventory."
-
-        entity = accepted.expect(HeldItem).entity
-        if action.operation == "REMOVE":
-            manager.player.inventory.remove(entity)
-            return f"Removed {entity.item.name} from inventory."
-        if action.operation == "UPDATE_CONDITION":
-            entity.hit_points = int(action.value)
-            return f"{entity.item.name} is now {item_condition_word(entity)}."
-
-        # UPDATE_QUANTITY: N copies of an item are N entities; adjust the
-        # count to match the target, capped by remaining inventory room.
-        target_quantity = int(action.value)
-        matching = [e for e in manager.player.inventory if e.item.id == entity.item.id]
-        while len(matching) > target_quantity:
-            manager.player.inventory.remove(matching.pop())
-        room = manager.player.max_inventory_size - len(manager.player.inventory)
-        for _ in range(min(target_quantity - len(matching), room)):
-            manager.player.inventory.append(ItemEntity(item=entity.item))
-        return f"{entity.item.name} quantity is now {target_quantity}."
-
     # === Combat ===
 
     def _resolve_zombie_attack(self, accepted: Accepted) -> tuple[list[str], int]:
@@ -731,7 +838,51 @@ class SimulationCore:
         elif isinstance(modifier, ReputationModifier):
             self.manager.relationship_manager.apply_reputation_modifier(modifier)
 
-    # === World state (goals / flags / relationships / NPCs / status / time) ===
+    # === Talking to people ===
+
+    def _resolve_talk(self, accepted: Accepted) -> list[str]:
+        action = accepted.action
+        assert isinstance(action, TalkAction)
+        npc = accepted.expect(TargetNpc).npc
+        self.validator.note_talked(npc.npc_id)
+        return self._social.talk(npc, action.approach)
+
+    def _resolve_give(self, accepted: Accepted) -> list[str]:
+        gift = accepted.expect(NpcItem)
+        return self._social.give(gift.entity, gift.npc)
+
+    def _resolve_ask(self, accepted: Accepted) -> list[str]:
+        action = accepted.action
+        assert isinstance(action, AskAction)
+        match action.request:
+            case "follow":
+                return self._social.ask_follow(accepted.expect(TargetNpc).npc)
+            case "stay":
+                return self._social.ask_stay(accepted.expect(TargetNpc).npc)
+            case "give":
+                request = accepted.expect(NpcItem)
+                return self._social.ask_give(request.npc, request.entity)
+            case "about":
+                asked = accepted.expect(NpcTopic)
+                facts, flag = self._social.ask_about(asked.npc, TOPICS[asked.topic_id])
+                note = self.discover_flag(flag) if flag else ""
+                return [*facts, *([note] if note else [])]
+        return [f"{self._name} asks about something, and nothing comes of it."]
+
+    # === Noise ===
+
+    def _resolve_shout(self, accepted: Accepted) -> str:
+        """A shout is a world sound; the zombie loop hears it in the next minute it runs."""
+        radius, volume = (
+            (lore_k.SHOUT_SNEAK_RADIUS, lore_k.SHOUT_SNEAK_VOLUME)
+            if self.manager.player.sneaking
+            else (lore_k.SHOUT_RADIUS, lore_k.SHOUT_VOLUME)
+        )
+        self._pending_sounds.append(Sound(radius=radius, volume=volume))
+        self._shouted = True
+        return f"{self._name} shouts."
+
+    # === World state (goals / relationships) ===
 
     def _resolve_add_goal(self, accepted: Accepted) -> str:
         action: AddGoalAction = accepted.action
@@ -745,80 +896,11 @@ class SimulationCore:
         self.manager.narrative.goals[action.horizon].remove(action.goal_text)
         return f"Removed {action.horizon} goal: {action.goal_text}."
 
-    def _resolve_set_flag(self, accepted: Accepted) -> str:
-        action: SetFlagAction = accepted.action
-        self.manager.narrative.flags[action.flag_name] = action.value
-        return f"Flag '{action.flag_name}' is now {action.value}."
-
-    def _resolve_discover_flag(self, accepted: Accepted) -> str:
-        action: DiscoverFlagAction = accepted.action
-        self.manager.narrative.discovered_flags.add(action.flag_name)
-        value = self.manager.narrative.flags.get(action.flag_name)
-        return self._with_quest_note(
-            f"Discovered flag '{action.flag_name}' (currently {value}).",
-            f"discover:{action.flag_name}",
-        )
-
-    def _resolve_update_relationship(self, accepted: Accepted) -> str:
-        action: UpdateRelationshipAction = accepted.action
-        npc = accepted.expect(TargetNpc).npc
-        manager = self.manager
-        relationships = manager.relationship_manager
-        player_id = manager.player.entity_id
-        if action.axis == "affection":
-            relationships.apply_affinity_modifier(
-                AffinityModifier(source_id=npc.npc_id, target_id=player_id, amount=action.amount)
-            )
-            disposition = relationships.get_disposition(npc.npc_id, player_id)
-            return f"{npc.name} now feels {disposition} toward {self._name}."
-        relationships.adjust_trust(npc.npc_id, player_id, action.amount)
-        trust = relationships.get_trust_level(npc.npc_id, player_id)
-        return f"{npc.name}'s trust in {self._name} is now {trust}."
-
     def _resolve_add_relationship_note(self, accepted: Accepted) -> str:
         action: AddRelationshipNoteAction = accepted.action
         npc = accepted.expect(TargetNpc).npc
         npc.notes = f"{npc.notes}; {action.note}" if npc.notes else action.note
         return f"Noted about {npc.name}: {action.note}"
-
-    def _resolve_npc_move(self, accepted: Accepted) -> str:
-        destination = accepted.expect(NpcDestination)
-        npc, location = destination.npc, destination.location
-        npc.current_location_id = location.id
-        return f"{npc.name} moved to {location.name}."
-
-    def _resolve_npc_status(self, accepted: Accepted) -> str:
-        action: NpcStatusAction = accepted.action
-        npc = accepted.expect(TargetNpc).npc
-        if action.operation == "ADD":
-            if action.status not in npc.status:
-                npc.status.append(action.status)
-            return self._with_quest_note(
-                f"{npc.name} is now '{action.status}'.",
-                f"npc_status:{npc.npc_id}:{action.status}",
-            )
-        # No quest note on REMOVE: see _advance_quests -- progress is one-way.
-        npc.status.remove(action.status)
-        return f"{npc.name} is no longer '{action.status}'."
-
-    def _resolve_status_add(self, accepted: Accepted) -> str:
-        action: StatusAddAction = accepted.action
-        manager = self.manager
-        condition = manager._as_condition(action.status)
-        if condition is not None and condition not in manager.player.conditions:
-            manager.player.conditions.append(condition)
-        if action.status not in manager.narrative.player_status:
-            manager.narrative.player_status.append(action.status)
-        return f"Added status '{action.status}'."
-
-    def _resolve_status_remove(self, accepted: Accepted) -> str:
-        action: StatusRemoveAction = accepted.action
-        manager = self.manager
-        condition = manager._as_condition(action.status)
-        if condition is not None and condition in manager.player.conditions:
-            manager.player.conditions.remove(condition)
-        manager.narrative.player_status.remove(action.status)
-        return f"Removed status '{action.status}'."
 
     def _resolve_wait(self, accepted: Accepted) -> str:
         span = accepted.expect(TimeSpan)
@@ -901,6 +983,8 @@ class SimulationCore:
         if self.manager.narrative.game_over:
             return ""
         player = self.manager.player
+        if self._interruption == INTERRUPTED_BY_BEAT:
+            return f"{self._name} is startled awake."
         if self._zombies_seen_this_chunk > 0 or self._interruption:
             panic = self._rng.uniform(
                 survival.SLEEP_INTERRUPTION_PANIC_MIN, survival.SLEEP_INTERRUPTION_PANIC_MAX
@@ -923,26 +1007,25 @@ class SimulationCore:
             return f"{self._name} wakes fully rested."
         return ""
 
-    _RESOLVERS = {
-        MoveAction: _resolve_move,
-        StanceAction: _resolve_stance,
-        TakeAction: _resolve_take,
-        DropAction: _resolve_drop,
-        WearAction: _resolve_wear,
-        TakeOffAction: _resolve_take_off,
-        AttackAction: _resolve_attack,
-        UseItemAction: _resolve_use_item,
-        WaitAction: _resolve_wait,
-        SleepAction: _resolve_sleep,
-        StatusAddAction: _resolve_status_add,
-        StatusRemoveAction: _resolve_status_remove,
-        AddGoalAction: _resolve_add_goal,
-        RemoveGoalAction: _resolve_remove_goal,
-        UpdateRelationshipAction: _resolve_update_relationship,
-        AddRelationshipNoteAction: _resolve_add_relationship_note,
-        SetFlagAction: _resolve_set_flag,
-        DiscoverFlagAction: _resolve_discover_flag,
-        UpdateInventoryAction: _resolve_update_inventory,
-        NpcMoveAction: _resolve_npc_move,
-        NpcStatusAction: _resolve_npc_status,
+    _RESOLVERS: dict[
+        str, Callable[["SimulationCore", Accepted], str | list[str] | tuple[list[str], int]]
+    ] = {
+        "MOVE_TO": _resolve_move,
+        "STANCE": _resolve_stance,
+        "TAKE": _resolve_take,
+        "DROP": _resolve_drop,
+        "WEAR": _resolve_wear,
+        "TAKE_OFF": _resolve_take_off,
+        "ATTACK": _resolve_attack,
+        "USE_ITEM": _resolve_use_item,
+        "WAIT": _resolve_wait,
+        "SLEEP": _resolve_sleep,
+        "EXERCISE": _resolve_exercise,
+        "SHOUT": _resolve_shout,
+        "TALK": _resolve_talk,
+        "ASK": _resolve_ask,
+        "GIVE": _resolve_give,
+        "ADD_GOAL": _resolve_add_goal,
+        "REMOVE_GOAL": _resolve_remove_goal,
+        "ADD_RELATIONSHIP_NOTE": _resolve_add_relationship_note,
     }

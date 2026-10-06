@@ -37,6 +37,8 @@ class NpcEntity(BaseEntity):
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     base_max_hit_points: int = 100
+    # Walks with the player: arrives with them whenever they change zone (spec 10).
+    following: bool = False
 
     @property
     def max_hit_points(self) -> int:

@@ -10,6 +10,8 @@ from adapters.save import files
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from modules.action.types import AnyAction
+from modules.entity.npc import NpcEntity
+from modules.modifier import AffinityModifier
 
 
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
@@ -28,6 +30,23 @@ def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     for action, fact in zip(actions, facts, strict=False):
         assert not fact.startswith("Refused:"), f"setup action {action!r} failed: {fact}"
     return facts
+
+
+def npc_of(gm: GameManager, name: str) -> NpcEntity:
+    """The NPC called `name`; a test that names someone who does not exist fails here."""
+    npc = gm.resolve_npc(name)
+    assert npc is not None, name
+    return npc
+
+
+def adjust_regard(gm: GameManager, npc_id: str, affection: int = 0, trust: int = 0) -> None:
+    """Move how an NPC regards the player, bypassing the verbs that normally earn it."""
+    relationships = gm.relationship_manager
+    player_id = gm.player.entity_id
+    relationships.apply_affinity_modifier(
+        AffinityModifier(source_id=npc_id, target_id=player_id, amount=affection)
+    )
+    relationships.adjust_trust(npc_id, player_id, trust)
 
 
 class FakeMemory:

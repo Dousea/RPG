@@ -2,15 +2,18 @@
 
 import unittest
 
-from adapters.llm import parse_action_response, parse_narrator_response
+from adapters.llm import (
+    NARRATOR_SYSTEM_PROMPT,
+    SUMMARIZER_SYSTEM_PROMPT,
+    parse_action_response,
+    parse_narrator_response,
+)
 
 
 class ParseActionResponseTests(unittest.TestCase):
     def test_well_formed_response(self):
-        lines = parse_action_response(
-            "ACTIONS:\nMOVE_TO hallway\nUPDATE_RELATIONSHIP Emma affection +1"
-        )
-        self.assertEqual(lines, ["MOVE_TO hallway", "UPDATE_RELATIONSHIP Emma affection +1"])
+        lines = parse_action_response("ACTIONS:\nMOVE_TO hallway\nADD_RELATIONSHIP_NOTE Emma kind")
+        self.assertEqual(lines, ["MOVE_TO hallway", "ADD_RELATIONSHIP_NOTE Emma kind"])
 
     def test_none_is_kept_as_a_line(self):
         # modules.action.parser.parse_action_plan is what actually treats NONE as
@@ -124,3 +127,30 @@ class ParseNarratorResponseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PromptRuleTests(unittest.TestCase):
+    """Spec 10, What the narrator must not do and Memory."""
+
+    def test_the_narrator_is_told_refused_means_it_did_not_happen(self):
+        self.assertIn("Refused", NARRATOR_SYSTEM_PROMPT)
+        self.assertIn("did not happen", NARRATOR_SYSTEM_PROMPT)
+
+    def test_the_narrator_may_only_use_listed_zombies_corpses_and_people(self):
+        for block in ("[THREATS]", "[CORPSES]", "[NPCS PRESENT]"):
+            self.assertIn(block, NARRATOR_SYSTEM_PROMPT)
+
+    def test_the_narrator_is_told_state_wins_over_memory(self):
+        self.assertIn("current blocks win", NARRATOR_SYSTEM_PROMPT)
+        self.assertIn("facts in parentheses are true", NARRATOR_SYSTEM_PROMPT)
+
+    def test_a_topic_is_said_only_when_outcomes_says_it_was_told(self):
+        self.assertIn("only when [OUTCOMES] says it was told", NARRATOR_SYSTEM_PROMPT)
+
+    def test_the_narrator_prompt_has_no_stale_story_tools(self):
+        for word in ("UPDATE_", "SET_FLAG", "Orton"):
+            self.assertNotIn(word, NARRATOR_SYSTEM_PROMPT)
+
+    def test_the_summarizer_is_told_parenthesised_facts_win(self):
+        self.assertIn("Facts in parentheses", SUMMARIZER_SYSTEM_PROMPT)
+        self.assertIn("win over the rest", SUMMARIZER_SYSTEM_PROMPT)

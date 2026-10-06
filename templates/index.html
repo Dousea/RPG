@@ -548,10 +548,6 @@
                         <div class="chip-row" id="condition-chips"></div>
                     </div>
                     <div class="section">
-                        <h3>Effects</h3>
-                        <div class="chip-row" id="status-tags"></div>
-                    </div>
-                    <div class="section">
                         <h3>Goals</h3>
                         <div id="goal-list"></div>
                     </div>
@@ -689,7 +685,6 @@
     const locationDescription = document.getElementById('location-description');
     const vitals = document.getElementById('vitals');
     const conditionChips = document.getElementById('condition-chips');
-    const statusTags = document.getElementById('status-tags');
     const goalList = document.getElementById('goal-list');
     const equipmentList = document.getElementById('equipment-list');
     const inventoryList = document.getElementById('inventory-list');
@@ -744,7 +739,7 @@
     // A screen shows once the snapshot carries any of its fields, so a screen
     // whose mechanic hasn't landed stays hidden without a code change here.
     const SCREEN_FIELDS = {
-        status: ['vitals', 'effects', 'conditions', 'status_effects', 'sneaking', 'goals'],
+        status: ['vitals', 'effects', 'conditions', 'sneaking', 'goals'],
         health: ['body'],
         inventory: ['held', 'equipment', 'inventory'],
         clothing: ['worn'],
@@ -879,7 +874,7 @@
             const sky = w.summary.replace(/^\w/, c => c.toUpperCase());
             metaChips.appendChild(el('span', 'chip', `${sky}, ${w.temperature_c} °C${w.sheltered ? ' · sheltered' : ''}`));
         }
-        metaChips.appendChild(el('span', 'chip stage', data.apocalypse_stage));
+        metaChips.appendChild(el('span', 'chip stage', data.outbreak_day ? `Outbreak day ${data.outbreak_day}` : 'Before the outbreak'));
     }
 
     function renderVitals(data) {
@@ -914,15 +909,6 @@
         if (data.sneaking) {
             conditionChips.appendChild(el('span', 'tag', 'Sneaking'));
         }
-    }
-
-    function renderStatusEffects(data) {
-        const effects = data.status_effects || [];
-        if (effects.length === 0) {
-            clearAndFill(statusTags, [emptyNote('Nothing notable.')]);
-            return;
-        }
-        clearAndFill(statusTags, effects.map(effect => el('span', 'tag warn', effect)));
     }
 
     function renderGoals(data) {
@@ -1064,6 +1050,7 @@
             const left = el('span');
             left.appendChild(el('span', 'name', npc.name));
             left.appendChild(el('span', 'trust', `trust: ${npc.trust}`));
+            if (npc.following) left.appendChild(el('span', 'trust', 'following you'));
             const tone = DISPOSITION_TONE[npc.disposition] || '';
             row.appendChild(left);
             row.appendChild(el('span', `tag ${tone}`.trim(), npc.disposition));
@@ -1173,7 +1160,6 @@
         locationDescription.textContent = data.location_description || '';
         renderMetaChips(data);
         renderVitals(data);
-        renderStatusEffects(data);
         renderGoals(data);
         renderInventory(data);
         renderEquipment(data);

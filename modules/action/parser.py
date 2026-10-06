@@ -1,46 +1,38 @@
 """Parsing of the parser LLM's ACTIONS lines into typed actions.
 
-Parsing recognizes shape only (right verb, right number of arguments). It
-never touches game state and never resolves an item, NPC or location name to
-a real entity; that is the Action Validator's job (`managers/validator.py`).
-`UPDATE_CONDITION health` is refused here because player HP is never
-LLM-authoritative (docs/01-engine-authority.md).
+`VERBS` is the one registry of what the parser may propose. Parsing recognizes
+shape only (right verb, right number of arguments). It never touches game state
+and never resolves an item, NPC or location name to a real entity; that is the
+Action Validator's job (`managers/validator.py`).
 """
 
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
+    AskAction,
     AttackAction,
-    DiscoverFlagAction,
     DropAction,
     Duration,
     ExerciseAction,
+    GiveAction,
     MoveAction,
-    NpcMoveAction,
-    NpcStatusAction,
     RemoveGoalAction,
-    SetFlagAction,
+    ShoutAction,
     SleepAction,
     StanceAction,
-    StatusAddAction,
-    StatusRemoveAction,
     TakeAction,
     TakeOffAction,
-    UpdateConditionAction,
-    UpdateInventoryAction,
-    UpdateRelationshipAction,
+    TalkAction,
     UseItemAction,
     WaitAction,
     WearAction,
 )
-
-NARRATIVE_CONDITION_FIELDS = ("sleep", "infection_risk")
-NUMERIC_CONDITION_FIELDS = ("hunger", "thirst", "morale")
 
 # Goal horizons the model writes in place of the two real ones.
 GOAL_HORIZON_SYNONYMS = {
@@ -50,18 +42,6 @@ GOAL_HORIZON_SYNONYMS = {
     "long": "long_term",
     "longterm": "long_term",
     "long_term": "long_term",
-}
-
-# Truthy/falsy words the model writes instead of a bare true/false.
-_FLAG_VALUES = {
-    "true": True,
-    "yes": True,
-    "1": True,
-    "on": True,
-    "false": False,
-    "no": False,
-    "0": False,
-    "off": False,
 }
 
 
@@ -197,34 +177,6 @@ def _parse_exercise(args: str) -> ExerciseAction:
     return ExerciseAction(exercise_name=match.group(1).strip(), minutes=int(match.group(2)))
 
 
-def _parse_status_add(args: str) -> StatusAddAction:
-    if not args:
-        raise _ActionParseError("STATUS_ADD needs a status name.")
-    return StatusAddAction(status=args)
-
-
-def _parse_status_remove(args: str) -> StatusRemoveAction:
-    if not args:
-        raise _ActionParseError("STATUS_REMOVE needs a status name.")
-    return StatusRemoveAction(status=args)
-
-
-def _parse_update_condition(args: str) -> UpdateConditionAction:
-    field_name, _, raw_value = args.partition(" ")
-    field_name = normalize_key(field_name)
-    raw_value = raw_value.strip().strip(".,;")
-    if not field_name or not raw_value:
-        raise _ActionParseError("UPDATE_CONDITION needs a field and a value.")
-    if field_name == "health":
-        raise _ActionParseError(
-            "UPDATE_CONDITION health is not an available action -- health only "
-            "changes through combat or item effects, never a declared number."
-        )
-    if field_name not in NARRATIVE_CONDITION_FIELDS and field_name not in NUMERIC_CONDITION_FIELDS:
-        raise _ActionParseError(f"Unknown condition field: '{field_name}'.")
-    return UpdateConditionAction(field_name=field_name, raw_value=raw_value)
-
-
 def _split_goal(args: str) -> tuple[str, str]:
     """Split '<horizon> <goal text>' tolerantly.
 
@@ -261,28 +213,6 @@ def _parse_remove_goal(args: str) -> RemoveGoalAction:
     return RemoveGoalAction(horizon=horizon, goal_text=goal)
 
 
-def _parse_update_relationship(args: str) -> UpdateRelationshipAction:
-    parts = args.split()
-    if len(parts) < 3:
-        raise _ActionParseError("UPDATE_RELATIONSHIP needs a name, an axis, and an amount.")
-    raw_amount, axis, name = (
-        parts[-1].strip(".,;"),
-        normalize_key(parts[-2]),
-        " ".join(parts[:-2]),
-    )
-    if axis == "affinity":
-        axis = "affection"
-    if not name:
-        raise _ActionParseError("UPDATE_RELATIONSHIP needs an NPC name.")
-    if axis not in ("affection", "trust"):
-        raise _ActionParseError(f"Unknown relationship axis: '{axis}'.")
-    try:
-        amount = int(raw_amount)
-    except ValueError:
-        raise _ActionParseError(f"'{raw_amount}' is not a number.") from None
-    return UpdateRelationshipAction(npc_name=name, axis=axis, amount=amount)
-
-
 def _parse_add_relationship_note(args: str) -> AddRelationshipNoteAction:
     name, _, note = args.partition(" ")
     name, note = name.strip(), note.strip()
@@ -291,105 +221,265 @@ def _parse_add_relationship_note(args: str) -> AddRelationshipNoteAction:
     return AddRelationshipNoteAction(npc_name=name, note=note)
 
 
-def _parse_set_flag(args: str) -> SetFlagAction:
-    flag, _, raw_value = args.partition(" ")
-    flag = flag.strip()
-    value = _FLAG_VALUES.get(normalize_key(raw_value))
-    if not flag or value is None:
+def _parse_shout(args: str) -> ShoutAction:
+    return ShoutAction()
+
+
+# The closed label sets live here because `modules/` cannot import `data/`;
+# `data/social.py` keys its table on them.
+TALK_APPROACH_LABELS = (
+    "chat",
+    "compliment",
+    "flirt",
+    "confide",
+    "comfort",
+    "argue",
+    "insult",
+    "threaten",
+)
+ASK_REQUEST_LABELS = ("follow", "stay", "give", "about")
+TALK_TURN_MINUTES = 5  # spec 10: one cost per turn, shared by TALK, ASK and GIVE
+
+
+def _parse_talk(args: str) -> TalkAction:
+    *name_words, last = args.split() or [""]
+    approach = normalize_key(last)
+    if not name_words or approach not in TALK_APPROACH_LABELS:
         raise _ActionParseError(
-            f"SET_FLAG needs a flag name and true/false, got '{raw_value.strip()}'."
+            f"TALK needs an NPC name and one of: {', '.join(TALK_APPROACH_LABELS)}."
         )
-    return SetFlagAction(flag_name=normalize_key(flag), value=value)
+    return TalkAction(npc_name=" ".join(name_words), approach=approach)
 
 
-def _parse_discover_flag(args: str) -> DiscoverFlagAction:
-    flag = args.strip()
-    if not flag:
-        raise _ActionParseError("DISCOVER_FLAG needs a flag name.")
-    return DiscoverFlagAction(flag_name=normalize_key(flag))
-
-
-_INVENTORY_OPERATIONS = ("ADD", "REMOVE", "UPDATE_CONDITION", "UPDATE_QUANTITY")
-
-
-def _parse_update_inventory(args: str) -> UpdateInventoryAction:
-    parts = args.split()
+def _parse_ask(args: str) -> AskAction:
+    words = args.split()
     index = next(
-        (i for i, part in enumerate(parts) if part.upper() in _INVENTORY_OPERATIONS),
+        (i for i, word in enumerate(words) if i > 0 and normalize_key(word) in ASK_REQUEST_LABELS),
         None,
     )
-    if index is None or index == 0:
+    if index is None:
         raise _ActionParseError(
-            f"UPDATE_INVENTORY needs an item and one of {_INVENTORY_OPERATIONS}."
+            f"ASK needs an NPC name and one of: {', '.join(ASK_REQUEST_LABELS)}."
         )
-    name = " ".join(parts[:index])
-    operation = parts[index].upper()
-    value = " ".join(parts[index + 1 :]).strip()
-    return UpdateInventoryAction(item_name=name, operation=operation, value=value)
+    request = normalize_key(words[index])
+    argument = " ".join(words[index + 1 :]).strip(" .,;")
+    if request == "about":
+        argument = normalize_key(argument)
+    if request in ("give", "about") and not argument:
+        raise _ActionParseError(
+            f"ASK ... {request} needs an {'item' if request == 'give' else 'topic'}."
+        )
+    if request in ("follow", "stay"):
+        argument = ""
+    return AskAction(npc_name=" ".join(words[:index]), request=request, argument=argument)
 
 
-def _parse_npc_move(args: str) -> NpcMoveAction:
-    name, separator, destination = args.partition(" TO ")
-    name, destination = name.strip(), destination.strip()
-    if not separator or not name or not destination:
-        raise _ActionParseError("NPC_MOVE needs the form '<npc> TO <location>'.")
-    return NpcMoveAction(npc_name=name, destination=destination)
+_GIVE_SEPARATOR = re.compile(r"(.*\S)\s+to\s+(\S.*)", re.IGNORECASE)
 
 
-_NPC_STATUS_OPERATIONS = ("ADD", "REMOVE")
+def _parse_give(args: str) -> GiveAction:
+    text = args.strip().rstrip(".,;")
+    separated = _GIVE_SEPARATOR.fullmatch(text)
+    if separated:
+        return GiveAction(item_name=separated.group(1), npc_name=separated.group(2))
+    *item_words, npc = text.split() or [""]
+    if not item_words:
+        raise _ActionParseError("GIVE needs an item and an NPC name.")
+    return GiveAction(item_name=" ".join(item_words), npc_name=npc)
 
 
-def _parse_npc_status(args: str) -> NpcStatusAction:
-    parts = args.split()
-    index = next(
-        (i for i, part in enumerate(parts) if part.upper() in _NPC_STATUS_OPERATIONS),
-        None,
-    )
-    if index is None or index == 0:
-        raise _ActionParseError("NPC_STATUS needs '<npc> ADD|REMOVE <status>'.")
-    name = " ".join(parts[:index])
-    operation = parts[index].upper()
-    status = " ".join(parts[index + 1 :]).strip()
-    if not status:
-        raise _ActionParseError("NPC_STATUS needs a status name.")
-    return NpcStatusAction(npc_name=name, operation=operation, status=status)
+TargetKind = Literal[
+    "npc",
+    "zombie",
+    "corpse",
+    "item",
+    "zone",
+    "barrier",
+    "body_part",
+    "approach",
+    "request",
+    "duration",
+    "text",
+]
 
 
-_PARSERS: dict[str, Callable[[str], AnyAction]] = {
-    "MOVE_TO": _parse_move_to,
-    "STANCE": _parse_stance,
-    "TAKE": _parse_take,
-    "DROP": _parse_drop,
-    "WEAR": _parse_wear,
-    "TAKE_OFF": _parse_take_off,
-    "ATTACK": _parse_attack,
-    "USE_ITEM": _parse_use_item,
-    "WAIT": _parse_wait,
-    "SLEEP": _parse_sleep,
-    "EXERCISE": _parse_exercise,
-    "STATUS_ADD": _parse_status_add,
-    "STATUS_REMOVE": _parse_status_remove,
-    "UPDATE_CONDITION": _parse_update_condition,
-    "ADD_GOAL": _parse_add_goal,
-    "REMOVE_GOAL": _parse_remove_goal,
-    "UPDATE_RELATIONSHIP": _parse_update_relationship,
-    "ADD_RELATIONSHIP_NOTE": _parse_add_relationship_note,
-    "SET_FLAG": _parse_set_flag,
-    "DISCOVER_FLAG": _parse_discover_flag,
-    "UPDATE_INVENTORY": _parse_update_inventory,
-    "NPC_MOVE": _parse_npc_move,
-    "NPC_STATUS": _parse_npc_status,
-}
+SceneKey = Literal[
+    "goals",
+    "items_here",
+    "carried",
+    "wearable_carried",
+    "worn",
+    "npcs_here",
+    "threats",
+]
+
+
+@dataclass(frozen=True)
+class Verb:
+    """One verb the parser may propose.
+
+    `minutes` is the fixed cost, or None when the time is spent as the action runs.
+    `listed_when` is the scene keys that put the verb in front of the model: it is
+    listed when any is present, and always when empty. Unlisted verbs still parse.
+    The validator and resolver for a verb are looked up by `name` in
+    `managers/validator.py` and `managers/simulation.py`, which `modules/` cannot import.
+    """
+
+    name: str
+    target_kinds: tuple[TargetKind, ...]
+    parse: Callable[[str], AnyAction]
+    gloss: str
+    minutes: int | None
+    listed_when: tuple[SceneKey, ...] = ()
+
+
+def _verb(
+    name: str,
+    kinds: tuple[TargetKind, ...],
+    parse: Callable[[str], AnyAction],
+    gloss: str,
+    minutes: int | None,
+    listed_when: tuple[SceneKey, ...] = (),
+) -> tuple[str, Verb]:
+    return name, Verb(name, kinds, parse, gloss, minutes, listed_when)
+
+
+VERBS: dict[str, Verb] = dict(
+    [
+        _verb(
+            "MOVE_TO",
+            ("zone",),
+            _parse_move_to,
+            "a zone, in/out, or a specific spot (e.g. 'the kitchen'); add 'run' at the end to run",
+            None,
+        ),
+        _verb(
+            "STANCE", ("text",), _parse_stance, "sneak or stand: start or stop moving quietly", 0
+        ),
+        _verb("WAIT", ("duration",), _parse_wait, "10m, 2h, 1h30m, until night, until 14:30", None),
+        _verb("SLEEP", ("duration",), _parse_sleep, "optional duration; same forms as WAIT", None),
+        _verb("TAKE", ("item",), _parse_take, "an item listed in [ITEMS HERE]", 1, ("items_here",)),
+        _verb("DROP", ("item",), _parse_drop, "a carried item", 1, ("carried",)),
+        _verb(
+            "USE_ITEM",
+            ("item",),
+            _parse_use_item,
+            "a carried item; eating and drinking too",
+            None,
+            ("carried",),
+        ),
+        _verb(
+            "WEAR",
+            ("item",),
+            _parse_wear,
+            "a carried garment; refused if something is already there",
+            1,
+            ("wearable_carried",),
+        ),
+        _verb("TAKE_OFF", ("item",), _parse_take_off, "a worn garment", 1, ("worn",)),
+        _verb(
+            "EXERCISE",
+            ("text",),
+            _parse_exercise,
+            "an exercise from [EXERCISES], then optional minutes (10-60, in steps of 10)",
+            None,
+        ),
+        _verb(
+            "ATTACK",
+            ("npc", "zombie"),
+            _parse_attack,
+            "an NPC name, a zombie id from [THREATS], or 'zombie' for the nearest",
+            1,
+            ("npcs_here", "threats"),
+        ),
+        _verb("SHOUT", (), _parse_shout, "call out loudly; zombies may hear it", 0),
+        _verb(
+            "TALK",
+            ("npc", "approach"),
+            _parse_talk,
+            "say something to an NPC; the approach is how it is said",
+            TALK_TURN_MINUTES,
+            ("npcs_here",),
+        ),
+        _verb(
+            "ASK",
+            ("npc", "request"),
+            _parse_ask,
+            "ask an NPC for something: follow, stay, give <item>, about <topic>",
+            TALK_TURN_MINUTES,
+            ("npcs_here",),
+        ),
+        _verb(
+            "GIVE",
+            ("item", "npc"),
+            _parse_give,
+            "hand a carried item to an NPC",
+            TALK_TURN_MINUTES,
+            ("npcs_here",),
+        ),
+        _verb(
+            "ADD_GOAL",
+            ("text",),
+            _parse_add_goal,
+            "short_term or long_term, then the goal text",
+            0,
+        ),
+        _verb(
+            "REMOVE_GOAL",
+            ("text",),
+            _parse_remove_goal,
+            "short_term or long_term, then the goal text",
+            0,
+            ("goals",),
+        ),
+        _verb(
+            "ADD_RELATIONSHIP_NOTE",
+            ("npc", "text"),
+            _parse_add_relationship_note,
+            "an NPC name, then the character's own impression of them",
+            0,
+        ),
+    ]
+)
+
+# Verbs the model once proposed outcomes through. The engine owns what they set,
+# so a line using one is refused as not available.
+REMOVED_VERBS = frozenset(
+    {
+        "TIME_ADVANCE",
+        "UPDATE_CONDITION",
+        "UPDATE_RELATIONSHIP",
+        "SET_FLAG",
+        "DISCOVER_FLAG",
+        "NPC_MOVE",
+        "NPC_STATUS",
+        "STATUS_ADD",
+        "STATUS_REMOVE",
+        "UPDATE_INVENTORY",
+    }
+)
+
+
+def available_verbs(present: frozenset[SceneKey]) -> list[Verb]:
+    """The verbs to show the model for a scene, in registry order."""
+    return [
+        verb
+        for verb in VERBS.values()
+        if not verb.listed_when or any(key in present for key in verb.listed_when)
+    ]
 
 
 def parse_action_line(line: str) -> AnyAction | ParseFailure:
     """Parse one already-stripped, non-empty, non-'NONE' action line."""
-    verb, _, remainder = line.partition(" ")
-    handler = _PARSERS.get(verb.upper())
-    if handler is None:
-        return ParseFailure(raw=line, reason=f"Unknown action verb: '{verb}'.")
+    name, _, remainder = line.partition(" ")
+    name = name.upper()
+    verb = VERBS.get(name)
+    if verb is None:
+        if name in REMOVED_VERBS:
+            return ParseFailure(raw=line, reason=f"'{name}' is not an available action.")
+        return ParseFailure(raw=line, reason=f"Unknown action verb: '{name}'.")
     try:
-        return handler(remainder.strip())
+        return verb.parse(remainder.strip())
     except _ActionParseError as exc:
         return ParseFailure(raw=line, reason=str(exc))
 
@@ -398,7 +488,7 @@ def parse_action_plan(lines: list[str]) -> tuple[list[AnyAction], list[ParseFail
     """Parse a full ACTIONS: block into well-formed proposals and failures.
 
     Failures are shape/vocabulary problems only (unknown verb, missing args,
-    the retired health field) -- they are rejected before the Action Validator
+    a removed verb) -- they are rejected before the Action Validator
     ever sees them, and therefore before any prose describing them exists.
     """
     actions: list[AnyAction] = []

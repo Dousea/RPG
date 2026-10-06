@@ -25,7 +25,7 @@ body parts, bleeding, infection and the limp are left to the health mechanic.
 | `Pace`, the four ways the player moves | `modules/pace.py` |
 | `PlayerEntity.sneaking` | `modules/entity/player.py` |
 | `MOVE_TO ... run`, `STANCE`, the zombie `ATTACK` target | `modules/action/types.py`, `modules/action/parser.py`, `modules/resolution.py` |
-| The story effect that starts the outbreak | `modules/effect.py`, `managers/simulation.py` |
+| The story effect that starts the outbreak | `modules/story.py`, `managers/simulation.py` |
 | Every number below | `data/zombie_lore.py`, `data/locations.py` |
 | Hop minutes by pace, the approach minutes on an `ATTACK` | `data/time_costs.py` |
 | Rolling, population, spotting, hearing, movement, memory, the minute loop, the threat words | `managers/zombies.py` |

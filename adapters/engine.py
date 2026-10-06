@@ -105,7 +105,7 @@ class GameEngine:
             # 3. Validate and simulate, one action at a time in order. This is
             # where the engine decides what happens -- before the narrator
             # writes a single word about it.
-            outcome_facts = SimulationCore(manager).resolve(actions)
+            outcome_facts = SimulationCore(manager).resolve(actions, refused=len(parse_failures))
             for failure in parse_failures:
                 logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
                 outcome_facts.append(f"Refused: '{failure.raw}' -- {failure.reason}")
@@ -131,7 +131,7 @@ class GameEngine:
 
             parsed = llm.parse_narrator_response(raw_response)
             story_text = str(parsed["story"])
-            event_text = str(parsed["event"])
+            event_text = _entry_with_facts(str(parsed["event"]), outcome_facts)
             options = list(parsed["options"])
 
             # 5. Record the event in both memory tiers and reindex.
@@ -247,14 +247,13 @@ class GameEngine:
             "location_description": manager.current_location.description,
             "day": narrative.day,
             "time_of_day": narrative.time_of_day,
-            "apocalypse_stage": narrative.apocalypse_stage,
+            "outbreak_day": manager.outbreak_day(),
             "vitals": {"health": player.hit_points, "max_health": player.max_hit_points},
             "weather": _weather(manager),
             "effects": _status_effects(player),
             "skills": _skills(player),
             "character": _character(player),
             "conditions": [condition.value for condition in player.conditions],
-            "status_effects": list(narrative.player_status),
             "inventory": [
                 {"name": entity.item.name, "condition": _condition(entity)}
                 for entity in player.inventory
@@ -280,6 +279,13 @@ class GameEngine:
             ],
             "sneaking": player.sneaking,
         }
+
+
+def _entry_with_facts(event: str, facts: list[str]) -> str:
+    """The event-log entry: the narrator's event, then the engine's facts as the true part."""
+    if not facts:
+        return event
+    return f"{event} (Facts: {' '.join(facts)})"
 
 
 def _trait_entries(player: PlayerEntity) -> list[dict[str, str]]:
@@ -389,4 +395,5 @@ def _npc_regard(manager: GameManager, npc: NpcEntity) -> dict[str, Any]:
         "name": npc.name,
         "disposition": relationships.get_disposition(npc.npc_id, player_id).value,
         "trust": relationships.get_trust_level(npc.npc_id, player_id).value,
+        "following": npc.following,
     }

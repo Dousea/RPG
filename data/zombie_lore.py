@@ -67,6 +67,12 @@ SNEAK_STEP_ODDS_BASE = 4  # spec 09
 SNEAK_STEP_ODDS_CAP = 12  # spec 09
 COUGH_RADIUS = 35  # spec 09: tiles
 COUGH_VOLUME = 40  # spec 09
+SHOUT_RADIUS = 30  # spec 10: tiles
+SHOUT_VOLUME = 30  # spec 10
+SHOUT_SNEAK_RADIUS = 6  # spec 10: tiles
+SHOUT_SNEAK_VOLUME = 6  # spec 10
+MEGAPHONE_SHOUT = 90  # spec 10: radius and volume, unused until the catalogue has a megaphone
+MEGAPHONE_SHOUT_SNEAK = 18  # spec 10: radius and volume
 
 HEARING_POOR_FACTOR = 0.45  # spec 09
 HEARING_RAIN_FACTOR = 0.33  # spec 09
