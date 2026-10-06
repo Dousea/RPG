@@ -1,7 +1,5 @@
 import logging
 import random
-import re
-from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -13,11 +11,12 @@ from data.clock import (
     time_of_day_at,
 )
 from data.items import ITEMS
-from data.locations import STARTING_ZONE_ID, ZONE_EXIT_NOUNS, build_starting_locations
+from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
 from data.perks import PERKS
 from data.quests import build_starting_quests
 from data.traits import TRAITS
+from managers import locations
 from managers.climate import ClimateEngine
 from managers.relationship import RelationshipManager
 from modules.character.player import PlayerPerk, PlayerTrait
@@ -86,12 +85,6 @@ MAX_RECENT_EVENTS = config.game.max_recent_events
 # Once the recent-event buffer is this full, the older half is summarized.
 SUMMARY_THRESHOLD = config.game.summary_threshold
 
-# Words the model reaches for in place of a bare connection direction. Applied
-# only when the mapped direction is actually a connection of the current zone
-# (see `resolve_location`) -- otherwise "outside" from the street would match
-# the zone_street alias of the same name instead of following the exit out.
-DIRECTION_SYNONYMS = {"inside": "in", "outside": "out"}
-
 # `current_place` is LLM-authored text that flows into the next prompt and the
 # UI panel, so it is bounded here rather than trusted.
 MAX_PLACE_LENGTH = 80
@@ -102,64 +95,6 @@ MAX_PLACE_LENGTH = 80
 # adapters/persistence.py (which must apply the same cap to a hand-edited or
 # migrated save).
 DEATH_CAUSE_MAX_LENGTH = 200
-
-# Direction words with no destination behind them. If one of these did not
-# match a connection, it describes a shuffle inside the current zone -- it is
-# not the name of a place, so it must not be stored as one.
-BARE_DIRECTIONS = frozenset(
-    {
-        "north",
-        "south",
-        "east",
-        "west",
-        "up",
-        "down",
-        "in",
-        "out",
-        "inside",
-        "outside",
-        "back",
-        "forward",
-        "left",
-        "right",
-        "upstairs",
-        "downstairs",
-        "onwards",
-        "onward",
-        "further",
-    }
-)
-
-
-def _first_contiguous_match(haystack: list[str], needle: list[str]) -> int | None:
-    """The index in `haystack` where `needle` first appears as a contiguous,
-    in-order run, or None. Used by `GameManager.resolve_location`'s
-    whole-word fallback -- a subset test (`set(needle) <= set(haystack)`)
-    let "the street" and "the building" both claim position 0 of any phrase
-    starting with "the", regardless of where their real words actually sat.
-    """
-    span = len(needle)
-    for start in range(len(haystack) - span + 1):
-        if haystack[start : start + span] == needle:
-            return start
-    return None
-
-
-def _exit_noun_prefix(words: list[str]) -> tuple[str, int] | None:
-    """The zone whose ZONE_EXIT_NOUNS entry starts `words`, with that noun's
-    word count, or None. The longest noun wins, so "apartment building" is the
-    building rather than "apartment" (home) followed by a stray word.
-    """
-    best: tuple[str, int] | None = None
-    for zone_id, nouns in ZONE_EXIT_NOUNS.items():
-        for noun in nouns:
-            noun_words = noun.split()
-            if words[: len(noun_words)] == noun_words and (
-                best is None or len(noun_words) > best[1]
-            ):
-                best = (zone_id, len(noun_words))
-    return best
-
 
 # The game has one clock: `NarrativeState.minutes`. `World.time` and
 # `World.date` are a rendering of the same instant, derived by
@@ -346,162 +281,13 @@ class GameManager:
         return None
 
     def resolve_location(self, name: str) -> Location | None:
-        """Resolve a zone by connection direction, id, display name, or alias.
-
-        Returns None when nothing matches. That matters: `NPC_MOVE` resolves
-        through here too, and NPCs have no free-text place to fall back on, so a
-        resolver that always succeeded would scatter them into invented zones.
-        """
-        needle = name.strip().strip("\"'.,;:!?").casefold()
-        if not needle:
-            return None
-
-        # A direction out of where the player is standing ("out", "in"), with
-        # DIRECTION_SYNONYMS applied first -- but only ever matches an actual
-        # connection key, so an unmapped synonym simply falls through below.
-        needle_direction = DIRECTION_SYNONYMS.get(needle, needle)
-        for direction, loc_id in self.current_location.connections.items():
-            if needle_direction == direction.casefold() and loc_id in self.world.locations:
-                return self.world.locations[loc_id]
-
-        # Zone identity, matched globally. Adjacency is deliberately not
-        # enforced here: resolve_location backs narration and NPC_MOVE, not
-        # player movement legality (that's `ActionValidator._validate_move`).
-        for loc_id, location in self.world.locations.items():
-            if needle in (loc_id.casefold(), location.name.casefold()):
-                return location
-            if any(needle == alias.casefold() for alias in location.aliases):
-                return location
-
-        # Exit phrases ("outside the building", "out of the building",
-        # "leave the apartment", "exit my flat") mean walk *out* of the zone
-        # Orton is standing in right now -- but only when the phrase's object
-        # names the zone itself (ZONE_EXIT_NOUNS), never a landmark inside it.
-        # "outside the bodega" while already on the street must not walk him
-        # into the neighborhood, and "outside Emma's apartment" while in the
-        # building must not walk him onto the street -- both fall through to
-        # the whole-word fallback below instead, which lands him on the
-        # landmark itself. This runs before that fallback (an exit phrase is
-        # never itself a landmark name) and is keyed off the *current* zone,
-        # not whatever the fallback would have matched.
-        #
-        # The zone noun only has to *start* the object, so trailing words
-        # ("leave the building now", "exit the building to the street") still
-        # count. An exit phrase naming some *other* zone ("exit the building
-        # to the street" said on the street) can't be walked out of from here,
-        # so that zone must not win; whatever follows the noun decides, and
-        # nothing following means a spot where Orton already is.
-        exit_match = re.match(
-            r"^(?:outside(?: of)?|out of|leaving|leave|exiting|exit)\s+"
-            r"(?:(?:the|my|your|this|orton's)\s+)?(.+)$",
-            needle,
-        )
-        if exit_match:
-            exit_words = re.findall(r"[a-z0-9']+", exit_match.group(1))
-            named = _exit_noun_prefix(exit_words)
-            if named is not None:
-                zone_id, noun_length = named
-                if zone_id == self.current_location.id:
-                    out_id = self.current_location.connections.get("out")
-                    if out_id is not None and out_id in self.world.locations:
-                        return self.world.locations[out_id]
-                    return self.current_location
-                rest = " ".join(exit_words[noun_length:])
-                return self.resolve_location(rest) if rest else None
-
-        # Last pass: the model writes "back to my apartment" or "the lobby
-        # downstairs" rather than a bare name. Only whole words count, and only
-        # names long enough not to collide by accident -- a loose substring
-        # match here would quietly send the player to the wrong zone, which is
-        # the failure mode this whole design is meant to avoid.
-        #
-        # A trailing possessive 's is stripped from every token
-        # before matching ("clinic's" -> "clinic"), and a leading "the" is
-        # dropped from the candidate's own words (so "the street" matches as
-        # "street"). The candidate must then appear as a contiguous, in-order
-        # run of words in the phrase -- a subset test would let "the
-        # street" and "the building" both claim position 0 of any phrase
-        # starting with "the" ("the street outside the building" must not go
-        # to the building). The winning candidate is the one whose run starts
-        # earliest in the phrase. "the street outside my apartment" must
-        # resolve to "street" (starts at word 1) over "my apartment" (starts
-        # at word 3). Ties break by more words, then by the current zone.
-        phrase_words = [
-            word[:-2] if word.endswith("'s") else word for word in re.findall(r"[a-z0-9']+", needle)
-        ]
-
-        best: tuple[tuple[int, int, int], Location] | None = None
-        for location in self.world.locations.values():
-            for candidate in (location.name, *location.aliases):
-                folded = candidate.casefold()
-                if len(folded) < 4:
-                    continue
-                candidate_words = [
-                    word[:-2] if word.endswith("'s") else word
-                    for word in re.findall(r"[a-z0-9']+", folded)
-                ]
-                if candidate_words and candidate_words[0] == "the":
-                    candidate_words = candidate_words[1:]
-                if not candidate_words:
-                    continue
-                position = _first_contiguous_match(phrase_words, candidate_words)
-                if position is None:
-                    continue
-                is_current_zone = 0 if location.id == self.current_location.id else 1
-                score = (position, -len(candidate_words), is_current_zone)
-                if best is None or score < best[0]:
-                    best = (score, location)
-
-        return best[1] if best is not None else None
+        return locations.resolve_location(name, self.current_location, self.world.locations)
 
     def resolve_zone_exact(self, name: str) -> Location | None:
-        """Resolve a zone strictly: id, display name, or an exact global
-        alias only, casefolded and stripped.
-
-        `NPC_MOVE` uses this instead of `resolve_location`. NPCs have no
-        free-text spot to fall back on, so the player's forgiving resolution
-        -- connection directions, the whole-word fallback, exit phrases -- is
-        deliberately not available here: it exists to turn a vague phrase
-        into *somewhere* for prose to keep going, which is the wrong
-        trade-off for an engine-issued NPC placement.
-        """
-        needle = name.strip().strip("\"'.,;:").casefold()
-        if not needle:
-            return None
-        for location in self.world.locations.values():
-            if needle in (location.id.casefold(), location.name.casefold()):
-                return location
-            if any(needle == alias.casefold() for alias in location.aliases):
-                return location
-        return None
+        return locations.resolve_zone_exact(name, self.world.locations)
 
     def zone_path(self, start_id: str, target_id: str) -> list[str] | None:
-        """BFS over `Location.connections` from `start_id` to `target_id`.
-
-        Returns the hop list (zone ids), excluding `start_id` itself, so
-        callers can walk it one connection at a time and stop at the first
-        locked door they can't get through. `None` means the two zones are
-        not connected at all -- not reachable with the shipped map, but a
-        possible future one, so `_validate_move` still has to handle it.
-        """
-        if start_id == target_id:
-            return []
-        visited = {start_id}
-        queue: deque[tuple[str, list[str]]] = deque([(start_id, [])])
-        while queue:
-            current_id, path = queue.popleft()
-            location = self.world.locations.get(current_id)
-            if location is None:
-                continue
-            for loc_id in location.connections.values():
-                if loc_id in visited:
-                    continue
-                new_path = path + [loc_id]
-                if loc_id == target_id:
-                    return new_path
-                visited.add(loc_id)
-                queue.append((loc_id, new_path))
-        return None
+        return locations.zone_path(self.world.locations, start_id, target_id)
 
     @staticmethod
     def _find_item_entity(entities: list[ItemEntity], name: str) -> ItemEntity | None:

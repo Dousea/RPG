@@ -23,12 +23,8 @@ from data.clock import (
     minutes_until,
 )
 from data.items import find_item_by_name
-from managers.game import (
-    BARE_DIRECTIONS,
-    DIRECTION_SYNONYMS,
-    MAX_PLACE_LENGTH,
-    GameManager,
-)
+from managers.game import MAX_PLACE_LENGTH, GameManager
+from managers.locations import BARE_DIRECTIONS, connection_target
 from managers.stats import status_effect_level
 from modules.action import (
     AddGoalAction,
@@ -131,13 +127,8 @@ class ActionValidator:
         # whole-word resolution below can accidentally claim it (e.g. a zone
         # whose alias list happens to contain a direction word); (3)
         # otherwise fall through to full resolution.
-        needle_direction = DIRECTION_SYNONYMS.get(folded, folded)
-        target = None
-        for direction, loc_id in current.connections.items():
-            if needle_direction == direction.casefold() and loc_id in manager.world.locations:
-                target = manager.world.locations[loc_id]
-                break
-        else:
+        target = connection_target(folded, current, manager.world.locations)
+        if target is None:
             if folded in BARE_DIRECTIONS:
                 return Accepted(action, {"kind": "shuffle", "location": current, "raw": raw})
             target = manager.resolve_location(raw)
