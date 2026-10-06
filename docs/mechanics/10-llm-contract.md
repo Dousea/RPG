@@ -402,7 +402,8 @@ narrator writes nothing into memory.
 clicking it sends it to the parser like typed text, so a suggestion is never a
 shortcut past the engine. A reply with no headers at all is all story. A prompt block
 the narrator echoes back (`[OUTCOMES]` and the lines under it) is dropped up to the
-next header.
+next header. A header written in brackets (`[OPTIONS]`) counts as the header, and an
+option that reads `NONE`, bulleted or not, is no option.
 
 ## Memory
 

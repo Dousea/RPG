@@ -153,6 +153,24 @@ class ParseNarratorResponseTests(unittest.TestCase):
         parsed = parse_narrator_response("STORY:\nYou pause.\n\nEVENT:\nOrton paused")
         self.assertEqual(parsed["options"], [])
 
+    def test_a_bracketed_options_header_is_read_as_options(self):
+        parsed = parse_narrator_response(
+            "STORY:\nThe hallway is quiet.\n\n[OPTIONS]\n- Knock on 3A\n- Go back inside"
+        )
+        self.assertEqual(parsed["story"], "The hallway is quiet.")
+        self.assertEqual(parsed["options"], ["Knock on 3A", "Go back inside"])
+
+    def test_a_bracketed_story_header_is_read_as_the_story(self):
+        parsed = parse_narrator_response("[STORY]\nThe hallway is quiet.\n\nOPTIONS:\n- Wait")
+        self.assertEqual(parsed["story"], "The hallway is quiet.")
+        self.assertEqual(parsed["options"], ["Wait"])
+
+    def test_a_bulleted_none_is_not_an_option(self):
+        parsed = parse_narrator_response(
+            "STORY:\nYou pause.\n\nOPTIONS:\n- Call out to Emma\n- NONE"
+        )
+        self.assertEqual(parsed["options"], ["Call out to Emma"])
+
 
 class PromptRuleTests(unittest.TestCase):
     """Spec 10, What the narrator must not do and Memory."""

@@ -334,39 +334,47 @@ def parse_action_response(llm_response_text: str) -> list[str]:
 
 # A prompt block such as [OUTCOMES] echoed back into the reply; it is never prose.
 _PROMPT_BLOCK_HEADER = re.compile(r"\[[A-Z][A-Z ]*\]")
+_SECTION_HEADER = re.compile(
+    r"(?:\[(STORY|EVENT|OPTIONS)\]|(STORY|EVENT|OPTIONS):)(.*)", re.IGNORECASE
+)
+_SECTIONS = {"STORY": "story", "EVENT": "dropped", "OPTIONS": "options"}
 
 
 def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]]:
     """Split a STORY/OPTIONS narrator response into its parts.
 
     Section headers are matched line by line rather than by splitting on
-    blank lines, so a story containing blank lines survives intact. In a reply
+    blank lines, so a story containing blank lines survives intact. A header
+    may also be written in brackets (`[OPTIONS]`). In a reply
     with no STORY header, the lines before its first header are the story. An
     echoed prompt block (`[OUTCOMES]` and the lines under it) is dropped up to
     the next header, and so is a stray EVENT section. OPTIONS is optional: none
-    (or NONE) yields an empty list.
+    (or NONE, bulleted or not) yields an empty list.
     """
     sections: dict[str, list[str]] = {"story": [], "dropped": [], "options": []}
-    headers = {"STORY:": "story", "EVENT:": "dropped", "OPTIONS:": "options"}
     lines = llm_response_text.splitlines()
 
-    def header_of(stripped: str) -> str | None:
-        return next((key for key in headers if stripped.upper().startswith(key)), None)
+    def header_of(stripped: str) -> tuple[str, str] | None:
+        match = _SECTION_HEADER.match(stripped)
+        if not match:
+            return None
+        name = (match.group(1) or match.group(2)).upper()
+        return _SECTIONS[name], match.group(3).strip()
 
-    has_story_header = any(header_of(line.strip()) == "story" for line in lines)
+    has_story_header = any(
+        (header := header_of(line.strip())) and header[0] == "story" for line in lines
+    )
     current: str | None = None if has_story_header else "story"
 
     for line in lines:
         stripped = line.strip()
-        if _PROMPT_BLOCK_HEADER.fullmatch(stripped):
-            current = None
-            continue
-        matched_header = header_of(stripped)
-        if matched_header:
-            current = headers[matched_header]
-            remainder = stripped[len(matched_header) :].strip()
+        if header := header_of(stripped):
+            current, remainder = header
             if remainder:
                 sections[current].append(remainder)
+            continue
+        if _PROMPT_BLOCK_HEADER.fullmatch(stripped):
+            current = None
             continue
         if current:
             sections[current].append(line)
@@ -376,9 +384,10 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
     # mark, a semicolon, a colon) -- strip that before comparing, or it reads
     # as a stray one-item options list instead of "no options".
     options = [
-        stripped.lstrip("-").strip()
+        option
         for raw_line in sections["options"]
-        if (stripped := raw_line.strip()) and stripped.upper().rstrip(".!;:") != "NONE"
+        if (option := raw_line.strip().lstrip("-").strip())
+        and option.upper().rstrip(".!;:") != "NONE"
     ]
 
     return {
