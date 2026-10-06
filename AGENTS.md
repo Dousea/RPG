@@ -58,8 +58,8 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
 - **Logging, not print:** each module uses `logger = logging.getLogger(__name__)`.
   `debug` for per-turn traces, `info` for lifecycle, `warning` for dropped or
   repaired data. Ruff bans `print`.
-- **Saves:** while the game is not playable, there is no save migration:
-  bump the schema version and discard incompatible saves.
+- **Saves:** while the game is not playable (until spec 12 lands), there is
+  no save migration: bump the schema version and discard incompatible saves.
 - **Tests:** a test for a spec'd mechanic names the spec and section in its
   class docstring (`"""Spec 16, The arm pain divisor."""`) and asserts the
   spec's numbers. Tests stay offline: the LLM and the embedding model
