@@ -221,8 +221,9 @@ A tick is one 10-minute boundary.
 | chest | upper torso |
 | abs | lower torso |
 
-Part stiffness is saved. It has no effect and does not fade until the health
-mechanic lands.
+Part stiffness lives on the body part ([health](12-health-and-infection.md#pain-from-each-part)).
+It adds to the part's pain, slows actions through hand pain, and falls 21.6 per
+game hour while no region is still draining.
 
 **Starting regularity** is drawn once from the world seed, one draw per exercise
 in table order, upper bound excluded: Firefighter 10–19, Fitness Instructor
@@ -264,7 +265,8 @@ table.
 
 Schema v11 stores each skill's level and XP, the boosts, both loss timers and
 their last step, and the exercise state: regularity, last-done times, stiffness
-still to come, region timers and part stiffness. Older saves are discarded.
+still to come and region timers. Part stiffness is saved with the body.
+Older saves are discarded.
 
 ## Edge cases
 

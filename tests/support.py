@@ -10,7 +10,9 @@ from adapters.save import files
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from modules.action.types import AnyAction
+from modules.body import PART_WEIGHT, BodyPart
 from modules.entity.npc import NpcEntity
+from modules.entity.player import PlayerEntity
 from modules.modifier import AffinityModifier
 
 
@@ -30,6 +32,20 @@ def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     for action, fact in zip(actions, facts, strict=False):
         assert not fact.startswith("Refused:"), f"setup action {action!r} failed: {fact}"
     return facts
+
+
+def set_health(player: PlayerEntity, health: float) -> None:
+    """Spread damage over every part evenly so overall health is `health`."""
+    damage = 100.0 - health
+    each = damage / sum(PART_WEIGHT.values())
+    for state in player.body.values():
+        state.health = 100.0 - each
+
+
+def make_dying(player: PlayerEntity) -> None:
+    """Leave the player one health and a bleeding neck, so the next minutes kill them."""
+    set_health(player, 1.0)
+    player.body[BodyPart.NECK].bleeding_time = 10.0
 
 
 def npc_of(gm: GameManager, name: str) -> NpcEntity:

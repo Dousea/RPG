@@ -18,9 +18,11 @@ from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
 from data.traits import TRAITS
 from managers import creation
+from managers.body import open_wounds
 from managers.climate import weather_summary
 from managers.combat import held_entity
 from managers.context import ContextBuilder
+from managers.first_aid import part_word
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
@@ -32,7 +34,7 @@ from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
-from modules.item import MeleeWeaponItem
+from modules.item import MedicalItem, MeleeWeaponItem
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
@@ -250,9 +252,9 @@ class GameEngine:
             "day": narrative.day,
             "time_of_day": narrative.time_of_day,
             "outbreak_day": manager.outbreak_day(),
-            "vitals": {"health": player.hit_points, "max_health": player.max_hit_points},
             "weather": _weather(manager),
             "effects": _status_effects(player),
+            "body": _body(player),
             "skills": _skills(player),
             "character": _character(player),
             "conditions": [condition.value for condition in player.conditions],
@@ -347,9 +349,31 @@ def _status_effects(player: PlayerEntity) -> list[dict[str, Any]]:
     ]
 
 
+def _body(player: PlayerEntity) -> list[dict[str, Any]]:
+    """The injured and bandaged parts in words and flags; no health or pain number."""
+    entries: list[dict[str, Any]] = []
+    for part, state in player.body.items():
+        if not (state.injured or state.bandaged):
+            continue
+        wounds = open_wounds(state)
+        entries.append(
+            {
+                "part": part_word(part),
+                "wounds": wounds,
+                "bleeding": state.bleeding,
+                "bandaged": state.bandaged,
+                "dirty": state.bandaged and state.bandage_life <= 0,
+                "infected": state.infected_wound and state.wounded and not state.bandaged,
+            }
+        )
+    return entries
+
+
 def _condition(entity: ItemEntity) -> str:
     if isinstance(entity.item, MeleeWeaponItem):
         return item_condition_word(entity)
+    if isinstance(entity.item, MedicalItem):
+        return f"{entity.uses} left" if entity.item.uses > 1 else item_condition_word(entity)
     return f"{entity.hit_points}/{entity.max_hit_points}"
 
 

@@ -5,15 +5,14 @@ from modules.body import BodyLocation
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.item import (
-    AppliableItem,
     BaseItem,
     ClothingItem,
     ConsumableItem,
     HoldableItem,
+    MedicalItem,
     MeleeWeaponItem,
     RangedWeaponItem,
 )
-from modules.modifier import HPModifier
 from modules.weapon import RangedWeaponType
 
 # Our rule: below this share of its max hit points an item reads as damaged
@@ -58,6 +57,110 @@ def wetness_word(wetness: float) -> str:
         return "wet"
     return "damp"
 
+
+def _medical(item_id: str, name: str, description: str, **fields) -> tuple[str, MedicalItem]:
+    return item_id, MedicalItem(
+        id=item_id,
+        name=name,
+        description=description,
+        max_hit_points=5,
+        tags=["medical"],
+        slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
+        is_two_handed=False,
+        **fields,
+    )
+
+
+DIRTY_BANDAGE_ID = "item_dirty_bandage"  # spec 12
+DIRTY_RIPPED_SHEETS_ID = "item_dirty_ripped_sheets"  # spec 12
+BANDAGE_ID = "item_bandage"  # spec 12
+ADHESIVE_BANDAGE_ID = "item_adhesive_bandage"  # spec 12
+ALCOHOL_WIPES_ID = "item_alcohol_wipes"  # spec 12
+PAINKILLERS_ID = "item_painkillers"  # spec 12
+
+MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
+    [
+        _medical(
+            BANDAGE_ID,
+            "Bandage",
+            "A clean cloth bandage.",
+            bandage_power=4,
+            dirty_version=DIRTY_BANDAGE_ID,
+        ),
+        _medical(
+            DIRTY_BANDAGE_ID,
+            "Dirty Bandage",
+            "A used bandage, stained and stiff.",
+            bandage_power=0.5,
+            dirty=True,
+            reusable_bandage=True,
+        ),
+        _medical(
+            "item_sterilized_bandage",
+            "Sterilized Bandage",
+            "A bandage soaked in alcohol.",
+            bandage_power=4,
+            alcoholic=True,
+            dirty_version=DIRTY_BANDAGE_ID,
+        ),
+        _medical(
+            ADHESIVE_BANDAGE_ID,
+            "Adhesive Bandage",
+            "A small sticking plaster.",
+            bandage_power=1.5,
+        ),
+        _medical(
+            "item_ripped_sheets",
+            "Ripped Sheets",
+            "Strips of torn bedsheet.",
+            bandage_power=2,
+            dirty_version=DIRTY_RIPPED_SHEETS_ID,
+        ),
+        _medical(
+            DIRTY_RIPPED_SHEETS_ID,
+            "Dirty Ripped Sheets",
+            "Strips of torn sheet, filthy.",
+            bandage_power=0.5,
+            dirty=True,
+            reusable_bandage=True,
+        ),
+        _medical(
+            "item_sterilized_ripped_sheets",
+            "Sterilized Ripped Sheets",
+            "Strips of torn sheet soaked in alcohol.",
+            bandage_power=2,
+            alcoholic=True,
+            dirty_version=DIRTY_RIPPED_SHEETS_ID,
+        ),
+        _medical(
+            ALCOHOL_WIPES_ID,
+            "Alcohol Wipes",
+            "Packets of alcohol wipes.",
+            alcohol_power=4,
+            uses=5,
+        ),
+        _medical(
+            "item_disinfectant",
+            "Disinfectant",
+            "A bottle of rubbing alcohol.",
+            alcohol_power=4,
+            uses=3,
+        ),
+        _medical(
+            PAINKILLERS_ID,
+            "Painkillers",
+            "A bottle of painkillers.",
+            painkiller=True,
+            uses=10,
+        ),
+        _medical(
+            "item_antibiotics",
+            "Antibiotics",
+            "A course of antibiotics.",
+            reduce_infection_power=50,
+        ),
+    ]
+)
 
 ITEMS: dict[str, BaseItem] = {
     "item_crowbar": MeleeWeaponItem(
@@ -317,23 +420,7 @@ ITEMS: dict[str, BaseItem] = {
         bite_defense=20,
         neck_protection=0.5,
     ),
-    "item_first_aid_kit": AppliableItem(
-        id="item_first_aid_kit",
-        name="First Aid Kit",
-        description="Contains bandages and antiseptic.",
-        max_hit_points=20,
-        tags=["medical", "appliable"],
-        slots=[
-            CharacterHoldableSlot.RIGHT_HAND,
-            CharacterHoldableSlot.LEFT_HAND,
-        ],
-        is_two_handed=False,
-        modifiers=[
-            HPModifier(
-                amount=20,
-            )
-        ],
-    ),
+    **MEDICAL_ITEMS,
     **STARTING_CLOTHES,
 }
 

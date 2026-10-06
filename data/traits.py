@@ -945,6 +945,9 @@ BRAVE_ID = "brave"  # spec 07
 DESENSITIZED_ID = "desensitized"  # spec 07
 PRONE_TO_ILLNESS_ID = "pronetoillness"  # spec 07
 RESILIENT_ID = "resilient"  # spec 07
+FAST_HEALER_ID = "fasthealer"  # spec 07
+SLOW_HEALER_ID = "slowhealer"  # spec 07
+FEAR_OF_BLOOD_ID = "hemophobic"  # spec 07
 OUTDOORSMAN_ID = "outdoorsman"  # spec 07
 
 APPETITE_TRAIT_MULT = {HEARTY_APPETITE_ID: 1.5, LIGHT_EATER_ID: 0.75}  # spec 07

@@ -123,8 +123,7 @@ class ExerciseEngine:
         waiting = state.future_stiffness.get(region, 0.0)
         unit = min(k.STIFFNESS_DRAIN_PER_TICK, waiting)
         for part in k.REGION_PARTS[region]:
-            held = state.part_stiffness.get(part, 0.0)
-            state.part_stiffness[part] = held + k.STIFFNESS_PER_UNIT * unit
+            player.body[part].stiffness += k.STIFFNESS_PER_UNIT * unit
         state.future_stiffness[region] = waiting - unit
         if state.future_stiffness[region] <= 0:
             del state.future_stiffness[region]

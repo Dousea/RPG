@@ -242,7 +242,8 @@ Richer than the document's `position / condition / inventory`:
 
 ```text
 name, entity_id, current_location_id
-hit_points (0-100), stats (survival stats), asleep
+body (17 parts; hit_points is derived, see mechanics/12-health-and-infection.md),
+stats (survival stats), asleep
 inventory: list[ItemEntity]          max_inventory_size = 20
 appearance, occupation_id, job_title see mechanics/07-character-creation.md
 skills: {skill: SkillState}          level and XP, see mechanics/08-skills.md

@@ -6,6 +6,7 @@ exactly the entities the legality check saw.
 
 from dataclasses import dataclass
 
+from .body import BodyPart
 from .character.exercise import ExerciseDefinition
 from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
@@ -95,6 +96,14 @@ class NpcTopic:
 
 
 @dataclass(frozen=True)
+class FirstAidTarget:
+    """The body part a treatment is for and the item it uses, if any."""
+
+    part: BodyPart
+    entity: ItemEntity | None = None
+
+
+@dataclass(frozen=True)
 class TimeSpan:
     """In-game minutes to pass; `clamped` when the request exceeded the cap."""
 
@@ -119,5 +128,6 @@ Resolution = (
     | TargetZombie
     | TimeSpan
     | ExercisePlan
+    | FirstAidTarget
     | None
 )

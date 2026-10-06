@@ -261,7 +261,7 @@ class VerbRegistryTests(unittest.TestCase):
                 self.assertIn("not an available action", result.reason)
 
     def test_a_verb_of_a_later_spec_is_a_parse_failure_until_it_lands(self):
-        for line in ("BANDAGE left hand", "OPEN door", "REPAIR knife"):
+        for line in ("OPEN door", "REPAIR knife"):
             with self.subTest(line=line):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 

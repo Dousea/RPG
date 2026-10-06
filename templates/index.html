@@ -225,32 +225,6 @@
 
         .empty-note { color: var(--paper-dim); font-size: 0.9rem; font-style: italic; }
 
-        /* Vitals bars */
-        .stat-row { margin-bottom: 0.7rem; }
-        .stat-row:last-child { margin-bottom: 0; }
-        .stat-row-head {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.88rem;
-            color: var(--paper-dim);
-            margin-bottom: 0.3rem;
-        }
-        .stat-row-head span:last-child { color: var(--paper); }
-        .stat-bar {
-            height: 7px;
-            background: var(--line);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-        .stat-bar-fill {
-            height: 100%;
-            background: var(--moss);
-            width: 0%;
-            transition: width 0.3s ease, background-color 0.3s ease;
-        }
-        .stat-bar-fill.warn { background: var(--ember); }
-        .stat-bar-fill.bad { background: var(--hazard); }
-
         .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
 
         /* Tags */
@@ -543,8 +517,7 @@
                 <div class="screen" data-screen="status">
                     <h2 class="screen-title">Status</h2>
                     <div class="section">
-                        <h3>Vitals</h3>
-                        <div id="vitals"></div>
+                        <h3>Condition</h3>
                         <div class="chip-row" id="condition-chips"></div>
                     </div>
                     <div class="section">
@@ -555,6 +528,10 @@
 
                 <div class="screen" data-screen="health">
                     <h2 class="screen-title">Health</h2>
+                    <div class="section">
+                        <h3>Wounds</h3>
+                        <ul class="row-list" id="body-list"></ul>
+                    </div>
                 </div>
 
                 <div class="screen" data-screen="inventory">
@@ -687,13 +664,13 @@
     const locationPlace = document.getElementById('location-place');
     const deathBanner = document.getElementById('death-banner');
     const locationDescription = document.getElementById('location-description');
-    const vitals = document.getElementById('vitals');
     const conditionChips = document.getElementById('condition-chips');
     const goalList = document.getElementById('goal-list');
     const heldList = document.getElementById('held-list');
     const equipmentList = document.getElementById('equipment-list');
     const inventoryList = document.getElementById('inventory-list');
     const wornList = document.getElementById('worn-list');
+    const bodyList = document.getElementById('body-list');
     const survivorList = document.getElementById('survivor-list');
     const skillList = document.getElementById('skill-list');
     const traitList = document.getElementById('trait-list');
@@ -715,15 +692,6 @@
     let isGameOver = false;
     let characterName = 'The character';
 
-    // Bands a 0-100 stat into a bar color: healthy stays moss, a mid range
-    // warns in ember, and a low value reads as hazard -- the color itself is
-    // the status, not decoration on top of it.
-    function bandClass(percent) {
-        if (percent < 30) return 'bad';
-        if (percent < 60) return 'warn';
-        return '';
-    }
-
     function el(tag, className, text) {
         const node = document.createElement(tag);
         if (className) node.className = className;
@@ -744,7 +712,7 @@
     // A screen shows once the snapshot carries any of its fields, so a screen
     // whose mechanic hasn't landed stays hidden without a code change here.
     const SCREEN_FIELDS = {
-        status: ['vitals', 'effects', 'conditions', 'sneaking', 'goals'],
+        status: ['effects', 'conditions', 'sneaking', 'goals'],
         health: ['body'],
         inventory: ['held', 'equipment', 'inventory'],
         clothing: ['worn'],
@@ -882,27 +850,7 @@
         metaChips.appendChild(el('span', 'chip stage', data.outbreak_day ? `Outbreak day ${data.outbreak_day}` : 'Before the outbreak'));
     }
 
-    function renderVitals(data) {
-        const v = data.vitals || {};
-        const rows = [
-            ['Health', v.health, v.max_health],
-        ];
-        vitals.innerHTML = '';
-        rows.forEach(([label, value, max]) => {
-            const percent = max ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-            const row = el('div', 'stat-row');
-            const head = el('div', 'stat-row-head');
-            head.appendChild(el('span', null, label));
-            head.appendChild(el('span', null, `${value}${max === 100 ? '%' : `/${max}`}`));
-            const bar = el('div', 'stat-bar');
-            const fill = el('div', `stat-bar-fill ${bandClass(percent)}`.trim());
-            fill.style.width = `${percent}%`;
-            bar.appendChild(fill);
-            row.appendChild(head);
-            row.appendChild(bar);
-            vitals.appendChild(row);
-        });
-
+    function renderCondition(data) {
         conditionChips.innerHTML = '';
         (data.effects || []).forEach(effect => {
             const severe = effect.level >= 3;
@@ -985,6 +933,24 @@
             const li = el('li', 'row-item');
             li.appendChild(el('span', 'label', piece.location.replace('base:', '').replace(/_/g, ' ')));
             li.appendChild(el('span', 'value', piece.wetness_word ? `${piece.name} (${piece.wetness_word})` : piece.name));
+            return li;
+        }));
+    }
+
+    function renderBody(data) {
+        const parts = data.body || [];
+        if (parts.length === 0) {
+            clearAndFill(bodyList, [emptyNote('No wounds.')]);
+            return;
+        }
+        clearAndFill(bodyList, parts.map(part => {
+            const words = [...part.wounds];
+            if (part.bleeding) words.push('bleeding');
+            if (part.bandaged) words.push(part.dirty ? 'bandaged (dirty)' : 'bandaged');
+            if (part.infected) words.push('infected');
+            const li = el('li', 'row-item');
+            li.appendChild(el('span', 'label', part.part));
+            li.appendChild(el('span', 'value', words.join(', ')));
             return li;
         }));
     }
@@ -1177,12 +1143,13 @@
         locationPlace.hidden = !data.current_place;
         locationDescription.textContent = data.location_description || '';
         renderMetaChips(data);
-        renderVitals(data);
+        renderCondition(data);
         renderGoals(data);
         renderInventory(data);
         renderHeld(data);
         renderEquipment(data);
         renderWorn(data);
+        renderBody(data);
         renderSurvivor(data);
         renderSkills(data);
         renderNamedEntries(traitList, data.traits, 'None recorded.');

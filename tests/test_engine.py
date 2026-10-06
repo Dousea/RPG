@@ -5,6 +5,7 @@ Two LLM calls per turn now, not one: the parser proposes actions (script via
 narrator describes what already happened (script via `ScriptedLLM(story=...)`).
 """
 
+import json
 import unittest
 
 import adapters.engine as engine_module
@@ -12,11 +13,10 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from adapters.save import files
 from data.presets import ORTON
-from modules.body import BodyLocation
+from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
-from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM, npc_of
-from tests.test_simulation import LETHAL_ITEM
+from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM, make_dying, npc_of
 
 MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
 MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
@@ -127,6 +127,64 @@ class TurnTests(EngineTestCase):
         )
         self.assertIs(state["sneaking"], True)
 
+    def test_snapshot_carries_the_body_in_words_and_flags(self):
+        """Spec 12, What the narrator and the player see."""
+        self.assertEqual(self.engine.state()["body"], [])
+        player = self.engine.game.player
+        forearm = player.body[BodyPart.FOREARM_L]
+        forearm.bite_time = 60.0
+        forearm.bleeding_time = 10.0
+        hand = player.body[BodyPart.HAND_R]
+        hand.scratch_time = 6.0
+        hand.infected_wound = True
+        hand.zombie_infected = True
+        player.zombie_infection_since = 0.0
+        thigh = player.body[BodyPart.UPPERLEG_L]
+        thigh.cut_time = 12.0
+        thigh.bandage = "item_bandage"
+        thigh.bandage_life = 0.0
+        body = self.engine.state()["body"]
+        self.assertEqual(
+            body,
+            [
+                {
+                    "part": "right hand",
+                    "wounds": ["scratch"],
+                    "bleeding": False,
+                    "bandaged": False,
+                    "dirty": False,
+                    "infected": True,
+                },
+                {
+                    "part": "left forearm",
+                    "wounds": ["bite"],
+                    "bleeding": True,
+                    "bandaged": False,
+                    "dirty": False,
+                    "infected": False,
+                },
+                {
+                    "part": "left thigh",
+                    "wounds": ["laceration"],
+                    "bleeding": False,
+                    "bandaged": True,
+                    "dirty": True,
+                    "infected": False,
+                },
+            ],
+        )
+
+    def test_snapshot_body_never_carries_zombie_infection_or_a_number(self):
+        player = self.engine.game.player
+        player.body[BodyPart.HAND_R].scratch_time = 6.0
+        player.body[BodyPart.HAND_R].zombie_infected = True
+        player.zombie_infection_since = 0.0
+        text = json.dumps(self.engine.state()["body"]).casefold()
+        self.assertNotIn("zombie_infection", text)
+        for entry in self.engine.state()["body"]:
+            for value in entry.values():
+                self.assertTrue(isinstance(value, bool | str | list), value)
+
     def test_snapshot_lists_worn_clothing_with_wetness_words(self):
         self.engine.game.player.worn[BodyLocation.PANTS].wetness = 90.0
         worn = self.engine.state()["worn"]
@@ -144,7 +202,6 @@ class TurnTests(EngineTestCase):
     def test_snapshot_carries_the_held_item_and_kills(self):
         from data.items import ITEMS
         from modules.character.equipment import CharacterHoldableSlot
-        from modules.entity.item import ItemEntity
 
         state = self.engine.state()
         self.assertIsNone(state["held"])
@@ -356,16 +413,15 @@ class LifecycleTests(EngineTestCase):
         self.assertEqual(reloaded.player.current_location_id, "zone_home")
 
     def test_reset_does_not_leak_previous_world_state(self):
-        from modules.entity.item import ItemEntity
 
         self.engine.play("go out")  # now in zone_building
-        self.llm.actions = "ACTIONS:\nTAKE First Aid Kit"
-        self.engine.play("take the first aid kit")
+        self.llm.actions = "ACTIONS:\nTAKE Painkillers"
+        self.engine.play("take the painkillers")
         self.engine.reset()
         self.engine.create_character(ORTON)
         building = self.engine.game.world.locations["zone_building"]
         item_names = [e.item.name for e in building.entities if isinstance(e, ItemEntity)]
-        self.assertIn("First Aid Kit", item_names)
+        self.assertIn("Painkillers", item_names)
 
 
 class SaveLoadTests(EngineTestCase):
@@ -403,10 +459,10 @@ class DeathPersistenceTests(EngineTestCase):
     """game_over/death_cause survive a save and reload through the engine."""
 
     def test_death_survives_a_reload_through_the_engine(self):
-        self.engine.game.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
-        self.llm.actions = "ACTIONS:\nUSE_ITEM Suspicious Vial"
+        make_dying(self.engine.game.player)
+        self.llm.actions = "ACTIONS:\nWAIT 10m"
 
-        self.engine.play("drink the vial")
+        self.engine.play("wait here")
         self.assertTrue(self.engine.game.narrative.game_over)
         original_cause = self.engine.game.narrative.death_cause
         self.assertTrue(original_cause)

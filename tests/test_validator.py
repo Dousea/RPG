@@ -189,8 +189,8 @@ class ItemValidationTests(unittest.TestCase):
         from data.items import ITEMS
         from modules.entity.item import ItemEntity
 
-        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
-        result = self.validator.validate(UseItemAction(item_name="First Aid Kit"))
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        result = self.validator.validate(UseItemAction(item_name="Painkillers"))
         self.assertIsInstance(result, Accepted)
 
     def test_use_item_rejects_non_usable_items(self):
@@ -202,7 +202,7 @@ class ItemValidationTests(unittest.TestCase):
         self.assertIsInstance(result, Rejected)
 
     def test_use_item_not_in_inventory_is_rejected(self):
-        result = self.validator.validate(UseItemAction(item_name="First Aid Kit"))
+        result = self.validator.validate(UseItemAction(item_name="Painkillers"))
         self.assertIsInstance(result, Rejected)
 
 

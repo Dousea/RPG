@@ -92,9 +92,11 @@ Further rules.
 - A turn where the parser proposes nothing costs 1 minute.
 - Each action's cost is applied after it resolves, so the clock and `World.time`
   are current for the next action in the plan.
-- The action-time multiplier (pain, mood, cold hands) is 1 until health lands,
-  and it only scales the fixed costs of the timed verbs (`TAKE`, `DROP`,
-  `USE_ITEM` and eating). Walking, `ATTACK`, `WAIT` and `SLEEP` never take it.
+- The action-time multiplier (pain, mood, cold hands) only scales the fixed costs
+  of the timed verbs (`TAKE`, `DROP`, `USE_ITEM` and eating, `WEAR`, `TAKE_OFF`,
+  `EQUIP`, `UNEQUIP`, `BANDAGE`, `REMOVE_BANDAGE` and `DISINFECT`). Walking,
+  `ATTACK`, `WAIT` and `SLEEP` never take it; see
+  [health](12-health-and-infection.md#what-pain-does).
 - Every spent minute is also handed to the survival stat engine
   ([survival stats](02-survival-stats.md#turn-flow)). If the player dies part
   way through, only the minutes up to that point pass.

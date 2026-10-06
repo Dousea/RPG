@@ -9,6 +9,7 @@ from data import melee as melee_k
 from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
+from managers.body import land_wound
 from managers.combat import equipped_weapon
 from managers.skills import skill_levels
 from managers.stats.status_effects import defence_penalty, player_status_effect_levels
@@ -182,12 +183,9 @@ def clothing_defence(player: PlayerEntity, part: BodyPart, kind: WoundKind) -> i
     return min(math.floor(total), k.CLOTHING_DEFENCE_CAP)
 
 
-def apply_wound(player: PlayerEntity, wound: Wound) -> None:
-    """Take the wound's damage off overall health, scaled by the part's weight."""
-    player.fractional_hp_loss += wound.damage * k.BODY_PART_WEIGHT[wound.part]
-    whole = math.floor(player.fractional_hp_loss)
-    player.fractional_hp_loss -= whole
-    player.hit_points -= whole
+def apply_wound(player: PlayerEntity, wound: Wound, rng: random.Random) -> None:
+    """Put the wound into its part, which scales the damage by the part's weight."""
+    land_wound(player, wound.kind, wound.part, wound.damage, wound.zombie_infected, rng)
 
 
 def resolve_attack(
@@ -217,6 +215,6 @@ def resolve_attack(
     for entity in player.layers_for(part):
         entity.holes.add(part)
     wound = Wound(kind, part, damage, roll_zombie_infection(kind, rng))
-    apply_wound(player, wound)
+    apply_wound(player, wound, rng)
     outcome.wound = wound
     return outcome

@@ -1,5 +1,6 @@
-"""Body parts and body locations (spec 05)."""
+"""Body parts, body locations (spec 05) and the health of each part (spec 12)."""
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -143,3 +144,97 @@ class BodyLocation(StrEnum):
 
 
 LAYER_ORDER: dict[BodyLocation, int] = {location: i for i, location in enumerate(BodyLocation)}
+
+
+PART_WEIGHT: dict[BodyPart, float] = {  # spec 12: overall health lost per point of part damage
+    BodyPart.HAND_L: 0.1,
+    BodyPart.HAND_R: 0.1,
+    BodyPart.FOREARM_L: 0.2,
+    BodyPart.FOREARM_R: 0.2,
+    BodyPart.UPPERARM_L: 0.3,
+    BodyPart.UPPERARM_R: 0.3,
+    BodyPart.TORSO_UPPER: 0.35,
+    BodyPart.TORSO_LOWER: 0.4,
+    BodyPart.HEAD: 0.6,
+    BodyPart.NECK: 0.7,
+    BodyPart.GROIN: 0.4,
+    BodyPart.UPPERLEG_L: 0.3,
+    BodyPart.UPPERLEG_R: 0.3,
+    BodyPart.LOWERLEG_L: 0.2,
+    BodyPart.LOWERLEG_R: 0.2,
+    BodyPart.FOOT_L: 0.2,
+    BodyPart.FOOT_R: 0.2,
+}
+PART_HEALTH_MAX = 100.0  # spec 12
+OVERALL_DAMAGE_CAP = 100.0  # spec 12
+GENERAL_INFECTION_PER_LEVEL = 10  # spec 12
+GENERAL_INFECTION_CAP = 100.0  # spec 12
+
+
+@dataclass
+class PartState:
+    """One body part: its health, open wounds, bandage and infection (spec 12)."""
+
+    health: float = PART_HEALTH_MAX
+    scratch_time: float = 0.0
+    cut_time: float = 0.0
+    bite_time: float = 0.0
+    bleeding_time: float = 0.0
+    bandage: str | None = None
+    bandage_life: float = 0.0
+    bandage_alcoholic: bool = False
+    bandage_xp_ready: bool = True
+    zombie_infected: bool = False
+    infected_wound: bool = False
+    wound_infection: float = 0.0
+    alcohol: float = 0.0
+    extra_pain: float = 0.0
+    stiffness: float = 0.0
+
+    @property
+    def bandaged(self) -> bool:
+        return self.bandage is not None
+
+    @property
+    def bleeding(self) -> bool:
+        return self.bleeding_time > 0 and not self.bandaged
+
+    @property
+    def injured(self) -> bool:
+        return (
+            self.scratch_time > 0
+            or self.cut_time > 0
+            or self.bite_time > 0
+            or self.bleeding_time > 0
+        )
+
+    @property
+    def wounded(self) -> bool:
+        """Whether any wound time is still running."""
+        return self.scratch_time > 0 or self.cut_time > 0 or self.bite_time > 0
+
+
+def new_body() -> dict[BodyPart, PartState]:
+    return {part: PartState() for part in BodyPart}
+
+
+def overall_damage(body: dict[BodyPart, PartState]) -> float:
+    total = sum(
+        (PART_HEALTH_MAX - state.health) * PART_WEIGHT[part] for part, state in body.items()
+    )
+    return min(OVERALL_DAMAGE_CAP, total)
+
+
+def overall_health(body: dict[BodyPart, PartState]) -> float:
+    """100 less the weighted damage of every part, the damage capped at 100."""
+    return OVERALL_DAMAGE_CAP - overall_damage(body)
+
+
+def general_wound_infection(body: dict[BodyPart, PartState]) -> float:
+    """Ten times the infection levels of the infected wounds, at most 100."""
+    total = sum(
+        state.wound_infection
+        for state in body.values()
+        if state.infected_wound and state.wound_infection > 0
+    )
+    return min(GENERAL_INFECTION_CAP, GENERAL_INFECTION_PER_LEVEL * total)

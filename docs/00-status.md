@@ -36,6 +36,7 @@ what the game now does.
 | 09 | [Zombies](mechanics/09-zombies.md) | Implemented | `modules/entity/zombie.py`, `modules/location.py`, `modules/pace.py`, `modules/story.py`, `modules/resolution.py`, `modules/action/types.py`, `modules/action/parser.py`, `data/zombie_lore.py`, `data/locations.py`, `data/time_costs.py`, `managers/zombies.py`, `managers/noise.py`, `managers/zombie_attack.py`, `managers/simulation.py`, `managers/validator.py`, `managers/context.py`, `adapters/engine.py`, `adapters/llm.py`, `adapters/save/codec.py`, `templates/index.html` |
 | 10 | [LLM Contract](mechanics/10-llm-contract.md) | Implemented | `modules/action/parser.py`, `modules/action/types.py`, `modules/action/words.py`, `modules/entity/npc.py`, `modules/location.py`, `modules/resolution.py`, `modules/social.py`, `modules/story.py`, `data/social.py`, `data/topics.py`, `data/story_beats.py`, `data/time_costs.py`, `data/zombie_lore.py`, `data/quests.py`, `data/npcs.py`, `managers/social.py`, `managers/story.py`, `managers/game.py`, `managers/validator.py`, `managers/simulation.py`, `managers/context.py`, `adapters/llm.py`, `adapters/engine.py`, `adapters/save/codec.py`, `templates/index.html`, `evals/parser_cases.yaml`, `scripts/eval_parser.py` |
 | 11 | [Melee Combat](mechanics/11-melee-combat.md) | Implemented | `modules/item.py`, `modules/entity/item.py`, `modules/entity/zombie.py`, `modules/entity/player.py`, `modules/action/parser.py`, `modules/action/types.py`, `modules/action/words.py`, `data/melee.py`, `data/items.py`, `data/time_costs.py`, `data/zombie_lore.py`, `managers/melee.py`, `managers/combat.py`, `managers/zombies.py`, `managers/zombie_attack.py`, `managers/skills.py`, `managers/simulation.py`, `managers/validator.py`, `managers/context.py`, `adapters/engine.py`, `adapters/save/codec.py`, `templates/index.html` |
+| 12 | [Body-Part Health and Zombie Infection](mechanics/12-health-and-infection.md) | Implemented | `modules/body.py`, `modules/item.py`, `modules/entity/item.py`, `modules/entity/player.py`, `modules/modifier.py`, `modules/resolution.py`, `modules/action/types.py`, `modules/action/parser.py`, `modules/action/words.py`, `data/body.py`, `data/items.py`, `data/locations.py`, `data/time_costs.py`, `data/zombie_lore.py`, `managers/body.py`, `managers/first_aid.py`, `managers/zombie_attack.py`, `managers/zombies.py`, `managers/exercise.py`, `managers/events.py`, `managers/stats/engine.py`, `managers/stats/status_effects.py`, `managers/simulation.py`, `managers/validator.py`, `managers/context.py`, `adapters/engine.py`, `adapters/save/codec.py`, `templates/index.html` |
 
 ## The central divergence (resolved for engine authority; still open for scale)
 
@@ -112,7 +113,7 @@ this one.
 | [22 Relationships](22-relationships.md) | Implemented | `managers/relationship.py` | — |
 | [23 Traits, Perks, Effects, Modifiers](23-traits-perks-modifiers.md) | Implemented | `modules/effect.py`, `modules/modifier.py`, `managers/events.py` | Pipeline is live: `SimulationCore` constructs `WeaponDealDamageEvent`/`WeaponTakeDamageEvent`/`ConsumeItemEvent`/`ApplyItemEvent`, and the event-to-handler matcher (previously a always-false string comparison) correctly routes them, role-aware. |
 | [24 Runtime and Persistence](24-runtime-and-persistence.md) | Implemented | `config.py`, `adapters/save/codec.py`, `adapters/save/files.py`, `adapters/engine.py` | Schema is v4 (see [mechanics 01](mechanics/01-game-clock.md#saves)); `current_place`, `game_over` and `death_cause` are saved. Any other version is discarded and a new game starts; there is no migration. |
-| [25 UI Layout](25-ui-layout.md) | Partial | `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py` | The page, its three responsive layouts (8, 5 and 4 tabs) and the creation screen exist and are read-only. The Health and Nearby screens stay hidden until their mechanics send fields; hit points and item condition still show as numbers. |
+| [25 UI Layout](25-ui-layout.md) | Partial | `templates/index.html`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py` | The page, its three responsive layouts (8, 5 and 4 tabs) and the creation screen exist and are read-only. The Health and Nearby screens stay hidden until their mechanics send fields; item condition still shows as numbers. The Health screen lists wounded parts in words. |
 
 ## Known issues
 
@@ -238,16 +239,11 @@ prior session. Harmless today — the only lock in the game is Orton's own
 apartment door, and he starts holding its key — but it would misbehave the
 moment a second, player-unlockable door existed.
 
-**`game_over` is not reachable in normal play.** It is real and persisted
-(`managers/simulation.py` `_check_player_death`), and it is checked every
-turn, but nothing in the shipped content can actually drive Orton's HP to
-zero: `ATTACK` only ever damages the *target* NPC, never the player who
-issued it, and every item's `HPModifier` in `data/items.py` is positive
-(healing). There is no NPC aggression, hazard, or environmental system that
-damages Orton at all. The only ways to reach `game_over` today are a
-test-local item (see `tests/test_simulation.py`'s `LETHAL_ITEM`, used only
-to exercise the death path in isolation) or a hand-edited/malformed save
-that sets HP to zero directly.
+**`game_over` is reachable.** It is real and persisted
+(`managers/simulation.py` `_check_player_death`) and is checked every turn.
+Zombie wounds, bleeding, the zombie infection, starvation, thirst and deep cold or
+heat all take the player's health to zero; see
+[mechanics 12](mechanics/12-health-and-infection.md).
 
 **`item_storage_key` is unplaced.** The item is still defined in
 `data/items.py`, a holdover from the old storage-room map, but nothing in

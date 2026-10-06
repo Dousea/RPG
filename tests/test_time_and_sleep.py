@@ -23,7 +23,7 @@ from modules.action.types import (
 )
 from modules.entity.item import ItemEntity
 from modules.stats import CharacterStat
-from tests.support import simulate
+from tests.support import make_dying, simulate
 
 
 def _spent(gm: GameManager, *actions) -> int:
@@ -48,8 +48,8 @@ class TimeCostTests(unittest.TestCase):
 
     def test_using_a_non_food_item_costs_one_minute(self):
         gm = GameManager()
-        gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
-        self.assertEqual(_spent(gm, UseItemAction(item_name="First Aid Kit")), 1)
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        self.assertEqual(_spent(gm, UseItemAction(item_name="Painkillers")), 1)
 
     def test_eating_costs_the_default_five_minutes(self):
         gm = GameManager()
@@ -331,27 +331,38 @@ class SleepSpanTests(unittest.TestCase):
 
 
 class StatDeathTests(unittest.TestCase):
-    """Spec 02, Edge cases."""
+    """Spec 02, Edge cases; spec 12, Death."""
 
     def test_death_by_thirst_ends_the_game_with_the_cause(self):
         gm = GameManager()
         gm.player.stats.set(CharacterStat.THIRST, 0.9)
-        facts = simulate(gm, WaitAction(duration=Duration(minutes=12 * 60)))
+        facts: list[str] = []
+        for _ in range(60):
+            facts.extend(simulate(gm, WaitAction(duration=Duration(minutes=12 * 60))))
+            if gm.narrative.game_over:
+                break
         self.assertTrue(gm.narrative.game_over)
         self.assertEqual(gm.narrative.death_cause, "Orton died of thirst.")
         self.assertTrue(any("Orton has died" in fact for fact in facts))
         self.assertEqual(gm.player.hit_points, 0)
 
-    def test_the_clock_stops_at_the_chunk_where_orton_died(self):
+    def test_the_wait_stops_each_time_the_injured_level_rises(self):
         gm = GameManager()
         gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=12 * 60)))
+        self.assertIn("Orton is getting weaker.", facts)
+        self.assertFalse(gm.narrative.game_over)
+        self.assertLess(gm.narrative.minutes, 60 * 3)
+
+    def test_the_clock_stops_at_the_minute_orton_died(self):
+        gm = GameManager()
+        make_dying(gm.player)
         simulate(gm, WaitAction(duration=Duration(minutes=12 * 60)))
-        self.assertLess(gm.narrative.minutes, 6 * 60)
-        self.assertEqual(gm.narrative.minutes % 10, 0)
+        self.assertLess(gm.narrative.minutes, 10)
 
     def test_later_actions_in_the_turn_are_refused(self):
         gm = GameManager()
-        gm.player.stats.set(CharacterStat.THIRST, 0.9)
+        make_dying(gm.player)
         facts = simulate(
             gm,
             WaitAction(duration=Duration(minutes=12 * 60)),

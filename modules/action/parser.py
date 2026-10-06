@@ -17,12 +17,15 @@ from modules.action.types import (
     AnyAction,
     AskAction,
     AttackAction,
+    BandageAction,
+    DisinfectAction,
     DropAction,
     Duration,
     EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
+    RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
     ShoveAction,
@@ -144,6 +147,38 @@ def _parse_use_item(args: str) -> UseItemAction:
     if not args:
         raise _ActionParseError("USE_ITEM needs an item name.")
     return UseItemAction(item_name=args)
+
+
+_WITH_PATTERN = re.compile(r"\s+with\s+", re.IGNORECASE)
+
+
+def _split_with(args: str) -> tuple[str, str]:
+    """Split 'left forearm with Bandage' into the part and the item; either may be empty."""
+    text = args.strip()
+    if text.casefold().startswith("with "):
+        return "", text[len("with ") :].strip()
+    match = _WITH_PATTERN.search(text)
+    if match is None:
+        return text, ""
+    return text[: match.start()].strip(), text[match.end() :].strip()
+
+
+def _parse_bandage(args: str) -> BandageAction:
+    part, item = _split_with(args)
+    return BandageAction(part_name=part, item_name=item)
+
+
+def _parse_remove_bandage(args: str) -> RemoveBandageAction:
+    if not args:
+        raise _ActionParseError("REMOVE_BANDAGE needs a body part.")
+    return RemoveBandageAction(part_name=args)
+
+
+def _parse_disinfect(args: str) -> DisinfectAction:
+    part, item = _split_with(args)
+    if not part:
+        raise _ActionParseError("DISINFECT needs a body part.")
+    return DisinfectAction(part_name=part, item_name=item)
 
 
 _SPAN_PATTERN = re.compile(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?")
@@ -333,6 +368,7 @@ SceneKey = Literal[
     "worn",
     "npcs_here",
     "threats",
+    "hurt",
 ]
 
 
@@ -389,6 +425,30 @@ VERBS: dict[str, Verb] = dict(
             "a carried item; eating and drinking too",
             None,
             ("carried",),
+        ),
+        _verb(
+            "BANDAGE",
+            ("body_part", "item"),
+            _parse_bandage,
+            "a body part from [CONDITION], then optionally 'with <bandage>'",
+            1,
+            ("hurt",),
+        ),
+        _verb(
+            "REMOVE_BANDAGE",
+            ("body_part",),
+            _parse_remove_bandage,
+            "a bandaged body part from [CONDITION]; the bandage comes back to the inventory",
+            1,
+            ("hurt",),
+        ),
+        _verb(
+            "DISINFECT",
+            ("body_part", "item"),
+            _parse_disinfect,
+            "a hurt, unbandaged body part, then optionally 'with <alcohol item>'",
+            1,
+            ("hurt",),
         ),
         _verb(
             "WEAR",

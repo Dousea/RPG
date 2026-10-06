@@ -5,10 +5,13 @@ from modules.action.types import (
     AddRelationshipNoteAction,
     AnyAction,
     AttackAction,
+    BandageAction,
+    DisinfectAction,
     DropAction,
     EquipAction,
     ExerciseAction,
     MoveAction,
+    RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
     ShoveAction,
@@ -49,6 +52,12 @@ def describe_action(action: AnyAction) -> str:
             return f"take the {name} in hand"
         case UnequipAction(item_name=name):
             return f"put the {name} away"
+        case BandageAction(part_name=part):
+            return f"bandage the {part}" if part else "bandage a wound"
+        case RemoveBandageAction(part_name=part):
+            return f"take the bandage off the {part}"
+        case DisinfectAction(part_name=part):
+            return f"disinfect the {part}"
         case WaitAction():
             return "wait"
         case SleepAction():

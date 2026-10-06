@@ -30,7 +30,7 @@ from managers.game import (
     NarrativeState,
 )
 from managers.relationship import RelationshipManager
-from modules.body import BodyLocation, BodyPart
+from modules.body import BodyLocation, BodyPart, PartState, new_body
 from modules.character.appearance import Appearance, Gender
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.exercise import ExerciseState
@@ -46,7 +46,7 @@ from modules.entity.zombie import (
     ZombieEntity,
     ZombieState,
 )
-from modules.item import ClothingItem, MeleeWeaponItem
+from modules.item import ClothingItem, MedicalItem, MeleeWeaponItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.social import SocialLog
@@ -56,7 +56,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 15  # spec 11
+SCHEMA_VERSION = 16  # spec 12
 
 MAX_ID_LENGTH = 40
 
@@ -183,17 +183,10 @@ def _exercise_to_dict(state: ExerciseState) -> dict[str, Any]:
         "last_done_minute": dict(state.last_done_minute),
         "future_stiffness": dict(state.future_stiffness),
         "region_timers": dict(state.region_timers),
-        "part_stiffness": {part.value: amount for part, amount in state.part_stiffness.items()},
     }
 
 
 def _exercise_from_dict(data: dict[str, Any]) -> ExerciseState:
-    part_stiffness: dict[BodyPart, float] = {}
-    for name, amount in _as_dict(data.get("part_stiffness")).items():
-        try:
-            part_stiffness[BodyPart(name)] = float(amount)
-        except ValueError:
-            logger.warning(f"Dropping unknown body part '{name}'.")
     return ExerciseState(
         regularity=_float_map(data.get("regularity"), EXERCISES),
         last_done_minute={
@@ -207,8 +200,42 @@ def _exercise_from_dict(data: dict[str, Any]) -> ExerciseState:
             for key, ticks in _as_dict(data.get("region_timers")).items()
             if key in REGION_PARTS
         },
-        part_stiffness=part_stiffness,
     )
+
+
+def _part_state_to_dict(state: PartState) -> dict[str, Any]:
+    return dataclasses.asdict(state)
+
+
+def _part_state_from_dict(data: dict[str, Any]) -> PartState:
+    defaults = PartState()
+    values: dict[str, Any] = {}
+    for field in dataclasses.fields(PartState):
+        default = getattr(defaults, field.name)
+        raw = data.get(field.name, default)
+        if isinstance(default, bool):
+            values[field.name] = _as_bool(raw)
+        elif isinstance(default, float):
+            values[field.name] = float(raw)
+        else:
+            values[field.name] = None if raw is None else _as_text(raw, MAX_ID_LENGTH)
+    return PartState(**values)
+
+
+def _body_to_dict(body: dict[BodyPart, PartState]) -> dict[str, Any]:
+    return {part.value: _part_state_to_dict(state) for part, state in body.items()}
+
+
+def _body_from_dict(value: Any) -> dict[BodyPart, PartState]:
+    body = new_body()
+    for name, entry in _as_dict(value).items():
+        try:
+            part = BodyPart(name)
+        except ValueError:
+            logger.warning(f"Dropping unknown body part '{name}'.")
+            continue
+        body[part] = _part_state_from_dict(_as_dict(entry))
+    return body
 
 
 def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
@@ -218,6 +245,7 @@ def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
         "wetness": entity.wetness,
         "holes": sorted(part.value for part in entity.holes),
         "condition": entity.condition,
+        "uses": entity.uses,
     }
 
 
@@ -235,6 +263,8 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
             max(int(data.get("condition", entity.item.condition_max)), 0),
             entity.item.condition_max,
         )
+    if isinstance(entity.item, MedicalItem):
+        entity.uses = min(max(int(data.get("uses", entity.item.uses)), 0), entity.item.uses)
     for name in data.get("holes", []):
         try:
             entity.holes.add(BodyPart(name))
@@ -288,6 +318,10 @@ def _zombie_from_dict(data: dict[str, Any], zone_ids: Any) -> ZombieEntity | Non
     except (KeyError, TypeError, ValueError):
         logger.warning("Dropping a zombie with unreadable fields.")
         return None
+
+
+def _optional_float(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
 
 
 def _optional_minute(value: Any) -> int | None:
@@ -387,13 +421,16 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "name": player.name,
             "current_location_id": player.current_location_id,
             "current_place": player.current_place,
-            "hit_points": player.hit_points,
             "max_inventory_size": player.max_inventory_size,
             "stats": player.stats.to_dict(),
             "thermal": player.thermal.to_dict(),
             "asleep": player.asleep,
             "sneaking": player.sneaking,
-            "fractional_hp_loss": player.fractional_hp_loss,
+            "body": _body_to_dict(player.body),
+            "zombie_infection_since": player.zombie_infection_since,
+            "zombie_infection_hours": player.zombie_infection_hours,
+            "pain_effect_minutes": player.pain_effect_minutes,
+            "reduce_infection_power": player.reduce_infection_power,
             "food_eaten_timer": player.food_eaten_timer,
             "appearance": {
                 "forename": player.appearance.forename,
@@ -720,7 +757,11 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         thermal=ThermalState.from_dict(_as_dict(data.get("thermal"))),
         asleep=_as_bool(data.get("asleep", False)),
         sneaking=_as_bool(data.get("sneaking", False)),
-        fractional_hp_loss=float(data.get("fractional_hp_loss", 0.0)),
+        body=_body_from_dict(data.get("body")),
+        zombie_infection_since=_optional_float(data.get("zombie_infection_since")),
+        zombie_infection_hours=float(data.get("zombie_infection_hours", 0.0)),
+        pain_effect_minutes=float(data.get("pain_effect_minutes", 0.0)),
+        reduce_infection_power=float(data.get("reduce_infection_power", 0.0)),
         food_eaten_timer=float(data.get("food_eaten_timer", 0.0)),
         appearance=_appearance_from_dict(_as_dict(data.get("appearance"))),
         occupation_id=_as_text(data.get("occupation_id", ""), MAX_ID_LENGTH),
@@ -740,8 +781,6 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
     )
     player.equipment = equipment
     player.worn = worn
-    # Set last: __post_init__ filled hit_points to max.
-    player.hit_points = int(data.get("hit_points", player.max_hit_points))
     return player
 
 

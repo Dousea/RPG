@@ -241,8 +241,9 @@ is the core sampled every 7 sub-steps.
 - **Otherwise:** the stage falls 0.011111 per tick (37.5 per game hour) and the
   duration resets.
 
-`health_cap(stage)` is `100 − 100 × stage`. Nothing applies it to health until
-the health spec lands.
+`health_cap(stage)` is `100 − 100 × stage`. The
+[body minute](12-health-and-infection.md#the-body-minute) caps health at it, and a
+stage of 1 kills.
 
 ## Wetness
 

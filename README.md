@@ -139,16 +139,12 @@ NPC_MOVE <npc> TO <zone>             NPC_STATUS <npc> ADD|REMOVE <status>
 `UPDATE_CONDITION` is always refused: the engine moves hunger, thirst, fatigue and
 the other survival stats with the clock (see
 [docs/mechanics/02-survival-stats.md](docs/mechanics/02-survival-stats.md)), and
-player HP is never LLM-declarable (see docs/01-engine-authority.md). Player HP only changes through `ATTACK` (resolved
-by the Simulation Core against equipped-weapon damage, with trait/perk
-reactions) or `USE_ITEM` (applies the item's own modifiers, e.g. a medkit's
-`HPModifier`). In practice `game_over` is **not reachable in normal play**:
-`ATTACK` only ever damages the *target* NPC, never the player who issued it,
-and every item's `HPModifier` in `data/items.py` is positive (healing).
-Nothing in the shipped content lowers Orton's own HP. `_check_player_death`
-(`managers/simulation.py`) is real and still checked every turn, but it can
-currently only fire via a test-local item (see `tests/test_simulation.py`'s
-`LETHAL_ITEM`) or a hand-edited/malformed save. `MOVE_TO` resolves its
+player health is never LLM-declarable (see docs/01-engine-authority.md). Player
+health is derived from the body parts and only changes through zombie wounds,
+bleeding, infection and the other body effects described in
+[docs/mechanics/12-health-and-infection.md](docs/mechanics/12-health-and-infection.md);
+`_check_player_death` (`managers/simulation.py`) is the only producer of
+`game_over`. `MOVE_TO` resolves its
 destination against a zone id, display name, alias, or `in`/`out` connection
 out of the current zone (`GameManager.resolve_location`); a zone that isn't
 directly adjacent is reached by walking the connection graph

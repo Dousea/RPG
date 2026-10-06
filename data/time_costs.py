@@ -14,11 +14,14 @@ from modules.action.types import (
     AnyAction,
     AskAction,
     AttackAction,
+    BandageAction,
+    DisinfectAction,
     DropAction,
     EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
+    RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
     ShoveAction,
@@ -55,6 +58,7 @@ WALK_TO_BARRIER_MIN = 1  # spec 01
 WINDOW_CLIMB_MIN = 1  # spec 01
 WEAR_MINUTES = 1  # spec 01
 TAKE_OFF_MINUTES = 1  # spec 01
+FIRST_AID_MINUTES = 1  # spec 12
 ZONE_HOP_MIN = 10  # spec 01
 ZONE_HOP_RUNNING_MIN = 5  # spec 01
 ZONE_HOP_SNEAKING_MIN = 20  # spec 01
@@ -125,6 +129,9 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     WearAction: WEAR_MINUTES,
     TakeOffAction: TAKE_OFF_MINUTES,
     UseItemAction: _use_item_minutes,
+    BandageAction: FIRST_AID_MINUTES,
+    RemoveBandageAction: FIRST_AID_MINUTES,
+    DisinfectAction: FIRST_AID_MINUTES,
     MoveAction: _move_minutes,
     StanceAction: 0,
     WaitAction: _spent_minutes,
@@ -146,7 +153,12 @@ MULTIPLIED_ACTIONS: tuple[type, ...] = (
     UseItemAction,
     WearAction,
     TakeOffAction,
-)  # spec 01
+    EquipAction,
+    UnequipAction,
+    BandageAction,
+    RemoveBandageAction,
+    DisinfectAction,
+)  # spec 12
 
 
 def action_minutes(action: AnyAction, resolved: Resolution) -> int:

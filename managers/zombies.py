@@ -9,6 +9,7 @@ from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
 from data.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
+from managers.body import kill, limp_factor
 from managers.game import GameManager
 from managers.locations import zone_path
 from managers.melee import MeleeEngine
@@ -374,9 +375,10 @@ def chase_speed(zombie: ZombieEntity) -> float:
     return k.CHASE_SPEED_TILES_PER_MIN * zombie.speed_mod * distance_factor
 
 
-def approach_minutes(gap: float) -> int:
-    """Minutes the player needs to walk up to a zombie `gap` tiles away."""
-    return max(0, math.ceil((gap - k.ATTACK_RANGE_TILES) / k.WALK_APPROACH_TILES_PER_MIN))
+def approach_minutes(gap: float, speed_factor: float = 1.0) -> int:
+    """Minutes the player needs to walk up to a zombie `gap` tiles away; a limp slows the walk."""
+    walk = k.WALK_APPROACH_TILES_PER_MIN * speed_factor
+    return max(0, math.ceil((gap - k.ATTACK_RANGE_TILES) / walk))
 
 
 _HUNTING = (ZombieState.CHASING, ZombieState.ATTACKING)
@@ -565,7 +567,10 @@ class ZombieLoop:
         world, player = manager.world, manager.player
         player_zone = player.current_location_id
         size = world.locations[player_zone].size_tiles
-        opens = k.PACE_SPEED_TILES_PER_MIN[minute.pace] if minute.approach_target is None else 0
+        limp = limp_factor(player)
+        opens = (
+            k.PACE_SPEED_TILES_PER_MIN[minute.pace] * limp if minute.approach_target is None else 0
+        )
         for zombie in _by_id(world.zombies.values()):
             if zombie.is_down(now):
                 continue
@@ -575,7 +580,7 @@ class ZombieLoop:
                 self._follow_sound(zombie, size)
             if zombie.zombie_id == minute.approach_target:
                 zombie.gap = max(
-                    float(k.ATTACK_RANGE_TILES), zombie.gap - k.WALK_APPROACH_TILES_PER_MIN
+                    float(k.ATTACK_RANGE_TILES), zombie.gap - k.WALK_APPROACH_TILES_PER_MIN * limp
                 )
 
     def _chase(self, zombie: ZombieEntity, opens: float, size: int) -> None:
@@ -718,7 +723,7 @@ class ZombieLoop:
             assert zombie.side is not None
             outcome = resolve_attack(player, zombie.side, len(attackers), self._rng)
             if outcome.dragged_down:
-                player.hit_points = 0
+                kill(player)
                 report.death_fact = k.DRAGGED_FACT.format(name=name)
                 report.interrupted = True
                 return

@@ -15,11 +15,6 @@ class XPModifier:
 
 
 @dataclass
-class HPModifier:
-    amount: int
-
-
-@dataclass
 class ConditionsModifier:
     conditions: dict[CharacterCondition, bool]
 
@@ -41,7 +36,6 @@ class ReputationModifier:
 AnyModifier = (
     DamageMultiplicativeModifier
     | ConditionsModifier
-    | HPModifier
     | XPModifier
     | AffinityModifier
     | ReputationModifier

@@ -21,8 +21,10 @@ from data.skills import SKILLS
 from data.social import TALK_APPROACHES
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from data.traits import TRAITS
+from managers.body import open_wounds
 from managers.climate import describe_weather
 from managers.combat import held_entity
+from managers.first_aid import part_word
 from managers.game import GameManager
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
@@ -30,7 +32,7 @@ from managers.story import visible_topics
 from managers.zombies import threat_views
 from modules.action.parser import SceneKey, available_verbs
 from modules.entity.item import ItemEntity
-from modules.item import ClothingItem
+from modules.item import ClothingItem, MedicalItem
 from modules.quest import QuestStatus
 
 
@@ -170,10 +172,27 @@ class ContextBuilder:
         if narrator:
             parts.extend(condition.value for condition in player.conditions)
         line = ", ".join(parts) or "Fine"
+        line += "".join(f"\n{part_line}" for part_line in self._part_lines())
         held = held_entity(player)
         if held is not None:
             line += f"\nHolding: {held.item.name.lower()} ({item_condition_word(held)})"
         return line
+
+    def _part_lines(self) -> list[str]:
+        """One line per injured or bandaged part, in words: wounds, bleeding, bandage, infection."""
+        lines: list[str] = []
+        for part, state in self.manager.player.body.items():
+            if not (state.injured or state.bandaged):
+                continue
+            words = open_wounds(state)
+            if state.bleeding:
+                words.append("bleeding")
+            if state.bandaged:
+                words.append("bandaged (dirty)" if state.bandage_life <= 0 else "bandaged")
+            elif state.infected_wound and state.wounded:
+                words.append("infected")
+            lines.append(f"{part_word(part)}: {', '.join(words)}")
+        return lines
 
     def _threats_section(self) -> str:
         """The zombies the player perceives, by id, distance and what they are doing."""
@@ -313,6 +332,8 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("npcs_here")
         if any(view.zombie_id is not None for view in threat_views(manager)):
             keys.add("threats")
+        if any(state.injured or state.bandaged for state in player.body.values()):
+            keys.add("hurt")
         return frozenset(keys)
 
     def _available_actions_section(self) -> str:
@@ -552,9 +573,18 @@ def _lines(lines: Iterable[str]) -> str:
     return "\n".join(lines)
 
 
+def _uses_left(entity: ItemEntity) -> str:
+    """How many uses a multi-use medical item has left; empty for any other item."""
+    if isinstance(entity.item, MedicalItem) and entity.item.uses > 1:
+        return f" ({entity.uses} left)"
+    return ""
+
+
 def _marks(entity: ItemEntity) -> str:
-    return " (broken)" if entity.broken else ""
+    return " (broken)" if entity.broken else _uses_left(entity)
 
 
 def _with_condition(entity: ItemEntity) -> str:
+    if isinstance(entity.item, MedicalItem):
+        return f"{entity.item.name}{_uses_left(entity)}"
     return f"{entity.item.name} ({item_condition_word(entity)})"

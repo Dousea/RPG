@@ -16,6 +16,7 @@ from managers.stats.status_effects import (
 from modules import units
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, Stats, StatusEffect
+from tests.support import set_health
 
 RANGES = {
     CharacterStat.HUNGER: (0, 1, 0),
@@ -194,17 +195,17 @@ class StatusEffectThresholdTests(unittest.TestCase):
 
     def test_injured_reads_lost_hp_and_is_off_at_zero_hp(self):
         player = PlayerEntity(name="T", current_location_id="x")
-        player.hit_points = 80
+        set_health(player, 80.01)
         self.assertEqual(
             dict((m, lv) for m, lv, _ in active_status_effects(player)).get(
                 StatusEffect.INJURED, 0
             ),
             0,
         )
-        player.hit_points = 79
+        set_health(player, 79)
         names = {m: n for m, _, n in active_status_effects(player)}
         self.assertEqual(names[StatusEffect.INJURED], "A Little Hurt")
-        player.hit_points = 0
+        set_health(player, 0)
         self.assertNotIn(StatusEffect.INJURED, {m for m, _, _ in active_status_effects(player)})
 
 

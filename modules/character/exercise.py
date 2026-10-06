@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass, field
 
-from modules.body import BodyPart
-
 
 @dataclass(frozen=True)
 class ExerciseDefinition:
@@ -26,4 +24,3 @@ class ExerciseState:
     last_done_minute: dict[str, int] = field(default_factory=dict[str, int])
     future_stiffness: dict[str, float] = field(default_factory=dict[str, float])
     region_timers: dict[str, int] = field(default_factory=dict[str, int])
-    part_stiffness: dict[BodyPart, float] = field(default_factory=dict[BodyPart, float])

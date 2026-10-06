@@ -162,26 +162,6 @@ DAMAGE_OFFSET = 10  # spec 09
 ZOMBIE_INFECTION_CHANCE_PERCENT = {"scratch": 7, "laceration": 25, "bite": 100}  # spec 09
 CLOTHING_DEFENCE_CAP = 100  # spec 09
 
-# Overall health lost per point of wound damage, by body part.
-BODY_PART_WEIGHT = {  # spec 09
-    "hand_l": 0.1,
-    "hand_r": 0.1,
-    "forearm_l": 0.2,
-    "forearm_r": 0.2,
-    "upperarm_l": 0.3,
-    "upperarm_r": 0.3,
-    "torso_upper": 0.35,
-    "torso_lower": 0.4,
-    "head": 0.6,
-    "neck": 0.7,
-    "groin": 0.4,
-    "upperleg_l": 0.3,
-    "upperleg_r": 0.3,
-    "lowerleg_l": 0.2,
-    "lowerleg_r": 0.2,
-    "foot_l": 0.2,
-    "foot_r": 0.2,
-}
 BODY_PART_WORDS = {  # spec 09
     "hand_l": "left hand",
     "hand_r": "right hand",

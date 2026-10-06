@@ -13,8 +13,8 @@ need: its **gap**, the distance in tiles between it and the player. Everything i
 stepped minute by minute.
 
 What the player does to a zombie (damage, crits, knockdowns, shoves, weapon
-wear) is left to the melee mechanic. Wounds land as an overall-health loss only;
-body parts, bleeding, infection and the limp are left to the health mechanic.
+wear) is left to the melee mechanic. Wounds land in a body part; bleeding,
+infection and the limp belong to the [health mechanic](12-health-and-infection.md).
 
 ## What we port
 
@@ -376,7 +376,8 @@ A sleeping player is woken by the first attack.
 
 ## Wounds
 
-A landed wound lowers overall health by `damage × the part's weight`:
+A landed wound takes `damage` off its body part, which lowers overall health by
+`damage × the part's weight`:
 
 | Part | Weight |
 | --- | --- |
@@ -388,9 +389,9 @@ A landed wound lowers overall health by `damage × the part's weight`:
 | Head | 0.6 |
 | Neck | 0.7 |
 
-Fractions carry over between wounds. Whether a wound carries the zombie infection
-is rolled with it: a bite always, a laceration 25%, a scratch 7%. The roll is
-made but no infection follows from it yet, and the body keeps no per-part state.
+Whether a wound carries the zombie infection is rolled with it: a bite always, a
+laceration 25%, a scratch 7%. The part keeps the result, and the
+[body](12-health-and-infection.md#zombie-infection) does the rest.
 
 ## Zombies going down
 

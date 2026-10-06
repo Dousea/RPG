@@ -21,6 +21,10 @@ from modules.stats import CharacterStat
 from tests.support import simulate
 
 
+def stiffness_of(player) -> dict[BodyPart, float]:
+    return {part: state.stiffness for part, state in player.body.items() if state.stiffness}
+
+
 def make_player(**kwargs) -> PlayerEntity:
     player = PlayerEntity(name="Orton", current_location_id="zone_home", **kwargs)
     SkillEngine().set_level(player, "fitness", 5)
@@ -324,9 +328,9 @@ class OverTimeTests(unittest.TestCase):
         for _ in range(72):
             self.engine.tick(player, 0)
         self.assertEqual(player.exercise.region_timers["legs"], 0)
-        self.assertEqual(player.exercise.part_stiffness, {})
+        self.assertEqual(stiffness_of(player), {})
         self.engine.tick(player, 0)
-        self.assertAlmostEqual(player.exercise.part_stiffness[BodyPart.UPPERLEG_L], 2.5 * 0.3527059)
+        self.assertAlmostEqual(player.body[BodyPart.UPPERLEG_L].stiffness, 2.5 * 0.3527059)
         self.assertEqual(player.exercise.future_stiffness.get("legs", 0), 0)
 
     def test_a_drain_moves_one_unit_into_every_part_of_the_region(self):
@@ -340,9 +344,9 @@ class OverTimeTests(unittest.TestCase):
             BodyPart.UPPERARM_L,
             BodyPart.UPPERARM_R,
         )
-        self.assertEqual(set(player.exercise.part_stiffness), set(arms))
+        self.assertEqual(set(stiffness_of(player)), set(arms))
         for part in arms:
-            self.assertEqual(player.exercise.part_stiffness[part], 2.5)
+            self.assertEqual(player.body[part].stiffness, 2.5)
         self.assertEqual(player.exercise.future_stiffness["arms"], 2.0)
 
     def test_the_regions_map_to_their_parts(self):
@@ -363,7 +367,7 @@ class OverTimeTests(unittest.TestCase):
             player.exercise.future_stiffness[region] = 1.0
             player.exercise.region_timers[region] = 0
             self.engine.tick(player, 0)
-            self.assertEqual(set(player.exercise.part_stiffness), parts)
+            self.assertEqual(set(stiffness_of(player)), parts)
 
     def test_a_timer_still_running_holds_the_stiffness_back(self):
         player = make_player()
@@ -371,7 +375,7 @@ class OverTimeTests(unittest.TestCase):
         player.exercise.region_timers["abs"] = 5
         self.engine.tick(player, 0)
         self.assertEqual(player.exercise.region_timers["abs"], 4)
-        self.assertEqual(player.exercise.part_stiffness, {})
+        self.assertEqual(stiffness_of(player), {})
 
     def test_regularity_does_not_decay_within_24_hours(self):
         player = make_player()

@@ -13,6 +13,7 @@ from modules.effect import (
     WeaponDamageTakenEffect,
 )
 from modules.entity import BaseEntity
+from modules.entity.player import PlayerEntity
 from modules.event import (
     AnyEvent,
     ApplyItemEvent,
@@ -26,7 +27,6 @@ from modules.modifier import (
     AnyModifier,
     ConditionsModifier,
     DamageMultiplicativeModifier,
-    HPModifier,
     ReputationModifier,
 )
 
@@ -127,6 +127,10 @@ def apply_event_modifiers(
             logger.warning(f"Event target is not an Entity: {event.target}. Cannot apply damage.")
             return
 
+        if isinstance(event.target, PlayerEntity):
+            logger.warning("Event damage cannot land on the player's body; ignoring it.")
+            return
+
         event.target.hit_points -= final_damage
         logger.debug(
             f"Applied {final_damage} damage to #'{event.target.id}'. HP is now {event.target.hit_points}."
@@ -144,8 +148,6 @@ def apply_event_modifiers(
             relationships.apply_affinity_modifier(mod)
         elif isinstance(mod, ReputationModifier):
             relationships.apply_reputation_modifier(mod)
-        elif isinstance(mod, HPModifier) and isinstance(recipient, BaseEntity):
-            recipient.hit_points += mod.amount
         elif isinstance(mod, ConditionsModifier) and isinstance(recipient, BaseEntity):
             for condition, active in mod.conditions.items():
                 conditions = getattr(recipient, "conditions", None)

@@ -16,6 +16,7 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
+from modules.body import BodyPart
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
@@ -25,7 +26,7 @@ from modules.item import ClothingItem
 from modules.quest import QuestState
 from modules.stats import CharacterStat
 from modules.weather import WeatherSample
-from tests.support import adjust_regard, npc_of, resolve_actions
+from tests.support import adjust_regard, npc_of, resolve_actions, set_health
 
 
 class WorldFlagFirewallTests(unittest.TestCase):
@@ -236,6 +237,116 @@ class ConditionBlockTests(unittest.TestCase):
         self.assertIn("Well Fed (2/4)", prompt)
 
 
+class PartLinesTests(unittest.TestCase):
+    """Spec 12, What the narrator and the player see: `[CONDITION]` part lines."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def condition(self, narrator: bool = True) -> str:
+        if narrator:
+            prompt = self.builder.build_narrator_prompt("look")
+            return prompt.split("[CONDITION]")[1].split("[QUESTS]")[0]
+        prompt = self.builder.build_parser_prompt("look")
+        return prompt.split("[CONDITION]")[1].split("[WEATHER]")[0]
+
+    def test_a_bleeding_bite_reads_bite_bleeding(self):
+        state = self.gm.player.body[BodyPart.FOREARM_L]
+        state.bite_time = 60.0
+        state.bleeding_time = 10.0
+        self.assertIn("left forearm: bite, bleeding", self.condition())
+
+    def test_a_dirty_bandage_reads_bandaged_dirty(self):
+        state = self.gm.player.body[BodyPart.FOREARM_L]
+        state.bite_time = 60.0
+        state.bleeding_time = 10.0
+        state.bandage = "item_bandage"
+        state.bandage_life = 0.0
+        self.assertIn("left forearm: bite, bandaged (dirty)", self.condition())
+
+    def test_a_clean_bandage_reads_bandaged(self):
+        state = self.gm.player.body[BodyPart.HAND_R]
+        state.scratch_time = 6.0
+        state.bandage = "item_bandage"
+        state.bandage_life = 3.0
+        self.assertIn("right hand: scratch, bandaged\n", self.condition() + "\n")
+
+    def test_an_infected_unbandaged_wound_reads_infected(self):
+        state = self.gm.player.body[BodyPart.HAND_R]
+        state.scratch_time = 6.0
+        state.infected_wound = True
+        state.wound_infection = 2.0
+        self.assertIn("right hand: scratch, infected", self.condition())
+
+    def test_infection_is_not_shown_under_a_bandage(self):
+        state = self.gm.player.body[BodyPart.HAND_R]
+        state.scratch_time = 6.0
+        state.infected_wound = True
+        state.bandage = "item_bandage"
+        state.bandage_life = 3.0
+        self.assertNotIn("infected", self.condition())
+
+    def test_a_healed_part_drops_off_the_list(self):
+        self.gm.player.body[BodyPart.HAND_R].health = 40.0
+        self.assertNotIn("right hand", self.condition())
+
+    def test_a_laceration_reads_laceration(self):
+        state = self.gm.player.body[BodyPart.TORSO_LOWER]
+        state.cut_time = 12.0
+        self.assertIn("stomach: laceration", self.condition())
+
+    def test_the_parser_sees_the_part_lines_too(self):
+        state = self.gm.player.body[BodyPart.FOREARM_L]
+        state.bite_time = 60.0
+        self.assertIn("left forearm: bite", self.condition(narrator=False))
+
+    def test_the_lines_are_words_only(self):
+        state = self.gm.player.body[BodyPart.FOREARM_L]
+        state.bite_time = 60.0
+        state.bleeding_time = 10.0
+        state.wound_infection = 4.0
+        line = next(
+            each for each in self.condition().splitlines() if each.startswith("left forearm")
+        )
+        self.assertFalse(any(ch.isdigit() for ch in line))
+
+    def test_zombie_infection_is_never_named(self):
+        state = self.gm.player.body[BodyPart.FOREARM_L]
+        state.bite_time = 60.0
+        state.zombie_infected = True
+        self.gm.player.zombie_infection_since = 0.0
+        self.gm.player.stats.set(CharacterStat.ZOMBIE_INFECTION, 80)
+        for prompt in (
+            self.builder.build_narrator_prompt("look"),
+            self.builder.build_parser_prompt("look"),
+        ):
+            self.assertNotIn("zombie_infection", prompt.casefold())
+            self.assertNotIn("zombie_infection", prompt.casefold())
+
+    def test_bleeding_and_pain_status_effects_show_by_name(self):
+        self.gm.player.body[BodyPart.FOREARM_L].bleeding_time = 5.0
+        self.gm.player.stats.set(CharacterStat.PAIN, 15)
+        condition = self.condition()
+        self.assertIn("Minor Bleeding (1/4)", condition)
+        self.assertIn("Minor Pain (1/4)", condition)
+
+    def test_the_inventory_shows_uses_left(self):
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        self.gm.player.inventory[-1].uses = 7
+        parser = self.builder.build_parser_prompt("look")
+        self.assertIn("Painkillers (7 left)", parser.split("[INVENTORY]")[1].split("[WORN]")[0])
+        narrator = self.builder.build_narrator_prompt("look")
+        self.assertIn("Painkillers (7 left)", narrator)
+
+    def test_a_single_use_item_shows_no_count(self):
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_dirty_bandage"]))
+        parser = self.builder.build_parser_prompt("look")
+        inventory = parser.split("[INVENTORY]")[1].split("[WORN]")[0]
+        self.assertIn("Dirty Bandage", inventory)
+        self.assertNotIn("left", inventory)
+
+
 class HitPointsStayOutOfTheNarratorPromptTests(unittest.TestCase):
     """docs/01-engine-authority.md: the narrator gets HP and item condition in
     words, never as numbers."""
@@ -249,7 +360,7 @@ class HitPointsStayOutOfTheNarratorPromptTests(unittest.TestCase):
         return prompt.split("[CHARACTER]")[1].split("[CONDITION]")[0]
 
     def test_player_hit_points_are_not_in_the_prompt(self):
-        self.gm.player.hit_points = 37
+        set_health(self.gm.player, 37)
         prompt = self.builder.build_narrator_prompt("look")
         self.assertNotIn("37", prompt)
         self.assertNotIn("Health:", prompt)
@@ -930,7 +1041,7 @@ class NarratorBlockOrderTests(unittest.TestCase):
         gm = self.gm
         gm.player.stats.set(CharacterStat.HUNGER, 0.7371)
         gm.player.stats.set(CharacterStat.STRESS, 0.4242)
-        gm.player.hit_points = 61
+        set_health(gm.player, 61)
         adjust_regard(gm, "npc_emma", affection=37, trust=42)
         prompt = self.builder.build_narrator_prompt("look")
         state = prompt.split("[TIME AND WEATHER]")[1].split("[OUTCOMES]")[0]
@@ -1021,6 +1132,16 @@ class SceneKeyTests(unittest.TestCase):
         self.assertEqual(self.builder.scene_keys(), frozenset({"carried", "wearable_carried"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
         self.assertEqual(listed, ALWAYS | {"DROP", "USE_ITEM", "WEAR", "EQUIP"})
+
+    def test_an_injured_part_gives_hurt_and_lists_the_first_aid_verbs(self):
+        self.gm.player.body[BodyPart.HAND_L].scratch_time = 4.0
+        self.assertEqual(self.builder.scene_keys(), frozenset({"hurt"}))
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"BANDAGE", "REMOVE_BANDAGE", "DISINFECT"})
+
+    def test_a_bandaged_part_also_gives_hurt(self):
+        self.gm.player.body[BodyPart.HAND_L].bandage = "item_bandage"
+        self.assertEqual(self.builder.scene_keys(), frozenset({"hurt"}))
 
     def test_a_worn_item_gives_worn(self):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_jeans"]))

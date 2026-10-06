@@ -83,8 +83,8 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 
 | Screen | Sections | Fields | Exists |
 | --- | --- | --- | --- |
-| Status | status effects, conditions, goals | `effects`, `conditions`, `sneaking` (spec 09), `goals` | yes, with the health bar |
-| Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (spec 12, 17) | no |
+| Status | status effects, conditions, goals | `effects`, `conditions`, `sneaking` (spec 09), `goals` | yes |
+| Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (spec 12, 17) | yes, without spec 17's flags |
 | Inventory | held item, equipped slots, carried items | `held` (spec 11, 15), `equipment`, `inventory` | yes, without `held` |
 | Clothing | worn items, outer to inner, by body location | `worn` | yes |
 | Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | yes |
@@ -99,8 +99,8 @@ are marked severe by colour, never by a number. Conditions and the narrator's
 status effects follow as tags, then goals, short-term before long-term.
 `sneaking` is a tag here while it is on.
 
-Until spec 12, a health bar sits at the top. When `body` lands the bar and its
-`vitals` field go, and no health number replaces them.
+There is no health bar: spec 12 removed it and its `vitals` field, and no health
+number replaces them.
 
 ### Health
 
@@ -219,7 +219,6 @@ A mechanic that adds or changes a snapshot field:
 | Gap | Fix |
 | --- | --- |
 | Header shows the outbreak stage | now `outbreak_day` (spec 10): "Before the outbreak" or "Outbreak day N" |
-| Health bar shows hit points as a percentage | removed with spec 12; until then it is the one number grandfathered in |
 | Inventory and equipment show item condition as `n/max` | condition word with spec 11 |
 
 ---

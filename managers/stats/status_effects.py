@@ -15,6 +15,7 @@ from data.status_effects import (
     STATUS_EFFECT_THRESHOLDS,
     STRESS_MELEE_PENALTY_PER_LEVEL,
 )
+from modules.body import BodyPart, general_wound_infection
 from modules.entity.player import PlayerEntity
 from modules.item import ConsumableItem
 from modules.stats import CharacterStat, Stats, StatusEffect
@@ -34,11 +35,12 @@ def status_effect_level(status_effect: StatusEffect, value: float) -> int:
     return level
 
 
-def sick_value(stats: Stats) -> float:
-    """The number the Sick status effect reads; wound infection joins it with the health spec."""
+def sick_value(stats: Stats, wound_infection: float = 0.0) -> float:
+    """The number the Sick status effect reads: the worst of food sickness, zombie infection and wound infection."""
     worst = max(
         stats.get(CharacterStat.FOOD_SICKNESS),
         stats.get(CharacterStat.ZOMBIE_INFECTION),
+        wound_infection,
     )
     return worst / 100 + stats.get(CharacterStat.SICKNESS)
 
@@ -62,20 +64,23 @@ def hypothermia_level(core: float, intoxication: float) -> int:
 def status_effect_levels(
     stats: Stats,
     food_eaten_timer: float = 0.0,
-    hit_points: int | None = None,
+    hit_points: float | None = None,
     bleeding: int = 0,
+    wound_infection: float = 0.0,
 ) -> dict[StatusEffect, int]:
     """Every status effect's current level, in table order.
 
     Injured is off when `hit_points` is not given or is 0; `bleeding` is the
-    Bleeding level, 0 until the health spec supplies it.
+    Bleeding level and `wound_infection` the general wound infection.
     """
     levels: dict[StatusEffect, int] = {}
     for status_effect, spec in STATUS_EFFECT_THRESHOLDS.items():
         if status_effect is StatusEffect.FOOD_EATEN:
             levels[status_effect] = status_effect_level(status_effect, food_eaten_timer)
         elif status_effect is StatusEffect.SICK:
-            levels[status_effect] = status_effect_level(status_effect, sick_value(stats))
+            levels[status_effect] = status_effect_level(
+                status_effect, sick_value(stats, wound_infection)
+            )
         elif status_effect is StatusEffect.INJURED:
             injured = hit_points is not None and hit_points > 0
             levels[status_effect] = (
@@ -136,8 +141,19 @@ def defence_penalty(endurance: int, tired: int, drunk: int) -> int:
     )
 
 
+def player_bleeding_level(player: PlayerEntity) -> int:
+    bleeding = [part for part, state in player.body.items() if state.bleeding]
+    return bleeding_level(len(bleeding), BodyPart.NECK in bleeding)
+
+
 def player_status_effect_levels(player: PlayerEntity) -> dict[StatusEffect, int]:
-    return status_effect_levels(player.stats, player.food_eaten_timer, player.hit_points)
+    return status_effect_levels(
+        player.stats,
+        player.food_eaten_timer,
+        player.health,
+        player_bleeding_level(player),
+        general_wound_infection(player.body),
+    )
 
 
 def food_eaten_level(player: PlayerEntity) -> int:

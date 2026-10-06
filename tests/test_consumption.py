@@ -10,7 +10,7 @@ from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
 from modules.stats import CharacterStat
-from tests.support import simulate
+from tests.support import set_health, simulate
 
 
 def _food(name="Apple", **fields) -> ConsumableItem:
@@ -75,10 +75,10 @@ class ConsumingTests(unittest.TestCase):
 
     def test_the_beans_no_longer_heal_directly(self):
         gm = GameManager()
-        gm.player.hit_points = 50
+        set_health(gm.player, 50)
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         simulate(gm, UseItemAction(item_name="Canned Beans"))
-        self.assertEqual(gm.player.hit_points, 50)
+        self.assertLess(gm.player.health, 60)
 
     def test_each_field_applies_once(self):
         item = _food(

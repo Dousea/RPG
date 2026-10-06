@@ -23,7 +23,14 @@ from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.quest import QuestState, QuestStatus
 from modules.stats import CharacterStat
-from tests.support import IsolatedSaveTestCase, adjust_regard, npc_of, resolve_actions, simulate
+from tests.support import (
+    IsolatedSaveTestCase,
+    adjust_regard,
+    npc_of,
+    resolve_actions,
+    set_health,
+    simulate,
+)
 
 
 def played_game() -> GameManager:
@@ -50,7 +57,7 @@ def played_game() -> GameManager:
     # Health is retired as an LLM-declarable action (docs/01-engine-authority.md);
     # it only ever changes through combat or item effects. Set directly here
     # since this fixture is exercising persistence, not the action pipeline.
-    gm.player.hit_points = 55
+    set_health(gm.player, 55)
     gm.player.stats.set(CharacterStat.HUNGER, 0.7)
     emma = gm.resolve_npc("Emma")
     emma.goals.append("find out who the new neighbor is")
@@ -83,9 +90,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(self.loaded.player.hit_points, 55)
         self.assertEqual(self.loaded.player.stats.get(CharacterStat.HUNGER), 0.7)
 
-    def test_hit_points_are_not_reset_to_max_on_load(self):
-        # __post_init__ fills hit_points to max, so the saved value has to be
-        # applied after construction.
+    def test_derived_health_is_not_reset_to_max_on_load(self):
         self.assertNotEqual(self.loaded.player.hit_points, self.loaded.player.max_hit_points)
 
     def test_inventory_with_condition(self):
@@ -125,7 +130,6 @@ class RoundTripTests(IsolatedSaveTestCase):
         player.exercise.last_done_minute = {"squats": 90}
         player.exercise.future_stiffness = {"legs": 3.5}
         player.exercise.region_timers = {"legs": 60}
-        player.exercise.part_stiffness = {BodyPart.UPPERLEG_L: 5.0}
         restored = codec.from_dict(codec.to_dict(self.original)).player
         self.assertEqual(restored.loss_timers, player.loss_timers)
         self.assertEqual(restored.loss_timer_steps, player.loss_timer_steps)
@@ -226,14 +230,12 @@ class StatsSaveTests(IsolatedSaveTestCase):
         for index, stat in enumerate(CharacterStat):
             gm.player.stats.set(stat, stat.min + (stat.max - stat.min) * (index + 1) / 37)
         gm.player.asleep = True
-        gm.player.fractional_hp_loss = 0.25
         files.save(gm, self.save_path)
         loaded = files.load(self.save_path)
         assert loaded is not None
         for stat in CharacterStat:
             self.assertEqual(loaded.player.stats.get(stat), gm.player.stats.get(stat))
         self.assertTrue(loaded.player.asleep)
-        self.assertEqual(loaded.player.fractional_hp_loss, 0.25)
 
     def test_the_old_survival_fields_are_not_saved(self):
         files.save(GameManager(), self.save_path)
@@ -267,8 +269,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_15(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 15)
+    def test_schema_version_is_16(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 16)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -899,3 +901,73 @@ class MeleeSaveTests(IsolatedSaveTestCase):
     def test_a_new_weapon_starts_at_full_condition(self):
         self.assertEqual(ItemEntity(item=ITEMS["item_crowbar"]).condition, 15)
         self.assertEqual(ItemEntity(item=ITEMS["item_kitchen_knife"]).condition, 10)
+
+
+class BodySaveTests(IsolatedSaveTestCase):
+    """Spec 12, Saves."""
+
+    def test_the_body_zombie_infection_fields_pain_effect_and_antibiotics_round_trip(self):
+        gm = GameManager()
+        player = gm.player
+        part = player.body[BodyPart.FOREARM_L]
+        part.health = 61.5
+        part.scratch_time = 3.25
+        part.cut_time = 9.5
+        part.bite_time = 40.0
+        part.bleeding_time = 2.75
+        part.bandage = "item_bandage"
+        part.bandage_life = 3.5
+        part.bandage_alcoholic = True
+        part.bandage_xp_ready = False
+        part.zombie_infected = True
+        part.infected_wound = True
+        part.wound_infection = 4.5
+        part.alcohol = 1.5
+        part.extra_pain = 20.0
+        part.stiffness = 7.0
+        player.zombie_infection_since = 12.5
+        player.zombie_infection_hours = 60.0
+        player.pain_effect_minutes = 30.0
+        player.reduce_infection_power = 44.0
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.player.body, player.body)
+        self.assertEqual(loaded.player.zombie_infection_since, 12.5)
+        self.assertEqual(loaded.player.zombie_infection_hours, 60.0)
+        self.assertEqual(loaded.player.pain_effect_minutes, 30.0)
+        self.assertEqual(loaded.player.reduce_infection_power, 44.0)
+
+    def test_an_uninfected_player_keeps_zombie_infection_since_unset(self):
+        files.save(GameManager(), self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertIsNone(loaded.player.zombie_infection_since)
+
+    def test_a_medical_items_uses_round_trip(self):
+        gm = GameManager()
+        pills = ItemEntity(item=ITEMS["item_painkillers"])
+        pills.uses = 7
+        gm.player.inventory.append(pills)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        saved = [e for e in loaded.player.inventory if e.item.id == "item_painkillers"]
+        self.assertEqual([e.uses for e in saved], [7])
+
+    def test_player_hit_points_and_fractional_loss_are_no_longer_saved(self):
+        data = codec.to_dict(GameManager())
+        self.assertNotIn("hit_points", data["player"])
+        self.assertNotIn("fractional_hp_loss", data["player"])
+
+    def test_stiffness_lives_on_the_part(self):
+        gm = GameManager()
+        gm.player.body[BodyPart.UPPERLEG_L].stiffness = 5.0
+        loaded = codec.from_dict(codec.to_dict(gm))
+        self.assertEqual(loaded.player.body[BodyPart.UPPERLEG_L].stiffness, 5.0)
+
+    def test_an_unknown_part_in_the_body_is_dropped(self):
+        data = codec.to_dict(GameManager())
+        data["player"]["body"]["tail"] = {"health": 3}
+        loaded = codec.from_dict(data)
+        self.assertEqual(set(loaded.player.body), set(BodyPart))

@@ -86,6 +86,25 @@ class AppliableItem(HoldableItem):
 
 
 @dataclass
+class MedicalItem(HoldableItem):
+    """A bandage, disinfectant, painkiller or antibiotic (spec 12).
+
+    `dirty_version` is the id of the item a spent bandage becomes; `uses` is how
+    many times the item can be used before it is gone.
+    """
+
+    bandage_power: float = 0.0
+    alcoholic: bool = False
+    dirty_version: str | None = None
+    reusable_bandage: bool = False
+    dirty: bool = False
+    alcohol_power: float = 0.0
+    uses: int = 1
+    reduce_infection_power: float = 0.0
+    painkiller: bool = False
+
+
+@dataclass
 class MeleeWeaponItem(HoldableItem):
     """A melee weapon's stats; the runtime `condition` lives on its `ItemEntity`."""
 

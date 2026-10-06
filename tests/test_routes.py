@@ -59,7 +59,6 @@ class IndexTests(RouteTestCase):
         for element_id in (
             b'id="story-display"',
             b'id="location-status"',
-            b'id="vitals"',
             b'id="inventory-list"',
             b'id="equipment-list"',
             b'id="npc-list"',
@@ -89,9 +88,8 @@ class StatusEffectPayloadTests(RouteTestCase):
             [("hungry", "Very Hungry"), ("thirst", "Slightly Thirsty"), ("tired", "Drowsy")],
         )
         self.assertEqual(payload["effects"][0]["level"], 3)
-        for gone in ("hunger", "thirst"):
+        for gone in ("hunger", "thirst", "vitals"):
             self.assertNotIn(gone, payload)
-            self.assertNotIn(gone, payload["vitals"])
 
     def test_play_carries_the_temperature_status_effects_and_no_core_temperature(self):
         """Spec 06, What the narrator and the player see."""
@@ -102,7 +100,7 @@ class StatusEffectPayloadTests(RouteTestCase):
         status_effects = {m["type"]: m for m in payload["effects"]}
         self.assertEqual(status_effects["hypothermia"]["level"], 4)
         self.assertIn("wet", status_effects)
-        self.assertNotIn("temperature", payload["vitals"])
+        self.assertNotIn("temperature", payload)
 
     def test_state_lists_status_effects_highest_level_first(self):
         stats = self.engine.game.player.stats

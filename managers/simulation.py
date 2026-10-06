@@ -16,6 +16,7 @@ import random
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from data import body as body_k
 from data import exercises as ex_k
 from data import melee as melee_k
 from data import skills as skill_k
@@ -36,10 +37,12 @@ from data.time_costs import (
     zone_hop_minutes,
 )
 from data.topics import TOPICS
+from managers.body import BodyEngine, action_time_multiplier, limp_factor
 from managers.climate import weather_change_facts
 from managers.combat import equipped_weapon, held_slots, roll_damage
 from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
+from managers.first_aid import FirstAid
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.noise import Sound, cough_sound
 from managers.skills import SkillEngine, skill_levels
@@ -68,27 +71,36 @@ from modules.action.types import (
     MoveAction,
     RemoveGoalAction,
     ShoveAction,
+    SleepAction,
     StanceAction,
     TalkAction,
     WaitAction,
 )
 from modules.action.words import describe_action
 from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.player import PlayerEntity
 from modules.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
 )
-from modules.item import AppliableItem, ClothingItem, ConsumableItem, HoldableItem, MeleeWeaponItem
+from modules.item import (
+    AppliableItem,
+    ClothingItem,
+    ConsumableItem,
+    HoldableItem,
+    MedicalItem,
+    MeleeWeaponItem,
+)
 from modules.modifier import (
     AffinityModifier,
     ConditionsModifier,
-    HPModifier,
     ReputationModifier,
 )
 from modules.pace import Pace
 from modules.quest import QuestStatus
 from modules.resolution import (
     ExercisePlan,
+    FirstAidTarget,
     HeldItem,
     MoveBlocked,
     MoveToSpot,
@@ -129,6 +141,7 @@ SOCIAL_ACTIONS = (TalkAction, AskAction, GiveAction)
 TOO_MANY_ACTIONS_FACT = "Too much at once; {name} does the first five things."
 INTERRUPTED_BY_ATTACK = "attacked"
 INTERRUPTED_BY_BEAT = "story beat"
+INTERRUPTED_BY_WEAKENING = "weakening"
 
 
 @dataclass(frozen=True)
@@ -139,6 +152,17 @@ class Motion:
     approach_target: str | None = None
     swing_target: str | None = None
     shove: bool = False
+
+
+def _hurt_levels(player: PlayerEntity) -> tuple[int, int]:
+    """The Injured and Bleeding status effect levels."""
+    levels = player_status_effect_levels(player)
+    return levels[StatusEffect.INJURED], levels[StatusEffect.BLEEDING]
+
+
+def _got_worse(after: tuple[int, int], before: tuple[int, int]) -> bool:
+    """True when either level rose, whatever the other one did."""
+    return any(now > then for now, then in zip(after, before, strict=True))
 
 
 def _minutes_fact(minutes: int) -> str:
@@ -171,6 +195,8 @@ class SimulationCore:
         self._shouted = False
         self._spoke = False
         self._social = SocialManager(manager, self._rng)
+        self._body = BodyEngine(self._rng)
+        self._first_aid = FirstAid(self._rng, self.skill_engine)
 
     @property
     def _name(self) -> str:
@@ -327,8 +353,13 @@ class SimulationCore:
         return [*self._derive_statuses(), *self._fire_beats(clock_only=False)]
 
     def _action_time_multiplier(self) -> float:
-        """Pain, mood and cold slow timed actions; 1 until the health spec lands."""
-        return 1.0
+        """Pain, mood and cold slow timed actions (spec 12)."""
+        return action_time_multiplier(self.manager.player)
+
+    def _hop_minutes(self, pace: Pace) -> int:
+        """Minutes one zone hop takes at a pace, stretched by a limp (spec 12)."""
+        factor = limp_factor(self.manager.player)
+        return max(1, round(zone_hop_minutes(pace) / factor))
 
     def _stat_context(
         self,
@@ -414,18 +445,24 @@ class SimulationCore:
         spent = 0
         started = manager.narrative.minutes
         self._zombies_seen_this_chunk = 0
+        self._body.begin_span()
+        weakens = isinstance(action, WaitAction | SleepAction | ExerciseAction)
         while spent < minutes and not self._interruption:
             block = min(survival.MAX_CHUNK_MINUTES, minutes - spent)
             beat_in = self._next_clock_beat_in()
             if beat_in is not None:
                 block = min(block, beat_in)
-            ran, seen, exerting, loop_facts = self._zombie_minutes(block, asleep, motion)
+            before = player_status_effect_levels(manager.player)
+            ran, seen, exerting, loop_facts = self._zombie_minutes(block, asleep, motion, weakens)
             facts.extend(loop_facts)
             self._zombies_seen_this_chunk += seen
             if manager.narrative.game_over:
                 manager.climate.advance_to(manager.narrative.minutes + ran)
                 manager.advance_clock(ran)
                 return spent + ran, facts
+            facts.extend(
+                level_change_facts(self._name, before, player_status_effect_levels(manager.player))
+            )
             self._weather_facts = []
             stat_facts = self.stats_engine.advance(
                 manager.player,
@@ -441,9 +478,6 @@ class SimulationCore:
             spent += advanced
             facts.extend(self._fire_beats(clock_only=True))
             self._pending_sounds.extend(self._coughs(stat_facts))
-            if self.stats_engine.death_cause:
-                facts[-1] = self._check_player_death(self.stats_engine.death_cause)
-                break
         if not manager.narrative.game_over:
             facts.extend(self._run_ticks(started, spent, walking=isinstance(action, MoveAction)))
         return spent, facts
@@ -456,13 +490,15 @@ class SimulationCore:
         return [cough_sound() for fact in stat_facts if fact in words]
 
     def _zombie_minutes(
-        self, block: int, asleep: bool, motion: Motion
+        self, block: int, asleep: bool, motion: Motion, weakens: bool
     ) -> tuple[int, int, bool, list[str]]:
-        """Run up to `block` minutes of the zombie loop; stops at an interruption or a death.
+        """Run up to `block` minutes of the zombie loop and the body; stops at an interruption or a death.
 
-        Returns the minutes run, the zombies newly seen, whether a zombie attacked and the facts.
+        `weakens` ends the span when the Injured or Bleeding level rises. Returns the minutes
+        run, the zombies newly seen, whether a zombie attacked and the facts.
         """
         manager = self.manager
+        player = manager.player
         seen = 0
         exerting = False
         facts: list[str] = []
@@ -477,6 +513,7 @@ class SimulationCore:
             )
             sounds, self._pending_sounds = self._pending_sounds, []
             self._shouted = False
+            worse = _hurt_levels(player)
             report = self._loop.run_minute(manager.narrative.minutes + ran, minute, sounds)
             ran += 1
             seen += report.new_seen
@@ -484,6 +521,14 @@ class SimulationCore:
             facts.extend(report.facts)
             if report.death_fact:
                 facts.append(self._check_player_death(report.death_fact))
+                break
+            facts.extend(self._body.minute(player, (manager.narrative.minutes + ran) / 60))
+            if self._body.death_fact:
+                facts.append(self._check_player_death(self._body.death_fact))
+                break
+            if weakens and not report.interrupted and _got_worse(_hurt_levels(player), worse):
+                self._interruption = INTERRUPTED_BY_WEAKENING
+                facts.append(body_k.WEAKER_FACT.format(name=self._name))
                 break
             if report.interrupted:
                 self._interruption = report.interruption_fact or INTERRUPTED_BY_ATTACK
@@ -518,13 +563,18 @@ class SimulationCore:
         if handler is None:
             return [f"No resolver registered for {accepted.action.verb}."], 0
         self._skill_facts = []
+        slowdown = (
+            self._action_time_multiplier()
+            if isinstance(accepted.action, MULTIPLIED_ACTIONS)
+            else 1.0
+        )
         result = handler(self, accepted)
         if isinstance(result, tuple):
             return result
         lines = [result] if isinstance(result, str) else result
         minutes = action_minutes(accepted.action, accepted.resolved)
         if isinstance(accepted.action, MULTIPLIED_ACTIONS):
-            minutes = round(minutes * self._action_time_multiplier())
+            minutes = max(1, round(minutes * slowdown))
         if isinstance(accepted.action, SOCIAL_ACTIONS):
             minutes = 0 if self._spoke else minutes
             self._spoke = True
@@ -545,9 +595,12 @@ class SimulationCore:
         rather than re-triggering off a fact that already carries "died".
         """
         narrative = self.manager.narrative
-        if narrative.game_over or self.manager.player.hit_points > 0:
+        player = self.manager.player
+        if narrative.game_over or player.hit_points > 0:
             return fact
         narrative.game_over = True
+        if player.stats.get(CharacterStat.ZOMBIE_INFECTION) >= body_k.RISE_INFECTION_MIN:
+            fact = f"{fact.removesuffix('.')}{body_k.ROSE_AGAIN_SUFFIX}"
         narrative.death_cause = fact[:DEATH_CAUSE_MAX_LENGTH]
         return f"{fact} {self._name} has died. The game is over."
 
@@ -618,10 +671,11 @@ class SimulationCore:
         manager = self.manager
         player = manager.player
         motion = Motion(pace)
+        hop = self._hop_minutes(pace)
         if not self._loop.active():
             self._enter_zone(zone_id)
-            return self._spend(zone_hop_minutes(pace), action, motion=motion)
-        spent, facts = self._spend(zone_hop_minutes(pace) - 1, action, motion=motion)
+            return self._spend(hop, action, motion=motion)
+        spent, facts = self._spend(hop - 1, action, motion=motion)
         if self._interruption or manager.narrative.game_over:
             return spent, facts
         previous_id = player.current_location_id
@@ -698,16 +752,20 @@ class SimulationCore:
         self.manager.player.inventory.append(entity)
         return f"Take off {item.name}: succeeded."
 
-    def _resolve_use_item(self, accepted: Accepted) -> str:
+    def _resolve_use_item(self, accepted: Accepted) -> str | list[str]:
         manager = self.manager
         entity = accepted.expect(HeldItem).entity
         item = entity.item
-        assert isinstance(item, ConsumableItem | AppliableItem), "_validate_use_item checks this"
         player = manager.player
+        if isinstance(item, MedicalItem):
+            if item.painkiller:
+                return self._first_aid.take_pill(player, entity)
+            return self._first_aid.take_antibiotic(player, entity)
+        assert isinstance(item, ConsumableItem | AppliableItem), "_validate_use_item checks this"
 
-        # The item's own effect (e.g. a medkit's HPModifier) is not a trait
-        # reaction -- it applies unconditionally whenever the item is
-        # used, so it is applied directly rather than through the broadcast.
+        # The item's own effect is not a trait reaction -- it applies
+        # unconditionally whenever the item is used, so it is applied
+        # directly rather than through the broadcast.
         for modifier in item.modifiers:
             self._apply_modifier(player, modifier)
 
@@ -773,6 +831,22 @@ class SimulationCore:
         )
         swing_spent, swing_facts = self._spend(SWING_MIN, accepted.action, motion=swing)
         return [*facts, *swing_facts], spent + swing_spent
+
+    # === First aid ===
+
+    def _resolve_bandage(self, accepted: Accepted) -> list[str]:
+        target = accepted.expect(FirstAidTarget)
+        assert target.entity is not None, "_validate_bandage checks this"
+        return self._first_aid.bandage(self.manager.player, target.part, target.entity)
+
+    def _resolve_remove_bandage(self, accepted: Accepted) -> list[str]:
+        target = accepted.expect(FirstAidTarget)
+        return self._first_aid.remove_bandage(self.manager.player, target.part)
+
+    def _resolve_disinfect(self, accepted: Accepted) -> list[str]:
+        target = accepted.expect(FirstAidTarget)
+        assert target.entity is not None, "_validate_disinfect checks this"
+        return self._first_aid.disinfect(self.manager.player, target.part, target.entity)
 
     def _resolve_equip(self, accepted: Accepted) -> str:
         player = self.manager.player
@@ -857,9 +931,7 @@ class SimulationCore:
         trait reactions). Attribute/XP modifiers have no current producer on
         this path and are intentionally left unhandled rather than guessed
         at; see docs/00-status.md for the note."""
-        if isinstance(modifier, HPModifier):
-            entity.hit_points += modifier.amount
-        elif isinstance(modifier, ConditionsModifier):
+        if isinstance(modifier, ConditionsModifier):
             for condition, active in modifier.conditions.items():
                 if active and condition not in entity.conditions:
                     entity.conditions.append(condition)
@@ -1017,12 +1089,15 @@ class SimulationCore:
         player = self.manager.player
         if self._interruption == INTERRUPTED_BY_BEAT:
             return f"{self._name} is startled awake."
-        if self._zombies_seen_this_chunk > 0 or self._interruption:
+        zombie_woke = self._interruption not in ("", INTERRUPTED_BY_WEAKENING)
+        if self._zombies_seen_this_chunk > 0 or zombie_woke:
             panic = self._rng.uniform(
                 survival.SLEEP_INTERRUPTION_PANIC_MIN, survival.SLEEP_INTERRUPTION_PANIC_MAX
             )
             player.stats.add(CharacterStat.PANIC, panic)
             return f"A zombie wakes {self._name} in a panic."
+        if self._interruption == INTERRUPTED_BY_WEAKENING or not player.asleep:
+            return f"{self._name} wakes, badly hurt."
         stats = player.stats
         if status_effect_level(StatusEffect.HUNGRY, stats.get(CharacterStat.HUNGER)) >= (
             survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
@@ -1053,6 +1128,9 @@ class SimulationCore:
         "EQUIP": _resolve_equip,
         "UNEQUIP": _resolve_unequip,
         "USE_ITEM": _resolve_use_item,
+        "BANDAGE": _resolve_bandage,
+        "REMOVE_BANDAGE": _resolve_remove_bandage,
+        "DISINFECT": _resolve_disinfect,
         "WAIT": _resolve_wait,
         "SLEEP": _resolve_sleep,
         "EXERCISE": _resolve_exercise,

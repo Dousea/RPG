@@ -84,6 +84,28 @@ class UseItemAction:
 
 
 @dataclass
+class BandageAction:
+    """Bandage a part; an empty `part_name` picks the part most in need, an empty `item_name` the best bandage."""
+
+    verb: ClassVar[str] = "BANDAGE"
+    part_name: str = ""
+    item_name: str = ""
+
+
+@dataclass
+class RemoveBandageAction:
+    verb: ClassVar[str] = "REMOVE_BANDAGE"
+    part_name: str
+
+
+@dataclass
+class DisinfectAction:
+    verb: ClassVar[str] = "DISINFECT"
+    part_name: str
+    item_name: str = ""
+
+
+@dataclass
 class Duration:
     """How long a WAIT or SLEEP lasts: a fixed span, or until a clock time.
 
@@ -185,6 +207,9 @@ AnyAction = (
     | EquipAction
     | UnequipAction
     | UseItemAction
+    | BandageAction
+    | RemoveBandageAction
+    | DisinfectAction
     | WaitAction
     | SleepAction
     | ExerciseAction

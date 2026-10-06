@@ -89,6 +89,9 @@ drift apart.
 | `ATTACK` | NPC name, zombie id, or `zombie` | 1 per swing |
 | `SHOVE` | zombie id, or `zombie` | 1 per swing |
 | `EQUIP` / `UNEQUIP` | item | 1 |
+| `BANDAGE` | body part, optional `with` item | 1 |
+| `REMOVE_BANDAGE` | body part | 1 |
+| `DISINFECT` | body part, optional `with` item | 1 |
 | `SHOUT` | none | 0 |
 | `TALK` | NPC, approach | 5 per turn |
 | `ASK` | NPC, request | 5 per turn |
@@ -167,6 +170,7 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `TAKE_OFF` | `worn` | something is worn or in hand |
 | `TALK`, `ASK`, `GIVE` | `npcs_here` | someone is here |
 | `ATTACK` | `npcs_here`, `threats` | someone is here, or a zombie is perceived |
+| `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](12-health-and-infection.md)) |
 
 With nothing present, the block lists the eight always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. Closed labels inside a listed verb are printed in full.
 

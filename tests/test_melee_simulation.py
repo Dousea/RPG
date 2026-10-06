@@ -154,6 +154,14 @@ class DownAndStaggeredLoopTests(unittest.TestCase):
         self.assertFalse(zombie.staggered)
         self.assertTrue(loop.run_minute(1, PlayerMinute()).attacked)
 
+    def test_the_approach_step_closes_the_gap_at_the_limp_scaled_walking_pace(self):
+        for limp, closed in ((1.0, 4.0), (0.75, 3.0)):
+            gm = zombie_game()
+            zombie = add_zombie(gm, gap=10, state=ZombieState.IDLE)
+            with mock.patch("managers.zombies.limp_factor", return_value=limp):
+                self.loop(gm).run_minute(0, PlayerMinute(approach_target=zombie.zombie_id))
+            self.assertAlmostEqual(zombie.gap, 10 - closed)
+
     def test_a_down_zombie_does_not_move(self):
         gm = zombie_game()
         zombie = add_zombie(gm, gap=6, state=ZombieState.CHASING)

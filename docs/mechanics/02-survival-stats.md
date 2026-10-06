@@ -27,7 +27,8 @@ stat out of range.
 `StatsEngine.advance(player, minutes, ctx)` runs every registered driver over
 the minutes in chunks of at most 10. Short chunks keep the feedback terms
 honest: appetite shrinks as hunger rises, and fatigue gain follows endurance.
-It returns facts for every status effect that changed level, plus any HP loss.
+It returns facts for every status effect that changed level. The health the status effects
+take is not part of it: it runs in the body minute ([health](12-health-and-infection.md#the-body-minute)).
 
 - Drivers run in registration order. Each reads and writes `Stats` only, with
   the signature `apply(stats, hours, ctx)`.
@@ -35,9 +36,7 @@ It returns facts for every status effect that changed level, plus any HP loss.
   after the boredom driver sees the new Bored level.
 - `register(driver)` adds a driver after construction. Weather and body
   temperature use it.
-- After a call, `minutes_advanced` is the time that really passed (less than
-  asked if the player died), `health_lost` is the HP the status effects took, and
-  `death_cause` is set if they took the last of it.
+- After a call, `minutes_advanced` is the time that passed.
 - The chunk split depends only on the total, so `advance(600)` and ten
   `advance(60)` calls give the same stats.
 
@@ -75,9 +74,9 @@ For each accepted action:
 1. The resolver applies the action.
 2. The action's minutes are handed to `StatsEngine.advance`, then the clock
    moves by the minutes that really passed.
-3. Status-effect-change facts and any health-loss fact join the `[OUTCOMES]` block,
-   before the "About N minutes pass." fact.
-4. If the stats killed the player, the game ends the same way combat death
+3. Status-effect-change facts join the `[OUTCOMES]` block, before the "About N minutes
+   pass." fact.
+4. If the body minute killed the player, the game ends the same way combat death
    ends it.
 
 Because stats advance per action, a status effect that changes mid-turn affects the
@@ -162,8 +161,9 @@ about 16 hours.
 
 ### Stress
 
-Falls by 0.108 × h. Wound and infection stress and stress from sounds join
-when those specs land.
+Falls by 0.108 × h. Wound and zombie-infection stress join through the
+[body minute](12-health-and-infection.md#stress); stress from sounds joins when
+that spec lands.
 
 ### Endurance
 
@@ -276,16 +276,12 @@ day it wants the 16 hour cap.
 | Thirst (Dying of Thirst) | −17.82 |
 | Sick (Fever), when food sickness is above zombie infection | −178.2 |
 
-Losses add up. The loss per chunk is fractional: whole points come off
-`hit_points` and the rest is carried in `player.fractional_hp_loss`.
-
-Each span that takes HP gives one fact per cause, without numbers: "Orton is
-weakening from hunger.", "... from thirst." or "... from fever."
-
-If hit points reach 0 inside a chunk, the span stops at the end of that chunk.
-The fact is "Orton died of starvation.", "Orton died of thirst." or "Orton died
-of fever.", followed by the usual death line. The same text becomes the death
-cause, and later actions in the turn are refused.
+The body minute applies these through
+[`reduce_general`](12-health-and-infection.md#the-body-minute), each minute, with
+the same numbers. Each span that takes HP gives one fact per cause, without
+numbers: "Orton is weakening from hunger.", "... from thirst." or "... from
+fever." A death says "Orton died of starvation.", "Orton died of thirst." or
+"Orton died of fever.", and the minute it happens is the last that passes.
 
 ## What the narrator and the player see
 
@@ -294,13 +290,13 @@ cause, and later actions in the turn are refused.
 - The narrator and parser prompts carry a `[CONDITION]` block with the active
   status effects ([03](03-status-effects-and-consumption.md#what-the-narrator-and-the-player-see)).
 - `/play` carries `effects: [{type, level, name}]` for status effects above level 0. The
-  `vitals` object holds health only. The page shows each status effect as a tag.
+  page shows each status effect as a tag.
 
 ## Saves
 
-`SCHEMA_VERSION` is 6 (spec 03 adds the well-fed timer). The player saves `stats` (every stat by name), `asleep`
-and `fractional_hp_loss`. The old `hunger`, `thirst` and `morale` fields and
-the narrative `conditions` are gone. A save of any other version is discarded.
+`SCHEMA_VERSION` is 6 (spec 03 adds the well-fed timer). The player saves `stats` (every stat by name) and `asleep`.
+The old `hunger`, `thirst` and `morale` fields and the narrative `conditions`
+are gone. A save of any other version is discarded.
 
 ## Edge cases
 
@@ -308,7 +304,7 @@ the narrative `conditions` are gone. A save of any other version is discarded.
   chunks.
 - Sleeping while Starving or Dying of Thirst is allowed. The player wakes at the
   end of the first chunk, so a sleeper is never killed in one `SLEEP`.
-- Death mid-span stops the clock at the chunk where it happened.
+- Death mid-span stops the clock at the minute where it happened.
 - Drivers use no randomness. The only random value is the interruption panic.
 
 ## Testing
@@ -317,11 +313,11 @@ the narrative `conditions` are gone. A save of any other version is discarded.
   constant's per-hour value.
 - `tests/test_stats_engine.py`: one hand-computed hour (or chunk) per driver,
   Peckish at 4 to 5 hours, Drowsy at 15 to 17 hours, fatigue from 0.8 in bed,
-  the three health-loss figures, chunk equivalence, a registered driver, and
-  exactly one fact per status effect change.
+  chunk equivalence, a registered driver, and exactly one fact per status effect change.
+  The three health-loss figures are in `tests/test_body_minute.py`.
 - `tests/test_time_and_sleep.py`: stats advance per action, the sleep wake causes,
-  death by thirst with its cause, and the clock stopping at the death chunk.
+  death by thirst with its cause, and the clock stopping at the minute of death.
 - `tests/test_validator.py`: `SLEEP`
   refused at Panic level 1 and at Pain level 2, the open-sleep span.
-- `tests/test_persistence.py`: a round trip keeps `stats`, `asleep` and
-  `fractional_hp_loss` exactly, and a v4 save is discarded.
+- `tests/test_persistence.py`: a round trip keeps `stats` and `asleep` exactly,
+  and a v4 save is discarded.

@@ -93,12 +93,11 @@ outgoing hit. Each effect type now declares which role (`"source"` or
 
 ## Modifiers
 
-`modules/modifier.py`. Six types, deliberately dumb — they describe a change
+`modules/modifier.py`. Five types, deliberately dumb — they describe a change
 and carry no logic:
 
 ```text
 XPModifier                    amount
-HPModifier                    amount
 DamageMultiplicativeModifier  multiplier
 ConditionsModifier            {CharacterCondition: bool}
 AffinityModifier              source_id, target_id, amount
@@ -111,12 +110,13 @@ than letting the order in which traits happened to fire decide the outcome.
 
 ## Application
 
-`apply_event_modifiers` (`managers/events.py`) handles five of the six:
+`apply_event_modifiers` (`managers/events.py`) handles four of the five:
 `DamageMultiplicativeModifier` (composed, then applied to the event's target),
 `AffinityModifier` and `ReputationModifier` (forwarded to the
-[relationship manager](22-relationships.md)), and `HPModifier` and
-`ConditionsModifier` (applied to the event's target, or its source for an
-event with none). `XPModifier` is still collected and dropped — nothing on the
+[relationship manager](22-relationships.md)), and `ConditionsModifier` (applied
+to the event's target, or its source for an event with none). Event damage never
+lands on the player: their health comes from the body parts
+([mechanics 12](mechanics/12-health-and-infection.md)). `XPModifier` is still collected and dropped — nothing on the
 live path produces it yet. XP is awarded by the skill engine; see
 [mechanics 08](mechanics/08-skills.md).
 

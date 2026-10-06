@@ -294,8 +294,10 @@ class ResolveAttackTests(unittest.TestCase):
         self.assertEqual(wound.part, BodyPart.NECK)
         self.assertEqual(wound.damage, 5.0)
         self.assertTrue(wound.zombie_infected)
-        self.assertEqual(self.player.hit_points, 96 + 1)
-        self.assertAlmostEqual(self.player.fractional_hp_loss, 0.5)
+        self.assertAlmostEqual(self.player.health, 100 - 5 * 0.7)
+        self.assertAlmostEqual(self.player.body[BodyPart.NECK].health, 95.0)
+        self.assertGreater(self.player.body[BodyPart.NECK].bite_time, 0)
+        self.assertTrue(self.player.body[BodyPart.NECK].zombie_infected)
 
     def test_clothing_defence_100_always_blocks(self):
         self.player.worn[BodyLocation.JACKET] = armour(100, 100, set(BodyPart))

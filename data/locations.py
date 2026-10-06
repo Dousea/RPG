@@ -22,7 +22,7 @@ the next game after a reset.
 """
 
 from data.climate import INDOORS_BY_ZONE
-from data.items import ITEMS
+from data.items import ADHESIVE_BANDAGE_ID, ALCOHOL_WIPES_ID, BANDAGE_ID, ITEMS, PAINKILLERS_ID
 from data.zombie_lore import ZONE_ZOMBIE_FIELDS
 from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
@@ -46,6 +46,14 @@ ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_street": ("street", "block"),
     "zone_neighborhood": ("neighborhood", "neighbourhood"),
 }
+
+FIRST_AID_KIT_CONTENTS = [  # spec 12: fixed contents stand in for the kit's loot rolls
+    BANDAGE_ID,
+    BANDAGE_ID,
+    ADHESIVE_BANDAGE_ID,
+    ALCOHOL_WIPES_ID,
+    PAINKILLERS_ID,
+]
 
 
 def build_starting_locations() -> dict[str, Location]:
@@ -195,7 +203,7 @@ def build_starting_locations() -> dict[str, Location]:
             "item_black_jacket",
             "item_kitchen_knife",
         ],
-        "zone_building": ["item_first_aid_kit"],
+        "zone_building": FIRST_AID_KIT_CONTENTS,
         "zone_street": ["item_crowbar"],
     }
     for location_id, item_ids in starting_ground_items.items():

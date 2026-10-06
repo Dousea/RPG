@@ -39,26 +39,12 @@ from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
-from modules.item import ClothingItem, ConsumableItem
-from modules.modifier import HPModifier
+from modules.item import ClothingItem
+from modules.pace import Pace
 from modules.stats import CharacterStat
 from modules.story import StartOutbreak
 from modules.weather import WeatherSample
-from tests.support import simulate
-
-# A test-local lethal item, not part of data/items.py: -500 HP guarantees
-# Orton's hit points hit zero regardless of his current/max HP, without
-# reaching into a real item's numbers that another test might change.
-LETHAL_ITEM = ConsumableItem(
-    id="item_test_poison",
-    name="Suspicious Vial",
-    description="Definitely not safe to drink.",
-    max_hit_points=1,
-    tags=["consumable"],
-    slots=[CharacterHoldableSlot.RIGHT_HAND],
-    is_two_handed=False,
-    modifiers=[HPModifier(amount=-500)],
-)
+from tests.support import make_dying, set_health, simulate
 
 
 class ItemResolutionTests(unittest.TestCase):
@@ -73,29 +59,21 @@ class ItemResolutionTests(unittest.TestCase):
 
     def test_use_consumable_is_consumed(self):
         gm = GameManager()
-        gm.player.hit_points = 50
+        set_health(gm.player, 50)
         gm.player.inventory.clear()  # drop the starting apartment key
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         facts = simulate(gm, UseItemAction(item_name="Canned Beans"))
-        self.assertEqual(gm.player.hit_points, 50)
+        self.assertLess(gm.player.health, 60)
         self.assertEqual(gm.player.inventory, [])
         self.assertIn("succeeded", facts[0])
 
-    def test_use_appliable_heals_and_is_kept(self):
+    def test_using_painkillers_spends_a_pill_and_keeps_the_bottle(self):
         gm = GameManager()
-        gm.player.hit_points = 50
-        gm.player.inventory.clear()  # drop the starting apartment key
-        gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
-        simulate(gm, UseItemAction(item_name="First Aid Kit"))
-        self.assertEqual(gm.player.hit_points, 70)  # HPModifier(amount=20)
-        self.assertEqual(len(gm.player.inventory), 1)  # not consumed
-
-    def test_healing_clamps_to_max_hit_points(self):
-        gm = GameManager()
-        gm.player.hit_points = 95
-        gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
-        simulate(gm, UseItemAction(item_name="First Aid Kit"))
-        self.assertEqual(gm.player.hit_points, gm.player.max_hit_points)
+        gm.player.inventory.clear()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        simulate(gm, UseItemAction(item_name="Painkillers"))
+        self.assertEqual(len(gm.player.inventory), 1)
+        self.assertEqual(gm.player.inventory[0].uses, 9)
 
     def test_eating_refills_hunger_and_thirst(self):
         gm = GameManager()
@@ -116,35 +94,33 @@ class WorldStateResolutionTests(unittest.TestCase):
 
 class PlayerDeathResolutionTests(unittest.TestCase):
     """SimulationCore._check_player_death is the only producer of
-    NarrativeState.game_over/death_cause -- player HP only moves through
-    combat and item effects, so the LLM can never kill Orton by declaration."""
+    NarrativeState.game_over/death_cause -- player health only moves through
+    the body, so the LLM can never kill Orton by declaration."""
 
-    def test_lethal_item_ends_the_game(self):
+    def test_a_dying_player_ends_the_game(self):
         gm = GameManager()
-        gm.player.inventory.clear()
-        gm.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
-        facts = simulate(gm, UseItemAction(item_name="Suspicious Vial"))
+        make_dying(gm.player)
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=10)))
         self.assertTrue(gm.narrative.game_over)
-        self.assertIn("Suspicious Vial", gm.narrative.death_cause)
-        self.assertIn("Orton has died", facts[0])
+        self.assertIn("Orton", gm.narrative.death_cause)
+        self.assertTrue(any("Orton has died" in fact for fact in facts))
         self.assertEqual(gm.player.hit_points, 0)
 
     def test_actions_after_death_are_refused(self):
         gm = GameManager()
-        gm.player.inventory.clear()
-        gm.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
+        make_dying(gm.player)
         facts = simulate(
             gm,
-            UseItemAction(item_name="Suspicious Vial"),
+            WaitAction(duration=Duration(minutes=10)),
             AddGoalAction(horizon="short_term", goal_text="Survive"),
         )
-        self.assertIn("Orton has died", facts[0])
-        self.assertTrue(facts[1].startswith("Refused:"))
+        self.assertTrue(any("Orton has died" in fact for fact in facts))
+        self.assertTrue(any(fact.startswith("Refused:") for fact in facts))
         self.assertNotIn("Survive", gm.narrative.goals["short_term"])
 
     def test_surviving_hp_does_not_end_the_game(self):
         gm = GameManager()
-        gm.player.hit_points = 50
+        set_health(gm.player, 50)
         gm.player.inventory.clear()  # drop the starting apartment key
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         facts = simulate(gm, UseItemAction(item_name="Canned Beans"))
@@ -184,14 +160,14 @@ class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):
                 self.assertIn(f"Emma is {words}", fact)
 
     def test_using_an_item_reports_how_hurt_orton_is(self):
-        self.gm.player.hit_points = 50
-        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
-        fact = self._first_fact(UseItemAction(item_name="First Aid Kit"))
-        self.assertIn("Use First Aid Kit: succeeded, Orton is ", fact)
+        set_health(self.gm.player, 50)
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        fact = self._first_fact(UseItemAction(item_name="Canned Beans"))
+        self.assertIn("Use Canned Beans: succeeded, Orton is ", fact)
 
     def test_an_unhurt_player_reads_as_unhurt(self):
-        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
-        fact = self._first_fact(UseItemAction(item_name="First Aid Kit"))
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        fact = self._first_fact(UseItemAction(item_name="Canned Beans"))
         self.assertIn("Orton is unhurt", fact)
 
 
@@ -326,7 +302,7 @@ class BoundaryTickWiringTests(unittest.TestCase):
         gm.player.exercise.future_stiffness["arms"] = 1.0
         simulate(gm, WaitAction(duration=Duration(minutes=10)))
         for part in REGION_PARTS["arms"]:
-            self.assertEqual(gm.player.exercise.part_stiffness[part], 2.5)
+            self.assertEqual(gm.player.body[part].stiffness, 2.5)
 
 
 class DeathBeforeTicksTests(unittest.TestCase):
@@ -336,8 +312,7 @@ class DeathBeforeTicksTests(unittest.TestCase):
         gm = GameManager()
         gm.narrative.minutes = 2405
         player = gm.player
-        player.hit_points = 1
-        player.fractional_hp_loss = 0.999
+        make_dying(player)
         player.stats.set(CharacterStat.HUNGER, 1.0)
         player.stats.set(CharacterStat.ENDURANCE, 0.1)
         SkillEngine().set_level(player, "fitness", 5)
@@ -1066,3 +1041,243 @@ class ShoutTests(unittest.TestCase):
         zombie = add_zombie(gm, gap=25, state=ZombieState.IDLE)
         simulate(gm, ShoutAction(), rng=random.Random(1))
         self.assertNotEqual(zombie.state, ZombieState.IDLE)
+
+
+class WhatPainDoesTests(unittest.TestCase):
+    """Spec 12, What pain does."""
+
+    def refusal(self, gm: GameManager) -> str | None:
+        result = ActionValidator(gm).validate(SleepAction(duration=Duration(minutes=60)))
+        return result.reason if isinstance(result, Rejected) else None
+
+    def test_sleep_is_refused_at_panic_level_one(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.PANIC, 10)
+        self.assertEqual(self.refusal(gm), "Orton is too panicked to sleep.")
+
+    def test_sleep_is_refused_at_pain_two_with_fatigue_half(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.PAIN, 25)
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.5)
+        self.assertEqual(self.refusal(gm), "Orton is in too much pain to sleep.")
+
+    def test_sleep_is_allowed_at_pain_two_with_fatigue_point_nine(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.PAIN, 25)
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.9)
+        self.assertIsNone(self.refusal(gm))
+
+    def test_sleep_is_allowed_at_pain_level_one(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.PAIN, 15)
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.5)
+        self.assertIsNone(self.refusal(gm))
+
+    def minutes_for(self, gm: GameManager, action) -> int:
+        before = gm.narrative.minutes
+        simulate(gm, action)
+        return gm.narrative.minutes - before
+
+    def test_an_unhappy_player_takes_longer_over_a_fixed_cost_action(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.UNHAPPINESS, 50)
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        self.assertEqual(self.minutes_for(gm, DropAction(item_name="Painkillers")), 2)
+
+    def test_a_calm_player_takes_one_minute(self):
+        gm = GameManager()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        self.assertEqual(self.minutes_for(gm, DropAction(item_name="Painkillers")), 1)
+
+    def test_hand_pain_slows_a_bandage(self):
+        gm = GameManager()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_bandage"]))
+        state = gm.player.body[BodyPart.HAND_L]
+        state.scratch_time = 5.0
+        state.extra_pain = 400.0
+        from modules.action.types import BandageAction
+
+        self.assertEqual(self.minutes_for(gm, BandageAction(part_name="left hand")), 2)
+
+    def test_a_wait_is_not_slowed(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.UNHAPPINESS, 50)
+        self.assertEqual(self.minutes_for(gm, WaitAction(duration=Duration(minutes=10))), 10)
+
+    def test_equip_and_unequip_are_slowed_too(self):
+        from modules.action.types import EquipAction, UnequipAction
+
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.UNHAPPINESS, 50)
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_kitchen_knife"]))
+        self.assertEqual(self.minutes_for(gm, EquipAction(item_name="Kitchen Knife")), 2)
+        self.assertEqual(self.minutes_for(gm, UnequipAction(item_name="Kitchen Knife")), 2)
+
+
+class LimpWiringTests(unittest.TestCase):
+    """Spec 12, The limp."""
+
+    def hop_minutes(self, **wound) -> int:
+        gm = GameManager()
+        for name, value in wound.items():
+            setattr(gm.player.body[BodyPart.LOWERLEG_L], name, value)
+        before = gm.narrative.minutes
+        simulate(gm, MoveAction(destination="out"))
+        return gm.narrative.minutes - before
+
+    def test_a_whole_player_walks_a_hop_in_ten_minutes(self):
+        self.assertEqual(self.hop_minutes(), 10)
+
+    def test_a_shin_laceration_stretches_the_hop_to_twelve(self):
+        self.assertEqual(self.hop_minutes(cut_time=15.0), 12)
+
+    def test_a_bitten_shin_stretches_it_to_forty(self):
+        self.assertEqual(self.hop_minutes(bite_time=65.0), 40)
+
+    def test_a_limp_slows_the_pace_a_chased_player_opens_the_gap_at(self):
+        def gap_after(limping: bool) -> float:
+            gm = zombie_game()
+            if limping:
+                gm.player.body[BodyPart.LOWERLEG_L].bite_time = 65.0
+            zombie = add_zombie(gm, gap=20, state=ZombieState.CHASING, facing_cos=1.0)
+            zombie.time_since_seen = 0
+            loop = ZombieLoop(gm, random.Random(1), SkillEngine())
+            loop.run_minute(0, PlayerMinute(pace=Pace.RUN))
+            return zombie.gap
+
+        free, limping = gap_after(False), gap_after(True)
+        self.assertAlmostEqual(free - limping, 8 * (1 - 0.25))
+
+    def test_a_limp_lengthens_the_walk_up_to_a_zombie(self):
+        from managers.zombies import approach_minutes
+
+        self.assertEqual(approach_minutes(10.0, 1.0), 3)
+        self.assertEqual(approach_minutes(10.0, 0.25), 9)
+
+
+class WeakeningInterruptionTests(unittest.TestCase):
+    """Spec 12, Interruptions."""
+
+    def test_a_wait_stops_when_the_bleeding_level_rises(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        real = core._body.minute
+        calls = []
+
+        def minute(player, hours):
+            calls.append(hours)
+            if len(calls) == 3:
+                player.body[BodyPart.FOREARM_L].bleeding_time = 0.5
+            return real(player, hours)
+
+        core._body.minute = minute  # type: ignore[method-assign]
+        facts = core.resolve([WaitAction(duration=Duration(minutes=60))])
+        self.assertEqual(len(calls), 3)
+        self.assertIn("Orton is getting weaker.", facts)
+        self.assertIn("Orton is now Minor Bleeding.", facts)
+        self.assertEqual(gm.narrative.minutes, 3)
+
+    def test_a_sleeper_wakes_when_weakened(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 1)
+        core = SimulationCore(gm)
+        real = core._body.minute
+        calls = []
+
+        def minute(player, hours):
+            calls.append(hours)
+            if len(calls) == 2:
+                player.body[BodyPart.FOREARM_L].bleeding_time = 0.5
+            return real(player, hours)
+
+        core._body.minute = minute  # type: ignore[method-assign]
+        facts = core.resolve([SleepAction(duration=Duration(minutes=120))])
+        self.assertFalse(gm.player.asleep)
+        self.assertIn("Orton wakes, badly hurt.", facts)
+
+    def test_a_move_is_not_stopped_by_the_weakening_rule(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        real = core._body.minute
+        calls = []
+
+        def minute(player, hours):
+            calls.append(hours)
+            if len(calls) == 2:
+                player.body[BodyPart.FOREARM_L].bleeding_time = 0.5
+            return real(player, hours)
+
+        core._body.minute = minute  # type: ignore[method-assign]
+        core.resolve([MoveAction(destination="out")])
+        self.assertEqual(len(calls), 10)
+
+
+class WeakeningComparisonTests(unittest.TestCase):
+    """Spec 12, The weakening interruption: either level rising counts."""
+
+    def test_bleeding_rising_while_injured_falls_counts_as_worse(self):
+        from managers.simulation import _got_worse
+
+        self.assertTrue(_got_worse((1, 2), (2, 1)))
+        self.assertFalse(_got_worse((2, 1), (2, 1)))
+        self.assertFalse(_got_worse((1, 1), (2, 2)))
+
+
+class WoundLandsInThePartTests(unittest.TestCase):
+    """Spec 12, Wounds: a zombie's wound goes into its part."""
+
+    def test_a_bite_lands_on_the_neck_with_its_zombie_infection_and_infection_flags(self):
+        from unittest.mock import patch
+
+        gm = zombie_game()
+        gm.player.worn.clear()
+        zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
+        zombie.time_since_seen = 0
+        with (
+            patch("managers.zombie_attack.player_defence", return_value=-100),
+            patch("managers.zombie_attack.roll_body_part", return_value=BodyPart.NECK),
+            patch("managers.zombie_attack.roll_wound_kind", return_value="bite"),
+            patch("managers.zombie_attack.roll_wound_damage", return_value=5.0),
+            patch("managers.zombie_attack.clothing_defence", return_value=0),
+        ):
+            simulate(gm, WaitAction(duration=Duration(minutes=1)), rng=random.Random(1))
+        neck = gm.player.body[BodyPart.NECK]
+        self.assertGreater(neck.bite_time, 49)
+        self.assertTrue(neck.zombie_infected)
+        self.assertTrue(neck.infected_wound)
+        self.assertGreaterEqual(100.0 - gm.player.health, 5.0 * 0.7 - 1e-9)
+
+
+class RisingTests(unittest.TestCase):
+    """Spec 12, Death: rising."""
+
+    def test_a_death_while_infected_adds_and_rose_again(self):
+        gm = GameManager()
+        make_dying(gm.player)
+        gm.player.body[BodyPart.HAND_L].zombie_infected = True
+        gm.player.zombie_infection_since = 0.0
+        gm.player.zombie_infection_hours = 60.0
+        gm.narrative.minutes = 60 * 10
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=20)))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertTrue(gm.narrative.death_cause.endswith("...and rose again."))
+        self.assertTrue(any("and rose again." in fact for fact in facts))
+
+    def test_a_death_without_the_infection_does_not_rise(self):
+        gm = GameManager()
+        make_dying(gm.player)
+        simulate(gm, WaitAction(duration=Duration(minutes=20)))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertNotIn("rose again", gm.narrative.death_cause)
+
+    def test_the_zombie_infection_infection_ends_the_game_and_the_player_rises(self):
+        gm = GameManager()
+        gm.player.body[BodyPart.HAND_L].zombie_infected = True
+        gm.player.zombie_infection_since = 0.0
+        gm.player.zombie_infection_hours = 50.0
+        gm.narrative.minutes = 60 * 51
+        simulate(gm, WaitAction(duration=Duration(minutes=5)))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertEqual(
+            gm.narrative.death_cause, "Orton died of the zombie infection...and rose again."
+        )

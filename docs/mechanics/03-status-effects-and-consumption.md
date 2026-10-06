@@ -40,14 +40,15 @@ the level.
 | Unhappy | unhappiness | 20 | 45 | 60 | 80 | Sad, Very Sad, Depressed, Severely Depressed |
 | Pain | pain | 10 | 20 | 50 | 75 | Minor Pain, Pain, Severe Pain, Agony |
 | Drunk | intoxication | 10 | 30 | 50 | 70 | Tipsy, Drunk, Very Drunk, Hammered |
-| Sick | max(food sickness, infection) ÷ 100 + sickness | 0.25 | 0.50 | 0.75 | 0.90 | Queasy, Nauseous, Sick, Fever |
+| Sick | max(food sickness, zombie infection, general wound infection) ÷ 100 + sickness | 0.25 | 0.50 | 0.75 | 0.90 | Queasy, Nauseous, Sick, Fever |
 | Food Eaten | well-fed timer | above 0 | above 1600 | above 3200 | above 4800 | Well Fed at every level |
-| Injured | 100 − HP | 20 | 40 | 60 | 75 | A Little Hurt, Injured, Severe Injuries, Critical Injuries |
+| Injured | 100 − health | 20 | 40 | 60 | 75 | A Little Hurt, Injured, Severe Injuries, Critical Injuries |
 | Bleeding | bleeding body parts, capped at 4; 4 if the neck bleeds | 1 | 2 | 3 | 4 | Minor Bleeding, Bleeding, Severe Bleeding, Massive Blood Loss |
 
-- Injured is off at 0 HP.
-- Bleeding is level 0 until the health spec supplies bleeding parts.
-  `bleeding_level(parts, neck)` already applies the cap.
+- Injured is off at 0 health, and reads the health the body parts give
+  ([health](12-health-and-infection.md#overall-health)).
+- Bleeding counts the bleeding parts ([health](12-health-and-infection.md#bleeding));
+  `bleeding_level(parts, neck)` applies the cap.
 - The "Well Fed" name is shared by all four Food Eaten levels for now.
 - Wet, Hypothermia, Hyperthermia, Has a Cold and Windchill join this table with
   the weather and body-temperature specs.
@@ -63,7 +64,7 @@ table order ("Orton is now Peckish.", "Orton is no longer Peckish.").
 | Melee damage | Panic at level 2 or more subtracts 0.1 per level. Stress at level 2 or more subtracts 0.1 per level. The hit is floored at 0.1. |
 | Fatigue gain | Endurance feeds fatigue. |
 | Unhappiness gain | Bored and Stress levels feed unhappiness. |
-| HP loss | Starving, Dying of Thirst and Fever cost HP over time. |
+| HP loss | Starving, Dying of Thirst and Fever cost health over time, and Massive Blood Loss costs more ([health](12-health-and-infection.md#the-body-minute)). |
 | Sleep | `SLEEP` is refused at Panic level 1 or more, and at Pain level 2 or more unless fatigue is above 0.85. |
 | Crit chance | 5 per Endurance level, 5 per Heavy Load level and 1.3 per Panic level are lost. |
 | Defence | 2 per Endurance level, 3 per Tired level and 2 per Drunk level are lost. |
@@ -110,7 +111,8 @@ Each field applies once. Every stat clamps to its range, so a positive
 range.
 
 - **No instant healing.** Food does not restore HP. The canned beans have no
-  HP modifier.
+  HP modifier, and no item heals directly; health comes back only through the
+  [body](12-health-and-infection.md#healing).
 - **Well-fed timer** (`player.food_eaten_timer`): gains
   `|hunger_change| × 13000`, doubled if cooked, capped at 11000. It drains at
   10800 per game hour while time passes, including while eating. It drives the

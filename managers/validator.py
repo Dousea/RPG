@@ -16,6 +16,7 @@ re-derive the reason something was legal.
 import re
 from dataclasses import dataclass
 
+from data import body as body_k
 from data import exercises as ex
 from data import survival
 from data.body_locations import EXCLUSIVE_LOCATIONS
@@ -27,8 +28,16 @@ from data.clock import (
 )
 from data.items import ITEMS
 from data.topics import TOPICS
+from managers.body import limp_factor
 from managers.combat import held_entity, held_slots
 from managers.exercise import endurance_level
+from managers.first_aid import (
+    bandage_items,
+    disinfectant_items,
+    find_part,
+    most_needed_part,
+    part_word,
+)
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
 from managers.social import locked_out
@@ -42,12 +51,15 @@ from modules.action.types import (
     AnyAction,
     AskAction,
     AttackAction,
+    BandageAction,
+    DisinfectAction,
     DropAction,
     Duration,
     EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
+    RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
     ShoveAction,
@@ -63,10 +75,17 @@ from modules.action.types import (
 )
 from modules.entity.npc import NpcEntity
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
-from modules.item import AppliableItem, ClothingItem, ConsumableItem, HoldableItem
+from modules.item import (
+    AppliableItem,
+    ClothingItem,
+    ConsumableItem,
+    HoldableItem,
+    MedicalItem,
+)
 from modules.pace import Pace
 from modules.resolution import (
     ExercisePlan,
+    FirstAidTarget,
     HeldItem,
     MoveBlocked,
     MoveToSpot,
@@ -319,8 +338,14 @@ class ActionValidator:
         entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to use.")
-        if not isinstance(entity.item, (ConsumableItem, AppliableItem)):
-            return Rejected(action, f"{entity.item.name} cannot be used this way.")
+        item = entity.item
+        if isinstance(item, MedicalItem):
+            if item.painkiller or item.reduce_infection_power > 0:
+                return Accepted(action, HeldItem(entity))
+            if item.bandage_power > 0 or item.alcohol_power > 0:
+                return Rejected(action, body_k.USE_HINT)
+        if not isinstance(item, (ConsumableItem, AppliableItem)):
+            return Rejected(action, f"{item.name} cannot be used this way.")
         return Accepted(action, HeldItem(entity))
 
     def _validate_equip(self, action: EquipAction) -> ValidationResult:
@@ -350,6 +375,86 @@ class ActionValidator:
         if len(player.inventory) >= player.max_inventory_size:
             return Rejected(action, "Inventory is full.")
         return Accepted(action, HeldItem(held))
+
+    # === First aid ===
+
+    def _asleep_refusal(self) -> str:
+        return f"{self._name} is asleep." if self.manager.player.asleep else ""
+
+    def _no_such_part(self, action: AnyAction, name: str) -> Rejected:
+        return Rejected(action, f"{self._name} has no '{name}'.")
+
+    def _validate_bandage(self, action: BandageAction) -> ValidationResult:
+        player = self.manager.player
+        if refusal := self._asleep_refusal():
+            return Rejected(action, refusal)
+        if action.part_name:
+            found = find_part(action.part_name)
+            if found is None:
+                return self._no_such_part(action, action.part_name)
+            part = found
+        else:
+            picked = most_needed_part(player)
+            if picked is None:
+                return Rejected(action, f"{self._name} has nothing to bandage.")
+            part = picked
+        state = player.body[part]
+        word = part_word(part)
+        if not state.injured:
+            return Rejected(action, f"The {word} isn't hurt.")
+        if state.bandaged:
+            return Rejected(action, f"The {word} already has a bandage. Remove it first.")
+        candidates = bandage_items(player)
+        if action.item_name:
+            entity = self.manager._find_item_entity(player.inventory, action.item_name)
+            if entity is None:
+                return Rejected(action, f"No '{action.item_name}' in inventory to bandage with.")
+            if entity not in candidates:
+                return Rejected(action, f"{entity.item.name} is not a bandage.")
+        elif candidates:
+            entity = candidates[0]
+        else:
+            return Rejected(action, f"{self._name} has nothing to bandage with.")
+        return Accepted(action, FirstAidTarget(part, entity))
+
+    def _validate_remove_bandage(self, action: RemoveBandageAction) -> ValidationResult:
+        player = self.manager.player
+        if refusal := self._asleep_refusal():
+            return Rejected(action, refusal)
+        part = find_part(action.part_name)
+        if part is None:
+            return self._no_such_part(action, action.part_name)
+        if not player.body[part].bandaged:
+            return Rejected(action, f"The {part_word(part)} has no bandage.")
+        if len(player.inventory) >= player.max_inventory_size:
+            return Rejected(action, "Inventory is full.")
+        return Accepted(action, FirstAidTarget(part))
+
+    def _validate_disinfect(self, action: DisinfectAction) -> ValidationResult:
+        player = self.manager.player
+        if refusal := self._asleep_refusal():
+            return Rejected(action, refusal)
+        part = find_part(action.part_name)
+        if part is None:
+            return self._no_such_part(action, action.part_name)
+        state = player.body[part]
+        word = part_word(part)
+        if not state.injured:
+            return Rejected(action, f"The {word} isn't hurt.")
+        if state.bandaged:
+            return Rejected(action, f"The {word} is bandaged. Remove it first.")
+        candidates = disinfectant_items(player)
+        if action.item_name:
+            entity = self.manager._find_item_entity(player.inventory, action.item_name)
+            if entity is None:
+                return Rejected(action, f"No '{action.item_name}' in inventory to disinfect with.")
+            if entity not in candidates:
+                return Rejected(action, f"{entity.item.name} cannot disinfect a wound.")
+        elif candidates:
+            entity = candidates[0]
+        else:
+            return Rejected(action, f"{self._name} has nothing to disinfect with.")
+        return Accepted(action, FirstAidTarget(part, entity))
 
     # === Combat ===
 
@@ -394,7 +499,9 @@ class ActionValidator:
             pool = [zombie for zombie in here if zombie.zombie_id == needle]
         if not pool:
             return None
-        return TargetZombie(pool[0].zombie_id, approach_minutes(pool[0].gap))
+        return TargetZombie(
+            pool[0].zombie_id, approach_minutes(pool[0].gap, limp_factor(self.manager.player))
+        )
 
     # === Time ===
 
@@ -569,6 +676,9 @@ class ActionValidator:
         "EQUIP": _validate_equip,
         "UNEQUIP": _validate_unequip,
         "USE_ITEM": _validate_use_item,
+        "BANDAGE": _validate_bandage,
+        "REMOVE_BANDAGE": _validate_remove_bandage,
+        "DISINFECT": _validate_disinfect,
         "WAIT": _validate_wait,
         "SLEEP": _validate_sleep,
         "EXERCISE": _validate_exercise,
