@@ -1,12 +1,21 @@
 """Parsing of the parser call's ACTIONS block and the narrator's STORY/EVENT."""
 
+import json
 import unittest
+from unittest import mock
 
+import requests
+
+from adapters import llm
 from adapters.llm import (
     NARRATOR_SYSTEM_PROMPT,
+    PARSER_JSON_SYSTEM_PROMPT,
+    PARSER_SYSTEM_PROMPT,
     SUMMARIZER_SYSTEM_PROMPT,
+    LLMError,
     parse_action_response,
     parse_narrator_response,
+    parse_plan_response,
 )
 
 
@@ -134,10 +143,6 @@ class ParseNarratorResponseTests(unittest.TestCase):
         self.assertEqual(parsed["options"], [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class PromptRuleTests(unittest.TestCase):
     """Spec 10, What the narrator must not do and Memory."""
 
@@ -163,3 +168,116 @@ class PromptRuleTests(unittest.TestCase):
     def test_the_summarizer_is_told_parenthesised_facts_win(self):
         self.assertIn("Facts in parentheses", SUMMARIZER_SYSTEM_PROMPT)
         self.assertIn("win over the rest", SUMMARIZER_SYSTEM_PROMPT)
+
+
+class FakeResponse:
+    def __init__(self, status_code: int, content: str = ""):
+        self.status_code = status_code
+        self._content = content
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.exceptions.HTTPError(f"HTTP {self.status_code}")
+
+    def json(self) -> dict:
+        return {"choices": [{"message": {"content": self._content}}]}
+
+
+SCHEMA = {"type": "object", "properties": {"actions": {"type": "array"}}}
+
+
+class ReadParserReplyTests(unittest.TestCase):
+    """Spec 10, Plans."""
+
+    def test_a_structured_reply_is_read_as_a_json_plan(self):
+        reply = llm.ParserReply('{"actions": [{"verb": "SHOUT"}]}', structured=True)
+        actions, failures = llm.read_parser_reply(reply)
+        self.assertEqual([type(action).__name__ for action in actions], ["ShoutAction"])
+        self.assertEqual(failures, [])
+
+    def test_a_text_reply_is_read_as_action_lines(self):
+        reply = llm.ParserReply("ACTIONS:\nSHOUT", structured=False)
+        actions, failures = llm.read_parser_reply(reply)
+        self.assertEqual([type(action).__name__ for action in actions], ["ShoutAction"])
+        self.assertEqual(failures, [])
+
+
+class ParserRequestTests(unittest.TestCase):
+    """Spec 10, Plans."""
+
+    def ask(self, *responses: FakeResponse, schema=SCHEMA):
+        with mock.patch.object(llm.requests, "post", side_effect=responses) as post:
+            reply = llm.query_parser("prompt", schema)
+        return reply, [call.kwargs["json"] for call in post.call_args_list]
+
+    def test_the_request_carries_the_schema_as_a_strict_response_format(self):
+        reply, payloads = self.ask(FakeResponse(200, '{"actions": []}'))
+        self.assertEqual(
+            payloads[0]["response_format"],
+            {
+                "type": "json_schema",
+                "json_schema": {"name": "action_plan", "strict": True, "schema": SCHEMA},
+            },
+        )
+        self.assertEqual(payloads[0]["messages"][0]["content"], PARSER_JSON_SYSTEM_PROMPT)
+        self.assertEqual((reply.text, reply.structured), ('{"actions": []}', True))
+
+    def test_a_4xx_falls_back_once_to_the_text_prompt(self):
+        with self.assertLogs("adapters.llm", level="WARNING"):
+            reply, payloads = self.ask(FakeResponse(400), FakeResponse(200, "ACTIONS:\nNONE"))
+        self.assertEqual(len(payloads), 2)
+        self.assertNotIn("response_format", payloads[1])
+        self.assertEqual(payloads[1]["messages"][0]["content"], PARSER_SYSTEM_PROMPT)
+        self.assertEqual((reply.text, reply.structured), ("ACTIONS:\nNONE", False))
+
+    def test_a_server_error_is_not_retried_as_text(self):
+        with self.assertRaises(LLMError):
+            self.ask(FakeResponse(500))
+
+    def test_a_4xx_on_the_text_prompt_is_an_error(self):
+        with self.assertRaises(LLMError), self.assertLogs("adapters.llm", level="WARNING"):
+            self.ask(FakeResponse(400), FakeResponse(400))
+
+    def test_without_a_schema_the_request_is_the_text_prompt(self):
+        reply, payloads = self.ask(FakeResponse(200, "NONE"), schema=None)
+        self.assertNotIn("response_format", payloads[0])
+        self.assertFalse(reply.structured)
+
+    def test_the_narrator_request_has_no_response_format(self):
+        with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
+            llm.query_narrator("prompt")
+        self.assertNotIn("response_format", post.call_args.kwargs["json"])
+
+    def test_the_json_prompt_asks_for_the_object_and_keeps_the_rules(self):
+        self.assertIn('"actions"', PARSER_JSON_SYSTEM_PROMPT)
+        self.assertNotIn("ACTIONS:", PARSER_JSON_SYSTEM_PROMPT)
+        for rule in ("CRITICAL", "one action, never two", "there is no action for dealing"):
+            self.assertIn(rule, PARSER_JSON_SYSTEM_PROMPT)
+            self.assertIn(rule, PARSER_SYSTEM_PROMPT)
+
+    def test_the_json_examples_are_plans_the_parser_reads(self):
+        examples = [line for line in PARSER_JSON_SYSTEM_PROMPT.splitlines() if line.startswith("{")]
+        verbs = []
+        for example in examples:
+            actions, failures = parse_plan_response(example)
+            self.assertEqual(failures, [])
+            verbs.append([a.verb for a in actions])
+        self.assertEqual(verbs, [["TAKE", "MOVE_TO"], ["ASK"]])
+
+
+class ParsePlanResponseTests(unittest.TestCase):
+    def test_a_plan_becomes_actions(self):
+        actions, failures = parse_plan_response(json.dumps({"actions": [{"verb": "SHOUT"}]}))
+        self.assertEqual(([a.verb for a in actions], failures), (["SHOUT"], []))
+
+    def test_an_empty_plan_is_none(self):
+        self.assertEqual(parse_plan_response('{"actions": []}'), ([], []))
+
+    def test_bad_json_is_a_refusal_not_a_crash(self):
+        for text in ("", "ACTIONS:\nNONE", '{"actions": [', "null"):
+            actions, failures = parse_plan_response(text)
+            self.assertEqual((actions, len(failures)), ([], 1), text)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from adapters.llm import ParserReply
 from adapters.save import files
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -99,20 +100,24 @@ class ScriptedLLM:
         actions: str = "ACTIONS:\nNONE",
         story: str = "STORY:\n...\n\nEVENT:\n...",
         summary: str = "A summary.",
+        structured: bool = False,
     ):
         self.actions = actions
         self.story = story
         self.summary = summary
+        self.structured = structured
+        self.schemas: list[dict | None] = []
         self.prompts: list[str] = []  # parser-call prompts
         self.narrator_prompts: list[str] = []
         self.summarized: list[str] = []
         self.error: Exception | None = None
 
-    def query_parser(self, prompt: str) -> str:
+    def query_parser(self, prompt: str, schema: dict | None = None) -> ParserReply:
         self.prompts.append(prompt)
+        self.schemas.append(schema)
         if self.error is not None:
             raise self.error
-        return self.actions
+        return ParserReply(self.actions, structured=self.structured)
 
     def query_narrator(self, prompt: str) -> str:
         self.narrator_prompts.append(prompt)

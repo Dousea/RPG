@@ -1,0 +1,308 @@
+"""The per-turn JSON schema for the parser's plan, and the plan read back into actions.
+
+The schema constrains what the parser model may emit; it changes no rule. Each
+JSON action is turned back into the action line the grammar in
+`modules/action/parser.py` accepts and goes through `parse_action_plan`, so
+validation, refusals and facts are the same for both formats. Pure: the caller
+decodes the JSON text and sends the schema.
+"""
+
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any
+
+from modules.action.parser import (
+    ASK_REQUEST_LABELS,
+    GOAL_HORIZON_LABELS,
+    TALK_APPROACH_LABELS,
+    ParseFailure,
+    Verb,
+    parse_action_plan,
+)
+from modules.action.types import AnyAction
+
+JsonObject = dict[str, Any]
+
+STANCE_LABELS = ("sneak", "stand")
+
+
+@dataclass(frozen=True)
+class SceneChoices:
+    """The closed sets of names the scene offers, each in the order the prompt lists them."""
+
+    items_here: tuple[str, ...] = ()
+    carried: tuple[str, ...] = ()
+    held: tuple[str, ...] = ()
+    wearable: tuple[str, ...] = ()
+    worn: tuple[str, ...] = ()
+    npcs: tuple[str, ...] = ()
+    zombie_ids: tuple[str, ...] = ()
+    hurt_parts: tuple[str, ...] = ()
+    bandaged_parts: tuple[str, ...] = ()
+    bandages: tuple[str, ...] = ()
+    disinfectants: tuple[str, ...] = ()
+    npc_items: tuple[str, ...] = ()
+    topics: tuple[str, ...] = ()
+    exercises: tuple[str, ...] = ()
+    exercise_minutes: tuple[int, ...] = ()
+    times_of_day: tuple[str, ...] = ()
+
+
+def _string() -> JsonObject:
+    return {"type": "string"}
+
+
+def _one_of(names: tuple[str, ...]) -> JsonObject:
+    return {"type": "string", "enum": list(dict.fromkeys(names))}
+
+
+def _branch(
+    verb: str, required: Mapping[str, JsonObject], optional: Mapping[str, JsonObject] | None = None
+) -> JsonObject:
+    properties: JsonObject = {"verb": {"const": verb}, **required, **(optional or {})}
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": ["verb", *required],
+        "additionalProperties": False,
+    }
+
+
+def _duration_pattern(times_of_day: tuple[str, ...]) -> str:
+    """Spans such as 10m, 2h, 1h30m, and 'until <time of day>' or 'until HH:MM'."""
+    span = r"[1-9]\d{0,2}h(?:[0-5]?\dm)?|[1-9]\d{0,2}m"
+    clock = r"(?:[01]?\d|2[0-3]):[0-5]\d"
+    until = "|".join([*times_of_day, clock])
+    return f"^(?:{span}|until (?:{until}))$"
+
+
+def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
+    """The schema branch for one verb, or None when a required closed set is empty."""
+    text = _string()
+    match name:
+        case "MOVE_TO":
+            return _branch(name, {"destination": text}, {"run": {"type": "boolean"}})
+        case "STANCE":
+            return _branch(name, {"stance": _one_of(STANCE_LABELS)})
+        case "WAIT":
+            pattern = {"type": "string", "pattern": _duration_pattern(choices.times_of_day)}
+            return _branch(name, {"duration": pattern})
+        case "SLEEP":
+            pattern = {"type": "string", "pattern": _duration_pattern(choices.times_of_day)}
+            return _branch(name, {}, {"duration": pattern})
+        case "TAKE":
+            return _item_branch(name, choices.items_here)
+        case "DROP" | "USE_ITEM" | "EQUIP":
+            return _item_branch(name, choices.carried)
+        case "WEAR":
+            return _item_branch(name, choices.wearable)
+        case "TAKE_OFF":
+            return _item_branch(name, choices.worn)
+        case "UNEQUIP":
+            return _item_branch(name, choices.held)
+        case "BANDAGE":
+            return _first_aid_branch(name, choices.hurt_parts, choices.bandages)
+        case "DISINFECT":
+            return _first_aid_branch(name, choices.hurt_parts, choices.disinfectants)
+        case "REMOVE_BANDAGE":
+            if not choices.bandaged_parts:
+                return None
+            return _branch(name, {"body_part": _one_of(choices.bandaged_parts)})
+        case "EXERCISE":
+            if not choices.exercises:
+                return None
+            minutes: JsonObject = {"type": "integer", "enum": list(choices.exercise_minutes)}
+            return _branch(
+                name,
+                {"exercise": _one_of(choices.exercises)},
+                {"minutes": minutes} if choices.exercise_minutes else None,
+            )
+        case "ATTACK":
+            nearest = ("zombie",) if choices.zombie_ids else ()
+            return _target_branch(name, (*choices.npcs, *choices.zombie_ids, *nearest))
+        case "SHOVE":
+            return _target_branch(name, choices.zombie_ids)
+        case "SHOUT":
+            return _branch(name, {})
+        case "TALK":
+            if not choices.npcs:
+                return None
+            return _branch(
+                name,
+                {"npc": _one_of(choices.npcs), "approach": _one_of(TALK_APPROACH_LABELS)},
+                {"speech": text},
+            )
+        case "ASK":
+            return _ask_branch(name, choices)
+        case "GIVE":
+            if not choices.carried or not choices.npcs:
+                return None
+            return _branch(name, {"item": _one_of(choices.carried), "npc": _one_of(choices.npcs)})
+        case "ADD_GOAL" | "REMOVE_GOAL":
+            return _branch(name, {"horizon": _one_of(GOAL_HORIZON_LABELS), "text": text})
+        case "ADD_RELATIONSHIP_NOTE":
+            if not choices.npcs:
+                return None
+            return _branch(name, {"npc": _one_of(choices.npcs), "note": text})
+    return None
+
+
+def _item_branch(name: str, names: tuple[str, ...]) -> JsonObject | None:
+    return _branch(name, {"item": _one_of(names)}) if names else None
+
+
+def _target_branch(name: str, names: tuple[str, ...]) -> JsonObject | None:
+    return _branch(name, {"target": _one_of(names)}) if names else None
+
+
+def _first_aid_branch(
+    name: str, parts: tuple[str, ...], items: tuple[str, ...]
+) -> JsonObject | None:
+    if not parts:
+        return None
+    return _branch(name, {"body_part": _one_of(parts)}, {"item": _one_of(items)} if items else None)
+
+
+def _ask_branch(name: str, choices: SceneChoices) -> JsonObject | None:
+    if not choices.npcs:
+        return None
+    optional: JsonObject = {}
+    if choices.npc_items:
+        optional["item"] = _one_of(choices.npc_items)
+    if choices.topics:
+        optional["topic"] = _one_of(choices.topics)
+    return _branch(
+        name, {"npc": _one_of(choices.npcs), "request": _one_of(ASK_REQUEST_LABELS)}, optional
+    )
+
+
+def build_plan_schema(verbs: list[Verb], choices: SceneChoices, max_actions: int) -> JsonObject:
+    """The schema of `{"actions": [...]}` with one branch per listed verb that has a choice to make."""
+    branches = [
+        branch for verb in verbs if (branch := _verb_branch(verb.name, choices)) is not None
+    ]
+    actions: JsonObject = {"type": "array", "minItems": 0, "maxItems": max_actions}
+    if branches:
+        actions["items"] = {"anyOf": branches}
+    else:
+        actions["maxItems"] = 0
+    return {
+        "type": "object",
+        "properties": {"actions": actions},
+        "required": ["actions"],
+        "additionalProperties": False,
+    }
+
+
+class _PlanShapeError(ValueError):
+    """Internal control flow only; callers see it folded into ParseFailure."""
+
+
+def _text(fields: JsonObject, key: str) -> str:
+    value = fields.get(key, "")
+    if not isinstance(value, str):
+        raise _PlanShapeError(f"'{key}' must be text.")
+    return " ".join(value.split())
+
+
+def _line(verb: str, *parts: str) -> str:
+    return " ".join([verb, *(part for part in parts if part)])
+
+
+def _move_line(fields: JsonObject) -> str:
+    run = fields.get("run", False)
+    if not isinstance(run, bool):
+        raise _PlanShapeError("'run' must be true or false.")
+    return _line("MOVE_TO", _text(fields, "destination"), "run" if run else "")
+
+
+def _first_aid_line(verb: str, fields: JsonObject) -> str:
+    part, item = _text(fields, "body_part"), _text(fields, "item")
+    return _line(verb, part, f"with {item}" if item else "")
+
+
+def _exercise_line(fields: JsonObject) -> str:
+    minutes = fields.get("minutes")
+    if minutes is not None and (not isinstance(minutes, int) or isinstance(minutes, bool)):
+        raise _PlanShapeError("'minutes' must be a whole number.")
+    return _line("EXERCISE", _text(fields, "exercise"), "" if minutes is None else str(minutes))
+
+
+def _ask_line(fields: JsonObject) -> str:
+    request = _text(fields, "request")
+    argument = _text(fields, "topic" if request == "about" else "item")
+    return _line("ASK", _text(fields, "npc"), request, argument)
+
+
+def _item_line(verb: str) -> Callable[[JsonObject], str]:
+    return lambda fields: _line(verb, _text(fields, "item"))
+
+
+def _target_line(verb: str) -> Callable[[JsonObject], str]:
+    return lambda fields: _line(verb, _text(fields, "target"))
+
+
+def _first_aid(verb: str) -> Callable[[JsonObject], str]:
+    return lambda fields: _first_aid_line(verb, fields)
+
+
+def _goal_line(verb: str) -> Callable[[JsonObject], str]:
+    return lambda fields: _line(verb, _text(fields, "horizon"), _text(fields, "text"))
+
+
+_LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
+    "MOVE_TO": _move_line,
+    "STANCE": lambda fields: _line("STANCE", _text(fields, "stance")),
+    "WAIT": lambda fields: _line("WAIT", _text(fields, "duration")),
+    "SLEEP": lambda fields: _line("SLEEP", _text(fields, "duration")),
+    "TAKE": _item_line("TAKE"),
+    "DROP": _item_line("DROP"),
+    "USE_ITEM": _item_line("USE_ITEM"),
+    "EQUIP": _item_line("EQUIP"),
+    "UNEQUIP": _item_line("UNEQUIP"),
+    "WEAR": _item_line("WEAR"),
+    "TAKE_OFF": _item_line("TAKE_OFF"),
+    "BANDAGE": _first_aid("BANDAGE"),
+    "DISINFECT": _first_aid("DISINFECT"),
+    "REMOVE_BANDAGE": lambda fields: _line("REMOVE_BANDAGE", _text(fields, "body_part")),
+    "EXERCISE": _exercise_line,
+    "ATTACK": _target_line("ATTACK"),
+    "SHOVE": _target_line("SHOVE"),
+    "SHOUT": lambda fields: "SHOUT",
+    "TALK": lambda fields: _line("TALK", _text(fields, "npc"), _text(fields, "approach")),
+    "ASK": _ask_line,
+    "GIVE": lambda fields: _line(
+        "GIVE", _text(fields, "item"), "to" if fields.get("npc") else "", _text(fields, "npc")
+    ),
+    "ADD_GOAL": _goal_line("ADD_GOAL"),
+    "REMOVE_GOAL": _goal_line("REMOVE_GOAL"),
+    "ADD_RELATIONSHIP_NOTE": lambda fields: _line(
+        "ADD_RELATIONSHIP_NOTE", _text(fields, "npc"), _text(fields, "note")
+    ),
+}
+
+
+def action_line(entry: object) -> str:
+    """The grammar line for one JSON action; raises `_PlanShapeError` for a shape the schema forbids."""
+    if not isinstance(entry, dict):
+        raise _PlanShapeError("An action must be an object.")
+    verb = entry.get("verb")
+    builder = _LINE_BUILDERS.get(verb) if isinstance(verb, str) else None
+    if builder is None:
+        raise _PlanShapeError(f"Unknown action verb: '{verb}'.")
+    return builder(entry)
+
+
+def parse_plan(payload: object) -> tuple[list[AnyAction], list[ParseFailure]]:
+    """Read a decoded `{"actions": [...]}` plan into actions and failures."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("actions"), list):
+        return [], [ParseFailure(raw=str(payload), reason="The plan must be {'actions': [...]}.")]
+    lines: list[str] = []
+    failures: list[ParseFailure] = []
+    for entry in payload["actions"]:
+        try:
+            lines.append(action_line(entry))
+        except _PlanShapeError as exc:
+            failures.append(ParseFailure(raw=str(entry), reason=str(exc)))
+    actions, line_failures = parse_action_plan(lines)
+    return actions, [*failures, *line_failures]

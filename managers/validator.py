@@ -44,7 +44,7 @@ from managers.social import locked_out
 from managers.stats.status_effects import status_effect_level
 from managers.story import visible_topics
 from managers.zombies import approach_minutes, perceived_now
-from modules.action.parser import TALK_APPROACH_LABELS
+from modules.action.parser import GOAL_HORIZON_LABELS, TALK_APPROACH_LABELS
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -101,7 +101,7 @@ from modules.resolution import (
 )
 from modules.stats import CharacterStat, StatusEffect
 
-GOAL_HORIZONS = ("short_term", "long_term")
+GOAL_HORIZONS = GOAL_HORIZON_LABELS
 
 ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
 

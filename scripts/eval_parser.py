@@ -30,8 +30,11 @@ def scene(case: dict) -> GameManager:
 
 def run_case(case: dict) -> tuple[bool, list[str]]:
     manager = scene(case)
-    prompt = ContextBuilder(manager).build_parser_prompt(case["input"])
-    got, _ = parse_action_plan(llm.parse_action_response(llm.query_parser(prompt)))
+    context = ContextBuilder(manager)
+    reply = llm.query_parser(
+        context.build_parser_prompt(case["input"]), context.build_plan_schema()
+    )
+    got, _ = llm.read_parser_reply(reply)
     want, _ = parse_action_plan(list(case["expect"]))
     return got == want, [repr(action) for action in got]
 

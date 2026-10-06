@@ -15,24 +15,34 @@ import re
 from collections.abc import Iterable
 from datetime import date
 
-from data.exercises import BARBELL_ID, DUMBBELL_ID, EXERCISES
+from data.clock import TIMES_OF_DAY
+from data.exercises import (
+    BARBELL_ID,
+    DUMBBELL_ID,
+    EXERCISE_MINUTES_MAX,
+    EXERCISE_MINUTES_MIN,
+    EXERCISE_MINUTES_STEP,
+    EXERCISES,
+)
 from data.items import ITEMS, item_condition_word, wetness_word
 from data.names import SKIN_TONE_WORDS
 from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
 from data.social import TALK_APPROACHES
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
+from data.time_costs import MAX_PLAN_ACTIONS
 from data.traits import TRAITS
 from managers.body import open_wounds
 from managers.climate import describe_weather
 from managers.combat import held_entity
-from managers.first_aid import part_word
+from managers.first_aid import bandage_items, disinfectant_items, part_word
 from managers.game import GameManager
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
 from managers.story import visible_topics
 from managers.zombies import threat_views
 from modules.action.parser import SceneKey, available_verbs
+from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, MedicalItem
 from modules.quest import QuestStatus
@@ -347,6 +357,52 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("hurt")
         return frozenset(keys)
 
+    def scene_choices(self) -> SceneChoices:
+        """The closed sets of names the scene offers, as the validator would accept them."""
+        manager = self.manager
+        player = manager.player
+        ground = manager._ground_items()
+        npcs = manager.npcs_in_location(player.current_location_id)
+        held = held_entity(player)
+        return SceneChoices(
+            items_here=_names(ground),
+            carried=_names(player.inventory),
+            held=_names([held] if held is not None else []),
+            wearable=_names(
+                entity
+                for entity in [*player.inventory, *ground]
+                if isinstance(entity.item, ClothingItem)
+            ),
+            worn=_names(entity for _, entity in player.worn_outer_to_inner()),
+            npcs=tuple(npc.name for npc in npcs),
+            zombie_ids=tuple(
+                view.zombie_id for view in threat_views(manager) if view.zombie_id is not None
+            ),
+            hurt_parts=tuple(
+                part_word(part)
+                for part, state in player.body.items()
+                if state.injured and not state.bandaged
+            ),
+            bandaged_parts=tuple(
+                part_word(part) for part, state in player.body.items() if state.bandaged
+            ),
+            bandages=_names(bandage_items(player)),
+            disinfectants=_names(disinfectant_items(player)),
+            npc_items=_names(entity for npc in npcs for entity in npc.inventory),
+            topics=tuple(topic.topic_id for npc in npcs for topic in visible_topics(manager, npc)),
+            exercises=tuple(exercise.name for exercise in EXERCISES.values()),
+            exercise_minutes=tuple(
+                range(EXERCISE_MINUTES_MIN, EXERCISE_MINUTES_MAX + 1, EXERCISE_MINUTES_STEP)
+            ),
+            times_of_day=TIMES_OF_DAY,
+        )
+
+    def build_plan_schema(self) -> JsonObject:
+        """The JSON schema the parser's reply is constrained to, for the scene the prompt shows."""
+        return build_plan_schema(
+            available_verbs(self.scene_keys()), self.scene_choices(), MAX_PLAN_ACTIONS
+        )
+
     def _available_actions_section(self) -> str:
         """The verbs the scene lists, each with its argument kinds, gloss and closed labels."""
         lines: list[str] = []
@@ -579,6 +635,10 @@ engine could not decide at all -- treat it the same as [OUTCOMES].)
 
 [SCENE]
 {player_input}"""
+
+
+def _names(entities: Iterable[ItemEntity]) -> tuple[str, ...]:
+    return tuple(entity.item.name for entity in entities)
 
 
 def _lines(lines: Iterable[str]) -> str:

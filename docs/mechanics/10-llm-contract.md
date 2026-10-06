@@ -42,7 +42,7 @@ Three calls:
 
 | Call | Temperature | Gets | Returns | Decides |
 | --- | --- | --- | --- | --- |
-| **Parser** | 0.2 | the scene, in the parser blocks below | `ACTIONS:` lines, or `NONE` | which verb, which listed target, which listed label |
+| **Parser** | 0.2 | the scene, in the parser blocks below | a JSON plan `{"actions": [...]}`, or `ACTIONS:` lines as the fallback | which verb, which listed target, which listed label |
 | **Narrator** | 0.7 | memory, state and this turn's `[OUTCOMES]` | `STORY`, `EVENT`, `OPTIONS` | the words |
 | **Summarizer** | 0.5 | older event-log entries | one paragraph | the words |
 
@@ -176,7 +176,30 @@ With nothing present, the block lists the eight always-listed verbs. Filtering d
 
 ### Plans
 
-The parser returns a plan: its `ACTIONS:` lines, resolved in order.
+The parser returns a plan, resolved in order. It is a JSON object, `{"actions": [...]}`,
+constrained by a schema built for the turn from the same scene the blocks show; an
+empty list is `NONE`.
+
+- **One branch per listed verb.** Each branch fixes the verb and names its fields. A
+  field is a closed choice wherever the scene gives a closed set: `TAKE` takes an item
+  lying here, `DROP`, `USE_ITEM`, `EQUIP` and `GIVE` a carried one, `UNEQUIP` the held
+  item, `TAKE_OFF` a worn one, `WEAR` a garment carried or lying here (so a `TAKE` and a
+  `WEAR` fit in one plan), `BANDAGE` and `DISINFECT` an injured part that has no bandage
+  and optionally a carried bandage or alcohol item, `REMOVE_BANDAGE` a bandaged part,
+  `ATTACK` an NPC here, a seen zombie's id or `zombie` (offered only while a zombie is
+  seen), `SHOVE` a seen zombie's id, `TALK` and `ASK` an NPC here with the closed
+  approach or request labels. `WAIT` and `SLEEP` take a duration string the duration
+  grammar accepts. `MOVE_TO` takes any destination text and an optional `run`. A verb
+  whose closed set is empty has no branch.
+- **The same path as the lines.** Each JSON action is turned into the action line the
+  grammar accepts and parsed with it, so validation, refusals and facts do not depend
+  on the format. A reply that is not JSON, or a shape the schema does not allow, is a
+  `ParseFailure`, refused as a fact like a malformed line.
+- **The schema lists only the scene's verbs.** The text format still parses a verb
+  that is not listed, and a verb the schema leaves out cannot be emitted at all.
+- **If the server rejects the request** (an HTTP 4xx, for a server without structured
+  output), the parser call is made once more with the text prompt and its `ACTIONS:`
+  lines are parsed as before. The narrator and summarizer calls never carry a schema.
 
 - **At most 5 actions** per turn. The rest are refused: "Too much at once; Orton
   does the first five things."
@@ -394,7 +417,7 @@ next header.
 
 ## Checking the models
 
-Tests never call a model; every mechanic is tested from `ACTIONS:` lines. The
+Tests never call a model; every mechanic is tested from action lines or a JSON plan. The
 parser's quality is measured separately. `evals/parser_cases.yaml` holds scenes, an
 input and the expected plan ("I creep down to the lobby" gives `STANCE sneak` and
 `MOVE_TO building`; "tell Emma she looks great" gives `TALK Emma compliment`; "I

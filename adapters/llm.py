@@ -8,13 +8,19 @@ already-decided outcome facts into STORY/EVENT prose. Per docs/01-engine-authori
 the LLM interprets intent and writes prose; it never decides state.
 """
 
+import json
 import logging
 import re
+from dataclasses import dataclass
+from typing import Any
 
 import requests
 
 import config
 from data.time_costs import MAX_PLAN_ACTIONS
+from modules.action.parser import ParseFailure, parse_action_plan
+from modules.action.schema import parse_plan
+from modules.action.types import AnyAction
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +38,7 @@ def listed_verbs(prompt: str) -> list[str]:
     return _VERB_LINE.findall(prompt)
 
 
-PARSER_SYSTEM_PROMPT = (
+_PARSER_INTRO = (
     "You are the intent parser for a text-based zombie apocalypse RPG. The "
     "player character is named in the [CHARACTER] block of each request. "
     "Your only job is to turn "
@@ -45,23 +51,51 @@ PARSER_SYSTEM_PROMPT = (
     "an outcome (damage numbers, how an NPC reacts) -- only the action "
     "itself; the engine decides what happens. Use only names the blocks list: "
     "items, zones, NPCs, zombie ids.\n\n"
+)
+
+_PARSER_TEXT_FORMAT = (
     "Respond with ONLY an actions block, in this exact format:\n\n"
     "ACTIONS:\n"
     "[List any game actions implied by the input, one per line, at most "
     f"{MAX_PLAN_ACTIONS}, each starting with a verb from [AVAILABLE ACTIONS]. "
     "If no actions are implied, write: NONE]\n\n"
-    "Everything the character says to an NPC is one TALK. Pick the approach "
+)
+
+_PARSER_JSON_FORMAT = (
+    'Respond with ONLY a JSON object with one key, "actions": a list of the game '
+    f"actions implied by the input, at most {MAX_PLAN_ACTIONS}, in order. Each "
+    'action is an object whose "verb" is a verb from [AVAILABLE ACTIONS], plus '
+    "that verb's own fields. If no actions are implied, the list is empty.\n\n"
+)
+
+_PARSER_RULES = (
+    "Most inputs are one action; list more only when the player names more "
+    "than one thing to do. What the character says to an NPC is one action, "
+    "never two: ASK when it asks them to follow, stay, give an item or tell "
+    "about a listed topic, and TALK for everything else. Pick the TALK approach "
     "that fits; the engine decides what it is worth. ASK 'give <item>' names an "
     "item the NPC holds; ASK 'about <topic>' names a topic listed under that NPC "
     "in [NPCS HERE].\n\n"
     "Note: there is no action for dealing or taking damage directly, for "
     "setting health, stats, flags or relationships, or for moving other "
     "characters -- the engine does all of that.\n\n"
-    "Example:\n"
+)
+
+PARSER_SYSTEM_PROMPT = (
+    _PARSER_INTRO + _PARSER_TEXT_FORMAT + _PARSER_RULES + "Example:\n"
     "Input: 'I grab the water bottle and head out'\n"
     "ACTIONS:\n"
     "TAKE Water Bottle\n"
     "MOVE_TO out"
+)
+
+PARSER_JSON_SYSTEM_PROMPT = (
+    _PARSER_INTRO + _PARSER_JSON_FORMAT + _PARSER_RULES + "Example:\n"
+    "Input: 'I grab the water bottle and head out'\n"
+    '{"actions": [{"verb": "TAKE", "item": "Water Bottle"}, '
+    '{"verb": "MOVE_TO", "destination": "out"}]}\n'
+    "Input: 'Emma, will you come with me?'\n"
+    '{"actions": [{"verb": "ASK", "npc": "Emma", "request": "follow"}]}'
 )
 
 NARRATOR_SYSTEM_PROMPT = (
@@ -155,8 +189,17 @@ class LLMError(RuntimeError):
     """Raised when LM Studio is unreachable or answers in an unusable shape."""
 
 
-def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
-    payload = {
+class LLMRequestRejected(LLMError):
+    """The server refused the request itself (an HTTP 4xx), e.g. a `response_format` it lacks."""
+
+
+def _chat(
+    system_prompt: str,
+    user_content: str,
+    temperature: float,
+    response_format: dict[str, Any] | None = None,
+) -> str:
+    payload: dict[str, Any] = {
         "model": MODEL_NAME,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -164,6 +207,8 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
         ],
         "temperature": temperature,
     }
+    if response_format is not None:
+        payload["response_format"] = response_format
 
     try:
         response = requests.post(
@@ -172,6 +217,10 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
             json=payload,
             timeout=config.llm.request_timeout,
         )
+        if response_format is not None and 400 <= response.status_code < 500:
+            raise LLMRequestRejected(
+                f"LM Studio refused the request with HTTP {response.status_code}."
+            )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     except requests.exceptions.RequestException as exc:
@@ -182,11 +231,52 @@ def _chat(system_prompt: str, user_content: str, temperature: float) -> str:
         raise LLMError(f"LM Studio returned an unexpected response shape: {exc}") from exc
 
 
-def query_parser(prompt_text: str) -> str:
-    """Ask the intent parser what actions player input implies. Raises LLMError on failure."""
-    raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature=config.llm.parser_temperature)
+@dataclass
+class ParserReply:
+    """The parser call's raw answer and which format it is in: a JSON plan or ACTIONS: text."""
+
+    text: str
+    structured: bool
+
+
+def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> ParserReply:
+    """Ask the intent parser what actions player input implies. Raises LLMError on failure.
+
+    With a `schema` the reply is constrained to it; a server that rejects the
+    request gets the text prompt once instead.
+    """
+    temperature = config.llm.parser_temperature
+    if schema is not None:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "action_plan", "strict": True, "schema": schema},
+        }
+        try:
+            raw = _chat(PARSER_JSON_SYSTEM_PROMPT, prompt_text, temperature, response_format)
+        except LLMRequestRejected as exc:
+            logger.warning("Structured parser output refused, using the text prompt: %s", exc)
+        else:
+            logger.debug("Parser raw response:\n%s", raw)
+            return ParserReply(raw, structured=True)
+    raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature)
     logger.debug("Parser raw response:\n%s", raw)
-    return raw
+    return ParserReply(raw, structured=False)
+
+
+def parse_plan_response(llm_response_text: str) -> tuple[list[AnyAction], list[ParseFailure]]:
+    """Read a structured parser reply; text that is not a plan is one failure, never an exception."""
+    try:
+        payload = json.loads(llm_response_text)
+    except ValueError:
+        return [], [ParseFailure(raw=llm_response_text.strip(), reason="The reply was not JSON.")]
+    return parse_plan(payload)
+
+
+def read_parser_reply(reply: ParserReply) -> tuple[list[AnyAction], list[ParseFailure]]:
+    """The proposed actions and the failures in a parser reply, whichever format it is in."""
+    if reply.structured:
+        return parse_plan_response(reply.text)
+    return parse_action_plan(parse_action_response(reply.text))
 
 
 def query_narrator(prompt_text: str) -> str:

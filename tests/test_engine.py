@@ -68,6 +68,40 @@ class TurnTests(EngineTestCase):
             self.engine.game.memory.full_event_log,
         )
 
+    def test_the_parser_is_sent_this_scenes_schema(self):
+        self.engine.play("go out")
+        schema = self.llm.schemas[-1]
+        assert schema is not None
+        verbs = [
+            b["properties"]["verb"]["const"]
+            for b in schema["properties"]["actions"]["items"]["anyOf"]
+        ]
+        self.assertIn("MOVE_TO", verbs)
+        self.assertNotIn("BANDAGE", verbs)
+
+    def test_a_structured_reply_goes_through_the_same_validation(self):
+        self.llm.structured = True
+        self.llm.actions = json.dumps(
+            {
+                "actions": [
+                    {"verb": "MOVE_TO", "destination": "out"},
+                    {"verb": "ADD_GOAL", "horizon": "short_term", "text": "Find a weapon"},
+                    {"verb": "TAKE", "item": "Nothing Like This"},
+                ]
+            }
+        )
+        result = self.engine.play("go out")
+        self.assertEqual(result["current_location"], "Your Building")
+        self.assertIn("Find a weapon", result["goals"]["short_term"])
+        self.assertIn("Refused", self.llm.narrator_prompts[-1])
+
+    def test_a_structured_reply_that_is_not_json_is_refused_and_the_turn_goes_on(self):
+        self.llm.structured = True
+        self.llm.actions = "{nope"
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "You walk out into the building.")
+        self.assertIn("Refused", self.llm.narrator_prompts[-1])
+
     def test_player_input_reaches_the_parser_prompt(self):
         self.engine.play("peer down the corridor")
         self.assertIn("peer down the corridor", self.llm.prompts[-1])

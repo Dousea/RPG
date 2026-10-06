@@ -28,7 +28,6 @@ from managers.simulation import SimulationCore
 from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects
 from managers.zombies import threat_views
-from modules.action.parser import parse_action_plan
 from modules.character.build import CharacterBuild
 from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
@@ -97,14 +96,14 @@ class GameEngine:
             logger.debug(f"Recalled {len(deep_memories)} deep memories.")
 
             # 2. Ask the parser what the player is trying to do. No prose exists yet.
-            parser_prompt = ContextBuilder(manager).build_parser_prompt(player_input)
+            context = ContextBuilder(manager)
+            parser_prompt = context.build_parser_prompt(player_input)
             try:
-                raw_actions = llm.query_parser(parser_prompt)
+                reply = llm.query_parser(parser_prompt, context.build_plan_schema())
             except llm.LLMError as exc:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
-            action_lines = llm.parse_action_response(raw_actions)
-            actions, parse_failures = parse_action_plan(action_lines)
+            actions, parse_failures = llm.read_parser_reply(reply)
 
             # 3. Validate and simulate, one action at a time in order. This is
             # where the engine decides what happens -- before the narrator
