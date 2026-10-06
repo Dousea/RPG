@@ -3,17 +3,21 @@
 import dataclasses
 import logging
 import math
+import random
 from collections.abc import Callable
 
 from data import survival as k
 from data.clock import MINUTES_PER_HOUR
 from data.status_effects import FOOD_EATEN_DRAIN_per_hour
-from managers.stats.drivers import StatContext, StatDriver, default_drivers
+from managers.cold import ColdDriver
+from managers.stats.drivers import BodyMultipliers, StatContext, StatDriver, default_drivers
 from managers.stats.status_effects import (
     food_eaten_level,
     level_change_facts,
     player_status_effect_levels,
 )
+from managers.thermoregulator import ThermoregulatorDriver
+from managers.wetness import WetnessDriver
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, StatusEffect
 from modules.weather import WeatherSample
@@ -35,8 +39,14 @@ class StatsEngine:
     status effects took, and `death_cause` is set when they took the last of it.
     """
 
-    def __init__(self, drivers: list[StatDriver] | None = None) -> None:
-        self._drivers: list[StatDriver] = drivers if drivers is not None else default_drivers()
+    def __init__(
+        self, drivers: list[StatDriver] | None = None, rng: random.Random | None = None
+    ) -> None:
+        self._drivers: list[StatDriver] = (
+            drivers
+            if drivers is not None
+            else [*default_drivers(), WetnessDriver(), ThermoregulatorDriver(), ColdDriver(rng)]
+        )
         self.minutes_advanced = 0
         self.health_lost = 0.0
         self.death_cause = ""
@@ -63,8 +73,17 @@ class StatsEngine:
         self._weakening_reported = set()
         facts: list[str] = []
         remaining = minutes
+        body_given = ctx.body != BodyMultipliers()
         while remaining > 0:
             chunk = min(k.MAX_CHUNK_MINUTES, remaining)
+            if not body_given:
+                thermal = player.thermal
+                ctx = dataclasses.replace(
+                    ctx,
+                    body=BodyMultipliers(
+                        thermal.energy_mult, thermal.fluids_mult, thermal.fatigue_mult
+                    ),
+                )
             if weather_for_chunk is not None:
                 ctx = dataclasses.replace(
                     ctx, weather=weather_for_chunk(self.minutes_advanced, chunk)
@@ -81,7 +100,8 @@ class StatsEngine:
         stats = player.stats
         hours = minutes / MINUTES_PER_HOUR
         before = player_status_effect_levels(player)
-        ctx = dataclasses.replace(ctx, food_eaten_level=food_eaten_level(player))
+        ctx = dataclasses.replace(ctx, food_eaten_level=food_eaten_level(player), wearer=player)
+        player.thermal.facts.clear()
         for driver in self._drivers:
             driver.apply(stats, hours, ctx)
         player.food_eaten_timer = max(
@@ -90,6 +110,7 @@ class StatsEngine:
         drivers_done = player_status_effect_levels(player)
         health_facts = self._lose_health(player, drivers_done, hours)
         facts = level_change_facts(before, player_status_effect_levels(player))
+        facts.extend(player.thermal.facts)
         facts.extend(health_facts)
         return facts
 

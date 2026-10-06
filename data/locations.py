@@ -173,6 +173,7 @@ def build_starting_locations() -> dict[str, Location]:
 
     for zone_id, indoors in INDOORS_BY_ZONE.items():
         locations[zone_id].indoors = indoors
+    locations["zone_home"].floor = 1  # spec 06
 
     # Locked from the building side only: leaving the apartment needs no key.
     apartment_door = DoorEntity(

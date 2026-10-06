@@ -16,6 +16,7 @@ class StatusEffectspec:
     thresholds: tuple[float, float, float, float]
     names: tuple[str, str, str, str]
     inverted: bool = False
+    strict: bool = False  # inverted levels compare with `<` instead of `<=`
 
 
 STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
@@ -90,9 +91,37 @@ STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
         (0, 1, 2, 3),
         ("Minor Bleeding", "Bleeding", "Severe Bleeding", "Massive Blood Loss"),
     ),
+    StatusEffect.WET: StatusEffectspec(  # spec 06
+        CharacterStat.WETNESS,
+        (15, 40, 70, 90),
+        ("Damp", "Wet", "Soaked", "Drenched"),
+    ),
+    StatusEffect.HAS_A_COLD: StatusEffectspec(  # spec 06
+        CharacterStat.COLD_STRENGTH,
+        (20, 40, 60, 75),
+        ("Sniffly", "Has a Cold", "Heavy Cold", "Bad Cold"),
+    ),
+    StatusEffect.HYPOTHERMIA: StatusEffectspec(  # spec 06
+        CharacterStat.TEMPERATURE,
+        (36.5, 35, 30, 25),
+        ("Chilled", "Cold", "Freezing", "Hypothermia"),
+        inverted=True,
+        strict=True,
+    ),
+    StatusEffect.HYPERTHERMIA: StatusEffectspec(  # spec 06
+        CharacterStat.TEMPERATURE,
+        (37.5, 39, 40, 41),
+        ("Warm", "Hot", "Overheated", "Hyperthermia"),
+    ),
+    StatusEffect.WINDCHILL: StatusEffectspec(  # spec 06
+        CharacterStat.WINDCHILL,
+        (5, 10, 15, 20),
+        ("Breezy", "Wind Chill", "Biting Wind", "Freezing Wind"),
+    ),
 }
 
 STATUS_EFFECT_MAX_LEVEL = 4  # spec 03
+HYPOTHERMIA_SUPPRESS_INTOXICATION = (30, 70)  # spec 06: level 1 and level 2
 
 # Our rule: how an outcome fact describes a hurt body, by Injured level 0 to 4.
 # Level 0 here still means some hit points are lost; a full body is unhurt.

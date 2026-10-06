@@ -40,11 +40,12 @@ from modules.item import ClothingItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.stats import Stats
+from modules.thermal import ThermalState
 from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 8  # spec 05
+SCHEMA_VERSION = 9  # spec 06
 
 
 # Equipment slots are two separate enums; this resolves a saved slot name back
@@ -195,6 +196,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "time": manager.world.time,
             "date": manager.world.date,
             "seed": manager.world.seed,
+            "power_on": manager.world.power_on,
             # Locations themselves are static; only ground items move.
             "ground_items": {
                 location_id: [
@@ -215,6 +217,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "level": player.level,
             "max_inventory_size": player.max_inventory_size,
             "stats": player.stats.to_dict(),
+            "thermal": player.thermal.to_dict(),
             "asleep": player.asleep,
             "fractional_hp_loss": player.fractional_hp_loss,
             "food_eaten_timer": player.food_eaten_timer,
@@ -329,6 +332,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         time=world_data.get("time", "12:00 PM"),
         date=world_data.get("date", "2023-10-01"),
         seed=int(world_data.get("seed", 0)),
+        power_on=_as_bool(world_data.get("power_on", True)) if "power_on" in world_data else True,
         locations=locations,
     )
 
@@ -519,6 +523,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
             if entity is not None
         ],
         stats=Stats.from_dict(data.get("stats", {})),
+        thermal=ThermalState.from_dict(_as_dict(data.get("thermal"))),
         asleep=_as_bool(data.get("asleep", False)),
         fractional_hp_loss=float(data.get("fractional_hp_loss", 0.0)),
         food_eaten_timer=float(data.get("food_eaten_timer", 0.0)),

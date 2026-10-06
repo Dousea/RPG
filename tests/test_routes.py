@@ -90,6 +90,17 @@ class StatusEffectPayloadTests(RouteTestCase):
             self.assertNotIn(gone, payload)
             self.assertNotIn(gone, payload["vitals"])
 
+    def test_play_carries_the_temperature_status_effects_and_no_core_temperature(self):
+        """Spec 06, What the narrator and the player see."""
+        stats = self.engine.manager.player.stats
+        stats.set(CharacterStat.TEMPERATURE, 21.0)
+        stats.set(CharacterStat.WETNESS, 95)
+        payload = self.client.post("/play", json={"input": "look"}).get_json()
+        status_effects = {m["type"]: m for m in payload["effects"]}
+        self.assertEqual(status_effects["hypothermia"]["level"], 4)
+        self.assertIn("wet", status_effects)
+        self.assertNotIn("temperature", payload["vitals"])
+
     def test_state_lists_status_effects_highest_level_first(self):
         stats = self.engine.manager.player.stats
         stats.set(CharacterStat.THIRST, 0.13)

@@ -24,6 +24,8 @@ class CharacterStat(Enum):
     TEMPERATURE = "temperature"
     WETNESS = "wetness"
     SICKNESS = "sickness"
+    COLD_STRENGTH = "cold_strength"
+    WINDCHILL = "windchill"
 
     @property
     def min(self) -> float:
@@ -62,6 +64,8 @@ STAT_RANGES: dict[CharacterStat, StatRange] = {  # spec 02
     CharacterStat.TEMPERATURE: StatRange(20, 40, 37),
     CharacterStat.WETNESS: StatRange(0, 100, 0),
     CharacterStat.SICKNESS: StatRange(0, 1, 0),
+    CharacterStat.COLD_STRENGTH: StatRange(0, 100, 0),  # spec 06
+    CharacterStat.WINDCHILL: StatRange(0, 100, 0),  # spec 06
 }
 
 
@@ -119,3 +123,8 @@ class StatusEffect(Enum):
     FOOD_EATEN = "food_eaten"
     INJURED = "injured"
     BLEEDING = "bleeding"
+    WET = "wet"
+    HAS_A_COLD = "has_a_cold"
+    HYPOTHERMIA = "hypothermia"
+    HYPERTHERMIA = "hyperthermia"
+    WINDCHILL = "windchill"

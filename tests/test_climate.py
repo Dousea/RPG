@@ -511,5 +511,91 @@ class WorldSeedTest(unittest.TestCase):
             self.assertTrue(all(0 <= o <= 8000 for o in ClimateEngine(seed, START).offsets))
 
 
+class FeltAirTest(unittest.TestCase):
+    """Spec 06, Air temperature felt."""
+
+    def felt(self, temperature, *, indoors=True, floor=0, power_on=False, daylight=0.0):
+        from managers.climate import felt_air_temperature
+
+        return felt_air_temperature(
+            temperature, indoors=indoors, floor=floor, power_on=power_on, daylight=daylight
+        )
+
+    def test_outdoors_is_the_outdoor_temperature(self):
+        self.assertEqual(self.felt(7.0, indoors=False), 7.0)
+
+    def test_powered_indoors_is_twenty_two(self):
+        self.assertEqual(self.felt(-5.0, power_on=True), 22.0)
+        self.assertEqual(self.felt(35.0, power_on=True, floor=1), 22.0)
+
+    def test_unpowered_cold_pulls_by_forty_percent_at_night(self):
+        self.assertAlmostEqual(self.felt(2.0, daylight=0.0), 2.0 + 20.0 * 0.4)
+
+    def test_unpowered_cold_pulls_by_sixty_percent_in_full_daylight(self):
+        self.assertAlmostEqual(self.felt(2.0, daylight=1.0), 2.0 + 20.0 * 0.6)
+
+    def test_upper_floor_cold_difference_is_times_085(self):
+        self.assertAlmostEqual(self.felt(2.0, floor=1, daylight=0.0), 2.0 + 20.0 * 0.4 * 0.85)
+
+    def test_hot_ground_floor_is_t_minus_d_times_085_times_m(self):
+        self.assertAlmostEqual(self.felt(32.0, daylight=0.5), 32.0 - 10.0 * 0.85 * 0.5)
+
+    def test_hot_upper_floor_has_the_night_term_and_no_085(self):
+        night = 1.0 - 0.25
+        self.assertAlmostEqual(
+            self.felt(32.0, floor=1, daylight=0.25),
+            32.0 - 10.0 * (0.4 + 0.2 * 0.25 + 0.2 * night),
+        )
+
+    def test_wind_chill_is_min_of_the_formula_and_the_temperature(self):
+        from managers.climate import wind_chill_temperature
+
+        for temperature in (10.0, 40.0):
+            for wind in (0.0, 4.0, 30.0):
+                v = wind**0.16
+                formula = 13.12 + 0.6215 * temperature - 11.37 * v + 0.3965 * temperature * v
+                with self.subTest(temperature=temperature, wind=wind):
+                    self.assertAlmostEqual(
+                        wind_chill_temperature(temperature, wind), min(formula, temperature)
+                    )
+
+    def test_wind_chill_has_no_limits_so_a_warm_day_and_a_breeze_still_chill(self):
+        from managers.climate import wind_chill_temperature
+
+        self.assertLess(wind_chill_temperature(20.0, 50.0), 20.0)
+        self.assertLess(wind_chill_temperature(5.0, 4.0), 5.0)
+        self.assertLess(wind_chill_temperature(40.0, 0.0), 40.0)
+
+    def test_felt_air_returns_still_and_wind_chill_air_outdoors(self):
+        from managers.climate import felt_air, wind_chill_temperature
+
+        air = felt_air(0.0, 30.0, indoors=False, floor=0, power_on=True, daylight=1.0)
+        self.assertEqual(air.still_c, 0.0)
+        self.assertAlmostEqual(air.wind_chill_c, wind_chill_temperature(0.0, 30.0))
+        self.assertAlmostEqual(air.windchill_amount, 0.0 - air.wind_chill_c)
+
+    def test_indoors_in_strong_wind_the_two_airs_are_equal_and_the_amount_is_zero(self):
+        from managers.climate import felt_air
+
+        air = felt_air(0.0, 90.0, indoors=True, floor=0, power_on=False, daylight=1.0)
+        self.assertEqual(air.wind_chill_c, air.still_c)
+        self.assertAlmostEqual(air.still_c, 0.0 + 22.0 * 0.6)
+        self.assertEqual(air.windchill_amount, 0.0)
+
+    def test_the_amount_is_zero_when_the_wind_chill_is_not_colder(self):
+        from managers.climate import felt_air
+
+        air = felt_air(40.0, 0.0, indoors=False, floor=0, power_on=True, daylight=1.0)
+        self.assertGreaterEqual(air.windchill_amount, 0.0)
+
+    def test_new_world_is_powered_and_the_apartment_is_on_floor_one(self):
+        from managers.game import GameManager
+
+        game = GameManager()
+        self.assertTrue(game.world.power_on)
+        self.assertEqual(game.world.locations["zone_home"].floor, 1)
+        self.assertEqual(game.world.locations["zone_building"].floor, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@
 import unittest
 
 from data.survival import BED_MULTIPLIERS
-from managers.stats.drivers import StatContext
+from managers.stats.drivers import StatContext, default_drivers
 from managers.stats.engine import StatsEngine
 from managers.stats.status_effects import status_effect_level
 from modules.entity.player import PlayerEntity
@@ -16,7 +16,7 @@ def make_player() -> PlayerEntity:
 
 
 def run(player, minutes, **ctx_fields):
-    engine = StatsEngine()
+    engine = StatsEngine(default_drivers())
     return engine, engine.advance(player, minutes, StatContext(**ctx_fields))
 
 
@@ -259,7 +259,7 @@ class ScenarioTests(unittest.TestCase):
     """Spec 02, Testing: the success criteria."""
 
     def _first_level(self, player, status_effect, minutes_limit, ctx, level=1):
-        engine = StatsEngine()
+        engine = StatsEngine(default_drivers())
         spec_stat = {
             StatusEffect.HUNGRY: S.HUNGER,
             StatusEffect.TIRED: S.FATIGUE,
@@ -345,7 +345,7 @@ class SleepTests(unittest.TestCase):
         # 0.5 above the break at 0.14 an hour, then 0.3 at 0.3 / 7 an hour.
         player = make_player()
         player.stats.set(S.FATIGUE, 0.8)
-        engine = StatsEngine()
+        engine = StatsEngine(default_drivers())
         ctx = StatContext(asleep=True, bed_type="average_bed")
         minutes = 0
         while player.stats.get(S.FATIGUE) > 0 and minutes < 60 * 16:
@@ -394,7 +394,7 @@ class HealthLossTests(unittest.TestCase):
     def test_fractional_loss_carries_between_calls(self):
         player = make_player()
         player.stats.set(S.HUNGER, 0.8)
-        engine = StatsEngine()
+        engine = StatsEngine(default_drivers())
         for _ in range(6):
             engine.advance(player, 10, StatContext())
         self.assertEqual(player.hit_points, 97)
@@ -445,8 +445,8 @@ class EngineTests(unittest.TestCase):
             player.stats.set(S.FATIGUE, 0.3)
             player.stats.set(S.ENDURANCE, 0.4)
             player.stats.set(S.PANIC, 40)
-        StatsEngine().advance(one, 600, StatContext(resting=True, indoors=True))
-        engine = StatsEngine()
+        StatsEngine(default_drivers()).advance(one, 600, StatContext(resting=True, indoors=True))
+        engine = StatsEngine(default_drivers())
         for _ in range(10):
             engine.advance(many, 60, StatContext(resting=True, indoors=True))
         for stat in S:
@@ -455,13 +455,13 @@ class EngineTests(unittest.TestCase):
     def test_a_driver_registered_after_construction_runs(self):
         class Chill:
             def apply(self, stats, hours, ctx):
-                stats.add(S.WETNESS, 10 * hours)
+                stats.add(S.PAIN, 10 * hours)
 
         player = make_player()
-        engine = StatsEngine()
+        engine = StatsEngine(default_drivers())
         engine.register(Chill())
         engine.advance(player, 60, StatContext())
-        self.assertAlmostEqual(player.stats.get(S.WETNESS), 10)
+        self.assertAlmostEqual(player.stats.get(S.PAIN), 10)
 
     def test_a_threshold_crossing_gives_exactly_one_fact(self):
         player = make_player()

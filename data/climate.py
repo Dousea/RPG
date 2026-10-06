@@ -19,6 +19,13 @@ SIMPLEX_OFFSET_MAX = 8000  # spec 04
 WIND_TO_KMH = 120  # spec 04
 SNOW_BELOW_C = 0  # spec 04
 
+INDOOR_POWERED_C = 22  # spec 06
+INDOOR_PULL_BASE = 0.4  # spec 06
+INDOOR_PULL_DAYLIGHT = 0.2  # spec 06
+UPPER_FLOOR_DIFF_MULT = 0.85  # spec 06
+UPPER_FLOOR_NIGHT_TERM = 0.2  # spec 06
+WINDCHILL_TERMS = (13.12, 0.6215, 11.37, 0.16, 0.3965)  # spec 06: wind in km/h
+
 # Our own tuning; the spec gives no values.
 AXIAL_TILT_DEGREES = 23.44
 EQUINOX_DAY = 80

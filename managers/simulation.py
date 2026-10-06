@@ -16,6 +16,7 @@ import random
 
 from data import status_effects, survival
 from data.items import item_condition_word
+from data.thermal import Metabolic
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.climate import weather_change_facts
 from managers.combat import UNARMED_WEAPON, equipped_weapon, roll_damage
@@ -30,6 +31,7 @@ from managers.stats.status_effects import (
     player_status_effect_levels,
     status_effect_level,
 )
+from managers.thermoregulator import attack_metabolic
 from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action.types import (
     AddGoalAction,
@@ -108,7 +110,7 @@ class SimulationCore:
         self.manager = manager
         self.validator = validator if validator is not None else ActionValidator(manager)
         self._rng = rng if rng is not None else random.Random()
-        self.stats_engine = StatsEngine()
+        self.stats_engine = StatsEngine(rng=self._rng)
         self._zombies_seen_this_chunk = 0
         self._weather_facts: list[str] = []
 
@@ -166,7 +168,18 @@ class SimulationCore:
             bed_type=bed_type or location.bed_type_at(player.current_place),
             hours_survived=manager.narrative.minutes / 60,
             new_zombies_seen=self._zombies_seen_this_chunk,
+            floor=location.floor,
+            power_on=manager.world.power_on,
+            metabolic=self._metabolic_target(action),
+            traits=frozenset(trait.id for trait in player.traits),
         )
+
+    def _metabolic_target(self, action: AnyAction | None) -> Metabolic:
+        if isinstance(action, MoveAction):
+            return Metabolic.WALKING_5KMH
+        if isinstance(action, AttackAction):
+            return attack_metabolic(equipped_weapon(self.manager.player))
+        return Metabolic.DEFAULT
 
     def _weather_for_chunk(self, offset: int, chunk: int) -> WeatherSample:
         """Advance the climate across a chunk; returns the weather at its midpoint.

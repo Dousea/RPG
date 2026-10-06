@@ -25,7 +25,11 @@ def status_effect_level(status_effect: StatusEffect, value: float) -> int:
     spec = STATUS_EFFECT_THRESHOLDS[status_effect]
     level = 0
     for index, threshold in enumerate(spec.thresholds, start=1):
-        if (value <= threshold) if spec.inverted else (value > threshold):
+        if spec.inverted:
+            reached = value < threshold if spec.strict else value <= threshold
+        else:
+            reached = value > threshold
+        if reached:
             level = index
     return level
 
@@ -44,6 +48,15 @@ def bleeding_level(bleeding_parts: int, neck: bool) -> int:
     if neck:
         return BLEEDING_LEVEL_CAP
     return min(bleeding_parts, BLEEDING_LEVEL_CAP)
+
+
+def hypothermia_level(core: float, intoxication: float) -> int:
+    """The Hypothermia level the player sees: levels 1 and 2 hide while intoxication is above 30 and 70."""
+    level = status_effect_level(StatusEffect.HYPOTHERMIA, core)
+    suppress_1, suppress_2 = status_effects.HYPOTHERMIA_SUPPRESS_INTOXICATION
+    if (level == 1 and intoxication > suppress_1) or (level == 2 and intoxication > suppress_2):
+        return 0
+    return level
 
 
 def status_effect_levels(
@@ -73,6 +86,9 @@ def status_effect_levels(
         else:
             assert spec.stat is not None
             levels[status_effect] = status_effect_level(status_effect, stats.get(spec.stat))
+    levels[StatusEffect.HYPOTHERMIA] = hypothermia_level(
+        stats.get(CharacterStat.TEMPERATURE), stats.get(CharacterStat.INTOXICATION)
+    )
     return levels
 
 

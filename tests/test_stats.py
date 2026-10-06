@@ -34,6 +34,8 @@ RANGES = {
     CharacterStat.TEMPERATURE: (20, 40, 37),
     CharacterStat.WETNESS: (0, 100, 0),
     CharacterStat.SICKNESS: (0, 1, 0),
+    CharacterStat.COLD_STRENGTH: (0, 100, 0),
+    CharacterStat.WINDCHILL: (0, 100, 0),
 }
 
 
@@ -146,6 +148,10 @@ class StatusEffectThresholdTests(unittest.TestCase):
         StatusEffect.SICK: (0.25, 0.50, 0.75, 0.90),
         StatusEffect.INJURED: (20, 40, 60, 75),
         StatusEffect.FOOD_EATEN: (0, 1600, 3200, 4800),
+        StatusEffect.WET: (15, 40, 70, 90),
+        StatusEffect.HAS_A_COLD: (20, 40, 60, 75),
+        StatusEffect.HYPERTHERMIA: (37.5, 39, 40, 41),
+        StatusEffect.WINDCHILL: (5, 10, 15, 20),
     }
 
     def test_each_column_is_strict_for_every_rising_status_effect(self):
@@ -200,6 +206,48 @@ class StatusEffectThresholdTests(unittest.TestCase):
         self.assertEqual(names[StatusEffect.INJURED], "A Little Hurt")
         player.hit_points = 0
         self.assertNotIn(StatusEffect.INJURED, {m for m, _, _ in active_status_effects(player)})
+
+
+class TemperatureStatusEffectTests(unittest.TestCase):
+    """Spec 06, Status effects added to 03."""
+
+    def test_hypothermia_columns_are_strict_and_fall_with_the_core(self):
+        for level, column in enumerate((36.5, 35, 30, 25), start=1):
+            with self.subTest(level=level):
+                self.assertEqual(status_effect_level(StatusEffect.HYPOTHERMIA, column), level - 1)
+                self.assertEqual(
+                    status_effect_level(StatusEffect.HYPOTHERMIA, column - 0.001), level
+                )
+
+    def _levels(self, core, intoxication):
+        stats = Stats()
+        stats.set(CharacterStat.TEMPERATURE, core)
+        stats.set(CharacterStat.INTOXICATION, intoxication)
+        return status_effect_levels(stats)[StatusEffect.HYPOTHERMIA]
+
+    def test_intoxication_above_30_hides_hypothermia_level_1(self):
+        self.assertEqual(self._levels(36.0, 30), 1)
+        self.assertEqual(self._levels(36.0, 31), 0)
+
+    def test_intoxication_above_70_hides_hypothermia_level_2(self):
+        self.assertEqual(self._levels(34.0, 70), 2)
+        self.assertEqual(self._levels(34.0, 71), 0)
+
+    def test_deeper_hypothermia_is_never_hidden(self):
+        self.assertEqual(self._levels(29.0, 100), 3)
+        self.assertEqual(self._levels(24.0, 100), 4)
+
+    def test_new_status_effects_read_their_stats(self):
+        stats = Stats()
+        stats.set(CharacterStat.WETNESS, 41)
+        stats.set(CharacterStat.COLD_STRENGTH, 61)
+        stats.set(CharacterStat.WINDCHILL, 16)
+        stats.set(CharacterStat.TEMPERATURE, 39.5)
+        levels = status_effect_levels(stats)
+        self.assertEqual(levels[StatusEffect.WET], 2)
+        self.assertEqual(levels[StatusEffect.HAS_A_COLD], 3)
+        self.assertEqual(levels[StatusEffect.WINDCHILL], 3)
+        self.assertEqual(levels[StatusEffect.HYPERTHERMIA], 2)
 
 
 class StatusEffectEffectTests(unittest.TestCase):

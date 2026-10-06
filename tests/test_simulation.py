@@ -393,7 +393,9 @@ class WearResolutionTests(unittest.TestCase):
         self.gm.player.inventory.append(entity)
         simulate(self.gm, WearAction(item_name="T-shirt"))
         simulate(self.gm, TakeOffAction(item_name="T-shirt"))
-        self.assertEqual(self.gm.player.inventory[0].wetness, 40.0)
+        self.assertEqual(self.gm.player.inventory[0], entity)
+        self.assertGreater(entity.wetness, 30.0)
+        self.assertLessEqual(entity.wetness, 40.0)
 
 
 if __name__ == "__main__":

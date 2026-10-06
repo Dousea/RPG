@@ -10,6 +10,24 @@ FRAME_RATE_PER_HOUR = 10800  # spec 02
 REAL_TIME_PER_HOUR = 6750  # spec 02
 
 
+MINUTES_PER_HOUR = 60
+
+
+def per_minute_from_frame(rate: float) -> float:
+    """A rate applied once per game-time frame, per game minute."""
+    return per_hour_from_frame(rate) / MINUTES_PER_HOUR
+
+
+def per_minute_from_real_frame(rate: float) -> float:
+    """A rate applied once per real-time frame, per game minute."""
+    return per_hour_from_real_frame(rate) / MINUTES_PER_HOUR
+
+
+def real_frames_per_minute() -> float:
+    """Real-time frames in one game minute (112.5)."""
+    return per_minute_from_real_frame(1)
+
+
 def per_hour_from_day_scaled(rate: float) -> float:
     """A rate that also scales with the day length, per game hour."""
     return rate * DAY_SCALED_PER_HOUR

@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from data import survival as k
+from data.thermal import Metabolic
 from managers.stats.status_effects import status_effect_level
+from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, Stats, StatusEffect
 from modules.weather import WeatherSample
 
@@ -48,6 +50,11 @@ class StatContext:
     corpse_defence: float = 0.0
     traits: frozenset[str] = frozenset()
     food_eaten_level: int = 0
+    floor: int = 0
+    power_on: bool = True
+    metabolic: Metabolic = Metabolic.DEFAULT
+    carry_ratio: float = 0.0
+    wearer: PlayerEntity | None = None
 
 
 class StatDriver(Protocol):

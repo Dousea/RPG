@@ -21,6 +21,8 @@ class Location:
     place_bed_types: dict[str, str] = field(default_factory=dict[str, str])
     # Rain and wind do not reach the player here (spec 04).
     indoors: bool = False
+    # Which storey an indoor zone is on; upper floors hold heat differently (spec 06).
+    floor: int = 0
 
     def bed_type_at(self, place: str) -> str:
         """The bed type at a free-text spot inside this zone."""
@@ -44,6 +46,8 @@ class World:
     date: str = "2023-10-01"
     # Drawn once when a new game starts; fixes the weather for the whole game (spec 04).
     seed: int = 0
+    # Mains power; nothing turns it off yet (spec 06).
+    power_on: bool = True
     locations: dict[str, Location] = field(
         default_factory=dict[str, Location]
     )  # e.g., {"zone_home": Location(...)}

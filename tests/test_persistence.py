@@ -231,8 +231,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_8(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 8)
+    def test_schema_version_is_9(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 9)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -247,6 +247,68 @@ class ClockSaveTests(IsolatedSaveTestCase):
         assert loaded is not None
         self.assertEqual(loaded.narrative.minutes, 2 * 1440 + 95)
         self.assertEqual(loaded.narrative.day, 3)
+
+
+class ThermalSaveTests(IsolatedSaveTestCase):
+    """Spec 06, Saves."""
+
+    def _round_trip(self, gm):
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        return loaded
+
+    def test_thermal_state_round_trips_exactly(self):
+        gm = GameManager()
+        thermal = gm.player.thermal
+        thermal.skin[BodyPart.HEAD] = 28.25
+        thermal.node_temp[BodyPart.HAND_L] = 30.5
+        thermal.primary[BodyPart.FOOT_L] = -0.5
+        thermal.secondary[BodyPart.NECK] = 0.25
+        thermal.metabolic_rate = 2.5
+        thermal.primary_total = -0.4
+        thermal.secondary_total = 0.3
+        thermal.energy_mult = 1.1
+        thermal.fluids_mult = 1.2
+        thermal.fatigue_mult = 1.3
+        thermal.core_cache = 36.25
+        thermal.cache_counter = 55.5
+        thermal.catch_cold = 41.5
+        thermal.cold_reduction = 3.0
+        thermal.sneeze_timer = 317.5
+        thermal.sneeze_active = 12.5
+        thermal.thermal_damage = 0.4
+        thermal.thermal_duration = 33.5
+        thermal.tick_frames = 1.0
+        gm.player.stats.set(CharacterStat.TEMPERATURE, 35.5)
+        gm.player.stats.set(CharacterStat.COLD_STRENGTH, 44.0)
+        loaded = self._round_trip(gm).player
+        self.assertEqual(loaded.thermal.to_dict(), thermal.to_dict())
+        self.assertEqual(loaded.stats.get(CharacterStat.TEMPERATURE), 35.5)
+        self.assertEqual(loaded.stats.get(CharacterStat.COLD_STRENGTH), 44.0)
+
+    def test_power_state_round_trips(self):
+        gm = GameManager()
+        gm.world.power_on = False
+        self.assertFalse(self._round_trip(gm).world.power_on)
+
+    def test_a_save_without_thermal_data_loads_a_fresh_body(self):
+        gm = GameManager()
+        files.save(gm, self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        del data["player"]["thermal"]
+        del data["world"]["power_on"]
+        loaded = codec.from_dict(data)
+        self.assertEqual(loaded.player.thermal.skin[BodyPart.HEAD], 33.0)
+        self.assertTrue(loaded.world.power_on)
+
+    def test_an_unknown_body_part_in_the_thermal_state_is_dropped(self):
+        gm = GameManager()
+        data = codec.to_dict(gm)
+        data["player"]["thermal"]["skin"]["tail"] = 20.0
+        loaded = codec.from_dict(data)
+        self.assertEqual(len(loaded.player.thermal.skin), len(BodyPart))
 
 
 class ClothingSaveTests(IsolatedSaveTestCase):

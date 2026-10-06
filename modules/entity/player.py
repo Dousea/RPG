@@ -10,6 +10,7 @@ from ..character.player import PlayerAttribute, PlayerPerk, PlayerTrait
 from ..character.state import CharacterCondition
 from ..item import ClothingItem
 from ..stats import Stats
+from ..thermal import ThermalState
 from . import BaseEntity
 from .item import ItemEntity
 
@@ -31,6 +32,7 @@ class PlayerEntity(BaseEntity):
     max_inventory_size: int = 20
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     stats: Stats = field(default_factory=Stats)
+    thermal: ThermalState = field(default_factory=ThermalState)
     asleep: bool = False
     # HP the status effects have taken that has not yet added up to a whole point.
     fractional_hp_loss: float = 0.0

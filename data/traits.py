@@ -78,3 +78,15 @@ TRAITS: dict[str, PlayerTrait] = {
         ],
     ),
 }
+
+PRONE_TO_ILLNESS_ID = "TraitID_ProneToIllness"  # spec 06; spec 07 adds the trait itself
+RESILIENT_ID = "TraitID_Resilient"  # spec 06
+OUTDOORSMAN_ID = "TraitID_Outdoorsman"  # spec 06
+
+CATCH_COLD_TRAIT_MULT = {  # spec 06
+    PRONE_TO_ILLNESS_ID: 1.7,
+    RESILIENT_ID: 0.45,
+    OUTDOORSMAN_ID: 0.25,
+}
+COLD_RECOVERY_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 0.5, RESILIENT_ID: 1.5}  # spec 06
+COLD_WORSENING_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 1.2, RESILIENT_ID: 0.8}  # spec 06

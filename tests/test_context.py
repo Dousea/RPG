@@ -196,6 +196,22 @@ class ConditionBlockTests(unittest.TestCase):
         for raw in ("0.5123", "0.3377", "41.25", "0.51", "0.34"):
             self.assertNotIn(raw, condition)
 
+    def test_condition_lists_the_temperature_status_effects_without_numbers(self):
+        """Spec 06, What the narrator and the player see."""
+        stats = self.gm.player.stats
+        stats.set(CharacterStat.WETNESS, 41.7)
+        stats.set(CharacterStat.TEMPERATURE, 34.8)
+        stats.set(CharacterStat.COLD_STRENGTH, 61.3)
+        stats.set(CharacterStat.WINDCHILL, 11.9)
+        prompt = self.builder.build_narrator_prompt("look")
+        condition = prompt.split("[CONDITION]")[1].split("[")[0]
+        self.assertIn("Wet (2/4)", condition)
+        self.assertIn("Heavy Cold (3/4)", condition)
+        self.assertIn("Cold (2/4)", condition)
+        self.assertIn("Wind Chill (2/4)", condition)
+        for raw in ("41.7", "34.8", "61.3", "11.9"):
+            self.assertNotIn(raw, condition)
+
     def test_a_player_with_no_status_effects_reads_as_fine(self):
         prompt = self.builder.build_narrator_prompt("look")
         condition = prompt.split("[CONDITION]")[1].split("[DEEP MEMORY]")[0]

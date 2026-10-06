@@ -3,6 +3,7 @@
 import datetime
 import logging
 import random
+from dataclasses import dataclass
 
 from data import climate as k
 from data.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
@@ -137,6 +138,65 @@ class ClimateEngine:
         self.periods_started += 1
         logger.debug(f"Weather period starts at hour {hour}, strength {strength:.2f}.")
         return self.period
+
+
+def felt_air_temperature(
+    temperature: float, *, indoors: bool, floor: int, power_on: bool, daylight: float
+) -> float:
+    """The air temperature a body feels (spec 06).
+
+    `daylight` is the outdoor daylight (0 to 1); the night term is its complement.
+    """
+    if not indoors:
+        return temperature
+    if power_on:
+        return k.INDOOR_POWERED_C
+    pull = k.INDOOR_PULL_BASE + k.INDOOR_PULL_DAYLIGHT * daylight
+    difference = temperature - k.INDOOR_POWERED_C
+    if difference <= 0:
+        mult = k.UPPER_FLOOR_DIFF_MULT if floor >= 1 else 1.0
+        return temperature - difference * pull * mult
+    if floor >= 1:
+        return temperature - difference * (pull + k.UPPER_FLOOR_NIGHT_TERM * (1 - daylight))
+    return temperature - difference * k.UPPER_FLOOR_DIFF_MULT * pull
+
+
+def wind_chill_temperature(temperature: float, wind_kmh: float) -> float:
+    """The wind-chill temperature: the formula's value, or the temperature if that is lower."""
+    a, b, c, d, e = k.WINDCHILL_TERMS
+    wind = wind_kmh**d
+    return min(a + b * temperature - c * wind + e * temperature * wind, temperature)
+
+
+@dataclass(frozen=True)
+class FeltAir:
+    """The air a body feels: still air, and the air with wind chill."""
+
+    still_c: float
+    wind_chill_c: float
+
+    @property
+    def windchill_amount(self) -> float:
+        """How many degrees colder the wind makes it; 0 indoors."""
+        return max(0.0, self.still_c - self.wind_chill_c)
+
+
+def felt_air(
+    temperature: float,
+    wind_kmh: float,
+    *,
+    indoors: bool,
+    floor: int,
+    power_on: bool,
+    daylight: float,
+) -> FeltAir:
+    """Still and wind-chill felt air; indoors the two are equal."""
+    still = felt_air_temperature(
+        temperature, indoors=indoors, floor=floor, power_on=power_on, daylight=daylight
+    )
+    if indoors:
+        return FeltAir(still, still)
+    return FeltAir(still, wind_chill_temperature(still, wind_kmh))
 
 
 def _band_word(value: float, bands: tuple[tuple[float, str], ...]) -> str | None:
