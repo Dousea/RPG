@@ -14,10 +14,12 @@ typings
 .pytest_cache
 
 # Claude Code. Worktrees under here are throwaway clones of this whole repo and
-# must never be committed; settings.local.json is per-developer. A shared
+# must never be committed; settings.local.json is per-developer; briefs/ holds
+# the implementer and reviewer agents' working files. A shared
 # .claude/settings.json is deliberately left trackable.
 .claude/worktrees/
 .claude/settings.local.json
+.claude/briefs/
 
 # Local secrets, should any ever be needed. config.yml is tracked and is not the
 # place for them.
