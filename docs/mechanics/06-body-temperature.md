@@ -309,8 +309,8 @@ above 1.
 - At 100 the counter resets and a cold starts at strength 20 with the sneeze
   timer 0.
 - Traits scale the rise: Prone to Illness 1.7, Resilient 0.45, Outdoorsy 0.25.
-  They use the ids `TraitID_ProneToIllness`, `TraitID_Resilient` and
-  `TraitID_Outdoorsman`; no current trait has them, so no trait changes a cold yet.
+  Their ids are `pronetoillness`, `resilient` and `outdoorsman`; the character's
+  traits come from [character creation](07-character-creation.md).
 
 **Course.** Cold strength (0 to 100) recovers 2.016 per minute while the player
 is indoors, not Wet, not Hypothermic, with fatigue at most 0.5 and hunger and
@@ -329,7 +329,7 @@ One timer, in real frames. It stays put below Has a Cold level 2. From level 2
 once: level 2 always sneezes, levels 3 and 4 sneeze when a roll of 100 comes
 above 50 (49 in 100) and otherwise cough. The timer resets to a draw in 600 to
 800 frames (level 2), 300 to 600 (level 3) or 200 to 300 (level 4), less the
-frames left in that minute. The narrator gets "Orton sneezes." or "Orton
+frames left in that minute. The narrator gets "<name> sneezes." or "<name>
 coughs." A sneeze would make a noise of radius 20 and volume 25, a cough radius
 35 and volume 40; nothing hears them yet. Rolls use the injected random source.
 

@@ -70,10 +70,10 @@ class QuestAdvancementTests(unittest.TestCase):
         gm = GameManager()
         gm.quests["marcus_likes_me"] = QuestState(
             quest_id="marcus_likes_me",
-            objectives=["npc_status:npc_marcus:trusts_orton"],
+            objectives=["npc_status:npc_marcus:trusts_player"],
         )
         resolve_actions(
-            gm, NpcStatusAction(npc_name="Marcus", operation="ADD", status="trusts_orton")
+            gm, NpcStatusAction(npc_name="Marcus", operation="ADD", status="trusts_player")
         )
         self.assertEqual(gm.quests["marcus_likes_me"].status, QuestStatus.COMPLETED)
 

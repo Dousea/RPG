@@ -3,7 +3,6 @@
 import random
 import unittest
 
-from data.traits import OUTDOORSMAN_ID, PRONE_TO_ILLNESS_ID, RESILIENT_ID
 from managers.cold import ColdDriver, catch_cold_delta, roll_sneeze, start_cold
 from managers.stats.drivers import StatContext
 from managers.stats.engine import StatsEngine
@@ -18,6 +17,10 @@ ALL_THREE_AT_20C = 0.25 * 0.18 * 16 + 0.25 * 0.02 * 8 + 0.25 * 0.08 * 4
 RISE_PER_MIN = 0.003 * 180
 FALL_PER_MIN = 0.175 * 112.5
 COURSE_PER_MIN = 0.0112 * 180
+
+PRONE_TO_ILLNESS_ID = "pronetoillness"  # spec 07, Traits with an effect now
+RESILIENT_ID = "resilient"
+OUTDOORSMAN_ID = "outdoorsman"
 
 
 def chilled_state(skin_c=25.0, parts=(BodyPart.TORSO_UPPER,)) -> ThermalState:

@@ -1,7 +1,7 @@
 """A GameManager as a JSON-ready dict, and back.
 
 Only *dynamic* state is saved. Static definitions -- item stats, location
-names and connections, trait and perk effects -- stay in `data/` and are looked
+names and connections, trait definitions -- stay in `data/` and are looked
 up by id on load. That keeps saves small and lets content be rebalanced without
 invalidating them.
 """
@@ -10,12 +10,12 @@ import dataclasses
 import logging
 from typing import Any
 
+from data import creation as k_creation
 from data.climate import STAGE_PHRASES
 from data.clock import WORLD_START_MINUTE_OF_DAY
 from data.items import ITEMS, WETNESS_MAX
 from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import build_starting_npcs
-from data.perks import PERKS
 from data.quests import build_starting_quests
 from data.traits import TRAITS
 from managers.climate import ClimateEngine
@@ -29,9 +29,9 @@ from managers.game import (
 )
 from managers.relationship import RelationshipManager
 from modules.body import BodyLocation, BodyPart
+from modules.character.appearance import Appearance, Gender
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.faction import CharacterFaction
-from modules.character.player import PlayerAttribute
 from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
@@ -45,7 +45,9 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 9  # spec 06
+SCHEMA_VERSION = 10  # spec 07
+
+MAX_ID_LENGTH = 40
 
 
 # Equipment slots are two separate enums; this resolves a saved slot name back
@@ -94,6 +96,37 @@ def _as_dict(value: Any) -> dict[str, Any]:
     field; treat anything that isn't actually a dict as empty rather than
     crashing on the first `.items()`/`.get()` call."""
     return value if isinstance(value, dict) else {}
+
+
+def _appearance_from_dict(data: dict[str, Any]) -> Appearance:
+    try:
+        gender = Gender(data.get("gender", Gender.MALE.value))
+    except ValueError:
+        logger.warning(f"Unknown gender '{data.get('gender')}'; using male.")
+        gender = Gender.MALE
+    name_cap = k_creation.NAME_MAX_CHARS
+    return Appearance(
+        forename=_as_text(data.get("forename", ""), name_cap),
+        surname=_as_text(data.get("surname", ""), name_cap),
+        gender=gender,
+        skin_tone=int(data.get("skin_tone", k_creation.SKIN_TONE_MIN)),
+        hair_style=_as_text(data.get("hair_style", ""), MAX_ID_LENGTH),
+        hair_colour=_as_text(data.get("hair_colour", ""), MAX_ID_LENGTH),
+        beard_style=_as_text(data.get("beard_style", ""), MAX_ID_LENGTH),
+        backstory=_as_text(data.get("backstory", ""), k_creation.BACKSTORY_MAX_CHARS),
+    )
+
+
+def _known_trait_ids(values: Any) -> list[str]:
+    ids = [str(v) for v in values] if isinstance(values, list) else []
+    for trait_id in ids:
+        if trait_id not in TRAITS:
+            logger.warning(f"Dropping unknown trait '{trait_id}'.")
+    return [trait_id for trait_id in ids if trait_id in TRAITS]
+
+
+def _int_map(value: Any) -> dict[str, int]:
+    return {str(key): int(amount) for key, amount in _as_dict(value).items()}
 
 
 def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
@@ -221,9 +254,21 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "asleep": player.asleep,
             "fractional_hp_loss": player.fractional_hp_loss,
             "food_eaten_timer": player.food_eaten_timer,
-            "attributes": {
-                attribute.value: value for attribute, value in player.attributes.items()
+            "appearance": {
+                "forename": player.appearance.forename,
+                "surname": player.appearance.surname,
+                "gender": player.appearance.gender.value,
+                "skin_tone": player.appearance.skin_tone,
+                "hair_style": player.appearance.hair_style,
+                "hair_colour": player.appearance.hair_colour,
+                "beard_style": player.appearance.beard_style,
+                "backstory": player.appearance.backstory,
             },
+            "occupation_id": player.occupation_id,
+            "job_title": player.job_title,
+            "trait_ids": list(player.traits),
+            "skills": dict(player.skills),
+            "skill_boosts": dict(player.skill_boosts),
             "inventory": [_item_entity_to_dict(e) for e in player.inventory],
             "equipment": {
                 slot.value: (_item_entity_to_dict(entity) if entity else None)
@@ -233,8 +278,6 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 location.value: _item_entity_to_dict(entity)
                 for location, entity in player.worn.items()
             },
-            "trait_ids": [trait.id for trait in player.traits],
-            "perk_ids": [perk.id for perk in player.perks],
             "conditions": [condition.value for condition in player.conditions],
         },
         "npcs": [
@@ -469,13 +512,6 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         logger.warning(f"Unknown player location '{location_id}'; using {STARTING_ZONE_ID}.")
         location_id = STARTING_ZONE_ID
 
-    attributes = {}
-    for name, value in data.get("attributes", {}).items():
-        try:
-            attributes[PlayerAttribute(name)] = int(value)
-        except ValueError:
-            logger.warning(f"Dropping unknown attribute '{name}'.")
-
     equipment: dict[Any, ItemEntity | None] = {
         **{slot: None for slot in CharacterHoldableSlot},
         **{slot: None for slot in CharacterArmorSlot},
@@ -510,7 +546,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
             logger.warning(f"Dropping unknown condition '{name}'.")
 
     player = PlayerEntity(
-        name=data.get("name", "Orton"),
+        name=data.get("name", ""),
         current_location_id=location_id,
         current_place=_as_text(data.get("current_place", ""), MAX_PLACE_LENGTH),
         entity_id=data.get("entity_id", "player"),
@@ -527,12 +563,14 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         asleep=_as_bool(data.get("asleep", False)),
         fractional_hp_loss=float(data.get("fractional_hp_loss", 0.0)),
         food_eaten_timer=float(data.get("food_eaten_timer", 0.0)),
-        traits=[TRAITS[trait_id] for trait_id in data.get("trait_ids", []) if trait_id in TRAITS],
-        perks=[PERKS[perk_id] for perk_id in data.get("perk_ids", []) if perk_id in PERKS],
+        appearance=_appearance_from_dict(_as_dict(data.get("appearance"))),
+        occupation_id=_as_text(data.get("occupation_id", ""), MAX_ID_LENGTH),
+        job_title=_as_text(data.get("job_title", ""), k_creation.JOB_TITLE_MAX_CHARS),
+        traits=_known_trait_ids(data.get("trait_ids", [])),
+        skills=_int_map(data.get("skills")),
+        skill_boosts=_int_map(data.get("skill_boosts")),
         conditions=conditions,
     )
-    if attributes:
-        player.attributes = attributes
     player.equipment = equipment
     player.worn = worn
     # Set last: __post_init__ filled hit_points to max.

@@ -507,3 +507,75 @@ class EngineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TraitFactorTests(unittest.TestCase):
+    """Spec 07, Traits with an effect now."""
+
+    @staticmethod
+    def after(setup, minutes, traits, **ctx):
+        player = make_player()
+        setup(player)
+        run(player, minutes, traits=frozenset(traits), **ctx)
+        return player
+
+    def test_appetite_factors(self):
+        def fed_half(p):
+            p.stats.set(S.HUNGER, 0.5)
+
+        base = self.after(fed_half, 6, ()).stats.get(S.HUNGER) - 0.5
+        self.assertAlmostEqual(base, 0.003456 * 0.5, places=7)
+        hearty = self.after(fed_half, 6, ("heartyappetite",)).stats.get(S.HUNGER) - 0.5
+        light = self.after(fed_half, 6, ("lighteater",)).stats.get(S.HUNGER) - 0.5
+        self.assertAlmostEqual(hearty, 0.003456 * 0.5 * 1.5, places=7)
+        self.assertAlmostEqual(light, 0.003456 * 0.5 * 0.75, places=7)
+
+    def test_thirst_factors(self):
+        nothing = lambda p: None  # noqa: E731
+        self.assertAlmostEqual(self.after(nothing, 6, ()).stats.get(S.THIRST), 0.00288, places=7)
+        high = self.after(nothing, 6, ("highthirst",)).stats.get(S.THIRST)
+        low = self.after(nothing, 6, ("lowthirst",)).stats.get(S.THIRST)
+        self.assertAlmostEqual(high, 0.00576, places=7)
+        self.assertAlmostEqual(low, 0.00144, places=7)
+
+    def test_awake_fatigue_factors(self):
+        nothing = lambda p: None  # noqa: E731
+        base = self.after(nothing, 60, ()).stats.get(S.FATIGUE)
+        self.assertAlmostEqual(base, 0.03726, places=5)
+        wakeful = self.after(nothing, 60, ("needslesssleep",)).stats.get(S.FATIGUE)
+        sleepy = self.after(nothing, 60, ("needsmoresleep",)).stats.get(S.FATIGUE)
+        self.assertAlmostEqual(wakeful, 0.03726 * 0.7, places=5)
+        self.assertAlmostEqual(sleepy, 0.03726 * 1.3, places=5)
+
+    def test_sleep_fatigue_factors(self):
+        def tired(p):
+            p.stats.set(S.FATIGUE, 0.8)
+
+        def lost(*traits):
+            player = self.after(tired, 60, traits, asleep=True, bed_type="average_bed")
+            return 0.8 - player.stats.get(S.FATIGUE)
+
+        self.assertAlmostEqual(lost(), 0.14, places=5)
+        self.assertAlmostEqual(lost("needslesssleep"), 0.14 / 0.75, places=5)
+        self.assertAlmostEqual(lost("needsmoresleep"), 0.14 / 1.18, places=5)
+        self.assertAlmostEqual(lost("insomniac"), 0.14 * 0.5, places=5)
+        self.assertAlmostEqual(lost("nightowl"), 0.14 * 1.4, places=5)
+
+    def test_panic_gain_factors(self):
+        nothing = lambda p: None  # noqa: E731
+
+        def panic(*traits):
+            return self.after(nothing, 1, traits, new_zombies_seen=5).stats.get(S.PANIC)
+
+        self.assertAlmostEqual(panic(), 35 - 6.75, places=4)
+        self.assertAlmostEqual(panic("cowardly"), 70 - 6.75, places=4)
+        self.assertAlmostEqual(panic("brave"), 35 * 0.3 - 6.75, places=4)
+
+    def test_desensitized_never_panics(self):
+        nothing = lambda p: None  # noqa: E731
+        player = self.after(nothing, 1, ("desensitized",), new_zombies_seen=50)
+        self.assertEqual(player.stats.get(S.PANIC), 0)
+        player = make_player()
+        player.stats.set(S.PANIC, 40)
+        run(player, 1, traits=frozenset({"desensitized"}), new_zombies_seen=1)
+        self.assertEqual(player.stats.get(S.PANIC), 0)

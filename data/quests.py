@@ -21,7 +21,7 @@ Adding a `discover:`/`npc_status:` objective means adding its name here too.
 
 Quest titles and objective labels are rendered into the narrator prompt
 unconditionally, with no check for who is in the room -- unlike every other
-prompt section. Write them so they never reveal something Orton hasn't
+prompt section. Write them so they never reveal something the player hasn't
 learned yet: name roles, not people ("the building super", not "Marcus").
 See docs/11-knowledge-firewall.md.
 """
@@ -32,12 +32,12 @@ from modules.quest import QuestState
 # parser is told these verbatim; anything else it invents still works as an
 # incidental fact, it just can't complete an objective.
 STORY_FLAGS: dict[str, str] = {
-    "apocalypse_cause": "Orton learns what actually caused the outbreak",
+    "apocalypse_cause": "the character learns what actually caused the outbreak",
 }
 
 # NPC status names with mechanical meaning, as name -> when to apply it.
 NPC_STATUSES: dict[str, str] = {
-    "trusts_orton": "an NPC decides Orton is someone they can rely on",
+    "trusts_player": "an NPC decides the character is someone they can rely on",
 }
 
 
@@ -56,11 +56,11 @@ def build_starting_quests() -> dict[str, QuestState]:
         QuestState(
             quest_id="quest_marcus_trust",
             title="Earn the Super's Trust",
-            objectives=["npc_status:npc_marcus:trusts_orton"],
+            objectives=["npc_status:npc_marcus:trusts_player"],
             objective_labels={
                 # "the super", not "Marcus" -- see the firewall note in this
                 # module's docstring.
-                "npc_status:npc_marcus:trusts_orton": "Earn the building super's trust",
+                "npc_status:npc_marcus:trusts_player": "Earn the building super's trust",
             },
         ),
         QuestState(

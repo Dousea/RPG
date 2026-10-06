@@ -872,10 +872,9 @@ class WiringTests(unittest.TestCase):
         from managers.game import GameManager
         from managers.simulation import SimulationCore
         from modules.action.types import Duration, MoveAction, WaitAction
-        from modules.character.player import PlayerTrait
 
         game = GameManager()
-        game.player.traits.append(PlayerTrait(PRONE_TO_ILLNESS_ID, "Prone", "", []))
+        game.player.traits.append(PRONE_TO_ILLNESS_ID)
         core = SimulationCore(game)
         ctx = core._stat_context(MoveAction(destination="out"))
         self.assertEqual(ctx.floor, 1)

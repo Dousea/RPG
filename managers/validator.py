@@ -112,17 +112,25 @@ class ActionValidator:
     def __init__(self, manager: GameManager):
         self.manager = manager
 
+    @property
+    def _name(self) -> str:
+        return self.manager.player.appearance.forename
+
+    def _keeps_keys(self) -> str:
+        looks = self.manager.player.appearance
+        return f"{self._name} keeps {looks.possessive} keys on {looks.object}."
+
     def validate_all(self, actions: list[AnyAction]) -> list[ValidationResult]:
         return [self.validate(action) for action in actions]
 
     def validate(self, action: AnyAction) -> ValidationResult:
         if self.manager.narrative.game_over:
             # The one sanctioned exception to "MOVE_TO never fails" (and
-            # every other action): once Orton is dead nothing more can
+            # every other action): once the player is dead nothing more can
             # happen, so every action this turn and beyond is refused rather
             # than dispatched. SimulationCore._check_player_death is the only
             # place that sets this flag; the LLM cannot trigger it.
-            return Rejected(action, "Orton is dead; nothing more can happen.")
+            return Rejected(action, f"{self._name} is dead; nothing more can happen.")
         handler = self._VALIDATORS.get(type(action))
         if handler is None:
             return Rejected(action, f"No validator registered for {type(action).__name__}.")
@@ -236,7 +244,7 @@ class ActionValidator:
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to drop.")
         if self._is_door_key(entity.item.id):
-            return Rejected(action, "Orton keeps his keys on him.")
+            return Rejected(action, self._keeps_keys())
         return Accepted(action, HeldItem(entity))
 
     def _validate_wear(self, action: WearAction) -> ValidationResult:
@@ -250,13 +258,14 @@ class ActionValidator:
         occupant = player.worn.get(item.body_location)
         if occupant is not None:
             return Rejected(
-                action, f"Orton is already wearing {_with_article(occupant.item.name)} there."
+                action,
+                f"{self._name} is already wearing {_with_article(occupant.item.name)} there.",
             )
         blocked = EXCLUSIVE_LOCATIONS.get(item.body_location, frozenset())
         for location, worn in player.worn.items():
             if location in blocked:
                 return Rejected(
-                    action, f"Orton cannot wear {item.name} while wearing {worn.item.name}."
+                    action, f"{self._name} cannot wear {item.name} while wearing {worn.item.name}."
                 )
         return Accepted(action, HeldItem(entity))
 
@@ -264,7 +273,7 @@ class ActionValidator:
         player = self.manager.player
         entity = self.manager._find_item_entity(list(player.worn.values()), action.item_name)
         if entity is None:
-            return Rejected(action, f"Orton is not wearing '{action.item_name}'.")
+            return Rejected(action, f"{self._name} is not wearing '{action.item_name}'.")
         if len(player.inventory) >= player.max_inventory_size:
             return Rejected(action, "Inventory is full.")
         return Accepted(action, HeldItem(entity))
@@ -272,7 +281,7 @@ class ActionValidator:
     def _is_door_key(self, item_id: str) -> bool:
         """Whether `item_id` is the `key_id` of any `DoorEntity` anywhere in
         the world -- engine-owned, not hard-coded to `item_apartment_key`.
-        Dropping (or duplicating) the key could strand Orton outside his own
+        Dropping (or duplicating) the key could strand the player outside their own
         apartment, since the door rebuilds LOCKED on every load (see
         data/locations.py)."""
         for location in self.manager.world.locations.values():
@@ -296,7 +305,7 @@ class ActionValidator:
             if item is None:
                 return Rejected(action, f"Unknown item: '{action.item_name}'.")
             if self._is_door_key(item.id):
-                return Rejected(action, "Orton can't conjure a key; it has to be found.")
+                return Rejected(action, f"{self._name} can't conjure a key; it has to be found.")
             if len(manager.player.inventory) >= manager.player.max_inventory_size:
                 return Rejected(action, "Inventory is full.")
             return Accepted(action, NewItem(item))
@@ -315,7 +324,7 @@ class ActionValidator:
         # DROP/ADD. UPDATE_CONDITION never removes an item, so it stays
         # unprotected.
         if action.operation == "REMOVE" and self._is_door_key(entity.item.id):
-            return Rejected(action, "Orton keeps his keys on him.")
+            return Rejected(action, self._keeps_keys())
         if action.operation in ("UPDATE_CONDITION", "UPDATE_QUANTITY"):
             try:
                 value = int(action.value)
@@ -323,9 +332,11 @@ class ActionValidator:
                 return Rejected(action, f"'{action.value}' is not a number.")
             if action.operation == "UPDATE_QUANTITY" and self._is_door_key(entity.item.id):
                 if value < 1:
-                    return Rejected(action, "Orton keeps his keys on him.")
+                    return Rejected(action, self._keeps_keys())
                 if value > 1:
-                    return Rejected(action, "Orton can't conjure a key; it has to be found.")
+                    return Rejected(
+                        action, f"{self._name} can't conjure a key; it has to be found."
+                    )
         return Accepted(action, HeldItem(entity))
 
     # === Combat ===
@@ -333,7 +344,7 @@ class ActionValidator:
     def _validate_attack(self, action: AttackAction) -> ValidationResult:
         manager = self.manager
         if self._player_incapacitated():
-            return Rejected(action, "Orton is in no state to attack anything.")
+            return Rejected(action, f"{self._name} is in no state to attack anything.")
         npc = manager.resolve_npc(action.target_name)
         if npc is None or npc.current_location_id != manager.player.current_location_id:
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
@@ -399,13 +410,13 @@ class ActionValidator:
         stats = self.manager.player.stats
         panic = status_effect_level(StatusEffect.PANIC, stats.get(CharacterStat.PANIC))
         if panic >= survival.SLEEP_REFUSED_PANIC_LEVEL:
-            return "Orton is too panicked to sleep."
+            return f"{self._name} is too panicked to sleep."
         pain = status_effect_level(StatusEffect.PAIN, stats.get(CharacterStat.PAIN))
         if (
             pain >= survival.SLEEP_REFUSED_PAIN_LEVEL
             and stats.get(CharacterStat.FATIGUE) <= survival.SLEEP_PAIN_FATIGUE_EXCEPTION
         ):
-            return "Orton is in too much pain to sleep."
+            return f"{self._name} is in too much pain to sleep."
         return ""
 
     # === Goals ===
@@ -459,13 +470,15 @@ class ActionValidator:
         location = manager.resolve_zone_exact(action.destination)
         if location is None:
             return Rejected(action, f"Unknown location: '{action.destination}'.")
-        # Orton's apartment door is locked from the building side (see
+        # The apartment door is locked from the building side (see
         # data/locations.py); nobody else has a key. An NPC can only be
-        # placed there while Orton himself is home to let them in.
+        # placed there while the player is home to let them in.
         if location.id == "zone_home" and manager.player.current_location_id != "zone_home":
+            looks = manager.player.appearance
             return Rejected(
                 action,
-                "Orton's apartment is locked; nobody gets in unless he's there to let them in.",
+                f"{self._name}'s apartment is locked; nobody gets in unless "
+                f"{looks.subject}'s there to let them in.",
             )
         return Accepted(action, NpcDestination(npc, location))
 

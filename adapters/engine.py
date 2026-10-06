@@ -14,12 +14,16 @@ from adapters import llm
 from adapters.memory import SemanticMemory
 from adapters.save import codec, files
 from data.items import wetness_word
+from data.occupations import OCCUPATIONS
+from data.traits import TRAITS
+from managers import creation
 from managers.climate import weather_summary
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.stats.status_effects import active_status_effects
 from modules.action.parser import parse_action_plan
+from modules.character.build import CharacterBuild
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
@@ -39,8 +43,19 @@ class GameEngine:
     def __init__(self):
         self._lock = threading.Lock()
         self.memory = SemanticMemory()
-        self.manager = files.load() or GameManager()
-        self.memory.rebuild(self.manager.memory.full_event_log)
+        self.manager: GameManager | None = files.load()
+        self.memory.rebuild(self.manager.memory.full_event_log if self.manager else [])
+
+    @property
+    def has_game(self) -> bool:
+        return self.manager is not None
+
+    @property
+    def game(self) -> GameManager:
+        """The running game; only for callers that know one exists."""
+        if self.manager is None:
+            raise RuntimeError("No game is running: create a character first.")
+        return self.manager
 
     # === Turn execution ===
 
@@ -48,15 +63,18 @@ class GameEngine:
         """Run a full turn and return the payload the frontend renders."""
         with self._lock:
             manager = self.manager
+            if manager is None:
+                return self._snapshot(story_text="")
 
             if manager.narrative.game_over:
-                # Orton is already dead -- no parser, no narrator, no save.
-                # The turn that killed him already recorded and persisted
+                # The character is already dead -- no parser, no narrator, no save.
+                # The turn that killed them already recorded and persisted
                 # everything there was to record; nothing after that is a
                 # real turn anymore.
                 return self._snapshot(
                     story_text=(
-                        f"Orton is dead. {manager.narrative.death_cause}\n"
+                        f"{manager.player.appearance.forename} is dead. "
+                        f"{manager.narrative.death_cause}\n"
                         "Start a new game to play again."
                     )
                 )
@@ -70,7 +88,7 @@ class GameEngine:
             ]
             logger.debug(f"Recalled {len(deep_memories)} deep memories.")
 
-            # 2. Ask the parser what Orton is trying to do. No prose exists yet.
+            # 2. Ask the parser what the player is trying to do. No prose exists yet.
             parser_prompt = ContextBuilder(manager).build_parser_prompt(player_input)
             try:
                 raw_actions = llm.query_parser(parser_prompt)
@@ -117,14 +135,14 @@ class GameEngine:
             self.memory.rebuild(manager.memory.full_event_log)
 
             # 6. Summarize if enough history has built up.
-            self._run_summarization()
+            self._run_summarization(manager)
 
             files.save(manager)
             return self._snapshot(story_text=story_text, options=options)
 
-    def _run_summarization(self) -> None:
+    def _run_summarization(self, manager: GameManager) -> None:
         """Fold the oldest unsummarized events into a narrative paragraph."""
-        pending = self.manager.events_pending_summary()
+        pending = manager.events_pending_summary()
         if not pending:
             return
         try:
@@ -133,19 +151,34 @@ class GameEngine:
             # Not fatal: the turn stands, we just try again next turn.
             logger.warning(f"Summarization skipped: {exc}")
             return
-        self.manager.memory.summaries.append(summary)
-        logger.info(f"Added summary #{len(self.manager.memory.summaries)}.")
+        manager.memory.summaries.append(summary)
+        logger.info(f"Added summary #{len(manager.memory.summaries)}.")
 
     # === Lifecycle ===
 
     def reset(self) -> dict[str, Any]:
-        """Discard the save and start a brand new game."""
+        """Discard the save; no game runs until a character is created."""
         with self._lock:
             files.delete()
-            self.manager = GameManager()
-            self.memory.rebuild(self.manager.memory.full_event_log)
-            files.save(self.manager)
+            self.manager = None
+            self.memory.rebuild([])
             return self._snapshot(story_text="")
+
+    def create_character(self, build: CharacterBuild) -> tuple[list[str], dict[str, Any] | None]:
+        """Validate a build and start a new game from it.
+
+        Returns the refusal messages (and no snapshot) for an invalid build, else
+        no messages and the first snapshot. The server's check is the one that counts.
+        """
+        with self._lock:
+            errors = creation.validate(build)
+            if errors:
+                return errors, None
+            files.delete()
+            self.manager = GameManager(player=creation.new_player(build))
+            self.memory.rebuild([])
+            files.save(self.manager)
+            return [], self._snapshot(story_text="")
 
     def state(self) -> dict[str, Any]:
         """Current state with no story text, for the initial page load."""
@@ -155,7 +188,7 @@ class GameEngine:
     def export_save(self) -> dict[str, Any]:
         """The current game as a save-file dict, for the player to download."""
         with self._lock:
-            return codec.to_dict(self.manager)
+            return codec.to_dict(self.game)
 
     def import_save(self, data: dict[str, Any]) -> dict[str, Any] | None:
         """Replace the live game with an uploaded save, or reject a bad one.
@@ -180,7 +213,7 @@ class GameEngine:
         """Build the frontend payload. Caller must hold the lock.
 
         Mirrors what `managers/context.py` already tells the narrator about
-        Orton -- quests, conditions, equipment, traits/perks, level, and NPC
+        the character -- quests, conditions, equipment, traits, level, and NPC
         disposition bands -- so the player can see in the panel what the
         narrator has been reacting to all along. NPC bands go out the same
         way `ContextBuilder._npcs_present_section` sends them to the LLM
@@ -193,11 +226,14 @@ class GameEngine:
         that aren't a fresh narrated turn (reset/state/import) pass none.
         """
         manager = self.manager
+        if manager is None:
+            return {"needs_creation": True, "story_text": story_text, "options": []}
         player = manager.player
         narrative = manager.narrative
         npcs_here = manager.npcs_in_location(player.current_location_id)
 
         return {
+            "needs_creation": False,
             "story_text": story_text,
             "options": options or [],
             "current_location": manager.current_location.name,
@@ -213,7 +249,7 @@ class GameEngine:
             "effects": _status_effects(player),
             "level": player.level,
             "experience_points": player.experience_points,
-            "attributes": {attr.value: value for attr, value in player.attributes.items()},
+            "character": _character(player),
             "conditions": [condition.value for condition in player.conditions],
             "status_effects": list(narrative.player_status),
             "inventory": [
@@ -222,12 +258,7 @@ class GameEngine:
             ],
             "equipment": _equipment(player),
             "worn": _worn(player),
-            "traits": [
-                {"name": trait.name, "description": trait.description} for trait in player.traits
-            ],
-            "perks": [
-                {"name": perk.name, "description": perk.description} for perk in player.perks
-            ],
+            "traits": _trait_entries(player),
             "goals": {
                 "short_term": list(narrative.goals.get("short_term", [])),
                 "long_term": list(narrative.goals.get("long_term", [])),
@@ -237,6 +268,27 @@ class GameEngine:
             "npcs_present": [npc.name for npc in npcs_here],
             "npcs": [_npc_regard(manager, npc) for npc in npcs_here],
         }
+
+
+def _trait_entries(player: PlayerEntity) -> list[dict[str, str]]:
+    return [
+        {"name": TRAITS[trait_id].name, "description": TRAITS[trait_id].description}
+        for trait_id in player.traits
+        if trait_id in TRAITS
+    ]
+
+
+def _occupation_name(player: PlayerEntity) -> str:
+    occupation = OCCUPATIONS.get(player.occupation_id)
+    return player.job_title or (occupation.name if occupation else "")
+
+
+def _character(player: PlayerEntity) -> dict[str, Any]:
+    return {
+        "name": player.name,
+        "occupation": _occupation_name(player),
+        "traits": [entry["name"] for entry in _trait_entries(player)],
+    }
 
 
 def _weather(manager: GameManager) -> dict[str, Any]:
@@ -303,7 +355,7 @@ def _active_quests(manager: GameManager) -> list[dict[str, Any]]:
 
 
 def _npc_regard(manager: GameManager, npc: NpcEntity) -> dict[str, Any]:
-    """An NPC's name and how they regard Orton, as bands, never the integers."""
+    """An NPC's name and how they regard the player, as bands, never the integers."""
     relationships = manager.relationship_manager
     player_id = manager.player.entity_id
     return {

@@ -1,6 +1,7 @@
 """Persistence: full round trip, schema guarding, and tolerance of bad saves."""
 
 import json
+import random
 import unittest
 from pathlib import Path
 
@@ -105,15 +106,37 @@ class RoundTripTests(IsolatedSaveTestCase):
         # The canned beans were never touched.
         self.assertIn("Canned Beans", [e.item.name for e in home.entities])
 
-    def test_traits_and_perks_resolve_by_id(self):
+    def test_character_fields_round_trip(self):
+        """Spec 07, Saves."""
+        assert self.loaded is not None
+        original, loaded = self.original.player, self.loaded.player
+        self.assertEqual(loaded.traits, original.traits)
+        self.assertEqual(loaded.appearance, original.appearance)
+        self.assertEqual(loaded.occupation_id, "unemployed")
+        self.assertEqual(loaded.job_title, "Software Developer")
+        self.assertEqual(loaded.skills, original.skills)
+        self.assertEqual(loaded.skill_boosts, original.skill_boosts)
+        self.assertEqual(loaded.skills["fitness"], 5)
+
+    def test_a_created_character_round_trips(self):
+        from managers import creation
+
+        build = creation.randomize(random.Random(3))
+        gm = GameManager(player=creation.new_player(build))
+        loaded = codec.from_dict(codec.to_dict(gm))
+        self.assertEqual(loaded.player.appearance, build.appearance)
+        self.assertEqual(loaded.player.traits, gm.player.traits)
+        self.assertEqual(loaded.player.name, build.appearance.full_name)
         self.assertEqual(
-            [t.id for t in self.loaded.player.traits],
-            [t.id for t in self.original.player.traits],
+            sorted(e.item.id for e in loaded.player.worn.values()), sorted(build.outfit)
         )
-        self.assertEqual(
-            [p.id for p in self.loaded.player.perks],
-            [p.id for p in self.original.player.perks],
-        )
+
+    def test_unknown_trait_ids_are_dropped_on_load(self):
+        data = codec.to_dict(GameManager())
+        data["player"]["trait_ids"] = ["strong", "nosuchtrait"]
+        loaded = codec.from_dict(data)
+        assert loaded is not None
+        self.assertEqual(loaded.player.traits, ["strong"])
 
     def test_conditions(self):
         self.assertIn("panic", [c.value for c in self.loaded.player.conditions])
@@ -231,8 +254,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_9(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 9)
+    def test_schema_version_is_10(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 10)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()

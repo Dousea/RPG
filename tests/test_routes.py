@@ -2,12 +2,14 @@
 
 import io
 import json
+import os
 import unittest
 
 import adapters.engine as engine_module
 import app as app_module
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
+from data.presets import ORTON
 from modules.stats import CharacterStat
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
@@ -29,6 +31,7 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.SemanticMemory = FakeMemory
 
         engine = GameEngine()
+        engine.create_character(ORTON)
         self._original_engine = app_module._engine
         app_module._engine = engine
         self.engine = engine
@@ -63,11 +66,11 @@ class IndexTests(RouteTestCase):
             b'id="goal-list"',
             b'id="quest-list"',
             b'id="trait-list"',
-            b'id="perk-list"',
-            b'id="attribute-grid"',
             b'id="save-button"',
             b'id="load-button"',
             b'id="load-input"',
+            b'id="creation-screen"',
+            b'id="creation-form"',
         ):
             self.assertIn(element_id, response.data)
 
@@ -76,7 +79,7 @@ class StatusEffectPayloadTests(RouteTestCase):
     """Spec 03, What the narrator and the player see."""
 
     def test_play_carries_status_effects_and_no_hunger_or_thirst(self):
-        stats = self.engine.manager.player.stats
+        stats = self.engine.game.player.stats
         stats.set(CharacterStat.HUNGER, 0.5)
         stats.set(CharacterStat.FATIGUE, 0.61)
         stats.set(CharacterStat.THIRST, 0.13)
@@ -92,7 +95,7 @@ class StatusEffectPayloadTests(RouteTestCase):
 
     def test_play_carries_the_temperature_status_effects_and_no_core_temperature(self):
         """Spec 06, What the narrator and the player see."""
-        stats = self.engine.manager.player.stats
+        stats = self.engine.game.player.stats
         stats.set(CharacterStat.TEMPERATURE, 21.0)
         stats.set(CharacterStat.WETNESS, 95)
         payload = self.client.post("/play", json={"input": "look"}).get_json()
@@ -102,7 +105,7 @@ class StatusEffectPayloadTests(RouteTestCase):
         self.assertNotIn("temperature", payload["vitals"])
 
     def test_state_lists_status_effects_highest_level_first(self):
-        stats = self.engine.manager.player.stats
+        stats = self.engine.game.player.stats
         stats.set(CharacterStat.THIRST, 0.13)
         stats.set(CharacterStat.HUNGER, 0.5)
         levels = [m["level"] for m in self.client.get("/state").get_json()["effects"]]
@@ -113,7 +116,7 @@ class StateTests(RouteTestCase):
     def test_state_reports_the_starting_world(self):
         # Orton now starts alone in his apartment; move to the building to
         # exercise the NPC-presence check below.
-        self.engine.manager.player.current_location_id = "zone_building"
+        self.engine.game.player.current_location_id = "zone_building"
         payload = self.client.get("/state").get_json()
         self.assertEqual(payload["current_location"], "Your Building")
         self.assertEqual(payload["day"], 1)
@@ -210,20 +213,111 @@ class SaveLoadRouteTests(RouteTestCase):
 
 
 class ResetTests(RouteTestCase):
-    def test_reset_starts_over(self):
+    def test_reset_deletes_the_save_and_leaves_no_game(self):
+        """Spec 07, Flow and routes."""
         self.client.post("/play", json={"input": "go out"})
         response = self.client.post("/reset")
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["message"], "Game has been reset.")
-        self.assertEqual(payload["state"]["current_location"], "Your Apartment")
-        self.assertEqual(payload["state"]["goals"]["short_term"], [])
+        self.assertTrue(payload["state"]["needs_creation"])
+        self.assertFalse(os.path.exists(self.save_path))
 
-    def test_state_after_reset_is_fresh(self):
-        self.client.post("/play", json={"input": "go out"})
+    def test_state_after_reset_asks_for_creation_and_play_is_refused(self):
         self.client.post("/reset")
-        payload = self.client.get("/state").get_json()
-        self.assertEqual(payload["current_location"], "Your Apartment")
+        self.assertTrue(self.client.get("/state").get_json()["needs_creation"])
+        self.assertEqual(self.client.post("/play", json={"input": "go out"}).status_code, 409)
+        self.assertEqual(self.client.get("/save/export").status_code, 409)
+
+
+class CreationRouteTests(RouteTestCase):
+    """Spec 07, Flow and routes."""
+
+    VALID = {
+        "appearance": {
+            "forename": "Mara",
+            "surname": "Quinn",
+            "gender": "female",
+            "skin_tone": 3,
+            "hair_style": "long",
+            "hair_colour": "black",
+            "beard_style": "",
+            "backstory": "Night shift nurse.",
+        },
+        "occupation_id": "nurse",
+        "job_title": "",
+        "traits": ["brave", "hemophobic"],
+        "outfit": ["item_tshirt", "item_jeans", "item_trainers"],
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.client.post("/reset")
+
+    def test_get_creation_has_the_screen_data(self):
+        payload = self.client.get("/creation").get_json()
+        self.assertEqual(len(payload["occupations"]), 25)
+        good, bad = payload["traits"]["good"], payload["traits"]["bad"]
+        self.assertTrue(all(t["cost"] > 0 for t in good))
+        self.assertTrue(all(t["cost"] < 0 for t in bad))
+        self.assertIn("strong", [t["id"] for t in good])
+        by_id = {t["id"]: t for t in good + bad}
+        self.assertEqual(
+            by_id["brave"]["excludes"],
+            ["agoraphobic", "claustrophobic", "cowardly", "desensitized"],
+        )
+        self.assertEqual(payload["base_skills"], {"fitness": 5, "strength": 5})
+        self.assertEqual(payload["appearance"]["skin_tones"]["1"], "pale")
+        self.assertIn("male", payload["outfits"]["default"])
+        self.assertEqual(payload["presets"]["orton"]["points_left"], 7)
+        self.assertEqual(payload["presets"]["orton"]["appearance"]["forename"], "Orton")
+
+    def test_an_invalid_build_starts_no_game(self):
+        bad = {**self.VALID, "occupation_id": "veteran", "traits": ["brave"]}
+        response = self.client.post("/creation", json=bad)
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.get_json()["errors"])
+        self.assertFalse(self.engine.has_game)
+        self.assertFalse(os.path.exists(self.save_path))
+        self.assertTrue(self.client.get("/state").get_json()["needs_creation"])
+
+    def test_a_malformed_body_is_refused(self):
+        for body in ({}, {"appearance": 3}, {**self.VALID, "traits": "brave"}):
+            response = self.client.post("/creation", json=body)
+            self.assertEqual(response.status_code, 400)
+        self.assertFalse(self.engine.has_game)
+
+    def test_a_valid_build_starts_day_one_at_eight_with_the_chosen_outfit(self):
+        response = self.client.post("/creation", json=self.VALID)
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertFalse(payload["needs_creation"])
+        self.assertEqual(payload["day"], 1)
+        manager = self.engine.game
+        self.assertEqual(
+            (manager.narrative.day, manager.narrative.hour, manager.narrative.minute), (1, 8, 0)
+        )
+        self.assertEqual(manager.world.time, "08:00 AM")
+        self.assertEqual(
+            sorted(e.item.id for e in manager.player.worn.values()),
+            ["item_jeans", "item_trainers", "item_tshirt"],
+        )
+        self.assertEqual(
+            payload["character"],
+            {
+                "name": "Mara Quinn",
+                "occupation": "Nurse",
+                "traits": ["Night Owl", "Brave", "Fear of Blood"],
+            },
+        )
+        self.assertTrue(os.path.exists(self.save_path))
+        self.assertEqual(self.client.post("/play", json={"input": "go out"}).status_code, 200)
+
+    def test_the_preset_posts_back_as_a_valid_build(self):
+        preset = self.client.get("/creation").get_json()["presets"]["orton"]
+        response = self.client.post("/creation", json=preset)
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()["character"]["occupation"], "Software Developer")
 
 
 class LazyEngineTests(IsolatedSaveTestCase):
@@ -248,7 +342,7 @@ class WeatherPayloadTests(RouteTestCase):
         self.assertTrue(weather["sheltered"])
 
     def test_temperature_is_the_rounded_outdoor_sample(self):
-        manager = self.engine.manager
+        manager = self.engine.game
         expected = round(manager.climate.sample(manager.narrative.minutes).air_temperature)
         weather = self.client.get("/state").get_json()["weather"]
         self.assertEqual(weather["temperature_c"], expected)

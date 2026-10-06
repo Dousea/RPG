@@ -248,5 +248,5 @@ SNEEZE_COIN_ABOVE = 50  # spec 06: a roll above this is a sneeze
 SNEEZE_OR_COUGH_ACTIVE_FRAMES = 25  # spec 06
 SNEEZE_NOISE = (20, 25)  # spec 06: radius in tiles, volume; nothing hears it yet
 COUGH_NOISE = (35, 40)  # spec 06
-SNEEZE_FACT = "Orton sneezes."
-COUGH_FACT = "Orton coughs."
+SNEEZE_FACT = "{name} sneezes."
+COUGH_FACT = "{name} coughs."

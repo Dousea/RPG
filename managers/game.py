@@ -10,14 +10,13 @@ from data.clock import (
     minute_of_day,
     time_of_day_at,
 )
-from data.items import ITEMS, build_orton_outfit
-from data.locations import STARTING_ZONE_ID, build_starting_locations
+from data.locations import build_starting_locations
 from data.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
-from data.perks import PERKS
+from data.presets import ORTON
 from data.quests import build_starting_quests
-from data.traits import TRAITS
 from managers import locations
 from managers.climate import ClimateEngine
+from managers.creation import new_player
 from managers.events import apply_event_modifiers, broadcast_event
 from managers.relationship import RelationshipManager
 from modules.character.state import CharacterCondition
@@ -132,8 +131,8 @@ class GameManager:
         quests: dict[str, QuestState] | None = None,
         climate: ClimateEngine | None = None,
     ):
-        """Build a manager. Every component defaults to its new-game value, so
-        `GameManager()` starts a fresh game and the persistence layer can
+        """Build a manager. Every component defaults to its new-game value (the
+        player to the Orton preset), so `GameManager()` starts a fresh game and the persistence layer can
         reconstruct a saved one by passing components in."""
         self.world = (
             world
@@ -148,26 +147,7 @@ class GameManager:
             if climate is not None
             else ClimateEngine(self.world.seed, WORLD_START_DATE, WORLD_START_MINUTE_OF_DAY)
         )
-        self.player = (
-            player
-            if player is not None
-            else PlayerEntity(
-                name="Orton",
-                current_location_id=STARTING_ZONE_ID,
-                # His own front-door key. Leaving it on the floor of an
-                # apartment he starts locked out of would strand him on turn
-                # one -- see data/locations.py's apartment_door.
-                inventory=[ItemEntity(item=ITEMS["item_apartment_key"])],
-                traits=[
-                    TRAITS["TraitID_Hemophobia"],
-                    TRAITS["TraitID_SmallFrame"],
-                ],
-                perks=[
-                    PERKS["PerkID_Charismatic"],
-                ],
-                worn=build_orton_outfit(),
-            )
-        )
+        self.player = player if player is not None else new_player(ORTON)
         self.npcs = npcs if npcs is not None else build_starting_npcs()
         self.narrative = narrative if narrative is not None else NarrativeState()
         self.memory = memory if memory is not None else MemoryState()
@@ -291,7 +271,7 @@ class GameManager:
 
     def drain_event_queue(self) -> None:
         """Process every queued event, broadcasting it and applying the
-        modifiers the world's traits and perks produce in response."""
+        modifiers the world's traits produce in response."""
         while self.event_queue:
             current_event = self.event_queue.pop(0)
             logger.debug(f"Processing Event: {type(current_event).__name__}")

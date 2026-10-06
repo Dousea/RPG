@@ -1,12 +1,12 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..body import LAYER_ORDER, BodyLocation, BodyPart
+from ..character.appearance import Appearance
 from ..character.equipment import (
     AnyCharacterEquipmentSlot,
     CharacterArmorSlot,
     CharacterHoldableSlot,
 )
-from ..character.player import PlayerAttribute, PlayerPerk, PlayerTrait
 from ..character.state import CharacterCondition
 from ..item import ClothingItem
 from ..stats import Stats
@@ -38,16 +38,6 @@ class PlayerEntity(BaseEntity):
     fractional_hp_loss: float = 0.0
     # Well-fed timer: counts down while the player digests; drives Food Eaten.
     food_eaten_timer: float = 0.0
-    attributes: dict[PlayerAttribute, int] = field(
-        default_factory=lambda: {
-            PlayerAttribute.AGILITY: 3,
-            PlayerAttribute.STRENGTH: 3,
-            PlayerAttribute.INTELLIGENCE: 3,
-            PlayerAttribute.WILLPOWER: 3,
-            PlayerAttribute.LUCK: 3,
-            PlayerAttribute.CHARISMA: 3,
-        }
-    )
     equipment: dict[AnyCharacterEquipmentSlot, ItemEntity | None] = field(
         default_factory=lambda: {
             **{slot: None for slot in CharacterHoldableSlot},
@@ -55,9 +45,19 @@ class PlayerEntity(BaseEntity):
         }
     )
     worn: dict[BodyLocation, ItemEntity] = field(default_factory=dict[BodyLocation, ItemEntity])
-    traits: list[PlayerTrait] = field(default_factory=list[PlayerTrait])
-    perks: list[PlayerPerk] = field(default_factory=list[PlayerPerk])
+    appearance: Appearance = field(default_factory=lambda: Appearance(forename=""))
+    occupation_id: str = ""
+    job_title: str = ""
+    # Trait ids, chosen and granted; the definitions are in data/traits.py.
+    traits: list[str] = field(default_factory=list[str])
+    skills: dict[str, int] = field(default_factory=dict[str, int])
+    skill_boosts: dict[str, int] = field(default_factory=dict[str, int])
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.appearance.forename:
+            self.appearance = replace(self.appearance, forename=self.name)
 
     def worn_outer_to_inner(self) -> list[tuple[BodyLocation, ItemEntity]]:
         return sorted(self.worn.items(), key=lambda pair: LAYER_ORDER[pair[0]], reverse=True)

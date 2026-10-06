@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from .character.faction import CharacterFaction
-from .character.player import PlayerAttribute
 from .character.state import CharacterCondition
 
 
@@ -31,11 +30,6 @@ class ConditionsModifier:
 
 
 @dataclass
-class AttributesModifier:
-    attributes: dict[PlayerAttribute, int]
-
-
-@dataclass
 class AffinityModifier:
     source_id: str
     target_id: str
@@ -53,7 +47,6 @@ AnyModifier = (
     XPMultiplicativeModifier
     | DamageMultiplicativeModifier
     | ConditionsModifier
-    | AttributesModifier
     | HPModifier
     | XPModifier
     | AffinityModifier

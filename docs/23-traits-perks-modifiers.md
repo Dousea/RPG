@@ -1,4 +1,4 @@
-# Traits, Perks, Effects, and Modifiers
+# Traits, Effects, and Modifiers
 
 > **Status: Implemented, live.** `modules/effect.py`, `modules/modifier.py`, `managers/events.py`. `managers/simulation.py`'s `SimulationCore` now constructs the events that drive it — every `ATTACK` and `USE_ITEM` action goes through this chain. See [Implementation Status](00-status.md).
 
@@ -18,7 +18,7 @@ EVENT                  a typed dataclass describing something that happened
   ↓
 BROADCAST              to entities relevant to that event (source, target)
   ↓
-EFFECT HANDLER         a trait's or perk's declared reaction to that event type
+EFFECT HANDLER         a trait's declared reaction to that event type
   ↓  condition(event)  → bool     does this reaction apply right now?
   ↓  effect(event)     → Modifier what it produces
   ↓
@@ -52,22 +52,21 @@ one is what [document 02](02-system-boundaries.md)'s event bus would require.
 callables, both taking the event:
 
 ```python
-ItemAppliedEffect[PlayerEntity](
-    condition=lambda event: "medical" in event.item.tags,
-    effect=lambda event: (
-        ConditionsModifier(conditions={CharacterCondition.PANIC: True})
-        if event.source.attributes[PlayerAttribute.WILLPOWER] < 5
-        else None
-    ),
+WeaponDamageTakenEffect(
+    condition=lambda event: True,
+    effect=lambda event: DamageMultiplicativeModifier(multiplier=1.1),
 )
 ```
 
-That is Hemophobia, from `data/traits.py`: using a medical item panics a
-character whose willpower is below 5. The condition gates on the *event*, the
-effect gates on the *actor's state*, and either may decline by returning `None`.
+That reaction makes its holder take ten percent more weapon damage. The
+condition gates on the *event*, the effect gates on the *actor's state*, and
+either may decline by returning `None`.
 
-`OnceEffect` is the odd one out — it takes a `PlayerEntity` rather than an
-event, for effects applied at character creation. Nothing dispatches it.
+The player's traits are plain ids (see
+[character creation](mechanics/07-character-creation.md)): the ones that change
+a survival stat are read by the stat drivers, not by this chain. The chain
+reads only traits that carry effect handlers, which today is none on the
+player; the pipeline stays for NPCs and for later traits that react to events.
 
 ## Matching handlers to events
 
@@ -94,7 +93,7 @@ outgoing hit. Each effect type now declares which role (`"source"` or
 
 ## Modifiers
 
-`modules/modifier.py`. Eight types, deliberately dumb — they describe a change
+`modules/modifier.py`. Seven types, deliberately dumb — they describe a change
 and carry no logic:
 
 ```text
@@ -103,7 +102,6 @@ XPMultiplicativeModifier      multiplier
 HPModifier                    amount
 DamageMultiplicativeModifier  multiplier
 ConditionsModifier            {CharacterCondition: bool}
-AttributesModifier            {PlayerAttribute: int}
 AffinityModifier              source_id, target_id, amount
 ReputationModifier            source_faction, target_faction, amount
 ```
@@ -114,16 +112,14 @@ than letting the order in which traits happened to fire decide the outcome.
 
 ## Application
 
-`apply_event_modifiers` (`managers/events.py`) handles five of the eight:
+`apply_event_modifiers` (`managers/events.py`) handles five of the seven:
 `DamageMultiplicativeModifier` (composed, then applied to the event's target),
 `AffinityModifier` and `ReputationModifier` (forwarded to the
 [relationship manager](22-relationships.md)), and `HPModifier` and
 `ConditionsModifier` (applied to the event's target, or its source for an
-event with none). `XPModifier`, `AttributesModifier` and
+event with none). `XPModifier` and
 `XPMultiplicativeModifier` are still collected and dropped — nothing on the
-live path produces them yet (`OnceEffect`, which is how `AttributesModifier`
-is meant to apply, runs at character creation, not per-event, and nothing
-dispatches it still; see [document 00](00-status.md)'s open issues).
+live path produces them yet.
 
 `managers/simulation.py`'s `SimulationCore` is the actual caller for combat
 and item use — it calls `broadcast_event` directly rather than

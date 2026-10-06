@@ -4,8 +4,7 @@ Validates each action (via `managers/validator.py`) and decides what actually
 happens -- HP, inventory, position, the clock -- before any prose exists.
 Movement, inventory, and world-state actions are direct field mutations;
 combat and item use additionally build real events and run them through the
-event/effect/modifier pipeline in `managers/events.py`, so trait/perk reactions in `data/traits.py`
-and `data/perks.py` fire.
+event/effect/modifier pipeline in `managers/events.py`, so trait reactions fire.
 
 `resolve()` returns one outcome-fact string per action -- what the narrator
 prompt describes. The narrator is never the source of truth for anything in
@@ -114,6 +113,14 @@ class SimulationCore:
         self._zombies_seen_this_chunk = 0
         self._weather_facts: list[str] = []
 
+    @property
+    def _name(self) -> str:
+        return self.manager.player.appearance.forename
+
+    @property
+    def _subject(self) -> str:
+        return self.manager.player.appearance.subject
+
     def resolve(self, actions: list[AnyAction]) -> list[str]:
         """Validate and resolve each action in order, one at a time.
 
@@ -171,7 +178,7 @@ class SimulationCore:
             floor=location.floor,
             power_on=manager.world.power_on,
             metabolic=self._metabolic_target(action),
-            traits=frozenset(trait.id for trait in player.traits),
+            traits=frozenset(player.traits),
         )
 
     def _metabolic_target(self, action: AnyAction | None) -> Metabolic:
@@ -202,7 +209,7 @@ class SimulationCore:
     ) -> tuple[int, list[str]]:
         """Advance the stats, then the clock by the minutes that really passed.
 
-        Returns those minutes and the facts the stats produced. Once Orton is
+        Returns those minutes and the facts the stats produced. Once the player is
         dead the clock still moves but the stats stay where they fell.
         """
         manager = self.manager
@@ -242,7 +249,7 @@ class SimulationCore:
         return facts, spent
 
     def _check_player_death(self, fact: str) -> str:
-        """End the game the moment Orton's HP reaches zero.
+        """End the game the moment the player's HP reaches zero.
 
         Player HP only ever moves through combat and item effects (main's
         rule, unchanged here), so this is the only producer of `game_over` --
@@ -255,7 +262,7 @@ class SimulationCore:
             return fact
         narrative.game_over = True
         narrative.death_cause = fact[:DEATH_CAUSE_MAX_LENGTH]
-        return f"{fact} Orton has died. The game is over."
+        return f"{fact} {self._name} has died. The game is over."
 
     # === Movement ===
 
@@ -278,7 +285,7 @@ class SimulationCore:
                 player.current_place = place
                 fact = (
                     f"Move to {target.name}: blocked -- the door to {target.name} is "
-                    f"locked and Orton has no key. Orton is in {stop.name}, {place}."
+                    f"locked and {self._name} has no key. {self._name} is in {stop.name}, {place}."
                 )
                 if stop.id != player.current_location_id:
                     player.current_location_id = stop.id
@@ -292,7 +299,7 @@ class SimulationCore:
             case ShuffleInZone(location=zone, direction=direction):
                 return f"Moved {direction} within {zone.name}."
             case _:
-                return "MOVE_TO had no destination; Orton stayed put."
+                return f"MOVE_TO had no destination; {self._name} stayed put."
 
     # === Items ===
 
@@ -335,8 +342,8 @@ class SimulationCore:
         assert isinstance(item, ConsumableItem | AppliableItem), "_validate_use_item checks this"
         player = manager.player
 
-        # The item's own effect (e.g. a medkit's HPModifier) is not a trait/
-        # perk reaction -- it applies unconditionally whenever the item is
+        # The item's own effect (e.g. a medkit's HPModifier) is not a trait
+        # reaction -- it applies unconditionally whenever the item is
         # used, so it is applied directly rather than through the broadcast.
         for modifier in item.modifiers:
             self._apply_modifier(player, modifier)
@@ -355,7 +362,7 @@ class SimulationCore:
         return " ".join(
             [
                 f"Use {item.name}: succeeded, "
-                f"Orton is {injury_words(player.hit_points, player.max_hit_points)}.",
+                f"{self._name} is {injury_words(player.hit_points, player.max_hit_points)}.",
                 *consume_facts,
             ]
         )
@@ -382,7 +389,7 @@ class SimulationCore:
         if item.cooked:
             fed *= status_effects.FOOD_EATEN_COOKED_MULT
         player.food_eaten_timer = min(status_effects.FOOD_EATEN_CAP, player.food_eaten_timer + fed)
-        return level_change_facts(before, player_status_effect_levels(player))
+        return level_change_facts(self._name, before, player_status_effect_levels(player))
 
     def _resolve_update_inventory(self, accepted: Accepted) -> str:
         manager = self.manager
@@ -526,10 +533,10 @@ class SimulationCore:
                 AffinityModifier(source_id=npc.npc_id, target_id=player_id, amount=action.amount)
             )
             disposition = relationships.get_disposition(npc.npc_id, player_id)
-            return f"{npc.name} now feels {disposition} toward Orton."
+            return f"{npc.name} now feels {disposition} toward {self._name}."
         relationships.adjust_trust(npc.npc_id, player_id, action.amount)
         trust = relationships.get_trust_level(npc.npc_id, player_id)
-        return f"{npc.name}'s trust in Orton is now {trust}."
+        return f"{npc.name}'s trust in {self._name} is now {trust}."
 
     def _resolve_add_relationship_note(self, accepted: Accepted) -> str:
         action: AddRelationshipNoteAction = accepted.action
@@ -580,11 +587,11 @@ class SimulationCore:
         span = accepted.expect(TimeSpan)
         spent = _span_words(span.minutes)
         if span.clamped:
-            return f"Orton waits {spent}, the most he can at once."
-        return f"Orton waits {spent}."
+            return f"{self._name} waits {spent}, the most {self._subject} can at once."
+        return f"{self._name} waits {spent}."
 
     def _resolve_sleep(self, accepted: Accepted) -> tuple[list[str], int]:
-        """Sleep chunk by chunk until the time is up or something wakes Orton."""
+        """Sleep chunk by chunk until the time is up or something wakes the player."""
         span = accepted.expect(TimeSpan)
         player = self.manager.player
         wanted = span.minutes
@@ -603,13 +610,13 @@ class SimulationCore:
         player.asleep = False
         words = _span_words(spent)
         if span.clamped:
-            lead = f"Orton sleeps {words}, the most he can at once."
+            lead = f"{self._name} sleeps {words}, the most {self._subject} can at once."
         else:
-            lead = f"Orton sleeps {words}."
+            lead = f"{self._name} sleeps {words}."
         return [lead, *facts, *([wake_fact] if wake_fact else [])], spent
 
     def _waking(self, slept_minutes: int) -> str:
-        """The fact for what wakes Orton after this chunk, or "" if nothing does."""
+        """The fact for what wakes the player after this chunk, or "" if nothing does."""
         if self.manager.narrative.game_over:
             return ""
         player = self.manager.player
@@ -618,21 +625,21 @@ class SimulationCore:
                 survival.SLEEP_INTERRUPTION_PANIC_MIN, survival.SLEEP_INTERRUPTION_PANIC_MAX
             )
             player.stats.add(CharacterStat.PANIC, panic)
-            return "A zombie wakes Orton in a panic."
+            return f"A zombie wakes {self._name} in a panic."
         stats = player.stats
         if status_effect_level(StatusEffect.HUNGRY, stats.get(CharacterStat.HUNGER)) >= (
             survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
         ):
-            return "Hunger wakes Orton."
+            return f"Hunger wakes {self._name}."
         if status_effect_level(StatusEffect.THIRST, stats.get(CharacterStat.THIRST)) >= (
             survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
         ):
-            return "Thirst wakes Orton."
+            return f"Thirst wakes {self._name}."
         if (
             stats.get(CharacterStat.FATIGUE) <= 0
             and slept_minutes >= survival.SLEEP_FATIGUE_WAKE_MIN_HOURS * 60
         ):
-            return "Orton wakes fully rested."
+            return f"{self._name} wakes fully rested."
         return ""
 
     _RESOLVERS = {

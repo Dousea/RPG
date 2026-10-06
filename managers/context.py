@@ -14,7 +14,10 @@ prose context plus this turn's already-decided [OUTCOMES].
 from collections.abc import Iterable
 
 from data.items import item_condition_word, wetness_word
+from data.names import SKIN_TONE_WORDS
+from data.occupations import OCCUPATIONS
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
+from data.traits import TRAITS
 from managers.climate import describe_weather
 from managers.game import GameManager
 from managers.stats.status_effects import active_status_effects
@@ -25,6 +28,27 @@ from modules.quest import QuestStatus
 class ContextBuilder:
     def __init__(self, manager: GameManager):
         self.manager = manager
+
+    @property
+    def _name(self) -> str:
+        return self.manager.player.appearance.forename
+
+    def _appearance_line(self) -> str:
+        looks = self.manager.player.appearance
+        parts = [
+            f"{SKIN_TONE_WORDS.get(looks.skin_tone, 'unremarkable')} skin",
+            "bald"
+            if looks.hair_style == "bald"
+            else f"{looks.hair_style} {looks.hair_colour} hair",
+        ]
+        if looks.beard_style:
+            parts.append(f"a {looks.beard_style}")
+        return ", ".join(parts)
+
+    def _occupation_line(self) -> str:
+        player = self.manager.player
+        occupation = OCCUPATIONS.get(player.occupation_id)
+        return player.job_title or (occupation.name if occupation else "None")
 
     # === Shared sections ===
 
@@ -63,9 +87,9 @@ class ContextBuilder:
         """NPCs present, with how each one currently regards the player.
 
         Affinity and trust go out as bands, never as the underlying integers
-        -- Orton can tell that Emma has warmed to him; he cannot read
+        -- the player can tell that Emma has warmed to them; they cannot read
         `affection +37` off her face, and a narrator given the number
-        narrates to it. NPC goals are shown as visible intent (what Orton
+        narrates to it. NPC goals are shown as visible intent (what the player
         could plausibly read from behavior); NPC `.knowledge` is deliberately
         never rendered here -- it exists for a future dialogue system to gate
         what an NPC can truthfully say, not to be handed to the narrator
@@ -95,10 +119,10 @@ class ContextBuilder:
             if npc.goals:
                 lines.append(f"   Visible intent: {', '.join(npc.goals)}")
             if npc.notes:
-                # ADD_RELATIONSHIP_NOTE writes Orton's read on someone, not the
+                # ADD_RELATIONSHIP_NOTE writes the player's read on someone, not the
                 # NPC's private thoughts, so this side of the firewall is where
                 # it belongs -- but say whose impressions they are.
-                lines.append(f"   Orton's impressions: {npc.notes}")
+                lines.append(f"   {self._name}'s impressions: {npc.notes}")
         return "\n".join(lines)
 
     def _summary_section(self) -> str:
@@ -125,7 +149,7 @@ class ContextBuilder:
         return ", ".join(f"{name} ({level}/{STATUS_EFFECT_MAX_LEVEL})" for _, level, name in active)
 
     def _weather_section(self) -> str:
-        """The outdoor weather in words, and whether Orton is sheltered from it."""
+        """The outdoor weather in words, and whether the player is sheltered from it."""
         manager = self.manager
         sample = manager.climate.sample(manager.narrative.minutes)
         return describe_weather(sample, manager.current_location.indoors)
@@ -137,7 +161,7 @@ class ContextBuilder:
         return "\n".join(f" - {fact}" for fact in outcome_facts)
 
     def _discovered_flags_section(self) -> str:
-        """Only flags Orton has actually discovered -- doc 11's complaint was
+        """Only flags the player has actually discovered -- doc 11's complaint was
         that every world flag went out unfiltered regardless of whether
         anything in the story had ever revealed it to the player. A flag
         becomes visible here only once a `DISCOVER_FLAG` action has marked it
@@ -158,7 +182,7 @@ class ContextBuilder:
 
         Quest completion is engine-decided (`SimulationCore._advance_quests`)
         -- there is no LLM verb for it -- but the narrator still needs to know
-        what Orton is working toward so it can weave it into prose. Only
+        what the player is working toward so it can weave it into prose. Only
         ACTIVE quests render; a quest that just completed this turn already
         shows up in [OUTCOMES], and there is no reason to keep prompting the
         narrator about one that's done.
@@ -184,18 +208,24 @@ class ContextBuilder:
             f" - {slot.name}: {_with_condition(entity) if entity else 'None'}"
             for slot, entity in player.equipment.items()
         )
+        looks = player.appearance
+        trait_lines = (
+            f" - {TRAITS[t].name}: {TRAITS[t].description}" for t in player.traits if t in TRAITS
+        )
         return f"""
 Name: {player.name}
+Pronouns: {looks.subject}/{looks.object}
+Occupation: {self._occupation_line()}
+Appearance: {self._appearance_line()}
+Backstory: {looks.backstory or "None"}
 Level: {player.level} (XP: {player.experience_points})
 Conditions: {", ".join(condition.name for condition in player.conditions) or "None"}
 Status: {", ".join(narrative.player_status) or "None"}
 Goals: {self._goals_line() or "None"}
 Inventory: {_lines(f" - {_with_condition(entity)}" for entity in player.inventory) or "Empty"}
-Attributes: {_lines(f" - {attr.name}: {value}" for attr, value in player.attributes.items()) or "None"}
 Equipment: {_lines(equipment) or "None"}
 Wearing: {self._outfit_line()}
-Traits: {_lines(f" - {trait.name}: {trait.description}" for trait in player.traits) or "None"}
-Perks: {_lines(f" - {perk.name}: {perk.description}" for perk in player.perks) or "None"}
+Traits: {_lines(trait_lines) or "None"}
 """
 
     def _outfit_line(self) -> str:
@@ -255,7 +285,11 @@ Flags: {self._discovered_flags_section()}
             npc.name for npc in manager.npcs_in_location(player.current_location_id)
         )
 
-        return f"""[LOCATION]
+        looks = player.appearance
+        return f"""[CHARACTER]
+{player.name} ({looks.subject}/{looks.object}), {self._occupation_line()}. Say "{looks.subject}" and "{looks.object}", never "they", for this character.
+
+[LOCATION]
 {manager.current_location.name}: {manager.current_location.description}
 Specific spot: {player.current_place or "(nowhere in particular)"}
 
@@ -265,9 +299,9 @@ Specific spot: {player.current_place or "(nowhere in particular)"}
 [ZONES]
 (The world is these {len(manager.world.locations)} zones, each listed below
 with its aliases. Naming a zone or one of its listed aliases/landmarks moves
-Orton there, walking through connecting zones as needed. `in`/`out` follow
-the zone's own exits. Anything not listed here is a spot inside the zone he
-is already in, which is normal and expected. A locked door stops him at the
+{self._name} there, walking through connecting zones as needed. `in`/`out` follow
+the zone's own exits. Anything not listed here is a spot inside the zone {looks.subject}
+is already in, which is normal and expected. A locked door stops {looks.object} at the
 door rather than refusing the move.)
 
 {self._zones_section().rstrip()}
@@ -309,11 +343,12 @@ door rather than refusing the move.)
         describes them; it does not decide them. `deep_memories` are
         semantically retrieved past events supplied by the memory layer.
         """
+        looks = self.manager.player.appearance
         return f"""[CHARACTER]
 {self._character_section()}
 
 [CONDITION]
-(Orton's body and mood right now, as levels out of 4. Describe them; do not
+({self._name}'s body and mood right now, as levels out of 4. Describe them; do not
 give them numbers.)
 {self._condition_section()}
 
@@ -326,8 +361,8 @@ give them numbers.)
 {self._location_section()}
 
 [WEATHER]
-(The weather outside, in words. When Orton is sheltered, rain and wind do not
-reach him, though he can still hear them.)
+(The weather outside, in words. When {self._name} is sheltered, rain and wind do not
+reach {looks.object}, though {looks.subject} can still hear them.)
 {self._weather_section()}
 
 [ITEMS IN CURRENT LOCATION]
@@ -343,7 +378,7 @@ reach him, though he can still hear them.)
 {self._npcs_present_section().rstrip()}
 
 [QUESTS]
-(What Orton is currently working toward, engine-tracked. [x] is complete.)
+(What {self._name} is currently working toward, engine-tracked. [x] is complete.)
 
 {self._quests_section().rstrip()}
 

@@ -1,0 +1,167 @@
+"""The 25 occupations (spec 07)."""
+
+from modules.character.definitions import OccupationDefinition as Occ
+
+CUSTOM_OCCUPATION_ID = "unemployed"  # spec 07
+
+_ROWS = [
+    Occ("unemployed", "Custom Occupation", 8),
+    Occ(
+        "burgerflipper",
+        "Burger Flipper",
+        2,
+        ("cook2",),
+        {"cooking": 2, "maintenance": 1, "short_blade": 1},
+    ),
+    Occ("tailor", "Tailor", 2, (), {"tailoring": 4}),
+    Occ("doctor", "Doctor", 0, (), {"first_aid": 6, "short_blade": 1}),
+    Occ(
+        "farmer",
+        "Farmer",
+        0,
+        (),
+        {"agriculture": 4, "animal_care": 1, "strength": 1},
+    ),
+    Occ(
+        "fireofficer",
+        "Firefighter",
+        0,
+        (),
+        {"running": 1, "strength": 1, "fitness": 1, "axe": 1},
+    ),
+    Occ(
+        "lumberjack",
+        "Lumberjack",
+        0,
+        ("axeman",),
+        {"axe": 2, "strength": 1, "maintenance": 1},
+    ),
+    Occ(
+        "nurse",
+        "Nurse",
+        0,
+        ("nightowl",),
+        {"first_aid": 3, "lightfooted": 1, "fitness": 1},
+    ),
+    Occ(
+        "rancher",
+        "Rancher",
+        0,
+        (),
+        {"animal_care": 4, "butchering": 3, "fitness": 1},
+    ),
+    Occ(
+        "carpenter",
+        "Carpenter",
+        -2,
+        (),
+        {
+            "carpentry": 4,
+            "carving": 1,
+            "short_blunt": 1,
+            "masonry": 1,
+            "maintenance": 1,
+        },
+    ),
+    Occ(
+        "chef",
+        "Chef",
+        -2,
+        ("cook2",),
+        {"cooking": 4, "maintenance": 1, "short_blade": 1, "butchering": 2},
+    ),
+    Occ(
+        "constructionworker",
+        "Construction Worker",
+        -2,
+        (),
+        {
+            "short_blunt": 2,
+            "long_blunt": 1,
+            "masonry": 2,
+            "carpentry": 1,
+            "maintenance": 1,
+        },
+    ),
+    Occ("electrician", "Electrician", -2, (), {"electrical": 5}),
+    Occ(
+        "fisherman",
+        "Fishing Guide",
+        -2,
+        (),
+        {"fishing": 3, "foraging": 1, "butchering": 1},
+    ),
+    Occ(
+        "repairman",
+        "DIY Expert",
+        -2,
+        ("inventive_prof",),
+        {"carpentry": 1, "maintenance": 2, "short_blunt": 1, "masonry": 1},
+    ),
+    Occ(
+        "securityguard",
+        "Security Guard",
+        -2,
+        ("nightowl",),
+        {"running": 2, "lightfooted": 1, "short_blunt": 1},
+    ),
+    Occ(
+        "engineer",
+        "Engineer",
+        -4,
+        (),
+        {"electrical": 1, "carpentry": 1, "masonry": 1},
+    ),
+    Occ("mechanics", "Mechanic", -4, ("mechanics2",), {"mechanics": 4, "welding": 1}),
+    Occ("metalworker", "Welder", -4, (), {"welding": 4}),
+    Occ(
+        "parkranger",
+        "Park Ranger",
+        -4,
+        ("herbalist_prof",),
+        {
+            "trapping": 1,
+            "first_aid": 1,
+            "foraging": 1,
+            "knapping": 1,
+            "carving": 1,
+        },
+    ),
+    Occ(
+        "policeofficer",
+        "Police Officer",
+        -4,
+        (),
+        {"aiming": 4, "reloading": 1, "nimble": 1},
+    ),
+    Occ(
+        "burglar",
+        "Burglar",
+        -6,
+        ("burglar",),
+        {"nimble": 2, "sneaking": 2, "lightfooted": 2},
+    ),
+    Occ(
+        "fitnessinstructor",
+        "Fitness Instructor",
+        -6,
+        ("nutritionist2",),
+        {"fitness": 3, "running": 2, "strength": 1},
+    ),
+    Occ(
+        "smither",
+        "Blacksmith",
+        -6,
+        ("blacksmith2",),
+        {"blacksmithing": 4, "maintenance": 1, "short_blunt": 1},
+    ),
+    Occ(
+        "veteran",
+        "Veteran",
+        -8,
+        ("desensitized",),
+        {"aiming": 2, "reloading": 2},
+    ),
+]
+
+OCCUPATIONS: dict[str, Occ] = {row.id: row for row in _ROWS}

@@ -25,9 +25,9 @@ from modules.weather import WeatherSample
 logger = logging.getLogger(__name__)
 
 WEAKENING_FACTS = {
-    "starvation": "Orton is weakening from hunger.",
-    "thirst": "Orton is weakening from thirst.",
-    "fever": "Orton is weakening from fever.",
+    "starvation": "{name} is weakening from hunger.",
+    "thirst": "{name} is weakening from thirst.",
+    "fever": "{name} is weakening from fever.",
 }
 
 
@@ -109,7 +109,9 @@ class StatsEngine:
         )
         drivers_done = player_status_effect_levels(player)
         health_facts = self._lose_health(player, drivers_done, hours)
-        facts = level_change_facts(before, player_status_effect_levels(player))
+        facts = level_change_facts(
+            player.appearance.forename, before, player_status_effect_levels(player)
+        )
         facts.extend(player.thermal.facts)
         facts.extend(health_facts)
         return facts
@@ -140,9 +142,9 @@ class StatsEngine:
             for _, cause in sources:
                 if cause not in self._weakening_reported:
                     self._weakening_reported.add(cause)
-                    facts.append(WEAKENING_FACTS[cause])
+                    facts.append(WEAKENING_FACTS[cause].format(name=player.appearance.forename))
             return facts
         player.fractional_hp_loss = 0.0
         cause = max(sources)[1]
-        self.death_cause = f"Orton died of {cause}."
+        self.death_cause = f"{player.appearance.forename} died of {cause}."
         return [self.death_cause]

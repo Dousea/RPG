@@ -1,9 +1,9 @@
-"""The event pipeline: traits and perks react to an event with modifiers."""
+"""The event pipeline: traits react to an event with modifiers."""
 
 import logging
 
 from managers.relationship import RelationshipManager
-from modules.character.player import PlayerPerk, PlayerTrait
+from modules.character.player import PlayerTrait
 from modules.effect import (
     AnyEffect,
     ItemAppliedEffect,
@@ -77,14 +77,10 @@ def broadcast_event(event: AnyEvent) -> list[AnyModifier]:
         role_entities["target"] = target
 
     for role, entity in role_entities.items():
-        all_effects: list[PlayerTrait | PlayerPerk] = []
-        if hasattr(entity, "traits"):
-            all_effects.extend(getattr(entity, "traits", []))
-        if hasattr(entity, "perks"):
-            all_effects.extend(getattr(entity, "perks", []))
+        reacting = [t for t in getattr(entity, "traits", []) if isinstance(t, PlayerTrait)]
 
-        for trait_or_perk in all_effects:
-            for effect_handler in trait_or_perk.effects:
+        for trait in reacting:
+            for effect_handler in trait.effects:
                 if not effect_handler_matches(event, effect_handler, role):
                     continue
 
@@ -106,7 +102,7 @@ def broadcast_event(event: AnyEvent) -> list[AnyModifier]:
                     continue
 
                 logger.debug(
-                    f"Effect '{trait_or_perk.name}' on entity #'{entity.id}' ({role}) generated modifier: {type(mod).__name__}"
+                    f"Effect '{trait.name}' on entity #'{entity.id}' ({role}) generated modifier: {type(mod).__name__}"
                 )
                 collected_modifiers.append(mod)
 
@@ -159,15 +155,12 @@ def apply_event_modifiers(
                     conditions.append(condition)
                 elif not active and condition in conditions:
                     conditions.remove(condition)
-        # AttributesModifier/XPModifier/XPMultiplicativeModifier have no
-        # current producer on this path (OnceEffect runs at character
-        # creation, not per-event; QuestCompletionEvent has no emitter
-        # yet -- a real Story Director is doc 07, out of scope here) and
-        # are intentionally left unhandled rather than guessed at.
+        # XPModifier/XPMultiplicativeModifier have no current producer on this
+        # path (QuestCompletionEvent has no emitter yet) and are left unhandled.
 
 
 def effect_handler_matches(event: AnyEvent, handler: AnyEffect, role: str) -> bool:
-    """Whether an effect handler (from a trait's or perk's `.effects`)
+    """Whether an effect handler (from a trait's `.effects`)
     reacts to this event's type when held by the entity occupying `role`
     ("source" or "target")."""
     if not isinstance(handler, EVENT_TO_EFFECT_TYPES.get(type(event), ())):

@@ -8,6 +8,7 @@ such dependency lives here:
 - `save`        -- a GameManager as a JSON-ready dict (`save.codec`) and on
                    disk at gamedata/engine_state.json (`save.files`)
 - `engine`      -- orchestrates one turn end to end
+- `creation_payload` -- the creation screen's JSON and a submitted build
 
 Nothing is re-exported here on purpose: `engine` imports `llm` and
 `save`, so importing it from this module would make `adapters` a partly

@@ -271,14 +271,7 @@
         .row-item .value { text-align: right; }
         .row-item .value.muted { color: var(--paper-dim); }
 
-        .attr-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0 1.25rem;
-        }
-        .attr-grid .row-item { grid-column: span 1; }
-
-        /* Traits / perks */
+        /* Traits */
         .named-entry { margin-bottom: 0.7rem; }
         .named-entry:last-child { margin-bottom: 0; }
         .named-entry .name { font-weight: 600; font-size: 0.92rem; }
@@ -386,6 +379,23 @@
             #story-display { height: 45vh; }
             .dossier { height: 60vh; }
         }
+
+        /* Character creation */
+        #creation-screen {
+            position: fixed; inset: 0; overflow-y: auto; z-index: 10;
+            background: var(--ink); padding: 1.5rem;
+        }
+        #creation-screen[hidden] { display: none; }
+        #creation-form { max-width: 56rem; margin: 0 auto; display: grid; gap: 1rem; }
+        #creation-form fieldset { border: 1px solid var(--line); padding: 0.8rem 1rem; }
+        #creation-form label { display: block; margin: 0.25rem 0; }
+        #creation-form input[type=text], #creation-form select, #creation-form textarea {
+            background: var(--panel); color: var(--paper); border: 1px solid var(--line);
+            padding: 0.3rem 0.5rem; font: inherit;
+        }
+        #creation-form .trait-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        #creation-form .muted { color: var(--paper-dim); }
+        #creation-errors { color: var(--hazard); margin: 0; padding-left: 1.2rem; }
     </style>
 </head>
 <body>
@@ -393,7 +403,7 @@
 
     <header>
         <div class="title-block">
-            <h1>Orton's Log</h1>
+            <h1>Survivor's Log</h1>
             <div class="meta-chips" id="meta-chips">
                 <span class="chip">Day &mdash;</span>
             </div>
@@ -410,7 +420,7 @@
 
     <main>
         <div id="story-display">
-            <p>Welcome, Orton. The adventure begins&hellip;</p>
+            <p>The adventure begins&hellip;</p>
         </div>
 
         <div class="dossier">
@@ -463,16 +473,8 @@
                         <ul class="row-list" id="standing-list"></ul>
                     </div>
                     <div class="section">
-                        <h3>Attributes</h3>
-                        <div class="attr-grid" id="attribute-grid"></div>
-                    </div>
-                    <div class="section">
                         <h3>Traits</h3>
                         <div id="trait-list"></div>
-                    </div>
-                    <div class="section">
-                        <h3>Perks</h3>
-                        <div id="perk-list"></div>
                     </div>
                 </div>
 
@@ -505,6 +507,48 @@
 
 </div>
 
+<section id="creation-screen" hidden>
+    <form id="creation-form">
+        <h1>Create your survivor</h1>
+        <label>Preset <select id="cc-preset"><option value="">(build your own)</option></select></label>
+        <fieldset>
+            <legend>Who they are</legend>
+            <label>Forename <input type="text" id="cc-forename" maxlength="20"></label>
+            <label>Surname <input type="text" id="cc-surname" maxlength="20"></label>
+            <label>Gender <select id="cc-gender"></select></label>
+            <label>Skin tone <select id="cc-skin"></select></label>
+            <label>Hair style <select id="cc-hair-style"></select></label>
+            <label>Hair colour <select id="cc-hair-colour"></select></label>
+            <label id="cc-beard-row">Beard <select id="cc-beard"></select></label>
+            <label>Backstory <textarea id="cc-backstory" rows="2" maxlength="200"></textarea></label>
+        </fieldset>
+        <fieldset>
+            <legend>Occupation</legend>
+            <label>Occupation <select id="cc-occupation"></select></label>
+            <label id="cc-title-row">Job title <input type="text" id="cc-title" maxlength="40"></label>
+            <p class="muted" id="cc-granted"></p>
+        </fieldset>
+        <fieldset>
+            <legend>Traits</legend>
+            <p><strong id="cc-points"></strong></p>
+            <div class="trait-columns">
+                <div id="cc-good"></div>
+                <div id="cc-bad"></div>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Starting skills</legend>
+            <p class="muted" id="cc-skills"></p>
+        </fieldset>
+        <fieldset>
+            <legend>Starting outfit</legend>
+            <div id="cc-outfit"></div>
+        </fieldset>
+        <ul id="creation-errors"></ul>
+        <button type="submit" class="btn" id="cc-start">Start</button>
+    </form>
+</section>
+
 <script>
     // DOM references
     const storyDisplay = document.getElementById('story-display');
@@ -520,9 +564,7 @@
     const equipmentList = document.getElementById('equipment-list');
     const inventoryList = document.getElementById('inventory-list');
     const standingList = document.getElementById('standing-list');
-    const attributeGrid = document.getElementById('attribute-grid');
     const traitList = document.getElementById('trait-list');
-    const perkList = document.getElementById('perk-list');
     const npcList = document.getElementById('npc-list');
     const questList = document.getElementById('quest-list');
     const choiceOptions = document.getElementById('choice-options');
@@ -538,6 +580,7 @@
     // (which otherwise unconditionally re-enables input after every turn)
     // knows not to revive a dead game.
     let isGameOver = false;
+    let characterName = 'The character';
 
     // Bands a 0-100 stat into a bar color: healthy stays moss, a mid range
     // warns in ember, and a low value reads as hazard -- the color itself is
@@ -688,17 +731,6 @@
         standingList.appendChild(xp);
     }
 
-    function renderAttributes(data) {
-        const attributes = data.attributes || {};
-        attributeGrid.innerHTML = '';
-        Object.entries(attributes).forEach(([name, value]) => {
-            const row = el('div', 'row-item');
-            row.appendChild(el('span', 'label', name.replace(/^\w/, c => c.toUpperCase())));
-            row.appendChild(el('span', 'value', String(value)));
-            attributeGrid.appendChild(row);
-        });
-    }
-
     function renderNamedEntries(container, entries, emptyLabel) {
         if (!entries || entries.length === 0) {
             clearAndFill(container, [emptyNote(emptyLabel)]);
@@ -713,7 +745,7 @@
     }
 
     // Disposition bands are colored the same way the narrator reads them --
-    // Orton can tell Emma has warmed to him, never the raw affinity number.
+    // The player can tell Emma has warmed to them, never the raw affinity number.
     const DISPOSITION_TONE = {
         loyal: 'good', friendly: 'good',
         neutral: '',
@@ -791,15 +823,15 @@
         storyDisplay.scrollTop = storyDisplay.scrollHeight;
     }
 
-    // Shows/hides the death banner and locks down input once Orton is dead.
+    // Shows/hides the death banner and locks down input once the character is dead.
     // Nothing re-enables these here -- the reset flow reloads the page,
     // which is what actually clears this state.
     function applyGameOverState(data) {
         isGameOver = !!data.game_over;
-        // LLM-adjacent text (the fact that killed Orton) -- textContent
+        // LLM-adjacent text (the fact that killed the character) -- textContent
         // only, never innerHTML.
         deathBanner.textContent = isGameOver
-            ? `Orton has died. ${data.death_cause || ''}`.trim()
+            ? `${characterName} has died. ${data.death_cause || ''}`.trim()
             : '';
         deathBanner.hidden = !isGameOver;
         playerInput.disabled = isGameOver;
@@ -811,6 +843,11 @@
 
     // Refresh the dossier panel from a state payload.
     function updatePanel(data) {
+        if (data.needs_creation) {
+            openCreation();
+            return;
+        }
+        characterName = (data.character && data.character.name) || characterName;
         locationStatus.textContent = data.current_location;
         // LLM-authored free text -- textContent only, never innerHTML.
         locationPlace.textContent = data.current_place ? `— ${data.current_place}` : '';
@@ -823,9 +860,7 @@
         renderInventory(data);
         renderEquipment(data);
         renderStanding(data);
-        renderAttributes(data);
         renderNamedEntries(traitList, data.traits, 'None recorded.');
-        renderNamedEntries(perkList, data.perks, 'None recorded.');
         renderNpcs(data);
         renderQuests(data);
         renderChoiceOptions(data);
@@ -953,6 +988,214 @@
             console.error('Could not load game state:', error);
         }
     }
+
+    // === Character creation ===
+    // The points and skills shown here are a convenience; the server checks the build again.
+    const creationScreen = document.getElementById('creation-screen');
+    const cc = id => document.getElementById('cc-' + id);
+    let creationData = null;
+
+    function fillSelect(select, options) {
+        select.innerHTML = '';
+        options.forEach(([value, label]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            select.appendChild(option);
+        });
+    }
+
+    function traitById(id) {
+        const t = creationData.traits;
+        return [...t.good, ...t.bad, ...t.granted].find(trait => trait.id === id);
+    }
+
+    function currentOccupation() {
+        return creationData.occupations.find(o => o.id === cc('occupation').value);
+    }
+
+    function chosenTraits() {
+        return [...document.querySelectorAll('#cc-good input, #cc-bad input')]
+            .filter(box => box.checked).map(box => box.value);
+    }
+
+    function clashes(a, b) {
+        return traitById(a).excludes.includes(b) || traitById(b).excludes.includes(a);
+    }
+
+    function refreshCreation() {
+        const occupation = currentOccupation();
+        const granted = occupation.granted_traits;
+        document.querySelectorAll('#cc-good input, #cc-bad input').forEach(box => {
+            const others = [...granted, ...chosenTraits().filter(id => id !== box.value)];
+            box.disabled = !box.checked && others.some(other => clashes(box.value, other));
+        });
+        const chosen = chosenTraits();
+        const points = occupation.cost - chosen.reduce((sum, id) => sum + traitById(id).cost, 0);
+        cc('points').textContent = `Points left: ${points}` + (points < creationData.min_points_to_accept ? ' (not enough)' : '');
+        cc('granted').textContent = granted.length
+            ? 'Comes with: ' + granted.map(id => traitById(id).name).join(', ') : '';
+        cc('title-row').hidden = occupation.id !== 'unemployed';
+        cc('beard-row').hidden = cc('gender').value !== 'male';
+        const lim = creationData.skill_limits;
+        const levels = {};
+        Object.keys(creationData.skills).forEach(s => { levels[s] = creationData.base_skills[s] || 0; });
+        [occupation.boosts, ...[...granted, ...chosen].map(id => traitById(id).boosts)].forEach(boosts => {
+            Object.entries(boosts).forEach(([skill, amount]) => { levels[skill] += amount; });
+        });
+        const shown = Object.entries(levels)
+            .map(([skill, level]) => [skill, Math.max(lim.min, Math.min(lim.max, level))])
+            .filter(([skill, level]) => level > 0);
+        cc('skills').textContent = shown.map(([skill, level]) => `${creationData.skills[skill]} ${level}`).join(' · ');
+        refreshOutfit();
+    }
+
+    function refreshOutfit(keep) {
+        const data = creationData;
+        const gender = cc('gender').value;
+        const allowed = new Set();
+        const lists = [data.outfits.default[gender]];
+        const occupationLists = data.outfits.occupations[cc('occupation').value];
+        if (occupationLists) lists.push(occupationLists[gender]);
+        chosenTraits().forEach(id => {
+            const traitLists = data.outfits.traits[id];
+            if (traitLists) lists.push(traitLists[gender]);
+        });
+        lists.forEach(list => Object.values(list).forEach(entries => entries.forEach(e => allowed.add(e.item_id))));
+        Object.values(data.presets).forEach(p => p.outfit.forEach(id => allowed.add(id)));
+        const previous = keep || selectedOutfit();
+        const byLocation = {};
+        [...allowed].forEach(id => {
+            const item = data.clothing_items[id];
+            (byLocation[item.location] = byLocation[item.location] || []).push([id, item.name]);
+        });
+        cc('outfit').innerHTML = '';
+        Object.entries(byLocation).forEach(([location, items]) => {
+            const label = document.createElement('label');
+            label.textContent = location.replace('base:', '') + ' ';
+            const select = document.createElement('select');
+            select.dataset.location = location;
+            fillSelect(select, [['', '(none)'], ...items]);
+            select.value = items.some(([id]) => previous.includes(id)) ? previous.find(id => items.some(([i]) => i === id)) : '';
+            label.appendChild(select);
+            cc('outfit').appendChild(label);
+        });
+    }
+
+    function selectedOutfit() {
+        return [...document.querySelectorAll('#cc-outfit select')].map(s => s.value).filter(Boolean);
+    }
+
+    function dropClashingTraits() {
+        const granted = currentOccupation().granted_traits;
+        document.querySelectorAll('#cc-good input, #cc-bad input').forEach(box => {
+            if (box.checked && granted.some(other => clashes(box.value, other))) box.checked = false;
+        });
+    }
+
+    function buildFromForm() {
+        return {
+            appearance: {
+                forename: cc('forename').value.trim(),
+                surname: cc('surname').value.trim(),
+                gender: cc('gender').value,
+                skin_tone: Number(cc('skin').value),
+                hair_style: cc('hair-style').value,
+                hair_colour: cc('hair-colour').value,
+                beard_style: cc('gender').value === 'male' ? cc('beard').value : '',
+                backstory: cc('backstory').value.trim(),
+            },
+            occupation_id: cc('occupation').value,
+            job_title: currentOccupation().id === 'unemployed' ? cc('title').value.trim() : '',
+            traits: chosenTraits(),
+            outfit: selectedOutfit(),
+        };
+    }
+
+    function fillFromPreset(preset) {
+        const a = preset.appearance;
+        cc('forename').value = a.forename;
+        cc('surname').value = a.surname;
+        cc('gender').value = a.gender;
+        cc('skin').value = String(a.skin_tone);
+        cc('hair-style').value = a.hair_style;
+        cc('hair-colour').value = a.hair_colour;
+        cc('beard').value = a.beard_style;
+        cc('backstory').value = a.backstory;
+        cc('occupation').value = preset.occupation_id;
+        cc('title').value = preset.job_title;
+        document.querySelectorAll('#cc-good input, #cc-bad input').forEach(box => {
+            box.checked = preset.traits.includes(box.value);
+        });
+        refreshCreation();
+        refreshOutfit(preset.outfit);
+    }
+
+    function traitBoxes(container, traits) {
+        container.innerHTML = '';
+        traits.forEach(trait => {
+            const label = document.createElement('label');
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.value = trait.id;
+            box.addEventListener('change', refreshCreation);
+            label.appendChild(box);
+            label.appendChild(document.createTextNode(` ${trait.name} (${trait.cost}) `));
+            const hint = document.createElement('span');
+            hint.className = 'muted';
+            hint.textContent = trait.description;
+            label.appendChild(hint);
+            container.appendChild(label);
+        });
+    }
+
+    async function openCreation() {
+        if (!creationData) {
+            const response = await fetch('/creation');
+            creationData = await response.json();
+            const looks = creationData.appearance;
+            fillSelect(cc('gender'), looks.genders.map(g => [g, g]));
+            fillSelect(cc('skin'), Object.entries(looks.skin_tones));
+            fillSelect(cc('hair-style'), looks.hair_styles.map(h => [h, h]));
+            fillSelect(cc('hair-colour'), looks.hair_colours.map(h => [h, h]));
+            fillSelect(cc('beard'), looks.beard_styles.map(b => [b, b || 'none']));
+            fillSelect(cc('occupation'), creationData.occupations.map(o => [o.id, `${o.name} (${o.cost > 0 ? '+' : ''}${o.cost})`]));
+            fillSelect(cc('preset'), [['', '(build your own)'], ...Object.keys(creationData.presets).map(id => [id, id])]);
+            traitBoxes(cc('good'), creationData.traits.good);
+            traitBoxes(cc('bad'), creationData.traits.bad);
+            cc('occupation').addEventListener('change', () => { dropClashingTraits(); refreshCreation(); });
+            cc('gender').addEventListener('change', refreshCreation);
+            cc('preset').addEventListener('change', () => {
+                if (cc('preset').value) fillFromPreset(creationData.presets[cc('preset').value]);
+            });
+            refreshCreation();
+        }
+        creationScreen.hidden = false;
+    }
+
+    document.getElementById('creation-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const errors = document.getElementById('creation-errors');
+        errors.innerHTML = '';
+        const response = await fetch('/creation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildFromForm()),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            (data.errors || ['Could not start the game.']).forEach(message => {
+                const item = document.createElement('li');
+                item.textContent = message;
+                errors.appendChild(item);
+            });
+            return;
+        }
+        creationScreen.hidden = true;
+        storyDisplay.innerHTML = '';
+        appendStory(null, 'The adventure begins.');
+        updatePanel(data);
+    });
 
     // Event listeners
     inputForm.addEventListener('submit', handleTurn);

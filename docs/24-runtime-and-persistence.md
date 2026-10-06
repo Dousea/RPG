@@ -51,16 +51,17 @@ restart.
 ## What is persisted
 
 Only *dynamic* state. Static definitions — item stats, location names and
-connections, trait and perk effect callables — stay in `data/` and are looked up
+connections, trait definitions — stay in `data/` and are looked up
 by id on load.
 
 ```text
 SAVED                              LOOKED UP BY ID ON LOAD
 player position, condition,        item definitions (data/items.py)
   inventory, equipment,            location names, descriptions,
-  attributes, XP, level             connections (data/locations.py)
-trait ids, perk ids                trait and perk effects
-NPC position, status, notes,        (data/traits.py, data/perks.py)
+  appearance, occupation, skills,   connections (data/locations.py)
+  XP, level                        trait definitions (data/traits.py)
+trait ids
+NPC position, status, notes,
   condition
 relationships (affinity,
   trust, reputation)
@@ -76,21 +77,20 @@ without invalidating existing saves, because the save never stored those
 numbers. It is **not** the event-oriented model that document proposes: there is
 no mutation log, so there is no replay, no rollback, and no world history.
 
-Trait and perk effects are *callables*. They could not be serialized even if we
-wanted to, which is what forces the by-id split rather than merely recommending
-it.
+Item and location definitions carry callables and live data, so the by-id split
+is what keeps the save small and safe to reload.
 
 ## Compatibility policy
 
 Three rules, in order of severity:
 
-**Schema mismatch discards the save.** `SCHEMA_VERSION` (now 5) is written into
+**Schema mismatch discards the save.** `SCHEMA_VERSION` (now 10) is written into
 every save. A `version` that does not match causes the save to be dropped and a
 new game started, with a log line. A half-understood save is worse than a fresh
 one; there is no migration and no partial load. The clock fields of the save are
 in [the game clock](mechanics/01-game-clock.md#saves).
 
-**Unknown ids are dropped, not fatal.** An item id, location id, trait or perk
+**Unknown ids are dropped, not fatal.** An item id, location id or trait
 id in the save that no longer exists in `data/` is skipped with a log line. A
 deleted item vanishes from the inventory and the rest of the save loads. This is
 what makes content deletion safe between schema versions.

@@ -2,9 +2,21 @@
 
 import unittest
 
+from adapters import llm
+from managers import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
-from modules.action.types import DiscoverFlagAction, MoveAction, SetFlagAction
+from managers.simulation import SimulationCore
+from modules.action.types import (
+    DiscoverFlagAction,
+    DropAction,
+    Duration,
+    MoveAction,
+    SetFlagAction,
+    WaitAction,
+)
+from modules.character.appearance import Appearance, Gender
+from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
 from modules.quest import QuestState
 from modules.stats import CharacterStat
@@ -430,3 +442,87 @@ class WeatherFactTests(unittest.TestCase):
             self.assertEqual(precipitation_phrase(stage, False), rain)
             self.assertEqual(precipitation_phrase(stage, True), snow)
         self.assertEqual(precipitation_phrase("storm", True), "a snow storm")
+
+
+MARA = CharacterBuild(
+    appearance=Appearance(
+        forename="Mara",
+        surname="Quinn",
+        gender=Gender.FEMALE,
+        skin_tone=4,
+        hair_style="ponytail",
+        hair_colour="red",
+        backstory="Left the city for a night shift and never went home.",
+    ),
+    occupation_id="nurse",
+    traits=("brave", "hemophobic"),
+    outfit=("item_tshirt", "item_jeans"),
+)
+
+
+class CharacterBlockTests(unittest.TestCase):
+    """Spec 07, What the narrator and the parser see."""
+
+    def setUp(self):
+        self.assertEqual(creation.validate(MARA), [])
+        self.gm = GameManager(player=creation.new_player(MARA))
+        self.builder = ContextBuilder(self.gm)
+        self.prompt = self.builder.build_narrator_prompt("look")
+
+    def character_block(self) -> str:
+        return self.prompt.split("[CHARACTER]")[1].split("[CONDITION]")[0]
+
+    def test_the_block_names_the_character_pronouns_occupation_looks_and_traits(self):
+        block = self.character_block()
+        self.assertIn("Name: Mara Quinn", block)
+        self.assertIn("she/her", block)
+        self.assertIn("Occupation: Nurse", block)
+        self.assertIn("brown skin", block)
+        self.assertIn("ponytail red hair", block)
+        self.assertIn("Left the city for a night shift", block)
+        self.assertIn("Brave:", block)
+        self.assertIn("Fear of Blood:", block)
+        self.assertIn("Night Owl:", block)
+
+    def test_a_job_title_replaces_the_occupation_name(self):
+        build = CharacterBuild(
+            appearance=Appearance(forename="Sam"),
+            occupation_id="unemployed",
+            job_title="Software Developer",
+        )
+        prompt = ContextBuilder(
+            GameManager(player=creation.new_player(build))
+        ).build_narrator_prompt("look")
+        self.assertIn("Occupation: Software Developer", prompt)
+
+    def test_the_block_shows_no_costs_points_or_skill_numbers(self):
+        block = self.character_block()
+        lowered = block.lower()
+        for word in ("cost", "points", "fitness", "strength", "skill"):
+            self.assertNotIn(word, lowered)
+        details = [
+            line
+            for line in block.splitlines()
+            if line.startswith(("Name", "Pronouns", "Occupation", "Appearance", "Backstory"))
+        ]
+        self.assertFalse(any(char.isdigit() for char in "".join(details)))
+
+    def test_no_prompt_names_orton_unless_the_character_is_orton(self):
+        parser = self.builder.build_parser_prompt("go out")
+        for text in (self.prompt, parser, llm.PARSER_SYSTEM_PROMPT, llm.NARRATOR_SYSTEM_PROMPT):
+            self.assertNotIn("Orton", text)
+        self.assertIn("Mara", parser)
+        self.assertIn("she/her", parser)
+
+    def test_the_preset_is_named_orton_in_the_prompts(self):
+        prompt = ContextBuilder(GameManager()).build_narrator_prompt("look")
+        self.assertIn("Name: Orton", prompt)
+        self.assertIn("he/him", prompt)
+        self.assertIn("Software Developer", prompt)
+
+    def test_engine_facts_use_the_forename_and_pronouns(self):
+        facts = resolve_actions(self.gm, WaitAction(duration=Duration(minutes=10)))
+        self.assertEqual(facts[0], "Mara waits 10 minutes.")
+        self.assertFalse(any("Orton" in fact for fact in facts))
+        refused = SimulationCore(self.gm).resolve([DropAction(item_name="Apartment Key")])
+        self.assertEqual(refused[0].count("Mara keeps her keys on her."), 1)

@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from .entity import BaseEntity
-from .entity.player import PlayerEntity
 from .event import (
     ApplyItemEvent,
     ConsumeItemEvent,
@@ -12,11 +11,6 @@ from .event import (
     WeaponTakeDamageEvent,
 )
 from .modifier import AnyModifier
-
-
-@dataclass
-class OnceEffect:
-    effect: Callable[[PlayerEntity], Any]
 
 
 @dataclass
@@ -50,8 +44,7 @@ class ItemConsumedEffect[T: BaseEntity = BaseEntity]:
 
 
 AnyEffect = (
-    OnceEffect
-    | QuestCompletedEffect
+    QuestCompletedEffect
     | WeaponDamageTakenEffect[Any, Any]
     | WeaponDamageDealtEffect[Any, Any]
     | ItemAppliedEffect[Any, Any]

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from data import survival as k
+from data import traits as trait_k
 from data.thermal import Metabolic
 from managers.stats.status_effects import status_effect_level
 from modules.entity.player import PlayerEntity
@@ -61,13 +62,24 @@ class StatDriver(Protocol):
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None: ...
 
 
+def trait_mult(table: dict[str, float], traits: frozenset[str]) -> float:
+    """The product of the factors of the traits in `table` that the character has."""
+    mult = 1.0
+    for trait, value in table.items():
+        if trait in traits:
+            mult *= value
+    return mult
+
+
 def _recovery_mod(ctx: StatContext) -> float:
     return k.RECOVERY_MOD_STUB
 
 
 class HungerDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
-        appetite = 1 - stats.get(CharacterStat.HUNGER)
+        appetite = (1 - stats.get(CharacterStat.HUNGER)) * trait_mult(
+            trait_k.APPETITE_TRAIT_MULT, ctx.traits
+        )
         if ctx.asleep:
             if ctx.food_eaten_level == 0:
                 rate = k.HUNGER_INCREASE_WHILE_ASLEEP_per_hour
@@ -93,7 +105,7 @@ class ThirstDriver:
         if ctx.asleep:
             stats.add(CharacterStat.THIRST, k.THIRST_SLEEPING_INCREASE_per_hour * hours)
             return
-        rate = k.THIRST_INCREASE_per_hour
+        rate = k.THIRST_INCREASE_per_hour * trait_mult(trait_k.THIRST_TRAIT_MULT, ctx.traits)
         if ctx.exercising:
             rate *= k.THIRST_EXERCISE_MULTIPLIER
         stats.add(CharacterStat.THIRST, rate * hours * ctx.body.fluids)
@@ -109,10 +121,13 @@ class FatigueDriver:
                 else k.SLEEP_FATIGUE_HIGH_per_hour
             )
             bed = k.BED_MULTIPLIERS.get(ctx.bed_type, k.BED_MULTIPLIERS[k.DEFAULT_BED_TYPE])
-            stats.remove(CharacterStat.FATIGUE, rate * bed * hours)
+            recovery = trait_mult(trait_k.SLEEP_RECOVERY_TRAIT_MULT, ctx.traits)
+            hours_needed = trait_mult(trait_k.SLEEP_HOURS_TRAIT_MULT, ctx.traits)
+            stats.remove(CharacterStat.FATIGUE, rate * bed * recovery / hours_needed * hours)
             return
         loss = max(k.FATIGUE_ENDURANCE_FLOOR, 1 - stats.get(CharacterStat.ENDURANCE))
         gain = k.FATIGUE_INCREASE_per_hour * loss * hours * ctx.body.fatigue
+        gain *= trait_mult(trait_k.FATIGUE_GAIN_TRAIT_MULT, ctx.traits)
         if ctx.resting:
             gain /= k.FATIGUE_RESTING_DIVISOR
         stats.add(CharacterStat.FATIGUE, gain)
@@ -214,7 +229,10 @@ class UnhappinessDriver:
 
 class PanicDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
-        stats.add(CharacterStat.PANIC, k.PANIC_PER_ZOMBIE * ctx.new_zombies_seen)
+        gain = k.PANIC_PER_ZOMBIE * ctx.new_zombies_seen
+        stats.add(CharacterStat.PANIC, gain * trait_mult(trait_k.PANIC_GAIN_TRAIT_MULT, ctx.traits))
+        if trait_k.DESENSITIZED_ID in ctx.traits:
+            stats.reset(CharacterStat.PANIC)
         months = min(k.PANIC_REDUCTION_MONTH_CAP, int(ctx.hours_survived // k.HOURS_PER_MONTH))
         rate = k.PANIC_REDUCTION_per_hour * (1 + months)
         if ctx.asleep:

@@ -154,7 +154,7 @@ def active_status_effects(player: PlayerEntity) -> list[tuple[StatusEffect, int,
 
 
 def level_change_facts(
-    before: dict[StatusEffect, int], after: dict[StatusEffect, int]
+    name: str, before: dict[StatusEffect, int], after: dict[StatusEffect, int]
 ) -> list[str]:
     """One fact per status effect whose level changed, in table order."""
     facts: list[str] = []
@@ -163,9 +163,9 @@ def level_change_facts(
             continue
         names = STATUS_EFFECT_THRESHOLDS[status_effect].names
         if level == 0:
-            facts.append(f"Orton is no longer {names[before[status_effect] - 1]}.")
+            facts.append(f"{name} is no longer {names[before[status_effect] - 1]}.")
         else:
-            facts.append(f"Orton is now {names[level - 1]}.")
+            facts.append(f"{name} is now {names[level - 1]}.")
     return facts
 
 

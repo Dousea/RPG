@@ -6,7 +6,7 @@ import random
 from data import thermal as k
 from data import traits as trait_k
 from data.clock import MINUTES_PER_HOUR
-from managers.stats.drivers import StatContext
+from managers.stats.drivers import StatContext, trait_mult
 from managers.stats.status_effects import hypothermia_level, status_effect_level
 from managers.thermoregulator import NodeClothing, part_clothing
 from modules.body import BodyPart
@@ -51,14 +51,6 @@ def start_cold(state: ThermalState, stats: Stats) -> None:
     state.sneeze_timer = 0.0
 
 
-def _trait_mult(table: dict[str, float], traits: frozenset[str]) -> float:
-    mult = 1.0
-    for trait, value in table.items():
-        if trait in traits:
-            mult *= value
-    return mult
-
-
 def roll_sneeze(level: int, rng: random.Random) -> tuple[bool, float]:
     """Whether a trigger at Has a Cold `level` is a sneeze (else a cough), and the next timer in frames."""
     low, high = k.SNEEZE_TIMER_FRAMES[min(level, max(k.SNEEZE_TIMER_FRAMES))]
@@ -88,7 +80,7 @@ class ColdDriver:
             self._catch(stats, state, delta, ctx.traits)
             if stats.get(CharacterStat.COLD_STRENGTH) > 0:
                 self._course(stats, state, ctx)
-                self._sneeze(stats, state)
+                self._sneeze(stats, state, player.appearance.forename)
 
     def _catch(
         self, stats: Stats, state: ThermalState, delta: float, traits: frozenset[str]
@@ -97,7 +89,7 @@ class ColdDriver:
         if delta > k.CATCH_COLD_DELTA_MIN:
             if has_cold:
                 return
-            delta *= _trait_mult(trait_k.CATCH_COLD_TRAIT_MULT, traits)
+            delta *= trait_mult(trait_k.CATCH_COLD_TRAIT_MULT, traits)
             state.catch_cold += k.CATCH_COLD_INCREASE_per_min * delta
             if state.catch_cold >= k.CATCH_COLD_THRESHOLD:
                 start_cold(state, stats)
@@ -124,12 +116,12 @@ class ColdDriver:
         strength = stats.get(CharacterStat.COLD_STRENGTH)
         step = k.COLD_PROGRESSION_per_min
         if self._recovering(stats, state, ctx):
-            step *= _trait_mult(trait_k.COLD_RECOVERY_TRAIT_MULT, ctx.traits)
+            step *= trait_mult(trait_k.COLD_RECOVERY_TRAIT_MULT, ctx.traits)
             if state.cold_reduction > 0:
                 step *= k.COLD_REDUCTION_STRENGTH_MULT
             strength -= step
         else:
-            strength += step * _trait_mult(trait_k.COLD_WORSENING_TRAIT_MULT, ctx.traits)
+            strength += step * trait_mult(trait_k.COLD_WORSENING_TRAIT_MULT, ctx.traits)
         state.cold_reduction = max(0.0, state.cold_reduction - k.COLD_REDUCTION_per_min)
         if strength < 0:
             stats.set(CharacterStat.COLD_STRENGTH, 0.0)
@@ -138,7 +130,7 @@ class ColdDriver:
             return
         stats.set(CharacterStat.COLD_STRENGTH, min(strength, k.COLD_STRENGTH_MAX))
 
-    def _sneeze(self, stats: Stats, state: ThermalState) -> None:
+    def _sneeze(self, stats: Stats, state: ThermalState, name: str) -> None:
         level = status_effect_level(StatusEffect.HAS_A_COLD, stats.get(CharacterStat.COLD_STRENGTH))
         frames = k.SNEEZE_FRAMES_PER_MIN
         state.sneeze_active = max(0.0, state.sneeze_active - frames)
@@ -149,6 +141,7 @@ class ColdDriver:
             return
         left = frames - max(state.sneeze_timer, 0.0)
         sneeze, timer = roll_sneeze(level, self._rng)
-        state.facts.append(k.SNEEZE_FACT if sneeze else k.COUGH_FACT)
+        fact = k.SNEEZE_FACT if sneeze else k.COUGH_FACT
+        state.facts.append(fact.format(name=name))
         state.sneeze_timer = timer - left
         state.sneeze_active = max(0.0, k.SNEEZE_OR_COUGH_ACTIVE_FRAMES - left)

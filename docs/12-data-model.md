@@ -245,11 +245,11 @@ name, entity_id, current_location_id
 hit_points (0-100), stats (survival stats), asleep
 experience_points, level
 inventory: list[ItemEntity]          max_inventory_size = 20
-attributes: {PlayerAttribute: int}   AGILITY STRENGTH INTELLIGENCE
-                                     WILLPOWER LUCK CHARISMA, all 3
+appearance, occupation_id, job_title see mechanics/07-character-creation.md
+skills, skill_boosts: {skill: int}   starting levels and boosts
 equipment: {slot: ItemEntity | None} hands and the backpack slot
 worn: {BodyLocation: ItemEntity}     clothing, see mechanics/05-clothing.md
-traits: list[PlayerTrait]            perks: list[PlayerPerk]
+traits: list[str]                    trait ids, chosen and granted
 conditions: list[CharacterCondition] POISONED STUNNED BURNED FROZEN PANIC
 ```
 

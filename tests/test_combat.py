@@ -4,15 +4,25 @@ import random
 import unittest
 
 from data.items import ITEMS
-from data.perks import PERKS
-from data.traits import TRAITS
 from managers.game import GameManager
 from modules.action.types import AttackAction
 from modules.character.equipment import CharacterHoldableSlot
+from modules.character.player import PlayerTrait
+from modules.effect import WeaponDamageTakenEffect
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.item import MeleeWeaponItem, RangedWeaponItem
+from modules.modifier import DamageMultiplicativeModifier
 from tests.support import simulate
+
+SMALL_FRAME = PlayerTrait(
+    id="small_frame",
+    name="Small Frame",
+    description="Takes ten percent more damage.",
+    effects=[
+        WeaponDamageTakenEffect(effect=lambda _: DamageMultiplicativeModifier(multiplier=1.1))
+    ],
+)
 
 
 def _npc(gm: GameManager, name: str) -> NpcEntity:
@@ -54,7 +64,7 @@ class CombatResolutionTests(unittest.TestCase):
         self.assertEqual(before - emma.hit_points, _damage("item_crowbar"))
 
     def test_small_frame_takes_more_damage_than_an_unmodified_defender(self):
-        # TraitID_SmallFrame's WeaponDamageTakenEffect (+10% damage taken)
+        # The test trait's WeaponDamageTakenEffect (+10% damage taken)
         # must reach its handler through managers/events.py's matcher.
         # The pistol's damage (10) is used rather than the crowbar's (5) so
         # the 10% bump survives int() truncation in the assertion below.
@@ -76,27 +86,13 @@ class CombatResolutionTests(unittest.TestCase):
             item=ITEMS["item_pistol"]
         )
         marcus = _npc(gm2, "Marcus")
-        marcus.traits = [TRAITS["TraitID_SmallFrame"]]  # type: ignore[attr-defined]
+        marcus.traits = [SMALL_FRAME]  # type: ignore[attr-defined]
         marcus.current_location_id = gm2.player.current_location_id
         before2 = marcus.hit_points
         simulate(gm2, AttackAction(target_name="Marcus"), rng=self._fixed_rng())
         modified_damage = before2 - marcus.hit_points
 
         self.assertGreater(modified_damage, baseline_damage)
-
-    def test_gun_slinger_deals_more_and_takes_less_ranged_damage(self):
-        gm = GameManager()
-        gm.player.current_location_id = "zone_building"  # Emma starts here
-        gm.player.perks = [PERKS["PerkID_GunSlinger"]]
-        gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
-            item=ITEMS["item_pistol"]
-        )
-        emma = _npc(gm, "Emma")
-        before = emma.hit_points
-        simulate(gm, AttackAction(target_name="Emma"), rng=self._fixed_rng())
-        dealt = before - emma.hit_points
-        # Base pistol damage is 10; Gun Slinger's +20% dealt bonus applies.
-        self.assertEqual(dealt, int(_damage("item_pistol") * 1.2))
 
     def test_attack_on_absent_npc_is_rejected_before_any_damage(self):
         gm = GameManager()

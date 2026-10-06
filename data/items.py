@@ -1,4 +1,5 @@
 from data.clothing_coverage import covered_parts
+from data.clothing_items import STARTING_CLOTHES
 from modules.body import BodyLocation
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
@@ -273,17 +274,8 @@ ITEMS: dict[str, BaseItem] = {
             )
         ],
     ),
+    **STARTING_CLOTHES,
 }
-
-
-def build_orton_outfit() -> dict[BodyLocation, ItemEntity]:
-    """Fresh entities for what Orton wears at the start of a game."""
-    outfit: dict[BodyLocation, ItemEntity] = {}
-    for item_id in ORTON_OUTFIT_IDS:
-        item = ITEMS[item_id]
-        assert isinstance(item, ClothingItem)
-        outfit[item.body_location] = ItemEntity(item=item)
-    return outfit
 
 
 def find_item_by_name(name: str) -> BaseItem | None:

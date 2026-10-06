@@ -11,6 +11,7 @@ import adapters.engine as engine_module
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from adapters.save import files
+from data.presets import ORTON
 from modules.body import BodyLocation
 from modules.entity.item import ItemEntity
 from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
@@ -36,6 +37,7 @@ class EngineTestCase(IsolatedSaveTestCase):
         engine_module.SemanticMemory = FakeMemory
 
         self.engine = GameEngine()
+        self.engine.create_character(ORTON)
 
     def tearDown(self):
         engine_module.llm.query_parser = self._original_parser
@@ -54,7 +56,7 @@ class TurnTests(EngineTestCase):
 
     def test_turn_records_the_event_in_both_tiers(self):
         self.engine.play("go out")
-        memory = self.engine.manager.memory
+        memory = self.engine.game.memory
         self.assertIn("Orton entered the building", memory.full_event_log)
         self.assertIn("Orton entered the building", memory.recent_events)
 
@@ -62,7 +64,7 @@ class TurnTests(EngineTestCase):
         self.engine.play("go out")
         self.assertEqual(
             self.engine.memory.rebuilt_with[-1],
-            self.engine.manager.memory.full_event_log,
+            self.engine.game.memory.full_event_log,
         )
 
     def test_player_input_reaches_the_parser_prompt(self):
@@ -70,7 +72,7 @@ class TurnTests(EngineTestCase):
         self.assertIn("peer down the corridor", self.llm.prompts[-1])
 
     def test_recalled_memories_reach_the_narrator_prompt(self):
-        self.engine.manager.memory.full_event_log.append("Orton heard sirens.")
+        self.engine.game.memory.full_event_log.append("Orton heard sirens.")
         self.engine.memory.next_hits = [0]
         self.engine.play("what was that noise")
         self.assertIn("Orton heard sirens.", self.llm.narrator_prompts[-1])
@@ -98,7 +100,7 @@ class TurnTests(EngineTestCase):
         self.assertIn("current_place", result)
 
     def test_snapshot_lists_worn_clothing_with_wetness_words(self):
-        self.engine.manager.player.worn[BodyLocation.PANTS].wetness = 90.0
+        self.engine.game.player.worn[BodyLocation.PANTS].wetness = 90.0
         worn = self.engine.state()["worn"]
         self.assertEqual([entry["location"] for entry in worn][:2], ["base:sweater", "base:pants"])
         by_name = {entry["name"]: entry for entry in worn}
@@ -137,10 +139,11 @@ class TurnTests(EngineTestCase):
         self.engine.play("go out")
         self.assertEqual(self.engine.state()["options"], [])
         self.assertEqual(self.engine.reset()["options"], [])
+        self.assertTrue(self.engine.reset()["needs_creation"])
 
     def test_npcs_present_tracks_the_player(self):
         # Orton now starts alone in his apartment; Emma starts in the building.
-        self.engine.manager.player.current_location_id = "zone_building"
+        self.engine.game.player.current_location_id = "zone_building"
         before = self.engine.state()
         self.assertIn("Emma", before["npcs_present"])  # in the building
         after = self.engine.play("go out")
@@ -167,7 +170,7 @@ class TurnTests(EngineTestCase):
         self.assertIn("Refused:", self.llm.narrator_prompts[-1])
         self.assertIn("No 'Medkit' here to take.", self.llm.narrator_prompts[-1])
         # Nothing was deferred: pending_corrections/[CONTINUITY] stays empty.
-        self.assertEqual(self.engine.manager.narrative.pending_corrections, [])
+        self.assertEqual(self.engine.game.narrative.pending_corrections, [])
         self.assertIn("(Nothing to correct)", self.llm.narrator_prompts[-1])
 
     def test_unparseable_action_lines_are_surfaced_but_do_not_abort_the_turn(self):
@@ -179,8 +182,8 @@ class TurnTests(EngineTestCase):
 
 class DeathTests(EngineTestCase):
     def test_dead_game_makes_no_llm_calls(self):
-        self.engine.manager.narrative.game_over = True
-        self.engine.manager.narrative.death_cause = "Use Suspicious Vial: succeeded."
+        self.engine.game.narrative.game_over = True
+        self.engine.game.narrative.death_cause = "Use Suspicious Vial: succeeded."
         result = self.engine.play("get up")
         self.assertEqual(self.llm.prompts, [])
         self.assertEqual(self.llm.narrator_prompts, [])
@@ -188,12 +191,15 @@ class DeathTests(EngineTestCase):
         self.assertIn("new game", result["story_text"].lower())
 
     def test_reset_revives(self):
-        self.engine.manager.narrative.game_over = True
-        self.engine.manager.narrative.death_cause = "Orton starved."
-        result = self.engine.reset()
+        self.engine.game.narrative.game_over = True
+        self.engine.game.narrative.death_cause = "Orton starved."
+        self.engine.reset()
+        errors, result = self.engine.create_character(ORTON)
+        self.assertEqual(errors, [])
+        assert result is not None
         self.assertIs(result["game_over"], False)
         self.assertEqual(result["death_cause"], "")
-        self.assertFalse(self.engine.manager.narrative.game_over)
+        self.assertFalse(self.engine.game.narrative.game_over)
         # A revived game plays turns normally again.
         played = self.engine.play("go out")
         self.assertEqual(len(self.llm.prompts), 1)
@@ -203,14 +209,14 @@ class DeathTests(EngineTestCase):
 class SummarizationTests(EngineTestCase):
     def test_summary_is_produced_once_enough_events_accumulate(self):
         for i in range(9):
-            self.engine.manager.record_event(f"Event {i}")
+            self.engine.game.record_event(f"Event {i}")
         self.engine.play("go out")  # the tenth event
-        self.assertEqual(self.engine.manager.memory.summaries, ["A summary."])
+        self.assertEqual(self.engine.game.memory.summaries, ["A summary."])
         self.assertEqual(len(self.llm.summarized), 1)
 
     def test_no_summary_before_the_threshold(self):
         self.engine.play("go out")
-        self.assertEqual(self.engine.manager.memory.summaries, [])
+        self.assertEqual(self.engine.game.memory.summaries, [])
         self.assertEqual(self.llm.summarized, [])
 
 
@@ -222,13 +228,13 @@ class FailureTests(EngineTestCase):
 
     def test_parser_failure_leaves_state_untouched(self):
         self.engine.play("go out")  # a good turn first
-        log_before = list(self.engine.manager.memory.full_event_log)
+        log_before = list(self.engine.game.memory.full_event_log)
 
         self.llm.error = LLMError("connection refused")
         result = self.engine.play("go out")
 
         self.assertEqual(result["current_location"], "Your Building")
-        self.assertEqual(self.engine.manager.memory.full_event_log, log_before)
+        self.assertEqual(self.engine.game.memory.full_event_log, log_before)
         reloaded = files.load(self.save_path)
         self.assertEqual(reloaded.memory.full_event_log, log_before)
 
@@ -247,7 +253,7 @@ class FailureTests(EngineTestCase):
         result = self.engine.play("go out")
 
         self.assertIn("LM Studio dropped the connection", result["story_text"])
-        self.assertEqual(self.engine.manager.player.current_location_id, "zone_building")
+        self.assertEqual(self.engine.game.player.current_location_id, "zone_building")
         reloaded = files.load(self.save_path)
         self.assertEqual(reloaded.player.current_location_id, "zone_building")
 
@@ -257,34 +263,44 @@ class FailureTests(EngineTestCase):
 
         engine_module.llm.query_summary = boom
         for i in range(9):
-            self.engine.manager.record_event(f"Event {i}")
+            self.engine.game.record_event(f"Event {i}")
 
         result = self.engine.play("go out")
         self.assertEqual(result["story_text"], "You walk out into the building.")
-        self.assertEqual(self.engine.manager.memory.summaries, [])
-        self.assertIn("Orton entered the building", self.engine.manager.memory.full_event_log)
+        self.assertEqual(self.engine.game.memory.summaries, [])
+        self.assertIn("Orton entered the building", self.engine.game.memory.full_event_log)
 
 
 class LifecycleTests(EngineTestCase):
     def test_engine_resumes_from_a_save(self):
         self.engine.play("go out")
         resumed = GameEngine()
-        self.assertEqual(resumed.manager.player.current_location_id, "zone_building")
-        self.assertIn("Find a weapon", resumed.manager.narrative.goals["short_term"])
+        self.assertEqual(resumed.game.player.current_location_id, "zone_building")
+        self.assertIn("Find a weapon", resumed.game.narrative.goals["short_term"])
 
     def test_reset_clears_everything(self):
         self.engine.play("go out")
-        result = self.engine.reset()
+        self.engine.reset()
+        self.assertIsNone(self.engine.manager)
+        _, result = self.engine.create_character(ORTON)
+        assert result is not None
         self.assertEqual(result["current_location"], "Your Apartment")
         self.assertEqual(result["goals"]["short_term"], [])
-        self.assertEqual(self.engine.manager.memory.full_event_log, [])
+        self.assertEqual(self.engine.game.memory.full_event_log, [])
         self.assertEqual(
-            self.engine.manager.relationship_manager.get_affinity("npc_emma", "player"), 0
+            self.engine.game.relationship_manager.get_affinity("npc_emma", "player"), 0
         )
 
-    def test_reset_writes_a_fresh_save(self):
+    def test_reset_deletes_the_save(self):
         self.engine.play("go out")
         self.engine.reset()
+        self.assertIsNone(files.load(self.save_path))
+        self.assertIsNone(GameEngine().manager)
+
+    def test_creating_a_character_writes_a_fresh_save(self):
+        self.engine.play("go out")
+        self.engine.reset()
+        self.engine.create_character(ORTON)
         reloaded = files.load(self.save_path)
         self.assertIsNotNone(reloaded)
         self.assertEqual(reloaded.player.current_location_id, "zone_home")
@@ -296,7 +312,8 @@ class LifecycleTests(EngineTestCase):
         self.llm.actions = "ACTIONS:\nTAKE First Aid Kit"
         self.engine.play("take the first aid kit")
         self.engine.reset()
-        building = self.engine.manager.world.locations["zone_building"]
+        self.engine.create_character(ORTON)
+        building = self.engine.game.world.locations["zone_building"]
         item_names = [e.item.name for e in building.entities if isinstance(e, ItemEntity)]
         self.assertIn("First Aid Kit", item_names)
 
@@ -319,7 +336,7 @@ class SaveLoadTests(EngineTestCase):
         exported["version"] = 999
         self.assertIsNone(self.engine.import_save(exported))
         # The live game must be untouched by a rejected upload.
-        self.assertEqual(self.engine.manager.player.current_location_id, "zone_home")
+        self.assertEqual(self.engine.game.player.current_location_id, "zone_home")
 
     def test_import_persists_the_uploaded_save(self):
         self.engine.play("go out")  # now in the building
@@ -336,12 +353,12 @@ class DeathPersistenceTests(EngineTestCase):
     """game_over/death_cause survive a save and reload through the engine."""
 
     def test_death_survives_a_reload_through_the_engine(self):
-        self.engine.manager.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
+        self.engine.game.player.inventory.append(ItemEntity(item=LETHAL_ITEM))
         self.llm.actions = "ACTIONS:\nUSE_ITEM Suspicious Vial"
 
         self.engine.play("drink the vial")
-        self.assertTrue(self.engine.manager.narrative.game_over)
-        original_cause = self.engine.manager.narrative.death_cause
+        self.assertTrue(self.engine.game.narrative.game_over)
+        original_cause = self.engine.game.narrative.death_cause
         self.assertTrue(original_cause)
 
         prompts_before = len(self.llm.prompts)
@@ -351,8 +368,8 @@ class DeathPersistenceTests(EngineTestCase):
         # back up already dead -- not resurrect Orton for one more turn.
         reloaded = GameEngine()
         reloaded.memory = FakeMemory()
-        self.assertTrue(reloaded.manager.narrative.game_over)
-        self.assertEqual(reloaded.manager.narrative.death_cause, original_cause)
+        self.assertTrue(reloaded.game.narrative.game_over)
+        self.assertEqual(reloaded.game.narrative.death_cause, original_cause)
 
         result = reloaded.play("try again")
         self.assertIn("Orton is dead", result["story_text"])

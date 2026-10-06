@@ -11,6 +11,7 @@ import logging
 from flask import Flask, Response, jsonify, render_template, request
 
 import config
+from adapters.creation_payload import build_from_payload, creation_screen
 from adapters.engine import GameEngine
 
 app = Flask(__name__)
@@ -50,20 +51,45 @@ def play():
     if not player_input:
         return jsonify({"error": "No input provided"}), 400
 
-    return jsonify(get_engine().play(player_input))
+    engine = get_engine()
+    if not engine.has_game:
+        return jsonify({"error": "Create a character first.", "needs_creation": True}), 409
+    return jsonify(engine.play(player_input))
 
 
 @app.route("/reset", methods=["POST"])
 def reset_game():
-    """Deletes the save and starts a fresh game."""
+    """Deletes the save; the page then shows the creation screen."""
     result = get_engine().reset()
     return jsonify({"message": "Game has been reset.", "state": result})
+
+
+@app.route("/creation", methods=["GET"])
+def creation_options():
+    """Everything the creation screen needs."""
+    return jsonify(creation_screen())
+
+
+@app.route("/creation", methods=["POST"])
+def create_character():
+    """Validate a build; an invalid one starts nothing, a valid one starts day 1."""
+    payload = request.get_json(silent=True)
+    build = build_from_payload(payload) if isinstance(payload, dict) else None
+    if build is None:
+        return jsonify({"errors": ["The build is missing or malformed."]}), 400
+    errors, snapshot = get_engine().create_character(build)
+    if errors:
+        return jsonify({"errors": errors}), 400
+    return jsonify(snapshot)
 
 
 @app.route("/save/export", methods=["GET"])
 def export_save():
     """Download the current game as a save file."""
-    payload = get_engine().export_save()
+    engine = get_engine()
+    if not engine.has_game:
+        return jsonify({"error": "There is no game to save."}), 409
+    payload = engine.export_save()
     body = json.dumps(payload, indent=2)
     return Response(
         body,
