@@ -109,11 +109,6 @@ it is derived from the narrative clock and recomputed on load.
 Door lock state (e.g. the apartment door) is *not* persisted -- doors are
 part of the static map and always rebuild locked.
 
-> The older per-file `gamedata/*.json` (`character.json`, `world.json`,
-> `npcs.json`, ...) belonged to the previous engine and are no longer read or
-> written. They are left in place so nothing is lost; delete them when you are
-> confident you do not want the old save.
-
 ## Actions
 
 The parser proposes state changes as one action per line (`modules/action.py`

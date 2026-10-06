@@ -109,9 +109,11 @@ class MovementValidationTests(unittest.TestCase):
         # A locked door soft-lands ("blocked") rather than rejecting the move.
         # A generic locked door, distinct from the real apartment_door in
         # data/locations.py (whose key the default player already carries).
-        door = DoorEntity(leads_to="zone_building")
-        door.state = UnlockableEntityLockState.LOCKED
-        door.key_id = "item_storage_key"
+        door = DoorEntity(
+            leads_to="zone_building",
+            state=UnlockableEntityLockState.LOCKED,
+            key_id="item_storage_key",
+        )
         self.gm.current_location.entities.append(door)
 
         result = self.validator.validate(MoveAction(destination="out"))
@@ -124,9 +126,11 @@ class MovementValidationTests(unittest.TestCase):
         from data.items import ITEMS
         from modules.entity.item import ItemEntity
 
-        door = DoorEntity(leads_to="zone_building")
-        door.state = UnlockableEntityLockState.LOCKED
-        door.key_id = "item_storage_key"
+        door = DoorEntity(
+            leads_to="zone_building",
+            state=UnlockableEntityLockState.LOCKED,
+            key_id="item_storage_key",
+        )
         self.gm.current_location.entities.append(door)
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
 
@@ -237,9 +241,11 @@ class DoorKeyValidationTests(unittest.TestCase):
         from modules.entity.item import ItemEntity
         from modules.entity.object import DoorEntity, UnlockableEntityLockState
 
-        door = DoorEntity(leads_to="zone_home")
-        door.state = UnlockableEntityLockState.LOCKED
-        door.key_id = "item_storage_key"
+        door = DoorEntity(
+            leads_to="zone_home",
+            state=UnlockableEntityLockState.LOCKED,
+            key_id="item_storage_key",
+        )
         self.gm.current_location.entities.append(door)
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
 

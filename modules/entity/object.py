@@ -11,9 +11,10 @@ class UnlockableEntityLockState(StrEnum):
     UNLOCKED = "unlocked"
 
 
+@dataclass(kw_only=True)
 class UnlockableEntity(BaseEntity):
     state: UnlockableEntityLockState = UnlockableEntityLockState.UNLOCKED
-    key_id: str | None = None  # The item_id of the key that unlocks it
+    key_id: str | None = None
 
     def unlock(self, key: BaseItem) -> bool:
         if self.state == UnlockableEntityLockState.LOCKED and self.key_id == key.id:

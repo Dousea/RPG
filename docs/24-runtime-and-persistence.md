@@ -108,9 +108,7 @@ well; none exist, because none of those systems do.
 interrupted write cannot leave a truncated save. The whole state goes out each
 time; there is no incremental or append mode.
 
-All dynamic state lives in one file, `gamedata/engine_state.json`. The older
-per-file `gamedata/*.json` (`character.json`, `world.json`, `npcs.json`)
-belonged to the previous engine and are neither read nor written.
+All dynamic state lives in one file, `gamedata/engine_state.json`.
 
 ---
 

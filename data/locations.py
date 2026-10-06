@@ -175,9 +175,11 @@ def build_starting_locations() -> dict[str, Location]:
         locations[zone_id].indoors = indoors
 
     # Locked from the building side only: leaving the apartment needs no key.
-    apartment_door = DoorEntity(leads_to="zone_home")
-    apartment_door.state = UnlockableEntityLockState.LOCKED
-    apartment_door.key_id = "item_apartment_key"
+    apartment_door = DoorEntity(
+        leads_to="zone_home",
+        state=UnlockableEntityLockState.LOCKED,
+        key_id="item_apartment_key",
+    )
     locations["zone_building"].entities.append(apartment_door)
 
     starting_ground_items = {
