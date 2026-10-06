@@ -13,10 +13,12 @@ from typing import Any
 from data import creation as k_creation
 from data.climate import STAGE_PHRASES
 from data.clock import WORLD_START_MINUTE_OF_DAY
+from data.exercises import EXERCISES, REGION_PARTS
 from data.items import ITEMS, WETNESS_MAX
 from data.locations import STARTING_ZONE_ID, build_starting_locations
 from data.npcs import build_starting_npcs
 from data.quests import build_starting_quests
+from data.skills import MAX_LEVEL, SKILLS, total_xp_for_level
 from data.traits import TRAITS
 from managers.climate import ClimateEngine
 from managers.game import (
@@ -31,7 +33,9 @@ from managers.relationship import RelationshipManager
 from modules.body import BodyLocation, BodyPart
 from modules.character.appearance import Appearance, Gender
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
+from modules.character.exercise import ExerciseState
 from modules.character.faction import CharacterFaction
+from modules.character.skills import SkillState
 from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
@@ -45,7 +49,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 10  # spec 07
+SCHEMA_VERSION = 11  # spec 08
 
 MAX_ID_LENGTH = 40
 
@@ -127,6 +131,57 @@ def _known_trait_ids(values: Any) -> list[str]:
 
 def _int_map(value: Any) -> dict[str, int]:
     return {str(key): int(amount) for key, amount in _as_dict(value).items()}
+
+
+def _float_map(value: Any, allowed: Any) -> dict[str, float]:
+    return {str(key): float(amount) for key, amount in _as_dict(value).items() if key in allowed}
+
+
+def _skills_from_dict(value: Any) -> dict[str, SkillState]:
+    skills: dict[str, SkillState] = {}
+    for skill_id, entry in _as_dict(value).items():
+        if skill_id not in SKILLS:
+            logger.warning(f"Dropping unknown skill '{skill_id}'.")
+            continue
+        entry = _as_dict(entry)
+        level = max(0, min(MAX_LEVEL, int(entry.get("level", 0))))
+        cap = total_xp_for_level(skill_id, MAX_LEVEL)
+        skills[skill_id] = SkillState(level, max(0.0, min(float(cap), float(entry.get("xp", 0)))))
+    return skills
+
+
+def _exercise_to_dict(state: ExerciseState) -> dict[str, Any]:
+    return {
+        "regularity": dict(state.regularity),
+        "last_done_minute": dict(state.last_done_minute),
+        "future_stiffness": dict(state.future_stiffness),
+        "region_timers": dict(state.region_timers),
+        "part_stiffness": {part.value: amount for part, amount in state.part_stiffness.items()},
+    }
+
+
+def _exercise_from_dict(data: dict[str, Any]) -> ExerciseState:
+    part_stiffness: dict[BodyPart, float] = {}
+    for name, amount in _as_dict(data.get("part_stiffness")).items():
+        try:
+            part_stiffness[BodyPart(name)] = float(amount)
+        except ValueError:
+            logger.warning(f"Dropping unknown body part '{name}'.")
+    return ExerciseState(
+        regularity=_float_map(data.get("regularity"), EXERCISES),
+        last_done_minute={
+            key: int(minute)
+            for key, minute in _as_dict(data.get("last_done_minute")).items()
+            if key in EXERCISES
+        },
+        future_stiffness=_float_map(data.get("future_stiffness"), REGION_PARTS),
+        region_timers={
+            key: int(ticks)
+            for key, ticks in _as_dict(data.get("region_timers")).items()
+            if key in REGION_PARTS
+        },
+        part_stiffness=part_stiffness,
+    )
 
 
 def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
@@ -246,8 +301,6 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "current_location_id": player.current_location_id,
             "current_place": player.current_place,
             "hit_points": player.hit_points,
-            "experience_points": player.experience_points,
-            "level": player.level,
             "max_inventory_size": player.max_inventory_size,
             "stats": player.stats.to_dict(),
             "thermal": player.thermal.to_dict(),
@@ -267,8 +320,14 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "occupation_id": player.occupation_id,
             "job_title": player.job_title,
             "trait_ids": list(player.traits),
-            "skills": dict(player.skills),
+            "skills": {
+                skill_id: {"level": state.level, "xp": state.xp}
+                for skill_id, state in player.skills.items()
+            },
             "skill_boosts": dict(player.skill_boosts),
+            "loss_timers": dict(player.loss_timers),
+            "loss_timer_steps": dict(player.loss_timer_steps),
+            "exercise": _exercise_to_dict(player.exercise),
             "inventory": [_item_entity_to_dict(e) for e in player.inventory],
             "equipment": {
                 slot.value: (_item_entity_to_dict(entity) if entity else None)
@@ -550,8 +609,6 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         current_location_id=location_id,
         current_place=_as_text(data.get("current_place", ""), MAX_PLACE_LENGTH),
         entity_id=data.get("entity_id", "player"),
-        experience_points=data.get("experience_points", 0),
-        level=data.get("level", 1),
         max_inventory_size=data.get("max_inventory_size", 20),
         inventory=[
             entity
@@ -567,8 +624,15 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         occupation_id=_as_text(data.get("occupation_id", ""), MAX_ID_LENGTH),
         job_title=_as_text(data.get("job_title", ""), k_creation.JOB_TITLE_MAX_CHARS),
         traits=_known_trait_ids(data.get("trait_ids", [])),
-        skills=_int_map(data.get("skills")),
+        skills=_skills_from_dict(data.get("skills")),
         skill_boosts=_int_map(data.get("skill_boosts")),
+        loss_timers=_float_map(data.get("loss_timers"), SKILLS),
+        loss_timer_steps={
+            skill_id: int(step)
+            for skill_id, step in _as_dict(data.get("loss_timer_steps")).items()
+            if skill_id in SKILLS
+        },
+        exercise=_exercise_from_dict(_as_dict(data.get("exercise"))),
         conditions=conditions,
     )
     player.equipment = equipment

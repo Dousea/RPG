@@ -14,6 +14,7 @@ from modules.action.types import (
     AttackAction,
     DiscoverFlagAction,
     DropAction,
+    ExerciseAction,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
@@ -34,6 +35,7 @@ from modules.action.types import (
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
 from modules.resolution import (
+    ExercisePlan,
     HeldItem,
     MoveBlocked,
     MoveToSpot,
@@ -87,6 +89,14 @@ def _spent_minutes(action: AnyAction, resolved: Resolution) -> int:
     return resolved.minutes if isinstance(resolved, TimeSpan) else 0
 
 
+def _exercise_minutes(action: AnyAction, resolved: Resolution) -> int:
+    """The chosen minutes of an exercise plan, or the minutes run when it stops early."""
+    match resolved:
+        case ExercisePlan(minutes=minutes) | TimeSpan(minutes=minutes):
+            return minutes
+    return 0
+
+
 TIME_COSTS: dict[type, int | CostFunction] = {
     AttackAction: SWING_MIN,
     TakeAction: QUICK_ACTION_MIN,
@@ -97,6 +107,7 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     MoveAction: _move_minutes,
     WaitAction: _spent_minutes,
     SleepAction: _spent_minutes,
+    ExerciseAction: _exercise_minutes,
     StatusAddAction: 0,
     StatusRemoveAction: 0,
     UpdateConditionAction: 0,

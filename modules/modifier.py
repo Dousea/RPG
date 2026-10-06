@@ -5,11 +5,6 @@ from .character.state import CharacterCondition
 
 
 @dataclass
-class XPMultiplicativeModifier:
-    multiplier: float
-
-
-@dataclass
 class DamageMultiplicativeModifier:
     multiplier: float
 
@@ -44,8 +39,7 @@ class ReputationModifier:
 
 
 AnyModifier = (
-    XPMultiplicativeModifier
-    | DamageMultiplicativeModifier
+    DamageMultiplicativeModifier
     | ConditionsModifier
     | HPModifier
     | XPModifier

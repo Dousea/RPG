@@ -15,15 +15,18 @@ from adapters.memory import SemanticMemory
 from adapters.save import codec, files
 from data.items import wetness_word
 from data.occupations import OCCUPATIONS
+from data.skills import SKILLS
 from data.traits import TRAITS
 from managers import creation
 from managers.climate import weather_summary
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects
 from modules.action.parser import parse_action_plan
 from modules.character.build import CharacterBuild
+from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
@@ -175,7 +178,7 @@ class GameEngine:
             if errors:
                 return errors, None
             files.delete()
-            self.manager = GameManager(player=creation.new_player(build))
+            self.manager = GameManager.from_build(build)
             self.memory.rebuild([])
             files.save(self.manager)
             return [], self._snapshot(story_text="")
@@ -213,7 +216,7 @@ class GameEngine:
         """Build the frontend payload. Caller must hold the lock.
 
         Mirrors what `managers/context.py` already tells the narrator about
-        the character -- quests, conditions, equipment, traits, level, and NPC
+        the character -- quests, conditions, equipment, traits, skills, and NPC
         disposition bands -- so the player can see in the panel what the
         narrator has been reacting to all along. NPC bands go out the same
         way `ContextBuilder._npcs_present_section` sends them to the LLM
@@ -247,8 +250,7 @@ class GameEngine:
             "vitals": {"health": player.hit_points, "max_health": player.max_hit_points},
             "weather": _weather(manager),
             "effects": _status_effects(player),
-            "level": player.level,
-            "experience_points": player.experience_points,
+            "skills": _skills(player),
             "character": _character(player),
             "conditions": [condition.value for condition in player.conditions],
             "status_effects": list(narrative.player_status),
@@ -289,6 +291,21 @@ def _character(player: PlayerEntity) -> dict[str, Any]:
         "occupation": _occupation_name(player),
         "traits": [entry["name"] for entry in _trait_entries(player)],
     }
+
+
+def _skills(player: PlayerEntity) -> list[dict[str, Any]]:
+    """Every skill with its level and progress toward the next, never the XP."""
+    return [
+        {
+            "id": skill.id,
+            "name": skill.name,
+            "category": skill.category,
+            "level": state.level,
+            "progress": skill_progress(skill.id, state),
+        }
+        for skill in SKILLS.values()
+        for state in [player.skills.get(skill.id, SkillState())]
+    ]
 
 
 def _weather(manager: GameManager) -> dict[str, Any]:

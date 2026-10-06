@@ -5,10 +5,12 @@ from dataclasses import dataclass, field
 from functools import cache
 
 from data import climate as climate_k
+from data import skills as skill_k
 from data import status_effects
 from data import thermal as k
 from data.clock import MINUTES_PER_HOUR
 from managers.climate import FeltAir, felt_air
+from managers.skills import fitness_level
 from managers.stats.drivers import StatContext
 from managers.stats.status_effects import hypothermia_level, status_effect_level
 from modules.body import BodyPart
@@ -125,7 +127,7 @@ class ThermalInputs:
     energy: float = 1.0
     fluids: float = 1.0
     weight_kg: float = k.DEFAULT_BODY_WEIGHT_KG
-    fitness: float = k.FITNESS_STAT_STUB
+    fitness: float = 0.0
     body_wetness: float = 0.0
     intoxication: float = 0.0
     target_met: float = k.METABOLICS[k.Metabolic.DEFAULT]
@@ -465,6 +467,7 @@ def thermal_inputs(stats: Stats, ctx: StatContext, air: FeltAir, humidity: float
         fluids=1 - stats.get(CharacterStat.THIRST),
         body_wetness=stats.get(CharacterStat.WETNESS) / k.LAYER_SOAK_MAX,
         intoxication=stats.get(CharacterStat.INTOXICATION),
+        fitness=fitness_level(ctx.skills) / skill_k.FITNESS_STAT_DIVISOR - 1,
         target_met=metabolic_target(
             ctx.metabolic, stats.get(CharacterStat.ENDURANCE), energy, ctx.carry_ratio
         ),

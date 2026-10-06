@@ -34,7 +34,7 @@ Nothing in this chain names a specific trait. A new trait is data.
 `modules/event.py`. Five types, all generic over the entity types involved:
 
 ```text
-QuestCompletionEvent     source, experience_points_gained, styles[]
+QuestCompletionEvent     source, styles[]
 WeaponTakeDamageEvent    source, weapon, damage, target
 WeaponDealDamageEvent    source, weapon, damage, target
 ApplyItemEvent           source, item, target
@@ -93,12 +93,11 @@ outgoing hit. Each effect type now declares which role (`"source"` or
 
 ## Modifiers
 
-`modules/modifier.py`. Seven types, deliberately dumb — they describe a change
+`modules/modifier.py`. Six types, deliberately dumb — they describe a change
 and carry no logic:
 
 ```text
 XPModifier                    amount
-XPMultiplicativeModifier      multiplier
 HPModifier                    amount
 DamageMultiplicativeModifier  multiplier
 ConditionsModifier            {CharacterCondition: bool}
@@ -112,14 +111,14 @@ than letting the order in which traits happened to fire decide the outcome.
 
 ## Application
 
-`apply_event_modifiers` (`managers/events.py`) handles five of the seven:
+`apply_event_modifiers` (`managers/events.py`) handles five of the six:
 `DamageMultiplicativeModifier` (composed, then applied to the event's target),
 `AffinityModifier` and `ReputationModifier` (forwarded to the
 [relationship manager](22-relationships.md)), and `HPModifier` and
 `ConditionsModifier` (applied to the event's target, or its source for an
-event with none). `XPModifier` and
-`XPMultiplicativeModifier` are still collected and dropped — nothing on the
-live path produces them yet.
+event with none). `XPModifier` is still collected and dropped — nothing on the
+live path produces it yet. XP is awarded by the skill engine; see
+[mechanics 08](mechanics/08-skills.md).
 
 `managers/simulation.py`'s `SimulationCore` is the actual caller for combat
 and item use — it calls `broadcast_event` directly rather than

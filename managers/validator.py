@@ -15,6 +15,7 @@ re-derive the reason something was legal.
 
 from dataclasses import dataclass
 
+from data import exercises as ex
 from data import survival
 from data.body_locations import EXCLUSIVE_LOCATIONS
 from data.clock import (
@@ -23,7 +24,8 @@ from data.clock import (
     WAIT_CAP_MIN,
     minutes_until,
 )
-from data.items import find_item_by_name
+from data.items import ITEMS, find_item_by_name
+from managers.exercise import endurance_level
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
 from managers.stats.status_effects import status_effect_level
@@ -35,6 +37,7 @@ from modules.action.types import (
     DiscoverFlagAction,
     DropAction,
     Duration,
+    ExerciseAction,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
@@ -55,6 +58,7 @@ from modules.action.types import (
 from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.item import AppliableItem, ClothingItem, ConsumableItem
 from modules.resolution import (
+    ExercisePlan,
     HeldItem,
     MoveBlocked,
     MoveToSpot,
@@ -406,6 +410,28 @@ class ActionValidator:
             minutes = min(minutes, minutes_until(now, survival.SLEEP_DEFAULT_WAKE_MINUTE_OF_DAY))
         return Accepted(action, TimeSpan(minutes, clamped=False))
 
+    def _validate_exercise(self, action: ExerciseAction) -> ValidationResult:
+        player = self.manager.player
+        exercise = ex.find_exercise(action.exercise_name)
+        if exercise is None:
+            return Rejected(action, f"Unknown exercise: '{action.exercise_name}'.")
+        minutes = action.minutes if action.minutes is not None else ex.EXERCISE_MINUTES_DEFAULT
+        valid = range(
+            ex.EXERCISE_MINUTES_MIN, ex.EXERCISE_MINUTES_MAX + 1, ex.EXERCISE_MINUTES_STEP
+        )
+        if minutes not in valid:
+            return Rejected(
+                action,
+                f"{exercise.name} takes {ex.EXERCISE_MINUTES_MIN} to {ex.EXERCISE_MINUTES_MAX} "
+                f"minutes, in steps of {ex.EXERCISE_MINUTES_STEP}.",
+            )
+        if endurance_level(player) > ex.EXERCISE_ENDURANCE_STOP_LEVEL:
+            return Rejected(action, f"{self._name} is too exhausted to exercise.")
+        if exercise.item_id and not any(e.item.id == exercise.item_id for e in player.inventory):
+            needed = ITEMS[exercise.item_id].name.lower()
+            return Rejected(action, f"{exercise.name} needs a {needed}, and {self._name} has none.")
+        return Accepted(action, ExercisePlan(exercise, minutes))
+
     def _sleep_refusal(self) -> str:
         stats = self.manager.player.stats
         panic = status_effect_level(StatusEffect.PANIC, stats.get(CharacterStat.PANIC))
@@ -502,6 +528,7 @@ class ActionValidator:
         UseItemAction: _validate_use_item,
         WaitAction: _validate_wait,
         SleepAction: _validate_sleep,
+        ExerciseAction: _validate_exercise,
         StatusAddAction: _validate_status_add,
         StatusRemoveAction: _validate_status_remove,
         UpdateConditionAction: _validate_update_condition,

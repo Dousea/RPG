@@ -24,9 +24,9 @@ parser can't tell it from typed text. Three kinds of control are allowed:
 is told, in the same words: status effect names, wetness words, disposition and trust
 bands. A number reaches the screen only when the mechanic that owns the field
 allows it. Allowed today: the day, the time of day, the air temperature in °C,
-and on the creation screen the point costs, points left and starting skill
-levels. Planned: skill
-levels (spec 08) and the zombie kill count (spec 11). Never shown: hit points,
+the skill levels on the Character screen, and on the creation screen the
+point costs, points left and starting skill levels. Planned: the zombie kill
+count (spec 11). Never shown: hit points,
 pain, stat values, wetness or temperature of the body, item condition, odds,
 affinity or trust scores.
 
@@ -87,7 +87,7 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 | Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (spec 12, 17) | no |
 | Inventory | held item, equipped slots, carried items | `held` (spec 11, 15), `equipment`, `inventory` | yes, without `held` |
 | Clothing | worn items, outer to inner, by body location | `worn` | yes |
-| Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | yes, with Level and Experience until spec 08 |
+| Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | yes |
 | People | NPCs here: disposition, trust, following | `npcs` | yes |
 | Nearby | threats, corpses, doors and windows | `threats` (spec 09), `corpses` (spec 14), `barriers` (spec 13) | no |
 | Quests | active quests and their objectives | `quests` | yes |
@@ -124,9 +124,8 @@ Worn items outer to inner, each with its body location as words
 ### Character
 
 The name, the occupation (or the job title the player wrote) and the trait
-names with their descriptions. Skills come with spec 08: one row per skill,
-grouped by category, with the level number and a bar for `progress` toward the
-next level. The zombie kill count comes with spec 11. The appearance chosen at
+names with their descriptions. Skills: a row per trained skill, grouped by
+category, with the level number and a bar for `progress` toward the next level. The zombie kill count comes with spec 11. The appearance chosen at
 creation is not shown: the narrator describes it.
 
 ### People
@@ -219,7 +218,6 @@ A mechanic that adds or changes a snapshot field:
 
 | Gap | Fix |
 | --- | --- |
-| Character tab shows Level and Experience as numbers | replaced by skills in spec 08 |
 | Header shows `apocalypse_stage` | replaced by `outbreak_day` in spec 10 |
 | Health bar shows hit points as a percentage | removed with spec 12; until then it is the one number grandfathered in |
 | Inventory and equipment show item condition as `n/max` | condition word with spec 11 |

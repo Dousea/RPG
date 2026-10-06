@@ -7,6 +7,8 @@ from ..character.equipment import (
     CharacterArmorSlot,
     CharacterHoldableSlot,
 )
+from ..character.exercise import ExerciseState
+from ..character.skills import SkillState
 from ..character.state import CharacterCondition
 from ..item import ClothingItem
 from ..stats import Stats
@@ -27,8 +29,6 @@ class PlayerEntity(BaseEntity):
     # specific without needing a room for every corner. LLM-authored, so it is
     # capped and rendered as text, never markup.
     current_place: str = ""
-    experience_points: int = 0
-    level: int = 1
     max_inventory_size: int = 20
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     stats: Stats = field(default_factory=Stats)
@@ -50,8 +50,13 @@ class PlayerEntity(BaseEntity):
     job_title: str = ""
     # Trait ids, chosen and granted; the definitions are in data/traits.py.
     traits: list[str] = field(default_factory=list[str])
-    skills: dict[str, int] = field(default_factory=dict[str, int])
+    skills: dict[str, SkillState] = field(default_factory=dict[str, SkillState])
     skill_boosts: dict[str, int] = field(default_factory=dict[str, int])
+    # Fitness and Strength lose XP when untrained: a timer per skill, and the
+    # last floor(timer / divisor) that cost an XP.
+    loss_timers: dict[str, float] = field(default_factory=dict[str, float])
+    loss_timer_steps: dict[str, int] = field(default_factory=dict[str, int])
+    exercise: ExerciseState = field(default_factory=ExerciseState)
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
 
     def __post_init__(self) -> None:

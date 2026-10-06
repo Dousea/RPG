@@ -64,6 +64,14 @@ class SleepAction:
 
 
 @dataclass
+class ExerciseAction:
+    """`minutes` is None for the default."""
+
+    exercise_name: str
+    minutes: int | None = None
+
+
+@dataclass
 class StatusAddAction:
     status: str
 
@@ -151,6 +159,7 @@ AnyAction = (
     | UseItemAction
     | WaitAction
     | SleepAction
+    | ExerciseAction
     | StatusAddAction
     | StatusRemoveAction
     | UpdateConditionAction

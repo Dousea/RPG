@@ -3,6 +3,7 @@
 import unittest
 
 from adapters import llm
+from data.items import ITEMS
 from managers import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
@@ -18,6 +19,7 @@ from modules.action.types import (
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.item import ItemEntity
 from modules.quest import QuestState
 from modules.stats import CharacterStat
 from tests.support import resolve_actions
@@ -498,7 +500,7 @@ class CharacterBlockTests(unittest.TestCase):
     def test_the_block_shows_no_costs_points_or_skill_numbers(self):
         block = self.character_block()
         lowered = block.lower()
-        for word in ("cost", "points", "fitness", "strength", "skill"):
+        for word in ("cost", "points"):
             self.assertNotIn(word, lowered)
         details = [
             line
@@ -506,6 +508,21 @@ class CharacterBlockTests(unittest.TestCase):
             if line.startswith(("Name", "Pronouns", "Occupation", "Appearance", "Backstory"))
         ]
         self.assertFalse(any(char.isdigit() for char in "".join(details)))
+
+    def test_the_block_lists_skills_from_level_one_in_words(self):
+        """Spec 08, What the narrator and the player see."""
+        skills_line = next(
+            line for line in self.character_block().splitlines() if line.startswith("Skills:")
+        )
+        self.assertEqual(
+            skills_line,
+            "Skills: First Aid (capable), Fitness (skilled), Strength (skilled), Lightfooted (novice)",
+        )
+        self.assertFalse(any(char.isdigit() for char in skills_line))
+
+    def test_the_block_has_no_level_or_xp_line(self):
+        self.assertNotIn("XP", self.character_block())
+        self.assertNotIn("Level:", self.character_block())
 
     def test_no_prompt_names_orton_unless_the_character_is_orton(self):
         parser = self.builder.build_parser_prompt("go out")
@@ -526,3 +543,34 @@ class CharacterBlockTests(unittest.TestCase):
         self.assertFalse(any("Orton" in fact for fact in facts))
         refused = SimulationCore(self.gm).resolve([DropAction(item_name="Apartment Key")])
         self.assertEqual(refused[0].count("Mara keeps her keys on her."), 1)
+
+
+class ExerciseParserPromptTests(unittest.TestCase):
+    """Spec 08, What the narrator and the player see: the parser sees the exercise list."""
+
+    def prompt(self, *item_ids: str) -> str:
+        gm = GameManager()
+        for item_id in item_ids:
+            gm.player.inventory.append(ItemEntity(item=ITEMS[item_id]))
+        return ContextBuilder(gm).build_parser_prompt("do some push-ups")
+
+    def test_the_prompt_lists_every_exercise(self):
+        section = self.prompt().split("[EXERCISES]")[1].split("[")[0]
+        for name in (
+            "Squats",
+            "Push-ups",
+            "Sit-ups",
+            "Burpees",
+            "Barbell curls",
+            "Dumbbell press",
+            "Biceps curls",
+        ):
+            self.assertIn(name, section)
+
+    def test_the_prompt_says_which_gym_items_are_carried(self):
+        self.assertIn("Carrying: nothing to lift", self.prompt())
+        self.assertIn("Carrying: a barbell", self.prompt("item_barbell"))
+        self.assertIn("a dumbbell", self.prompt("item_dumbbell"))
+
+    def test_the_parser_is_taught_the_verb(self):
+        self.assertIn("EXERCISE", llm.PARSER_SYSTEM_PROMPT)

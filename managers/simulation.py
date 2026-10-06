@@ -13,14 +13,19 @@ this list; it only puts prose around facts the engine already decided.
 
 import random
 
+from data import exercises as ex_k
+from data import skills as skill_k
 from data import status_effects, survival
+from data.exercises import find_exercise
 from data.items import item_condition_word
 from data.thermal import Metabolic
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.climate import weather_change_facts
 from managers.combat import UNARMED_WEAPON, equipped_weapon, roll_damage
 from managers.events import broadcast_event
+from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.skills import SkillEngine, skill_levels
 from managers.stats.drivers import StatContext
 from managers.stats.engine import StatsEngine
 from managers.stats.status_effects import (
@@ -39,6 +44,7 @@ from modules.action.types import (
     AttackAction,
     DiscoverFlagAction,
     DropAction,
+    ExerciseAction,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
@@ -60,7 +66,7 @@ from modules.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
 )
-from modules.item import AppliableItem, ClothingItem, ConsumableItem
+from modules.item import AppliableItem, ClothingItem, ConsumableItem, MeleeWeaponItem
 from modules.modifier import (
     AffinityModifier,
     ConditionsModifier,
@@ -69,6 +75,7 @@ from modules.modifier import (
 )
 from modules.quest import QuestStatus
 from modules.resolution import (
+    ExercisePlan,
     HeldItem,
     MoveBlocked,
     MoveToSpot,
@@ -110,6 +117,9 @@ class SimulationCore:
         self.validator = validator if validator is not None else ActionValidator(manager)
         self._rng = rng if rng is not None else random.Random()
         self.stats_engine = StatsEngine(rng=self._rng)
+        self.skill_engine = SkillEngine()
+        self.exercise_engine = ExerciseEngine(self.skill_engine)
+        self._skill_facts: list[str] = []
         self._zombies_seen_this_chunk = 0
         self._weather_facts: list[str] = []
 
@@ -179,6 +189,7 @@ class SimulationCore:
             power_on=manager.world.power_on,
             metabolic=self._metabolic_target(action),
             traits=frozenset(player.traits),
+            skills=skill_levels(player),
         )
 
     def _metabolic_target(self, action: AnyAction | None) -> Metabolic:
@@ -186,6 +197,10 @@ class SimulationCore:
             return Metabolic.WALKING_5KMH
         if isinstance(action, AttackAction):
             return attack_metabolic(equipped_weapon(self.manager.player))
+        if isinstance(action, ExerciseAction):
+            exercise = find_exercise(action.exercise_name)
+            if exercise is not None:
+                return Metabolic.FITNESS_HEAVY if exercise.heavy else Metabolic.FITNESS
         return Metabolic.DEFAULT
 
     def _weather_for_chunk(self, offset: int, chunk: int) -> WeatherSample:
@@ -226,22 +241,39 @@ class SimulationCore:
         )
         facts = self._weather_facts + stat_facts
         spent = self.stats_engine.minutes_advanced
+        started = manager.narrative.minutes
         manager.advance_clock(spent)
         if self.stats_engine.death_cause:
             facts[-1] = self._check_player_death(self.stats_engine.death_cause)
+        if not manager.narrative.game_over:
+            facts.extend(self._run_ticks(started, spent, walking=isinstance(action, MoveAction)))
         return spent, facts
+
+    def _run_ticks(self, started: int, spent: int, *, walking: bool) -> list[str]:
+        """Run the 10-minute boundary hooks for each boundary the span crossed."""
+        first = started // skill_k.TICK_MINUTES + 1
+        last = (started + spent) // skill_k.TICK_MINUTES
+        facts: list[str] = []
+        for boundary in range(first, last + 1):
+            player = self.manager.player
+            facts.extend(self.skill_engine.tick(player, walking=walking))
+            self.exercise_engine.tick(player, boundary * skill_k.TICK_MINUTES)
+        return facts
 
     def _resolve_one(self, accepted: Accepted) -> tuple[list[str], int]:
         """Resolve one accepted action; returns its facts and the minutes it took."""
         if isinstance(accepted.action, SleepAction):
             return self._resolve_sleep(accepted)
+        if isinstance(accepted.action, ExerciseAction):
+            return self._resolve_exercise(accepted)
         handler = self._RESOLVERS.get(type(accepted.action))
         if handler is None:
             return [f"No resolver registered for {type(accepted.action).__name__}."], 0
         minutes = action_minutes(accepted.action, accepted.resolved)
         if isinstance(accepted.action, MULTIPLIED_ACTIONS):
             minutes = round(minutes * self._action_time_multiplier())
-        facts = [self._check_player_death(handler(self, accepted))]
+        self._skill_facts = []
+        facts = [self._check_player_death(handler(self, accepted)), *self._skill_facts]
         spent = 0
         if minutes:
             spent, stat_facts = self._spend(minutes, accepted.action)
@@ -428,6 +460,8 @@ class SimulationCore:
         damage, modifiers = roll_damage(attacker, weapon, npc, self._rng)
         npc.hit_points -= damage
         self._apply_relationship_modifiers(modifiers)
+        if isinstance(weapon, MeleeWeaponItem):
+            self._skill_facts.extend(self.skill_engine.hit_xp(attacker, weapon))
 
         if npc.hit_points <= 0:
             fact = f"Attack {npc.name} with {weapon.name}: hit, {npc.name} is down."
@@ -614,6 +648,46 @@ class SimulationCore:
         else:
             lead = f"{self._name} sleeps {words}."
         return [lead, *facts, *([wake_fact] if wake_fact else [])], spent
+
+    def _resolve_exercise(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Exercise minute by minute: the stats advance, then the minute's reps fire."""
+        plan = accepted.expect(ExercisePlan)
+        exercise = plan.exercise
+        player = self.manager.player
+        facts: list[str] = []
+        spent = 0
+        carry = 0.0
+        done = 0
+        stopped = False
+        planned = action_minutes(accepted.action, plan)
+        while spent < planned and not self.manager.narrative.game_over:
+            advanced, stat_facts = self._spend(1, accepted.action)
+            spent += advanced
+            facts.extend(stat_facts)
+            if self.manager.narrative.game_over:
+                break
+            carry += reps_per_minute(
+                exercise, skill_levels(player)[skill_k.FITNESS], endurance_level(player)
+            )
+            reps = int(carry)
+            carry -= reps
+            done += reps
+            for _ in range(reps):
+                facts.extend(
+                    self.exercise_engine.do_rep(player, exercise, self.manager.narrative.minutes)
+                )
+            if endurance_level(player) > ex_k.EXERCISE_ENDURANCE_STOP_LEVEL and spent < planned:
+                stopped = True
+                break
+        if self.manager.narrative.game_over:
+            return facts, spent
+        if stopped:
+            lead = "You stop, too exhausted to go on."
+        else:
+            lead = f"You finish {spent} minutes of {exercise.name.lower()}."
+        return [lead, f"{done} reps in all.", *facts], action_minutes(
+            accepted.action, TimeSpan(spent, False)
+        )
 
     def _waking(self, slept_minutes: int) -> str:
         """The fact for what wakes the player after this chunk, or "" if nothing does."""

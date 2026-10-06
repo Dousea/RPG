@@ -6,11 +6,13 @@ import unittest
 from data.items import ITEMS
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from managers.skills import SkillEngine
 from modules.action.types import (
     AddGoalAction,
     AttackAction,
     DropAction,
     Duration,
+    MoveAction,
     NpcMoveAction,
     NpcStatusAction,
     SetFlagAction,
@@ -396,6 +398,148 @@ class WearResolutionTests(unittest.TestCase):
         self.assertEqual(self.gm.player.inventory[0], entity)
         self.assertGreater(entity.wetness, 30.0)
         self.assertLessEqual(entity.wetness, 40.0)
+
+
+class BoundaryTickWiringTests(unittest.TestCase):
+    """Spec 08, Regularity and stiffness over time: the clock drives the ticks."""
+
+    def test_regularity_decays_by_two_thousandths_after_a_day_idle(self):
+        gm = GameManager()
+        gm.narrative.minutes = 3000
+        gm.player.exercise.last_done_minute["squats"] = 0
+        gm.player.exercise.regularity["squats"] = 50.0
+        simulate(gm, WaitAction(duration=Duration(minutes=10)))
+        self.assertAlmostEqual(gm.player.exercise.regularity["squats"], 50 - 0.002)
+
+    def test_a_boundary_drains_one_unit_of_stiffness_into_each_part(self):
+        from data.exercises import REGION_PARTS
+
+        gm = GameManager()
+        gm.player.exercise.region_timers["arms"] = 0
+        gm.player.exercise.future_stiffness["arms"] = 1.0
+        simulate(gm, WaitAction(duration=Duration(minutes=10)))
+        for part in REGION_PARTS["arms"]:
+            self.assertEqual(gm.player.exercise.part_stiffness[part], 2.5)
+
+
+class DeathBeforeTicksTests(unittest.TestCase):
+    """Spec 08, Where XP comes from: a lethal chunk is judged before the ticks run."""
+
+    def test_a_starvation_death_in_a_levelling_chunk_ends_the_game(self):
+        gm = GameManager()
+        gm.narrative.minutes = 2405
+        player = gm.player
+        player.hit_points = 1
+        player.fractional_hp_loss = 0.999
+        player.stats.set(CharacterStat.HUNGER, 1.0)
+        player.stats.set(CharacterStat.ENDURANCE, 0.1)
+        SkillEngine().set_level(player, "fitness", 5)
+        player.skills["fitness"].xp = 37500
+        player.loss_timers = {"fitness": 30000}
+        player.loss_timer_steps = {"fitness": -5}
+        facts = simulate(gm, WaitAction(duration=Duration(minutes=10)))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertIn("Orton has died", " ".join(facts))
+        self.assertEqual(player.skills["fitness"].xp, 37500)
+
+
+def _crowbar_game() -> GameManager:
+    gm = GameManager()
+    gm.player.current_location_id = "zone_building"
+    gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(item=ITEMS["item_crowbar"])
+    return gm
+
+
+class MeleeHitXpTests(unittest.TestCase):
+    """Spec 08, Where XP comes from: a melee hit against an NPC."""
+
+    def test_a_crowbar_hit_trains_fitness_strength_and_long_blunt(self):
+        gm = _crowbar_game()
+        simulate(gm, AttackAction(target_name="Emma"))
+        skills = gm.player.skills
+        self.assertAlmostEqual(skills["fitness"].xp, 37501)
+        self.assertAlmostEqual(skills["strength"].xp, 37501)
+        # min(3, 0.9 x 0.875) = 0.7875, times 0.25 for no boost and 1.3 for Fast Learner
+        self.assertAlmostEqual(skills["long_blunt"].xp, 0.2559375)
+
+    def test_bare_hands_train_only_fitness_and_strength(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        simulate(gm, AttackAction(target_name="Emma"))
+        trained = {s: st.xp for s, st in gm.player.skills.items() if st.xp}
+        self.assertEqual(trained, {"fitness": 37501.0, "strength": 37501.0})
+
+    def test_no_fitness_xp_at_or_below_half_endurance(self):
+        gm = _crowbar_game()
+        gm.player.stats.set(CharacterStat.ENDURANCE, 0.4)
+        simulate(gm, AttackAction(target_name="Emma"))
+        self.assertEqual(gm.player.skills["fitness"].xp, 37500)
+        self.assertAlmostEqual(gm.player.skills["strength"].xp, 37501)
+
+    def test_a_pistol_hit_trains_no_category(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
+            item=ITEMS["item_pistol"]
+        )
+        simulate(gm, AttackAction(target_name="Emma"))
+        self.assertEqual(gm.player.skills["aiming"].xp, 0)
+
+    def test_a_level_gained_from_a_hit_is_its_own_fact(self):
+        gm = _crowbar_game()
+        gm.player.skills["strength"].xp = 67499.5
+        gm.player.skills["strength"].level = 5
+        facts = simulate(gm, AttackAction(target_name="Emma"))
+        self.assertIn("Your Strength skill is now level 6.", facts)
+        self.assertNotRegex(facts[0], r"\d")
+
+
+class TickWiringTests(unittest.TestCase):
+    """Spec 08, Losing them when you stop training: the 10-minute boundary."""
+
+    def test_ten_minutes_run_the_timers_once(self):
+        gm = GameManager()
+        simulate(gm, WaitAction(duration=Duration(minutes=10)))
+        self.assertEqual(gm.player.loss_timers["fitness"], -49990)
+
+    def test_two_five_minute_waits_cross_one_boundary(self):
+        gm = GameManager()
+        simulate(gm, WaitAction(duration=Duration(minutes=5)))
+        self.assertEqual(gm.player.loss_timers["fitness"], -50000)
+        simulate(gm, WaitAction(duration=Duration(minutes=5)))
+        self.assertEqual(gm.player.loss_timers["fitness"], -49990)
+
+    def test_an_hour_runs_six_ticks(self):
+        gm = GameManager()
+        simulate(gm, WaitAction(duration=Duration(minutes=60)))
+        self.assertEqual(gm.player.loss_timers["fitness"], -49940)
+
+    def test_the_boundary_hook_knows_whether_the_player_was_walking(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        seen: list[bool] = []
+
+        def record(player, *, walking):
+            seen.append(walking)
+            return []
+
+        core.skill_engine.tick = record  # type: ignore[method-assign]
+        core.resolve([WaitAction(duration=Duration(minutes=10))])
+        core.resolve([MoveAction(destination="the kitchen")])
+        self.assertEqual(seen, [False])
+        core.resolve([MoveAction(destination="out")])
+        self.assertEqual(seen, [False, True])
+
+    def test_the_players_fitness_level_sets_the_recovery(self):
+        low, high = GameManager(), GameManager()
+        for gm, level in ((low, 0), (high, 10)):
+            gm.player.skills["fitness"].level = level
+            gm.player.stats.set(CharacterStat.ENDURANCE, 0.0)
+            simulate(gm, WaitAction(duration=Duration(minutes=6)))
+        ratio = high.player.stats.get(CharacterStat.ENDURANCE) / low.player.stats.get(
+            CharacterStat.ENDURANCE
+        )
+        self.assertAlmostEqual(ratio, 1.6 / 0.7, places=2)
 
 
 if __name__ == "__main__":

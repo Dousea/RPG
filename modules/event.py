@@ -10,7 +10,6 @@ from .quest import QuestStyle
 @dataclass
 class QuestCompletionEvent:
     source: PlayerEntity
-    experience_points_gained: int
     styles: list[QuestStyle]  # e.g., [QuestStyle.NON_VIOLENT, QuestStyle.STEALTH]
 
 

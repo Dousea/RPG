@@ -58,14 +58,15 @@ It returns facts for every status effect that changed level, plus any HP loss.
 | `new_zombies_seen` | 0 until zombies land |
 | `weather` | none until weather lands |
 | `body` | energy, fluids and fatigue multipliers, all 1 until body temperature lands |
-| `skills` | Fitness 5, Strength 5 until skills land |
+| `skills` | each skill's level; Fitness reads 5 when none is recorded |
 | `corpse_count`, `corpse_defence` | 0 until the zombie lifecycle lands |
 | `traits` | empty until character creation lands |
 | `food_eaten_level` | 0 until eating gives a well-fed timer |
 
 Trait multipliers are all 1 for now. Pain, zombie infection and stress from
 sounds are 0 until their specs land. Endurance regeneration is multiplied by a
-recovery factor of 1.2 (Fitness 5).
+recovery factor from the player's Fitness level
+([skills](08-skills.md#effects-wired-now)).
 
 ## Turn flow
 

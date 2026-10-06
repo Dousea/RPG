@@ -282,6 +282,33 @@
         .row-item .value { text-align: right; }
         .row-item .value.muted { color: var(--paper-dim); }
 
+        /* Skills */
+        .skill-group { margin-bottom: 0.8rem; }
+        .skill-group:last-child { margin-bottom: 0; }
+        .skill-category {
+            color: var(--paper-dim);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 0.2rem;
+        }
+        .skill-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.15rem 0.5rem;
+            font-size: 0.92rem;
+            padding: 0.25rem 0;
+        }
+        .skill-row .label { color: var(--paper-dim); }
+        .skill-bar {
+            grid-column: 1 / -1;
+            height: 4px;
+            background: var(--line);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .skill-fill { height: 100%; background: var(--ember); }
+
         /* Traits */
         .named-entry { margin-bottom: 0.7rem; }
         .named-entry:last-child { margin-bottom: 0; }
@@ -561,8 +588,8 @@
                         <ul class="row-list" id="survivor-list"></ul>
                     </div>
                     <div class="section">
-                        <h3>Standing</h3>
-                        <ul class="row-list" id="standing-list"></ul>
+                        <h3>Skills</h3>
+                        <div id="skill-list"></div>
                     </div>
                     <div class="section">
                         <h3>Traits</h3>
@@ -664,7 +691,7 @@
     const inventoryList = document.getElementById('inventory-list');
     const wornList = document.getElementById('worn-list');
     const survivorList = document.getElementById('survivor-list');
-    const standingList = document.getElementById('standing-list');
+    const skillList = document.getElementById('skill-list');
     const traitList = document.getElementById('trait-list');
     const npcList = document.getElementById('npc-list');
     const questList = document.getElementById('quest-list');
@@ -962,16 +989,39 @@
         }));
     }
 
-    function renderStanding(data) {
-        standingList.innerHTML = '';
-        const level = el('li', 'row-item');
-        level.appendChild(el('span', 'label', 'Level'));
-        level.appendChild(el('span', 'value', String(data.level)));
-        const xp = el('li', 'row-item');
-        xp.appendChild(el('span', 'label', 'Experience'));
-        xp.appendChild(el('span', 'value', String(data.experience_points)));
-        standingList.appendChild(level);
-        standingList.appendChild(xp);
+    // Skills with a level or some progress, grouped by category; the bar is
+    // the share of the way to the next level, never the XP itself.
+    function renderSkills(data) {
+        const trained = (data.skills || []).filter(skill => skill.level > 0 || skill.progress > 0);
+        if (trained.length === 0) {
+            clearAndFill(skillList, [emptyNote('No skills yet.')]);
+            return;
+        }
+        const groups = [];
+        trained.forEach(skill => {
+            let group = groups.find(entry => entry.category === skill.category);
+            if (!group) {
+                group = { category: skill.category, skills: [] };
+                groups.push(group);
+            }
+            group.skills.push(skill);
+        });
+        clearAndFill(skillList, groups.map(group => {
+            const wrapper = el('div', 'skill-group');
+            wrapper.appendChild(el('div', 'skill-category', group.category));
+            group.skills.forEach(skill => {
+                const row = el('div', 'skill-row');
+                row.appendChild(el('span', 'label', skill.name));
+                row.appendChild(el('span', 'value', String(skill.level)));
+                const bar = el('div', 'skill-bar');
+                const fill = el('div', 'skill-fill');
+                fill.style.width = `${Math.round(skill.progress * 100)}%`;
+                bar.appendChild(fill);
+                row.appendChild(bar);
+                wrapper.appendChild(row);
+            });
+            return wrapper;
+        }));
     }
 
     function renderNamedEntries(container, entries, emptyLabel) {
@@ -1104,7 +1154,7 @@
         renderEquipment(data);
         renderWorn(data);
         renderSurvivor(data);
-        renderStanding(data);
+        renderSkills(data);
         renderNamedEntries(traitList, data.traits, 'None recorded.');
         renderNpcs(data);
         renderQuests(data);

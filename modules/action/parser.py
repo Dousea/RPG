@@ -19,6 +19,7 @@ from modules.action.types import (
     DiscoverFlagAction,
     DropAction,
     Duration,
+    ExerciseAction,
     MoveAction,
     NpcMoveAction,
     NpcStatusAction,
@@ -165,6 +166,18 @@ def _parse_sleep(args: str) -> SleepAction:
     if not args:
         return SleepAction()
     return SleepAction(duration=_parse_duration("SLEEP", args))
+
+
+_EXERCISE_MINUTES_PATTERN = re.compile(r"(.*?)\s+(\d+)\s*(?:m|min|mins|minutes)?\.?")
+
+
+def _parse_exercise(args: str) -> ExerciseAction:
+    if not args:
+        raise _ActionParseError("EXERCISE needs an exercise.")
+    match = _EXERCISE_MINUTES_PATTERN.fullmatch(args.strip())
+    if match is None:
+        return ExerciseAction(exercise_name=args.strip().strip(".,;"))
+    return ExerciseAction(exercise_name=match.group(1).strip(), minutes=int(match.group(2)))
 
 
 def _parse_status_add(args: str) -> StatusAddAction:
@@ -335,6 +348,7 @@ _PARSERS: dict[str, Callable[[str], AnyAction]] = {
     "USE_ITEM": _parse_use_item,
     "WAIT": _parse_wait,
     "SLEEP": _parse_sleep,
+    "EXERCISE": _parse_exercise,
     "STATUS_ADD": _parse_status_add,
     "STATUS_REMOVE": _parse_status_remove,
     "UPDATE_CONDITION": _parse_update_condition,

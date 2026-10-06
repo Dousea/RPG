@@ -13,13 +13,16 @@ prose context plus this turn's already-decided [OUTCOMES].
 
 from collections.abc import Iterable
 
-from data.items import item_condition_word, wetness_word
+from data.exercises import BARBELL_ID, DUMBBELL_ID, EXERCISES
+from data.items import ITEMS, item_condition_word, wetness_word
 from data.names import SKIN_TONE_WORDS
 from data.occupations import OCCUPATIONS
+from data.skills import SKILLS
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from data.traits import TRAITS
 from managers.climate import describe_weather
 from managers.game import GameManager
+from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
 from modules.entity.item import ItemEntity
 from modules.quest import QuestStatus
@@ -218,7 +221,7 @@ Pronouns: {looks.subject}/{looks.object}
 Occupation: {self._occupation_line()}
 Appearance: {self._appearance_line()}
 Backstory: {looks.backstory or "None"}
-Level: {player.level} (XP: {player.experience_points})
+Skills: {self._skills_line()}
 Conditions: {", ".join(condition.name for condition in player.conditions) or "None"}
 Status: {", ".join(narrative.player_status) or "None"}
 Goals: {self._goals_line() or "None"}
@@ -227,6 +230,30 @@ Equipment: {_lines(equipment) or "None"}
 Wearing: {self._outfit_line()}
 Traits: {_lines(trait_lines) or "None"}
 """
+
+    def _skills_line(self) -> str:
+        """Skills from level 1 up, each with a word for its level; never a number."""
+        player = self.manager.player
+        parts = [
+            f"{skill.name} ({level_word(state.level)})"
+            for skill in SKILLS.values()
+            if (state := player.skills.get(skill.id)) is not None and state.level >= 1
+        ]
+        return ", ".join(parts) or "None"
+
+    def _exercise_section(self) -> str:
+        """The exercises the parser may propose, and which gym items are carried."""
+        carried = {entity.item.id for entity in self.manager.player.inventory}
+        items = [
+            f"a {noun}"
+            for item_id, noun in ((BARBELL_ID, "barbell"), (DUMBBELL_ID, "dumbbell"))
+            if item_id in carried
+        ]
+        names = ", ".join(
+            f"{e.name} (needs a {ITEMS[e.item_id].name.lower()})" if e.item_id else e.name
+            for e in EXERCISES.values()
+        )
+        return f"{names}\nCarrying: {' and '.join(items) or 'nothing to lift'}"
 
     def _outfit_line(self) -> str:
         """Worn items outer to inner, with a wetness word for damp ones, never a number."""
@@ -323,6 +350,9 @@ door rather than refusing the move.)
 
 [EQUIPPED]
 {equipped_str}
+
+[EXERCISES]
+{self._exercise_section()}
 
 [PLAYER INPUT]
 {player_input}"""

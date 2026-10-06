@@ -116,7 +116,24 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(loaded.job_title, "Software Developer")
         self.assertEqual(loaded.skills, original.skills)
         self.assertEqual(loaded.skill_boosts, original.skill_boosts)
-        self.assertEqual(loaded.skills["fitness"], 5)
+        self.assertEqual(loaded.skills["fitness"].level, 5)
+        self.assertEqual(loaded.skills["fitness"].xp, 37500)
+
+    def test_skill_timers_and_exercise_state_round_trip(self):
+        """Spec 08, Saves."""
+        assert self.loaded is not None
+        player = self.original.player
+        player.loss_timers = {"fitness": 1234.0, "strength": -49000.0}
+        player.loss_timer_steps = {"fitness": 1, "strength": -41}
+        player.exercise.regularity = {"squats": 12.5}
+        player.exercise.last_done_minute = {"squats": 90}
+        player.exercise.future_stiffness = {"legs": 3.5}
+        player.exercise.region_timers = {"legs": 60}
+        player.exercise.part_stiffness = {BodyPart.UPPERLEG_L: 5.0}
+        restored = codec.from_dict(codec.to_dict(self.original)).player
+        self.assertEqual(restored.loss_timers, player.loss_timers)
+        self.assertEqual(restored.loss_timer_steps, player.loss_timer_steps)
+        self.assertEqual(restored.exercise, player.exercise)
 
     def test_a_created_character_round_trips(self):
         from managers import creation
@@ -254,8 +271,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_10(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 10)
+    def test_schema_version_is_11(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 11)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()

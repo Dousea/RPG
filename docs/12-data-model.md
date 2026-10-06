@@ -243,10 +243,10 @@ Richer than the document's `position / condition / inventory`:
 ```text
 name, entity_id, current_location_id
 hit_points (0-100), stats (survival stats), asleep
-experience_points, level
 inventory: list[ItemEntity]          max_inventory_size = 20
 appearance, occupation_id, job_title see mechanics/07-character-creation.md
-skills, skill_boosts: {skill: int}   starting levels and boosts
+skills: {skill: SkillState}          level and XP, see mechanics/08-skills.md
+skill_boosts: {skill: int}           starting boosts
 equipment: {slot: ItemEntity | None} hands and the backpack slot
 worn: {BodyLocation: ItemEntity}     clothing, see mechanics/05-clothing.md
 traits: list[str]                    trait ids, chosen and granted

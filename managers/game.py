@@ -19,6 +19,7 @@ from managers.climate import ClimateEngine
 from managers.creation import new_player
 from managers.events import apply_event_modifiers, broadcast_event
 from managers.relationship import RelationshipManager
+from modules.character.build import CharacterBuild
 from modules.character.state import CharacterCondition
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
@@ -147,7 +148,7 @@ class GameManager:
             if climate is not None
             else ClimateEngine(self.world.seed, WORLD_START_DATE, WORLD_START_MINUTE_OF_DAY)
         )
-        self.player = player if player is not None else new_player(ORTON)
+        self.player = player if player is not None else new_player(ORTON, self.world.seed)
         self.npcs = npcs if npcs is not None else build_starting_npcs()
         self.narrative = narrative if narrative is not None else NarrativeState()
         self.memory = memory if memory is not None else MemoryState()
@@ -176,6 +177,13 @@ class GameManager:
         # Whatever the world arrived with, the narrative clock is authoritative.
         # Doing this here also repairs saves written while the two could drift.
         self._sync_world_clock()
+
+    @classmethod
+    def from_build(cls, build: CharacterBuild) -> "GameManager":
+        """A new game for a character build, in a world with a fresh seed."""
+        seed = random.Random().randrange(WORLD_SEED_LIMIT)
+        world = World(locations=build_starting_locations(), seed=seed)
+        return cls(world=world, player=new_player(build, seed))
 
     # === Clock ===
 

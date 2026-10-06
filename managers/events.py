@@ -155,8 +155,8 @@ def apply_event_modifiers(
                     conditions.append(condition)
                 elif not active and condition in conditions:
                     conditions.remove(condition)
-        # XPModifier/XPMultiplicativeModifier have no current producer on this
-        # path (QuestCompletionEvent has no emitter yet) and are left unhandled.
+        # XPModifier has no current producer on this path (QuestCompletionEvent
+        # has no emitter yet) and is left unhandled.
 
 
 def effect_handler_matches(event: AnyEvent, handler: AnyEffect, role: str) -> bool:

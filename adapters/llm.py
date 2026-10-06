@@ -64,6 +64,7 @@ PARSER_SYSTEM_PROMPT = (
     "- MOVE_TO zone_name, in/out, or a specific spot (e.g. 'the kitchen')\n"
     "- ATTACK target_name\n"
     "- USE_ITEM item_name\n"
+    "- EXERCISE exercise_name [10-60 minutes, in steps of 10] (from [EXERCISES])\n"
     "- WAIT duration (10m, 2h, 1h30m, until night, until 14:30)\n"
     "- SLEEP [duration]\n"
     "- STATUS_ADD status_name\n"

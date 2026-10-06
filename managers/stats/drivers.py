@@ -1,11 +1,14 @@
 """Stat drivers: each moves some survival stats over a chunk of game time (spec 02)."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from data import skills as skill_k
 from data import survival as k
 from data import traits as trait_k
 from data.thermal import Metabolic
+from managers.skills import fitness_level
 from managers.stats.status_effects import status_effect_level
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, Stats, StatusEffect
@@ -19,14 +22,6 @@ class BodyMultipliers:
     energy: float = 1.0
     fluids: float = 1.0
     fatigue: float = 1.0
-
-
-@dataclass(frozen=True)
-class SkillLevels:
-    """Fitness and Strength levels; 5 each until skills land."""
-
-    fitness: int = 5
-    strength: int = 5
 
 
 @dataclass(frozen=True)
@@ -46,7 +41,7 @@ class StatContext:
     new_zombies_seen: int = 0
     weather: WeatherSample | None = None
     body: BodyMultipliers = field(default_factory=BodyMultipliers)
-    skills: SkillLevels = field(default_factory=SkillLevels)
+    skills: Mapping[str, int] = field(default_factory=dict[str, int])
     corpse_count: int = 0
     corpse_defence: float = 0.0
     traits: frozenset[str] = frozenset()
@@ -72,7 +67,8 @@ def trait_mult(table: dict[str, float], traits: frozenset[str]) -> float:
 
 
 def _recovery_mod(ctx: StatContext) -> float:
-    return k.RECOVERY_MOD_STUB
+    levels = skill_k.ENDURANCE_RECOVERY_BY_FITNESS
+    return levels[max(0, min(len(levels) - 1, fitness_level(ctx.skills)))]
 
 
 class HungerDriver:

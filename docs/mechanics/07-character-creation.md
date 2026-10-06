@@ -175,7 +175,8 @@ Occupation with Unfit has Fitness 5 − 4 = 1, boost 1. Custom Occupation with
 Slow Metabolism has High Weight, so Fitness 5 − 1 = 4, boost 3, and 8 + 2 = 10
 points left.
 
-Levels and boosts are saved on the character. Nothing reads them yet.
+Levels and boosts are saved on the character. [Skills](08-skills.md) turns each
+level into XP and reads the boosts.
 
 ## Appearance and identity
 

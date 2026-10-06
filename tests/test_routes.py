@@ -307,7 +307,7 @@ class CreationRouteTests(RouteTestCase):
             {
                 "name": "Mara Quinn",
                 "occupation": "Nurse",
-                "traits": ["Night Owl", "Brave", "Fear of Blood"],
+                "traits": ["Night Owl", "Brave", "Fear of Blood", "Fit"],
             },
         )
         self.assertTrue(os.path.exists(self.save_path))
@@ -346,3 +346,49 @@ class WeatherPayloadTests(RouteTestCase):
         expected = round(manager.climate.sample(manager.narrative.minutes).air_temperature)
         weather = self.client.get("/state").get_json()["weather"]
         self.assertEqual(weather["temperature_c"], expected)
+
+
+class SkillsPayloadTests(RouteTestCase):
+    """Spec 08, What the narrator and the player see: the skills payload."""
+
+    def payload(self) -> dict:
+        return self.client.post("/play", json={"input": "look"}).get_json()
+
+    def test_play_replaces_level_and_experience_with_skills(self):
+        payload = self.payload()
+        self.assertNotIn("level", payload)
+        self.assertNotIn("experience_points", payload)
+        self.assertEqual(len(payload["skills"]), 35)
+
+    def test_each_entry_has_id_name_category_level_and_progress(self):
+        entry = {s["id"]: s for s in self.payload()["skills"]}["fitness"]
+        self.assertEqual(
+            entry,
+            {
+                "id": "fitness",
+                "name": "Fitness",
+                "category": "physical",
+                "level": 5,
+                "progress": 0.0,
+            },
+        )
+
+    def test_progress_is_the_share_of_the_way_to_the_next_level(self):
+        skills = self.engine.game.player.skills
+        skills["axe"].level = 1
+        skills["axe"].xp = 75 + 37.5
+        entry = {s["id"]: s for s in self.payload()["skills"]}["axe"]
+        self.assertEqual(entry["level"], 1)
+        self.assertAlmostEqual(entry["progress"], 0.25)
+
+    def test_level_ten_reads_as_full(self):
+        skills = self.engine.game.player.skills
+        skills["axe"].level = 10
+        skills["axe"].xp = 32775
+        entry = {s["id"]: s for s in self.payload()["skills"]}["axe"]
+        self.assertEqual(entry["progress"], 1.0)
+
+    def test_the_page_renders_skills_and_drops_the_old_rows(self):
+        page = self.client.get("/").data
+        self.assertIn(b"skill-list", page)
+        self.assertNotIn(b"data.experience_points", page)

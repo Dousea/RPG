@@ -65,6 +65,8 @@ ITEMS: dict[str, BaseItem] = {
         tags=["tool", "weapon"],
         type=MeleeWeaponType.BLUNT,
         damage=5,
+        skill_categories=("long_blunt",),  # spec 08
+        xp_damage=0.875,  # spec 08: mean of the matched weapon's damage range
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
             CharacterHoldableSlot.LEFT_HAND,
@@ -169,6 +171,30 @@ ITEMS: dict[str, BaseItem] = {
         modifiers=[],
         hunger_change=-0.40,
         thirst_change=0.10,
+    ),
+    "item_barbell": HoldableItem(
+        id="item_barbell",
+        name="Barbell",
+        description="A loaded steel bar for lifting.",
+        max_hit_points=15,  # spec 08
+        tags=["exercise"],
+        slots=[
+            CharacterHoldableSlot.RIGHT_HAND,
+            CharacterHoldableSlot.LEFT_HAND,
+        ],
+        is_two_handed=True,
+    ),
+    "item_dumbbell": HoldableItem(
+        id="item_dumbbell",
+        name="Dumbbell",
+        description="A cast-iron hand weight.",
+        max_hit_points=10,  # spec 08
+        tags=["exercise"],
+        slots=[
+            CharacterHoldableSlot.RIGHT_HAND,
+            CharacterHoldableSlot.LEFT_HAND,
+        ],
+        is_two_handed=False,
     ),
     "item_tshirt": ClothingItem(
         id="item_tshirt",

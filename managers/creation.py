@@ -1,5 +1,6 @@
 """Character creation rules: point pool, exclusions, starting skills, random builds (spec 07)."""
 
+import math
 import random
 from collections.abc import Iterable
 
@@ -22,7 +23,15 @@ from data.names import (
 )
 from data.occupations import OCCUPATIONS
 from data.presets import PRESETS
+from data.skills import (
+    LOSS_TIMER_DIVISOR,
+    LOSS_TIMER_START,
+    PASSIVE_SKILLS,
+    SKILLS,
+)
 from data.traits import TRAITS
+from managers.exercise import starting_regularity
+from managers.skills import SkillEngine
 from modules.body import BodyLocation
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild, ResolvedCharacter
@@ -285,15 +294,18 @@ def randomize(rng: random.Random) -> CharacterBuild:
     )
 
 
-def new_player(build: CharacterBuild) -> PlayerEntity:
-    """The starting player for a valid build: dressed in its outfit, holding the apartment key."""
+def new_player(build: CharacterBuild, seed: int = 0) -> PlayerEntity:
+    """The starting player for a valid build: dressed in its outfit, holding the apartment key.
+
+    `seed` is the world seed, which the starting exercise regularity is drawn from.
+    """
     resolved = resolve(build)
     worn: dict[BodyLocation, ItemEntity] = {}
     for item_id in build.outfit:
         item = ITEMS[item_id]
         assert isinstance(item, ClothingItem)
         worn[item.body_location] = ItemEntity(item=item)
-    return PlayerEntity(
+    player = PlayerEntity(
         name=build.appearance.full_name,
         current_location_id=STARTING_ZONE_ID,
         inventory=[ItemEntity(item=ITEMS["item_apartment_key"])],
@@ -302,6 +314,14 @@ def new_player(build: CharacterBuild) -> PlayerEntity:
         occupation_id=build.occupation_id,
         job_title=build.job_title,
         traits=list(resolved.traits),
-        skills=resolved.skills,
         skill_boosts=resolved.skill_boosts,
     )
+    engine = SkillEngine()
+    for skill_id in SKILLS:
+        engine.set_level(player, skill_id, resolved.skills.get(skill_id, 0))
+    player.exercise.regularity = starting_regularity(build.occupation_id, seed)
+    player.loss_timers = {skill_id: LOSS_TIMER_START for skill_id in PASSIVE_SKILLS}
+    player.loss_timer_steps = {
+        skill_id: math.floor(LOSS_TIMER_START / LOSS_TIMER_DIVISOR) for skill_id in PASSIVE_SKILLS
+    }
+    return player

@@ -77,7 +77,8 @@ thermal damage ticks.
 
 **Inputs.** `energy = 0.6·h + 0.4·f` with `h = 1 − (0.4·hunger + 0.6·hunger²)` and
 `f` the same for fatigue. `fluids = 1 − thirst`. Humidity comes from the weather.
-Body weight is 80 kg and the Fitness stat is 0 until their specs land.
+Body weight is 80 kg. The Fitness stat is the Fitness level ÷ 5 − 1, from −1 to 1
+([skills](08-skills.md#effects-wired-now)).
 
 ### Set point and metabolic rate
 

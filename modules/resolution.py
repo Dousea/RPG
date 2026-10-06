@@ -6,6 +6,7 @@ exactly the entities the legality check saw.
 
 from dataclasses import dataclass
 
+from .character.exercise import ExerciseDefinition
 from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
 from .item import BaseItem
@@ -88,4 +89,14 @@ class TimeSpan:
     clamped: bool
 
 
-Resolution = MoveOutcome | HeldItem | NewItem | TargetNpc | NpcDestination | TimeSpan | None
+@dataclass(frozen=True)
+class ExercisePlan:
+    """The exercise to do and the minutes asked for."""
+
+    exercise: ExerciseDefinition
+    minutes: int
+
+
+Resolution = (
+    MoveOutcome | HeldItem | NewItem | TargetNpc | NpcDestination | TimeSpan | ExercisePlan | None
+)

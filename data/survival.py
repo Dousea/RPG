@@ -55,7 +55,6 @@ WALKING_DRAIN_ENDURANCE_LEVEL = (
 WALKING_ENDURANCE_DRAIN_per_hour = per_hour_from_real_frame(0.000052 / 7)  # spec 02
 SNEAK_ENDURANCE_FACTOR = 1.5  # spec 02
 SLEEPING_ENDURANCE_REGEN_per_hour = per_hour_from_frame(0.000031 * 2 / 3)  # spec 02
-RECOVERY_MOD_STUB = 1.2  # spec 02: Fitness 5 until the skills spec lands
 
 # Idleness
 IDLE_INCREASE_per_hour = per_hour_from_day_scaled(0.0005)  # spec 02

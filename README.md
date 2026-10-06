@@ -125,7 +125,7 @@ TAKE <item>                          DROP <item>
 WEAR <item>                          TAKE_OFF <item>
 MOVE_TO <zone|in|out|spot>           ATTACK <target>
 USE_ITEM <item>                      WAIT <10m|2h|1h30m|until night|until HH:MM>
-SLEEP [duration]
+SLEEP [duration]                     EXERCISE <type> [10-60 minutes]
 STATUS_ADD <status>                  STATUS_REMOVE <status>
 UPDATE_CONDITION <field> <value>     SET_FLAG <flag> true|false
 DISCOVER_FLAG <flag>

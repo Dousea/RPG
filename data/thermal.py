@@ -100,7 +100,6 @@ WEIGHT_OFFSET = 0.5  # spec 06
 WEIGHT_SCALE = 0.666  # spec 06
 WEIGHT_FITNESS_MULT = 0.2  # spec 06
 DEFAULT_BODY_WEIGHT_KG = 80  # spec 06
-FITNESS_STAT_STUB = 0.0  # spec 06: Fitness stat until skills land
 
 # The core
 BODY_HEAT_PER_FRAME = 0.00025  # spec 06

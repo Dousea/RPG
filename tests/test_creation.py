@@ -245,8 +245,8 @@ class NewPlayerTests(unittest.TestCase):
         self.assertEqual(player.name, "Jo Reyes")
         self.assertEqual(player.appearance.forename, "Jo")
         self.assertEqual(player.occupation_id, "fireofficer")
-        self.assertEqual(player.traits, ["strong", "hemophobic"])
-        self.assertEqual(player.skills["strength"], 10)
+        self.assertEqual(player.traits, ["strong", "hemophobic", "fit"])
+        self.assertEqual(player.skills["strength"].level, 10)
         self.assertEqual(player.skill_boosts["strength"], 3)
         self.assertEqual(
             sorted(e.item.id for e in player.worn.values()), ["item_trainers", "item_tshirt"]
@@ -286,7 +286,7 @@ class TraitGrantedTraitTests(unittest.TestCase):
 
     def test_player_holds_the_granted_trait(self):
         player = creation.new_player(build(traits=("weightgain",)))
-        self.assertEqual(player.traits, ["overweight", "weightgain"])
+        self.assertEqual(player.traits, ["overweight", "weightgain", "out_of_shape"])
 
     def test_slow_metabolism_with_fit_is_refused_in_either_order(self):
         for traits in (("weightgain", "fit"), ("fit", "weightgain")):
