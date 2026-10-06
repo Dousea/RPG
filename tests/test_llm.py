@@ -77,6 +77,17 @@ class ParseNarratorResponseTests(unittest.TestCase):
         parsed = parse_narrator_response("story:\nx\n\nevent:\ny")
         self.assertEqual(parsed["story"], "x")
 
+    def test_prose_before_options_with_no_story_header_is_the_story(self):
+        parsed = parse_narrator_response(
+            "The apartment is quiet...\n\nYou lift the knife.\n\n**What do you do?**"
+            "\n\nOPTIONS:\n- Lock the door\n- Hide"
+        )
+        self.assertEqual(
+            parsed["story"],
+            "The apartment is quiet...\n\nYou lift the knife.\n\n**What do you do?**",
+        )
+        self.assertEqual(parsed["options"], ["Lock the door", "Hide"])
+
     def test_prose_with_no_headers_at_all_is_the_story(self):
         parsed = parse_narrator_response("just some prose\n\nwith no headers at all")
         self.assertEqual(parsed["story"], "just some prose\n\nwith no headers at all")

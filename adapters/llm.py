@@ -338,10 +338,11 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
     """Split a STORY/OPTIONS narrator response into its parts.
 
     Section headers are matched line by line rather than by splitting on
-    blank lines, so a story containing blank lines survives intact. A reply
-    with no headers is all story. An echoed prompt block (`[OUTCOMES]` and
-    the lines under it) is dropped up to the next header, and so is a stray
-    EVENT section. OPTIONS is optional: none (or NONE) yields an empty list.
+    blank lines, so a story containing blank lines survives intact. In a reply
+    with no STORY header, the lines before its first header are the story. An
+    echoed prompt block (`[OUTCOMES]` and the lines under it) is dropped up to
+    the next header, and so is a stray EVENT section. OPTIONS is optional: none
+    (or NONE) yields an empty list.
     """
     sections: dict[str, list[str]] = {"story": [], "dropped": [], "options": []}
     headers = {"STORY:": "story", "EVENT:": "dropped", "OPTIONS:": "options"}
@@ -350,9 +351,8 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
     def header_of(stripped: str) -> str | None:
         return next((key for key in headers if stripped.upper().startswith(key)), None)
 
-    # A reply with no headers at all is still prose; keep it as the story.
-    has_headers = any(header_of(line.strip()) for line in lines)
-    current: str | None = None if has_headers else "story"
+    has_story_header = any(header_of(line.strip()) == "story" for line in lines)
+    current: str | None = None if has_story_header else "story"
 
     for line in lines:
         stripped = line.strip()

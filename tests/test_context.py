@@ -832,6 +832,17 @@ class MeleeContextTests(unittest.TestCase):
     def narrator(self) -> str:
         return ContextBuilder(self.gm).build_narrator_prompt("look")
 
+    def test_a_held_knife_is_in_hands_not_worn(self):
+        self.gm.player.worn.clear()
+        knife = self.hold("item_kitchen_knife")
+        self.gm.player.inventory.append(knife)
+        builder = ContextBuilder(self.gm)
+        parser = builder.build_parser_prompt("look")
+        worn = parser.split("[WORN]")[1].split("[CONDITION]")[0]
+        self.assertNotIn("Kitchen Knife", worn)
+        self.assertIn("Kitchen Knife (in hands)", parser.split("[INVENTORY]")[1])
+        self.assertIn("Kitchen Knife", self.narrator().split("Equipment:")[1].split("Wearing:")[0])
+
     def test_a_down_zombie_reads_down(self):
         zombie = add_zombie(self.gm, 1, ZombieState.ATTACKING)
         zombie.down_until = self.gm.narrative.minutes + 2

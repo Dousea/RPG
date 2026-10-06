@@ -148,7 +148,7 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[NPCS HERE]` | each NPC, "(following you)" when they follow, what they hold, and a line per available topic |
 | `[THREATS]` | perceived zombie ids with distance words |
 | `[INVENTORY]` | carried items |
-| `[WORN]` | the worn outfit, and what is equipped |
+| `[WORN]` | the worn outfit |
 | `[CONDITION]` | status effects by name and level, `sneaking` |
 | `[WEATHER]` | the weather in words |
 | `[EXERCISES]` | exercise types, and whether a barbell or dumbbell is carried |
@@ -431,6 +431,8 @@ next header.
   after each drop. Current-state blocks, `[OUTCOMES]` and the player's input are never
   dropped; an emptied section keeps its header and placeholder. One warning per
   prompt lists what was dropped, and another says when it still does not fit.
+- `[WORN]` lists only worn clothing; what is held shows as "(in hands)" in
+  `[INVENTORY]` and on the narrator's Equipment line.
 
 ## Failures
 

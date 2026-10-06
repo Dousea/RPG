@@ -508,9 +508,7 @@ reach {looks.object}, though {looks.subject} can still hear them.)
         return "\n".join(lines)
 
     def _worn_section(self) -> str:
-        player = self.manager.player
-        worn = [entity.item.name for entity in player.equipment.values() if entity is not None]
-        worn += [entity.item.name for _, entity in player.worn_outer_to_inner()]
+        worn = [entity.item.name for _, entity in self.manager.player.worn_outer_to_inner()]
         return ", ".join(worn) if worn else "Nothing"
 
     # === Parser prompt ===
