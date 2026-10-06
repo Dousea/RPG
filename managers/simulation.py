@@ -16,12 +16,14 @@ this list; it only puts prose around facts the engine already decided.
 import random
 
 from data import status_effects, survival
+from data.items import item_condition_word
 from data.time_costs import MULTIPLIED_ACTIONS, NONE_TURN_MIN, action_minutes
 from managers.climate import weather_change_facts
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.stats import (
     StatContext,
     StatsEngine,
+    injury_words,
     level_change_facts,
     player_status_effect_levels,
     status_effect_level,
@@ -362,7 +364,7 @@ class SimulationCore:
         return " ".join(
             [
                 f"Use {item.name}: succeeded, "
-                f"Orton now at {player.hit_points}/{player.max_hit_points} HP.",
+                f"Orton is {injury_words(player.hit_points, player.max_hit_points)}.",
                 *consume_facts,
             ]
         )
@@ -406,7 +408,7 @@ class SimulationCore:
             return f"Removed {entity.item.name} from inventory."
         if action.operation == "UPDATE_CONDITION":
             entity.hit_points = int(action.value)
-            return f"{entity.item.name} condition is now {entity.hit_points}."
+            return f"{entity.item.name} is now {item_condition_word(entity)}."
 
         # UPDATE_QUANTITY: N copies of an item are N entities; adjust the
         # count to match the target, capped by remaining inventory room.
@@ -450,22 +452,16 @@ class SimulationCore:
         jitter = 1.0 + self._rng.uniform(-DAMAGE_JITTER, DAMAGE_JITTER)
         final_damage = max(1, int(base_damage * multiplier * jitter))
 
-        before = npc.hit_points
         npc.hit_points -= final_damage
-        dealt = before - npc.hit_points
 
         self._apply_relationship_modifiers(dealt_modifiers)
         self._apply_relationship_modifiers(taken_modifiers)
 
         if npc.hit_points <= 0:
-            fact = (
-                f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, {npc.name} is down."
-            )
+            fact = f"Attack {npc.name} with {weapon.name}: hit, {npc.name} is down."
             return self._with_quest_note(fact, f"defeat:{npc.npc_id}")
-        return (
-            f"Attack {npc.name} with {weapon.name}: hit for {dealt} damage, "
-            f"{npc.name} now at {npc.hit_points}/{npc.max_hit_points} HP."
-        )
+        hurt = injury_words(npc.hit_points, npc.max_hit_points)
+        return f"Attack {npc.name} with {weapon.name}: hit, {npc.name} is {hurt}."
 
     def _with_quest_note(self, fact: str, objective_key: str) -> str:
         """Append any quest progress `objective_key` caused to `fact`.
@@ -565,20 +561,17 @@ class SimulationCore:
         action: UpdateRelationshipAction = accepted.action
         npc = accepted.expect(TargetNpc).npc
         manager = self.manager
+        relationships = manager.relationship_manager
+        player_id = manager.player.entity_id
         if action.axis == "affection":
-            manager.relationship_manager.apply_affinity_modifier(
-                AffinityModifier(
-                    source_id=npc.npc_id,
-                    target_id=manager.player.entity_id,
-                    amount=action.amount,
-                )
+            relationships.apply_affinity_modifier(
+                AffinityModifier(source_id=npc.npc_id, target_id=player_id, amount=action.amount)
             )
-            score = manager.relationship_manager.get_affinity(npc.npc_id, manager.player.entity_id)
-        else:
-            score = manager.relationship_manager.adjust_trust(
-                npc.npc_id, manager.player.entity_id, action.amount
-            )
-        return f"{npc.name} {action.axis} is now {score}."
+            disposition = relationships.get_disposition(npc.npc_id, player_id)
+            return f"{npc.name} now feels {disposition} toward Orton."
+        relationships.adjust_trust(npc.npc_id, player_id, action.amount)
+        trust = relationships.get_trust_level(npc.npc_id, player_id)
+        return f"{npc.name}'s trust in Orton is now {trust}."
 
     def _resolve_add_relationship_note(self, accepted: Accepted) -> str:
         action: AddRelationshipNoteAction = accepted.action

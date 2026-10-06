@@ -1,4 +1,5 @@
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
+from modules.entity.item import ItemEntity
 from modules.item import (
     AppliableItem,
     ArmorItem,
@@ -14,6 +15,18 @@ from modules.weapon import MeleeWeaponType, RangedWeaponType
 # Our rule: below this share of its max hit points an item reads as damaged
 # rather than worn, so the narrator gets a word, never the number.
 ITEM_WORN_MIN_FRACTION = 0.5
+
+
+def item_condition_word(entity: ItemEntity) -> str:
+    """The item's hit points as intact, worn, damaged or broken."""
+    if entity.hit_points >= entity.max_hit_points:
+        return "intact"
+    if entity.hit_points <= 0:
+        return "broken"
+    if entity.hit_points >= entity.max_hit_points * ITEM_WORN_MIN_FRACTION:
+        return "worn"
+    return "damaged"
+
 
 ITEMS: dict[str, BaseItem] = {
     "item_crowbar": MeleeWeaponItem(

@@ -16,6 +16,7 @@ from data.status_effects import (
     DEFENCE_PENALTY_DRUNK,
     DEFENCE_PENALTY_ENDURANCE,
     DEFENCE_PENALTY_TIRED,
+    INJURY_WORDS,
     MELEE_DAMAGE_FLOOR,
     PANIC_MELEE_PENALTY_PER_LEVEL,
     STATUS_EFFECT_THRESHOLDS,
@@ -85,6 +86,14 @@ def status_effect_levels(
             assert spec.stat is not None
             levels[status_effect] = status_effect_level(status_effect, stats.get(spec.stat))
     return levels
+
+
+def injury_words(hit_points: int, max_hit_points: int) -> str:
+    """How hurt a body is, by the Injured status effect's bands scaled to its max."""
+    if hit_points >= max_hit_points:
+        return "unhurt"
+    lost_per_hundred = 100 * (max_hit_points - hit_points) / max_hit_points
+    return INJURY_WORDS[status_effect_level(StatusEffect.INJURED, lost_per_hundred)]
 
 
 def melee_status_effect_penalty(stats: Stats) -> float:

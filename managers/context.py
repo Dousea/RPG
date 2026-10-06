@@ -13,7 +13,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 
 from collections.abc import Iterable
 
-from data.items import ITEM_WORN_MIN_FRACTION
+from data.items import item_condition_word
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from managers.climate import describe_weather
 from managers.game import GameManager
@@ -370,14 +370,4 @@ def _lines(lines: Iterable[str]) -> str:
 
 
 def _with_condition(entity: ItemEntity) -> str:
-    return f"{entity.item.name} ({_condition_word(entity)})"
-
-
-def _condition_word(entity: ItemEntity) -> str:
-    if entity.hit_points >= entity.max_hit_points:
-        return "intact"
-    if entity.hit_points <= 0:
-        return "broken"
-    if entity.hit_points >= entity.max_hit_points * ITEM_WORN_MIN_FRACTION:
-        return "worn"
-    return "damaged"
+    return f"{entity.item.name} ({item_condition_word(entity)})"

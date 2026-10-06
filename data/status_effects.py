@@ -93,6 +93,10 @@ STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
 }
 
 STATUS_EFFECT_MAX_LEVEL = 4  # spec 03
+
+# Our rule: how an outcome fact describes a hurt body, by Injured level 0 to 4.
+# Level 0 here still means some hit points are lost; a full body is unhurt.
+INJURY_WORDS = ("barely hurt", "a little hurt", "injured", "badly injured", "critically injured")
 BLEEDING_LEVEL_CAP = 4  # spec 03
 FOOD_EATEN_PER_HUNGER = 13000  # spec 03: timer units per 1.0 hunger
 FOOD_EATEN_COOKED_MULT = 2  # spec 03

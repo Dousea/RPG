@@ -1033,6 +1033,67 @@ class ConsumingTests(unittest.TestCase):
         self.assertEqual(gm.player.food_eaten_timer, 0)
 
 
+class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):
+    """docs/01-engine-authority.md: outcome facts describe HP, damage and
+    relationship scores in words, never as numbers."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_building"  # Emma starts here
+        emma = self.gm.resolve_npc("Emma")
+        assert emma is not None
+        self.emma = emma
+        rng = random.Random()
+        rng.uniform = lambda a, b: 0.0
+        self.rng = rng
+
+    def _first_fact(self, action) -> str:
+        fact = _resolve(self.gm, action, rng=self.rng)[0]
+        self.assertNotRegex(fact, r"\d")
+        return fact
+
+    def test_an_attack_reports_how_hurt_the_target_is(self):
+        self.gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
+            item=ITEMS["item_crowbar"]
+        )
+        cases = ((100, "barely hurt"), (40, "badly injured"), (20, "critically injured"))
+        for hit_points, words in cases:
+            with self.subTest(hit_points=hit_points):
+                self.emma.hit_points = hit_points
+                fact = self._first_fact(AttackAction(target_name="Emma"))
+                self.assertIn(f"Emma is {words}", fact)
+
+    def test_using_an_item_reports_how_hurt_orton_is(self):
+        self.gm.player.hit_points = 50
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
+        fact = self._first_fact(UseItemAction(item_name="First Aid Kit"))
+        self.assertIn("Use First Aid Kit: succeeded, Orton is ", fact)
+
+    def test_an_unhurt_player_reads_as_unhurt(self):
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_first_aid_kit"]))
+        fact = self._first_fact(UseItemAction(item_name="First Aid Kit"))
+        self.assertIn("Orton is unhurt", fact)
+
+    def test_an_item_condition_update_reads_as_a_word(self):
+        fact = self._first_fact(
+            UpdateInventoryAction(
+                item_name="Apartment Key", operation="UPDATE_CONDITION", value="3"
+            )
+        )
+        self.assertEqual(fact, "Apartment Key is now damaged.")
+
+    def test_relationship_updates_read_as_bands(self):
+        relationships = self.gm.relationship_manager
+        fact = self._first_fact(
+            UpdateRelationshipAction(npc_name="Emma", axis="affection", amount=5)
+        )
+        disposition = relationships.get_disposition("npc_emma", "player")
+        self.assertEqual(fact, f"Emma now feels {disposition} toward Orton.")
+        fact = self._first_fact(UpdateRelationshipAction(npc_name="Emma", axis="trust", amount=-5))
+        trust = relationships.get_trust_level("npc_emma", "player")
+        self.assertEqual(fact, f"Emma's trust in Orton is now {trust}.")
+
+
 if __name__ == "__main__":
     unittest.main()
 
