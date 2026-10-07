@@ -146,8 +146,8 @@ class CornerStoreSaveTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.path = os.path.join(directory.name, "save.json")
 
-    def test_the_schema_is_19(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 19)
+    def test_the_schema_is_21(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 21)
 
     def test_the_smashed_window_and_the_store_round_trip(self):
         gm = on_the_street()

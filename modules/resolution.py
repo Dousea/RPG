@@ -77,6 +77,22 @@ class TargetZombie:
 
 
 @dataclass(frozen=True)
+class TargetCorpse:
+    """A corpse to search, and the minutes the player needs to walk up to it (spec 14)."""
+
+    corpse_id: str
+    approach_minutes: int
+
+
+@dataclass(frozen=True)
+class CorpseItem:
+    """An item on a searched corpse that the player takes (spec 14)."""
+
+    corpse_id: str
+    entity: ItemEntity
+
+
+@dataclass(frozen=True)
 class TargetNpc:
     npc: NpcEntity
 
@@ -156,6 +172,8 @@ Resolution = (
     | NpcItem
     | NpcTopic
     | TargetZombie
+    | TargetCorpse
+    | CorpseItem
     | TargetBarrier
     | BarricadeKit
     | PryTarget

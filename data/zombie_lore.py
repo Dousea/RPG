@@ -1,5 +1,9 @@
 """Zombie settings, population and zone numbers (spec 09)."""
 
+from data.traits import BRAVE_ID, COWARDLY_ID, DESENSITIZED_ID, PRONE_TO_ILLNESS_ID, RESILIENT_ID
+from modules.body import BodyPart
+from modules.units import per_minute_from_frame
+
 HOP_TILES = 40  # spec 09: every zone connection
 
 ZOMBIE_STRENGTH = 3  # spec 09
@@ -26,6 +30,91 @@ ZONE_ZOMBIE_FIELDS: dict[str, tuple[int, int, int]] = {  # spec 09
     "zone_bodega": (10, 1, 63),
     "zone_neighborhood": (80, 16, 64),
 }
+
+STANDING_HIT_PARTS = (  # spec 14: a weapon hit or shove on a standing zombie lands on one, uniformly
+    BodyPart.HAND_L,
+    BodyPart.HAND_R,
+    BodyPart.FOREARM_L,
+    BodyPart.FOREARM_R,
+    BodyPart.UPPERARM_L,
+    BodyPart.UPPERARM_R,
+    BodyPart.TORSO_UPPER,
+    BodyPart.TORSO_LOWER,
+    BodyPart.HEAD,
+    BodyPart.NECK,
+)
+FLOOR_HIT_PARTS = (BodyPart.HEAD, BodyPart.NECK)  # spec 14: a floor attack or stomp
+ZOMBIE_ARMOUR_FACTOR = 2  # spec 14: multiplier on a part's defence
+ZOMBIE_MAX_DEFENCE = 85  # spec 14: percent
+ZOMBIE_SCRATCH_WEIGHT = 0.5  # spec 14: in (scratch x 0.5 + bite) x 2
+ZOMBIE_PART_DEFENCE_CAP = 100  # spec 14: the scratch and the bite sum of a part
+
+CRAWLER_ONE_IN_WEAPON = 30  # spec 14: per weapon hit that does not kill
+CRAWLER_ONE_IN_STOMP = 15  # spec 14: per bare-handed stomp that does not kill
+CRAWLER_SPEED_MOD_BASE = 0.3  # spec 14
+CRAWLER_ATTACK_NOTHING_ONE_IN = 2  # spec 14: half its attacks do nothing
+CRAWLER_GROIN_ONE_IN = 10  # spec 14: groin to foot, else thigh to foot
+CRAWL_FACT = "{target} drops to the ground and starts to crawl."  # spec 14
+CRAWLER_STATE_WORDS = {  # spec 14
+    "idle": "crawling",
+    "alerted": "crawling toward the noise",
+    "chasing": "crawling toward you",
+    "attacking": "crawling",
+}
+
+CORPSE_CHUNK_CHANCE_FACTOR = 2 / 3 * 0.1  # spec 14: of the per-chunk zombie count
+CORPSE_SKELETON_ONE_IN = 14  # spec 14: 1 in 14
+CORPSE_FAKE_DEAD_ONE_IN = 15  # spec 14: of the bodies that are not skeletons
+CORPSE_FAKE_DEAD_CRAWLER_ONE_IN = 5  # spec 14: of the fake-dead ones
+CORPSE_RANDOM_HOLES = 10  # spec 14: per dressed outbreak corpse
+BODY_PART_COUNT = len(BodyPart)  # spec 14: a random hole picks one of the 17
+ROT_STAGE_HOURS = 72  # spec 14: game hours per rot stage
+HOURS_FOR_CORPSE_REMOVAL = 216  # spec 14: game hours
+SKELETON_ROT_ONE_IN = 7  # spec 14: a body past removal age may turn to bones instead
+SKELETON_REMOVAL_EXTRA_HOURS = 72  # spec 14: game hours
+ROT_STAGE_MAX = 3  # spec 14
+ROT_FRESH_DAYS = 20  # spec 14: days since the outbreak when every kill is still stage 1
+ROT_MID_DAYS = 90  # spec 14: days when the chances stop moving
+ROT_LATE_DAYS = 180  # spec 14: days when stage 1 is gone
+ROT_STAGE1_START, ROT_STAGE1_MID, ROT_STAGE1_LATE = 100, 20, 0  # spec 14: percent
+ROT_STAGE2_START, ROT_STAGE2_MID, ROT_STAGE2_LATE = 10, 30, 10  # spec 14: percent
+ROT_WORDS = {1: "fresh", 2: "decaying", 3: "rotten"}  # spec 14
+SKELETON_WORD = "bare bones"  # spec 14
+
+FAKE_DEAD_WAKEUP_MIN = 30  # spec 14: minutes after it died
+FAKE_DEAD_RING_TILES = (2, 4)  # spec 14: the player must be this far from the body
+RISE_FACT = "A body on the ground lurches to its feet."  # spec 14
+RISE_CRAWLING_FACT = (
+    "A body on the ground twitches and starts to drag itself across the floor."  # spec 14
+)
+
+CORPSE_STRIP_UNHAPPINESS_PER_MIN = per_minute_from_frame(
+    0.01
+)  # spec 14: unhappiness points per minute of taking an item
+STRIP_UNHAPPINESS_TRAIT_MULT = {COWARDLY_ID: 2.0, BRAVE_ID: 0.5, DESENSITIZED_ID: 0.0}  # spec 14
+LOOT_ROLL_STEPS = 10000  # spec 14: the pocket roll is a whole number below this
+SEARCH_FACT = "{name} goes through {corpse}: {items}."  # spec 14
+SEARCH_NOTHING = "nothing"  # spec 14
+TAKE_CORPSE_FACT = "{name} takes the dead {sex}'s {item}."  # spec 14
+DEAD_MAN, DEAD_WOMAN = "man", "woman"  # spec 14
+CORPSE_GONE_FACT = "{name} gets to where {corpse} lay, but the body is gone."  # spec 14
+ALREADY_SEARCHED = "{name} has already been through {corpse}."  # spec 14
+NOT_SEARCHED = "{name} hasn't been through {corpse} yet."  # spec 14
+NO_SUCH_CORPSE = "'{target}' is not here to search."  # spec 14
+NOT_ON_CORPSE = "{corpse} holds no '{item}'."  # spec 14
+ASLEEP_REFUSAL = "{name} is asleep."  # spec 14
+MAN_WORD, WOMAN_WORD = "a man", "a woman"  # spec 14
+CORPSE_LOOK_ITEMS = 3  # spec 14: garments named in a corpse's description
+
+CORPSE_COUNT_MAX = 25  # spec 14: bodies counted for corpse sickness
+SMELL_FACT = "The smell of the dead hangs thick here."  # spec 14
+
+REANIMATE_DELAY_MAX_MIN = 1.0  # spec 14: the player's body rises within this many minutes
+
+FEMALE_ONE_IN = 2  # spec 14: 50% female
+CHANCE_OF_ATTACHED_WEAPON = 6  # spec 14: percent
+ATTACHED_CONDITION_SPREAD = 5  # spec 14: condition from max(2, max - 5) up to max, exclusive
+ATTACHED_CONDITION_FLOOR = 2  # spec 14
 
 HEALTH_BASE_MIN = 0.5  # spec 09
 HEALTH_BASE_MAX = 3.5  # spec 09
@@ -74,6 +163,8 @@ SHOUT_SNEAK_RADIUS = 6  # spec 10: tiles
 SHOUT_SNEAK_VOLUME = 6  # spec 10
 MEGAPHONE_SHOUT = 90  # spec 10: radius and volume, unused until the catalogue has a megaphone
 MEGAPHONE_SHOUT_SNEAK = 18  # spec 10: radius and volume
+
+CORPSE_SICKNESS_TRAIT_MULT = {RESILIENT_ID: 0.75, PRONE_TO_ILLNESS_ID: 1.25}  # spec 14
 
 HEARING_POOR_FACTOR = 0.45  # spec 09
 HEARING_RAIN_FACTOR = 0.33  # spec 09

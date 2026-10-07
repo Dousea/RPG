@@ -22,6 +22,7 @@ from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
@@ -759,6 +760,147 @@ class InViewTests(unittest.TestCase):
         self.assertNotIn("[IN VIEW]", self.prompt())
 
 
+def corpses_block(prompt: str) -> str:
+    return prompt.split("[CORPSES]")[1].split("\n[")[0]
+
+
+class CorpsesContextTests(unittest.TestCase):
+    """Spec 14, What the narrator and the player see: the [CORPSES] block."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_street"
+        self.gm.world.outbreak_started_at = 0
+        clear_sky(self.gm)
+
+    def body(self, gap: float = 3.0, *items: str, **fields) -> CorpseEntity:
+        number = len(self.gm.world.corpses) + 1
+        corpse = CorpseEntity(
+            corpse_id=f"c{number}",
+            zone_id="zone_street",
+            gap=gap,
+            female=fields.pop("female", False),
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=fields.pop("rot_at_death", 1),
+            contents=[ItemEntity(item=ITEMS[item]) for item in items],
+            **fields,
+        )
+        self.gm.world.corpses[corpse.corpse_id] = corpse
+        return corpse
+
+    def parser(self) -> str:
+        return corpses_block(ContextBuilder(self.gm).build_parser_prompt("look")).strip()
+
+    def narrator(self) -> str:
+        block = corpses_block(ContextBuilder(self.gm).build_narrator_prompt("look"))
+        return block.split(")\n", 1)[1].strip()
+
+    def test_the_parser_sees_the_id_the_distance_the_clothes_the_rot_and_whether_searched(self):
+        self.body(3.0, "item_jacket_police")
+        self.assertEqual(
+            self.parser(), "- c1, close, a man in a police jacket, fresh, not searched"
+        )
+
+    def test_a_searched_body_lists_what_it_holds(self):
+        self.body(3.0, "item_jacket_police", "item_kitchen_knife", searched=True)
+        self.assertEqual(
+            self.parser(), "- c1, close, fresh, searched: police jacket, kitchen knife"
+        )
+
+    def test_a_woman_and_the_rot_words(self):
+        self.body(8.0, "item_jacket_police", female=True, rot_at_death=2)
+        self.body(8.0, "item_jacket_police", rot_at_death=3)
+        lines = [line.strip() for line in self.parser().splitlines()]
+        self.assertEqual(
+            lines[0], "- c1, nearby, a woman in a police jacket, decaying, not searched"
+        )
+        self.assertEqual(lines[1], "- c2, nearby, a man in a police jacket, rotten, not searched")
+
+    def test_a_skeleton_is_bare_bones(self):
+        self.body(3.0, skeleton=True)
+        self.assertEqual(self.parser(), "- c1, close, bare bones")
+
+    def test_the_narrator_sees_no_ids(self):
+        self.body(3.0, "item_jacket_police")
+        self.assertEqual(self.narrator(), "- close, a man in a police jacket, fresh, not searched")
+
+    def test_a_body_is_never_described_as_fake_dead_or_crawling(self):
+        self.body(3.0, "item_jacket_police", fake_dead=True, crawling=True)
+        for text in (self.parser(), self.narrator()):
+            self.assertNotIn("fake", text)
+            self.assertNotIn("crawl", text)
+            self.assertNotIn("rise", text)
+
+    def test_a_body_beyond_sight_is_not_listed(self):
+        self.body(30.0, "item_jacket_police")
+        self.assertEqual(self.parser(), "None")
+
+    def test_the_block_says_none_without_bodies(self):
+        self.assertEqual(self.parser(), "None")
+        self.assertEqual(self.narrator(), "None")
+
+    def test_a_body_in_another_zone_is_not_listed(self):
+        corpse = self.body(3.0, "item_jacket_police")
+        corpse.zone_id = "zone_building"
+        self.assertEqual(self.parser(), "None")
+
+    def test_narrator_facts_name_a_corpse_id_as_the_body(self):
+        self.body(3.0)
+        prompt = ContextBuilder(self.gm).build_narrator_prompt(
+            "look", ["Orton goes through c1: nothing."]
+        )
+        self.assertIn("Orton goes through the body: nothing.", prompt)
+
+
+class CorpseSceneKeyTests(CorpsesContextTests):
+    """Spec 14, What the narrator and the player see: SEARCH and TAKE come with the bodies."""
+
+    def setUp(self):
+        super().setUp()
+        self.gm.player.inventory.clear()
+        self.gm.player.worn.clear()
+        self.gm.current_location.entities.clear()
+        self.gm.world.barriers.clear()
+
+    def test_a_perceived_body_gives_corpses_and_search(self):
+        self.body(3.0, "item_jacket_police")
+        builder = ContextBuilder(self.gm)
+        self.assertEqual(builder.scene_keys(), frozenset({"corpses"}))
+        listed = listed_in_prompt(builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"SEARCH"})
+
+    def test_a_searched_body_with_contents_gives_loot_and_take(self):
+        self.body(3.0, "item_jacket_police", searched=True)
+        builder = ContextBuilder(self.gm)
+        self.assertEqual(builder.scene_keys(), frozenset({"corpses", "loot"}))
+        listed = listed_in_prompt(builder.build_parser_prompt("look"))
+        self.assertEqual(listed, ALWAYS | {"SEARCH", "TAKE"})
+
+
+class CrawlerThreatsTests(unittest.TestCase):
+    """Spec 14, What the narrator and the player see: `[THREATS]` says crawling."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_street"
+        self.gm.world.outbreak_started_at = 0
+        clear_sky(self.gm)
+
+    def test_a_crawler_reads_crawling_toward_you_or_on_you_crawling(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING, crawling=True)
+        add_zombie(self.gm, 1, ZombieState.ATTACKING, crawling=True)
+        block = threats_block(ContextBuilder(self.gm).build_narrator_prompt("look"))
+        self.assertIn("a zombie, close, crawling toward you", block)
+        self.assertIn("a zombie, on you, crawling", block)
+
+    def test_a_lunger_that_is_a_crawler_is_never_fast(self):
+        crawler = add_zombie(self.gm, 3, ZombieState.CHASING, crawling=True, lunger=True)
+        crawler.has_chased = True
+        block = threats_block(ContextBuilder(self.gm).build_narrator_prompt("look"))
+        self.assertNotIn("fast", block)
+
+
 class ThreatsContextTests(unittest.TestCase):
     """Spec 09, What the narrator and the player see: the [THREATS] block."""
 
@@ -941,6 +1083,7 @@ class ParserBlockOrderTests(unittest.TestCase):
             "[ITEMS HERE]",
             "[NPCS HERE]",
             "[THREATS]",
+            "[CORPSES]",
             "[DOORS AND WINDOWS]",
             "[INVENTORY]",
             "[WORN]",
@@ -952,10 +1095,6 @@ class ParserBlockOrderTests(unittest.TestCase):
         ]
         positions = _positions(prompt, headers)
         self.assertEqual(positions, sorted(positions))
-
-    def test_blocks_of_later_specs_are_omitted_until_they_land(self):
-        prompt = self.builder.build_parser_prompt("look")
-        self.assertNotIn("[CORPSES]", prompt)
 
     def test_character_is_the_name_and_pronouns_only(self):
         block = (
@@ -1477,7 +1616,7 @@ class BarrierBlockTests(unittest.TestCase):
                 thump_rate=1.5,
             )
         parser = self.builder.build_parser_prompt("look")
-        threats = parser.split("[THREATS]")[1].split("[DOORS AND WINDOWS]")[0].strip()
+        threats = parser.split("[THREATS]")[1].split("[CORPSES]")[0].strip()
         self.assertEqual(threats, "- z1 (behind the kitchen window)")
         narrator = self.builder.build_narrator_prompt("look")
         section = narrator.split("[THREATS]")[1].split("[OUTCOMES]")[0]

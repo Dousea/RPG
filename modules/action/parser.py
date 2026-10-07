@@ -30,6 +30,7 @@ from modules.action.types import (
     OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    SearchAction,
     ShoutAction,
     ShoveAction,
     SleepAction,
@@ -100,10 +101,22 @@ def _parse_stance(args: str) -> StanceAction:
     return StanceAction(sneaking=sneaking)
 
 
+_TAKE_FROM_PATTERN = re.compile(r"(.+?)\s+from\s+(\S.*)", re.IGNORECASE)
+
+
 def _parse_take(args: str) -> TakeAction:
-    if not args:
+    if not args or args.casefold().startswith("from "):
         raise _ActionParseError("TAKE needs an item name.")
+    source = _TAKE_FROM_PATTERN.fullmatch(args)
+    if source:
+        return TakeAction(item_name=source.group(1).strip(), from_name=source.group(2).strip())
     return TakeAction(item_name=args)
+
+
+def _parse_search(args: str) -> SearchAction:
+    if not args:
+        raise _ActionParseError("SEARCH needs a corpse.")
+    return SearchAction(target_name=args)
 
 
 def _parse_drop(args: str) -> DropAction:
@@ -406,6 +419,8 @@ SceneKey = Literal[
     "worn",
     "npcs_here",
     "threats",
+    "corpses",
+    "loot",
     "hurt",
     "barriers",
 ]
@@ -455,7 +470,22 @@ VERBS: dict[str, Verb] = dict(
         ),
         _verb("WAIT", ("duration",), _parse_wait, "10m, 2h, 1h30m, until night, until 14:30", None),
         _verb("SLEEP", ("duration",), _parse_sleep, "optional duration; same forms as WAIT", None),
-        _verb("TAKE", ("item",), _parse_take, "an item listed in [ITEMS HERE]", 1, ("items_here",)),
+        _verb(
+            "TAKE",
+            ("item",),
+            _parse_take,
+            "an item listed in [ITEMS HERE], or '<item> from <corpse>' for a searched corpse in [CORPSES]",
+            1,
+            ("items_here", "loot"),
+        ),
+        _verb(
+            "SEARCH",
+            ("corpse",),
+            _parse_search,
+            "a corpse id from [CORPSES], or 'corpse' for the nearest; goes through its pockets and clothes once",
+            1,
+            ("corpses",),
+        ),
         _verb("DROP", ("item",), _parse_drop, "a carried item", 1, ("carried",)),
         _verb(
             "USE_ITEM",

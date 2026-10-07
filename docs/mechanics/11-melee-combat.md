@@ -169,7 +169,7 @@ split   = 0.1, if split < 0
 stomp only: split = (uniform(0.7, 1.0) + 0.2 x Strength) x shoe_power
 split  x= tired_factor[Endurance status effect] x tired_factor[Tired status effect]
 split  x= 3, if the head is hit                 # floor attacks and stomps
-split  x= zombie armour (1 for now)
+split  x= 1 - defence / 100                     # the struck part's clothing, see the zombie lifecycle
 
 hits_taken += 1                                  # not for a shove
 split  x= 1.5 x (hits_taken - 2), if hits_taken >= 4
@@ -197,8 +197,9 @@ health -= dealt x 0.15
 
 A shove does no damage and does not raise `hits_taken`. It still counts as a hit
 for the split numbering, XP and sounds. A zombie whose health reaches 0 is
-killed ([Kills](#kills)). The arm-pain divisor, arm speed factor, zombie armour
-and sharpness are stubs fixed at 1 until their mechanics land.
+killed ([Kills](#kills)). The arm-pain divisor, arm speed factor and sharpness are
+stubs fixed at 1 until their mechanics land. Zombie armour is live: see
+[The Zombie Lifecycle](14-zombie-lifecycle.md#armour-against-melee).
 
 A crowbar at Blunt 0 takes about 4 swings to kill a typical zombie, at Blunt 5
 about 3, and a kitchen knife about 6 without a jaw stab.
@@ -216,7 +217,7 @@ about 3, and a kitchen knife about 6 without a jaw stab.
 
 ## Floor attacks and stomps
 
-A swing at a down zombie always hits the head (x3).
+A swing at a down zombie lands on the head or the neck (see zombie armour in spec 14); the head takes x3, the neck does not.
 
 - **With a weapon:** x the larger of 5 and the crit multiplier on top, and a crit
   is rolled as usual.
@@ -251,8 +252,8 @@ close.
   kills any zombie.
 - **The knife may get stuck**, with chance `1 / (r + 2 x (Short Blade + 1))`,
   where `r` is 3 if the zombie was attacking and 8 otherwise. At Short Blade 0
-  against an attacker that is 1 in 5. Until corpses exist the knife drops to the
-  zone floor as an item, and `TAKE` picks it up. It is never lost.
+  against an attacker that is 1 in 5. A stuck knife goes into the corpse the kill
+  leaves, and `TAKE <knife> from <corpse>` gets it back once the body is searched.
 - A close kill costs a fifth of the hit's endurance.
 
 ## Endurance

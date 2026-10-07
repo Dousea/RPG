@@ -1,0 +1,166 @@
+"""Corpses in the player's view, going through them and taking from them (spec 14)."""
+
+import random
+from dataclasses import dataclass
+
+from data import zombie_lore as k
+from data.items import ITEMS
+from data.zombie_loot import (
+    CORPSE_LOOT_MODIFIERS,
+    DEFAULT_LOOT_TABLES,
+    LOOT_CATALOGUE,
+    OUTFIT_LOOT_TABLES,
+)
+from managers.corpses import rot_stage
+from managers.game import GameManager
+from managers.zombies import distance_word, light_level
+from modules.body import LAYER_ORDER
+from modules.entity.corpse import CorpseEntity
+from modules.entity.item import ItemEntity
+from modules.item import ClothingItem
+
+
+def drop_chance(chance: float, kind: str) -> float:
+    """The chance a pocket entry drops: its table chance times the multiplier for its kind of item."""
+    return chance * CORPSE_LOOT_MODIFIERS[kind] / 100
+
+
+def roll_pockets(corpse: CorpseEntity, rng: random.Random) -> list[ItemEntity]:
+    """The pocket items of a body: its outfit's table first, then the default table for its sex.
+
+    Entries with no catalogue item are skipped without a roll, and bones hold nothing.
+    """
+    if corpse.skeleton:
+        return []
+    tables = [OUTFIT_LOOT_TABLES.get(corpse.outfit, ()), DEFAULT_LOOT_TABLES[_sex(corpse)]]
+    found: list[ItemEntity] = []
+    for table in tables:
+        for name, chance in table:
+            entry = LOOT_CATALOGUE.get(name)
+            item = ITEMS.get(entry[0]) if entry is not None else None
+            if entry is None or item is None:
+                continue
+            if rng.randrange(k.LOOT_ROLL_STEPS) < drop_chance(chance, entry[1]) * k.LOOT_ROLL_STEPS:
+                found.append(ItemEntity(item=item))
+    return found
+
+
+def _sex(corpse: CorpseEntity) -> str:
+    return "female" if corpse.female else "male"
+
+
+def search(corpse: CorpseEntity, rng: random.Random) -> None:
+    """Go through a body: its pockets are rolled once and everything it holds can be taken."""
+    if corpse.searched:
+        return
+    corpse.contents.extend(roll_pockets(corpse, rng))
+    corpse.searched = True
+
+
+def with_article(name: str) -> str:
+    """The name with "a" or "an"; plural names such as jeans take none."""
+    if name.endswith("s") and not name.endswith("ss"):
+        return name
+    return f"{'an' if name[0].lower() in 'aeiou' else 'a'} {name}"
+
+
+def contents_in_words(corpse: CorpseEntity) -> str:
+    """What a body holds, by name, for a fact."""
+    names = [with_article(entity.item.name.lower()) for entity in corpse.contents]
+    return ", ".join(names) or k.SEARCH_NOTHING
+
+
+def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | None:
+    """The item on a body that `name` points at: its exact name or id, else a name containing it."""
+    needle = name.strip().casefold()
+    for entity in corpse.contents:
+        if needle in (entity.item.name.casefold(), entity.item.id.casefold()):
+            return entity
+    for entity in corpse.contents:
+        if needle and needle in entity.item.name.casefold():
+            return entity
+    return None
+
+
+def strip_unhappiness(traits: list[str], minutes: int) -> float:
+    """The unhappiness taking items off a body costs: 1.8 a minute, changed by how hardened the player is."""
+    amount = k.CORPSE_STRIP_UNHAPPINESS_PER_MIN * minutes
+    for trait, factor in k.STRIP_UNHAPPINESS_TRAIT_MULT.items():
+        if trait in traits:
+            amount *= factor
+    return amount
+
+
+def perceived_corpses(manager: GameManager) -> list[CorpseEntity]:
+    """The bodies in the player's zone that the player can see, in id order."""
+    world = manager.world
+    if not world.corpses:
+        return []
+    sample = manager.climate.sample(manager.narrative.minutes)
+    light = light_level(manager.current_location.indoors, world.power_on, sample.daylight)
+    sight = k.SIGHT_RANGE * max(k.SIGHT_RANGE_MIN_LIGHT, light)
+    here = manager.player.current_location_id
+    return sorted(
+        (c for c in world.corpses.values() if c.zone_id == here and c.gap <= sight),
+        key=lambda c: int(c.corpse_id[1:]),
+    )
+
+
+@dataclass(frozen=True)
+class CorpseView:
+    """A perceived body in words."""
+
+    corpse_id: str
+    distance_word: str
+    rot_word: str
+    searched: bool
+    skeleton: bool
+    looks: str
+    contents: tuple[str, ...]
+
+    def line(self, *, with_id: bool) -> str:
+        """One line for a prompt: a body is only ever dead, never fake-dead or crawling."""
+        parts = [self.corpse_id] if with_id else []
+        parts.append(self.distance_word)
+        if self.skeleton:
+            parts.append(self.rot_word)
+        elif self.searched:
+            parts.append(self.rot_word)
+            parts.append(f"searched: {', '.join(self.contents) or k.SEARCH_NOTHING}")
+        else:
+            parts.extend([self.looks, self.rot_word, "not searched"])
+        return " - " + ", ".join(parts)
+
+
+def _layer(entity: ItemEntity) -> int:
+    item = entity.item
+    assert isinstance(item, ClothingItem)
+    return LAYER_ORDER[item.body_location]
+
+
+def _looks(corpse: CorpseEntity) -> str:
+    person = k.WOMAN_WORD if corpse.female else k.MAN_WORD
+    clothes = [e for e in corpse.contents if isinstance(e.item, ClothingItem)]
+    garments = sorted(clothes, key=_layer, reverse=True)[: k.CORPSE_LOOK_ITEMS]
+    names = [with_article(e.item.name.lower()) for e in garments]
+    if not names:
+        return person
+    worn = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+    return f"{person} in {worn}"
+
+
+def corpse_views(manager: GameManager) -> list[CorpseView]:
+    """The perceived bodies in words: no numbers, and nothing that says one may get up."""
+    now = manager.narrative.minutes
+    return [
+        CorpseView(
+            corpse_id=c.corpse_id,
+            distance_word=distance_word(c.gap),
+            rot_word=k.SKELETON_WORD if c.skeleton else k.ROT_WORDS[rot_stage(c, now)],
+            searched=c.searched,
+            skeleton=c.skeleton,
+            looks=_looks(c),
+            contents=tuple(e.item.name.lower() for e in c.contents),
+        )
+        for c in perceived_corpses(manager)
+    ]

@@ -9,14 +9,12 @@ from data.melee import BARE_HANDS
 from managers.game import GameManager
 from managers.melee import MeleeEngine, crit_chance, hit_split, hits_taken_factor
 from managers.skills import SkillEngine
-from modules.action.types import TakeAction
 from modules.body import BodyLocation
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import MeleeWeaponItem
 from modules.stats import CharacterStat, Stats
-from tests.support import simulate
 
 
 class FixedRng(random.Random):
@@ -257,7 +255,7 @@ class OneTargetChainTests(unittest.TestCase):
     def test_the_damage_roll_runs_from_min_to_max(self):
         gm = street_game(weapon="item_crowbar")
         zombie = add(gm, make_zombie())
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(zombie.health, 100 - (1.15 / 0.5) * 1.6 * 1.5 * 0.3 * 0.15)
 
     def test_a_crit_multiplies_by_the_weapon_multiplier(self):
@@ -347,9 +345,17 @@ class FloorAttackAndStompTests(unittest.TestCase):
         gm = street_game(weapon="item_crowbar")
         zombie = add(gm, make_zombie())
         zombie.down_until = 5
-        swing(gm, now=0)
+        swing(gm, rng=FixedRng(by_size={2: 0}), now=0)
         self.assertAlmostEqual(zombie.health, 100 - 1.2 * 3 * 1.6 * 1.5 * 0.3 * 5 * 0.15)
         self.assertTrue(zombie.is_down(1))
+
+    def test_a_floor_attack_landing_on_the_neck_takes_no_head_multiplier(self):
+        # the neck is index 1 of the two floor parts: split 1.2, no x3, x1.6, x1.5, x0.3, x5, then x0.15
+        gm = street_game(weapon="item_crowbar")
+        zombie = add(gm, make_zombie())
+        zombie.down_until = 5
+        swing(gm, rng=FixedRng(by_size={2: 1}), now=0)
+        self.assertAlmostEqual(zombie.health, 100 - 1.2 * 1.6 * 1.5 * 0.3 * 5 * 0.15)
 
     def test_a_floor_attack_on_a_zombie_not_facing_takes_half_as_much_again(self):
         facing = street_game(weapon="item_crowbar")
@@ -367,7 +373,7 @@ class FloorAttackAndStompTests(unittest.TestCase):
         gm = street_game()
         zombie = add(gm, make_zombie())
         zombie.down_until = 5
-        swing(gm, now=0)
+        swing(gm, rng=FixedRng(by_size={2: 0}), now=0)
         expected = 3.06 * 3 * (2 / 1.1) * 1.5 * 0.3 * 0.15
         self.assertAlmostEqual(zombie.health, 100 - expected)
 
@@ -376,7 +382,7 @@ class FloorAttackAndStompTests(unittest.TestCase):
         del gm.player.worn[BodyLocation.SHOES]
         zombie = add(gm, make_zombie())
         zombie.down_until = 5
-        swing(gm, now=0)
+        swing(gm, rng=FixedRng(by_size={2: 0}), now=0)
         expected = (1.7 * 0.5) * 3 * (2 / 1.1) * 1.5 * 0.3 * 0.15
         self.assertAlmostEqual(zombie.health, 100 - expected)
 
@@ -529,17 +535,16 @@ class KnifeTests(unittest.TestCase):
         swing(gm, "z1", rng=rng)
         self.assertIn(14, rng.sizes)
 
-    def test_a_stuck_knife_drops_to_the_zone_floor_and_take_recovers_it(self):
+    def test_a_stuck_knife_leaves_the_hand_and_goes_with_the_kill(self):
         gm = self.knife_game()
         set_levels(gm, short_blade=0)
         add(gm, make_zombie(1, state=ZombieState.ATTACKING))
-        swing(gm, "z1", rng=FixedRng(script=[0], by_size={5: 0}))
+        result = swing(gm, "z1", rng=FixedRng(script=[0], by_size={5: 0}))
         self.assertIsNone(gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND])
+        self.assertEqual([e.item.id for e in result.stuck_knives.values()], ["item_kitchen_knife"])
+        self.assertEqual(list(result.stuck_knives), ["z1"])
         ground = [e.item.id for e in gm.current_location.entities if isinstance(e, ItemEntity)]
-        self.assertIn("item_kitchen_knife", ground)
-        facts = simulate(gm, TakeAction(item_name="kitchen knife"))
-        self.assertFalse(facts[0].startswith("Refused"))
-        self.assertIn("item_kitchen_knife", [e.item.id for e in gm.player.inventory])
+        self.assertNotIn("item_kitchen_knife", ground)
 
     def test_a_knife_that_does_not_stick_stays_in_hand(self):
         gm = self.knife_game()
@@ -572,13 +577,13 @@ class EnduranceTests(unittest.TestCase):
         gm = street_game(weapon="item_crowbar")
         set_levels(gm, fitness=0)
         add(gm, make_zombie())
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(endurance_spent(gm), 0.01104)
 
     def test_fitness_five_scales_both_drains_by_point_eight_five(self):
         gm = street_game(weapon="item_crowbar")
         add(gm, make_zombie())
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(endurance_spent(gm), 0.01104 * 0.85)
 
     def test_the_hit_drain_scales_with_the_share_of_the_top_damage_dealt(self):
@@ -593,7 +598,7 @@ class EnduranceTests(unittest.TestCase):
         gm = street_game(weapon="item_crowbar")
         set_levels(gm, fitness=0)
         add(gm, make_zombie(health=0.115))
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(endurance_spent(gm), 0.00432 + 0.00672 * 0.1)
 
     def test_asthmatic_multiplies_the_swing_drain_by_one_point_two(self):
@@ -601,7 +606,7 @@ class EnduranceTests(unittest.TestCase):
         set_levels(gm, fitness=0)
         gm.player.traits.append("asthmatic")
         add(gm, make_zombie())
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(endurance_spent(gm), 0.00432 * 1.2 + 0.00672)
 
     def test_a_shove_costs_the_bare_hands_swing_and_a_full_hit(self):
@@ -633,7 +638,7 @@ class EnduranceTests(unittest.TestCase):
         gm = street_game(weapon="item_crowbar", blunt=8)
         set_levels(gm, fitness=0)
         add(gm, make_zombie())
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(endurance_spent(gm), 0.01104 * 0.8)
 
 
@@ -760,7 +765,7 @@ class HitXpTests(unittest.TestCase):
         hold(gm, "item_crowbar")
         zombie = add(gm, make_zombie())
         zombie.down_until = 5
-        swing(gm, rng=FixedRng(fraction=1.0))
+        swing(gm, rng=FixedRng(fraction=1.0, by_size={2: 0}))
         self.assertAlmostEqual(self.xp(gm, "long_blunt"), 3 * 0.25 * 1.3)
 
     def test_no_fitness_xp_at_or_below_half_endurance(self):

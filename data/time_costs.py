@@ -27,6 +27,7 @@ from modules.action.types import (
     OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    SearchAction,
     ShoutAction,
     ShoveAction,
     SleepAction,
@@ -51,11 +52,13 @@ from modules.resolution import (
     MoveToZone,
     Resolution,
     ShuffleInZone,
+    TargetCorpse,
     TargetZombie,
     TimeSpan,
 )
 
 SWING_MIN = 1  # spec 11
+SEARCH_MIN = 1  # spec 14
 EQUIP_MIN = 1  # spec 01
 UNEQUIP_MIN = 1  # spec 01
 QUICK_ACTION_MIN = 1  # spec 01
@@ -90,6 +93,13 @@ def _attack_minutes(action: AnyAction, resolved: Resolution) -> int:
     if isinstance(resolved, TargetZombie):
         return resolved.approach_minutes + SWING_MIN
     return SWING_MIN
+
+
+def _search_minutes(action: AnyAction, resolved: Resolution) -> int:
+    """The walk up to a corpse that is not yet in reach, plus the minute going through it."""
+    if isinstance(resolved, TargetCorpse):
+        return resolved.approach_minutes + SEARCH_MIN
+    return SEARCH_MIN
 
 
 def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
@@ -131,6 +141,7 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     BarricadeAction: BARRICADE_MIN,
     UnbarricadeAction: UNBARRICADE_MIN,
     ShoveAction: _attack_minutes,
+    SearchAction: _search_minutes,
     EquipAction: EQUIP_MIN,
     UnequipAction: UNEQUIP_MIN,
     TakeAction: QUICK_ACTION_MIN,

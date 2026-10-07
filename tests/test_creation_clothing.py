@@ -7,6 +7,7 @@ from data.clothing_selection import DEFAULT_CLOTHING, OCCUPATION_CLOTHING, TRAIT
 from data.items import ITEMS
 from data.occupations import OCCUPATIONS
 from data.traits import TRAITS
+from data.zombie_clothing import ZOMBIE_CLOTHING
 from managers.creation import _random_outfit
 from modules.body import BodyLocation
 from modules.character.appearance import Gender
@@ -431,7 +432,11 @@ class ClothingListRowTests(unittest.TestCase):
         self.assertEqual(len(distinct), 131)
 
     def test_catalog_names_are_unique(self):
-        names = [item.name.casefold() for item in ITEMS.values()]
+        names = [
+            item.name.casefold()
+            for item_id, item in ITEMS.items()
+            if item is not ZOMBIE_CLOTHING.get(item_id)
+        ]
         self.assertEqual(len(names), len(set(names)))
 
     def test_the_two_genders_exist_for_default(self):

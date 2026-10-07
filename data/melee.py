@@ -92,7 +92,6 @@ SHARPNESS = 1.0  # spec 11: stays 1 until the weapon upkeep spec
 SHARPNESS_MULT = 1.0  # spec 11: stays 1 until the weapon upkeep spec
 ARMS_PAIN_DIVISOR = 1.0  # spec 11: stays 1 until the arm injuries spec
 ARM_SPEED_FACTOR = 1.0  # spec 11: stays 1 until the arm injuries spec
-ZOMBIE_ARMOUR_FACTOR = 1.0  # spec 11: stays 1 until the zombie lifecycle spec
 HEAVY_LOAD_LEVEL = 0  # spec 11: stays 0 until the carrying spec
 
 CATEGORY_AXE = "axe"

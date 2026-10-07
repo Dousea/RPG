@@ -27,6 +27,7 @@ from modules.action.types import (
     Duration,
     MoveAction,
     OpenAction,
+    SearchAction,
     ShoutAction,
     SleepAction,
     StanceAction,
@@ -40,6 +41,7 @@ from modules.body import BodyLocation, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
 from modules.character.skills import SkillState
 from modules.entity.barrier import BarrierEntity, BarrierKind
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
@@ -643,6 +645,69 @@ class ZombieMinuteLoopTests(unittest.TestCase):
         self.assertEqual(zombie.state, ZombieState.ATTACKING)
         self.assertEqual(zombie.side.value, "front")  # type: ignore[union-attr]
         self.assertTrue(any("A zombie" in fact or "shoves" in fact for fact in facts))
+
+    def test_a_wait_is_interrupted_when_a_fake_dead_body_rises(self):
+        """Spec 14, Fake-dead corpses."""
+        gm = zombie_game()
+        gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_street",
+            gap=3.0,
+            female=False,
+            outfit="generic01",
+            died_at=-100,
+            rot_at_death=1,
+            fake_dead=True,
+        )
+        minutes, facts = self.spent(gm, WaitAction(duration=Duration(minutes=30)))
+        self.assertEqual(minutes, 1)
+        self.assertIn("A body on the ground lurches to its feet.", facts)
+        self.assertEqual(list(gm.world.zombies), ["z1"])
+        self.assertEqual(gm.world.corpses, {})
+
+    def test_a_plan_of_search_then_take_from_runs(self):
+        """Spec 14, Searching and looting."""
+        gm = zombie_game()
+        gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_street",
+            gap=1.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+            contents=[ItemEntity(item=ITEMS["item_jacket_police"])],
+        )
+        minutes, facts = self.spent(
+            gm, SearchAction(target_name="c1"), TakeAction(item_name="jacket", from_name="c1")
+        )
+        self.assertEqual(minutes, 2)
+        self.assertIn("Orton goes through c1: a police jacket.", facts)
+        self.assertEqual(gm.player.inventory[-1].item.id, "item_jacket_police")
+
+    def test_an_attack_during_the_search_cancels_the_rest_but_not_the_search(self):
+        """Spec 14, Interruptions."""
+        gm = zombie_game()
+        gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_street",
+            gap=1.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+            contents=[ItemEntity(item=ITEMS["item_jacket_police"])],
+        )
+        zombie = add_zombie(gm, gap=1, state=ZombieState.ATTACKING, facing_cos=1.0)
+        zombie.time_since_seen = 0
+        zombie.side = AttackSide.FRONT
+        _, facts = self.spent(
+            gm, SearchAction(target_name="c1"), TakeAction(item_name="jacket", from_name="c1")
+        )
+        self.assertTrue(gm.world.corpses["c1"].searched)
+        self.assertIn("Orton goes through c1: a police jacket.", facts)
+        self.assertTrue(any("never gets to: take the jacket from c1" in fact for fact in facts))
+        self.assertEqual(len(gm.world.corpses["c1"].contents), 1)
 
     def test_three_zombies_on_the_player_drag_them_down(self):
         facts: list[str] = []

@@ -19,6 +19,7 @@ const npcList = document.getElementById('npc-list');
 const questList = document.getElementById('quest-list');
 const threatList = document.getElementById('threat-list');
 const barrierList = document.getElementById('barrier-list');
+const corpseList = document.getElementById('corpse-list');
 const choiceOptions = document.getElementById('choice-options');
 const inputForm = document.getElementById('input-form');
 const playerInput = document.getElementById('player-input');
@@ -396,7 +397,7 @@ function renderNpcs(data) {
 function threatTone(threat) {
     if (threat.state_word === 'down') return '';
     if (threat.distance_word === 'on you' || /attacking|behind/.test(threat.state_word)) return 'grave';
-    return /coming/.test(threat.state_word) ? 'bad' : 'warn';
+    return /coming|crawling toward/.test(threat.state_word) ? 'bad' : 'warn';
 }
 
 function renderThreats(data) {
@@ -413,6 +414,31 @@ function renderThreats(data) {
         if (threat.distance_word) who.appendChild(el('span', 'aside', capitalised(threat.distance_word)));
         li.appendChild(who);
         li.appendChild(tag(threat.state_word, threatTone(threat)));
+        return li;
+    }));
+}
+
+// A body shows its distance, how far gone it is and, once searched, what it held.
+function renderCorpses(data) {
+    const corpses = data.corpses || [];
+    if (corpses.length === 0) {
+        clearAndFill(corpseList, [emptyNote('No bodies in sight.')]);
+        return;
+    }
+    clearAndFill(corpseList, corpses.map(corpse => {
+        const li = el('li', 'row-item');
+        const who = el('span', 'who');
+        who.appendChild(el('span', null, 'A body'));
+        who.appendChild(el('span', 'aside', capitalised(corpse.distance_word)));
+        if (corpse.searched) {
+            const held = corpse.contents.length ? corpse.contents.map(capitalised).join(', ') : 'Nothing left';
+            who.appendChild(el('span', 'aside', held));
+        }
+        li.appendChild(who);
+        const tags = el('span', 'tag-row');
+        tags.appendChild(tag(capitalised(corpse.rot_word), ''));
+        tags.appendChild(tag(corpse.searched ? 'Searched' : 'Not searched', corpse.searched ? 'good' : ''));
+        li.appendChild(tags);
         return li;
     }));
 }
@@ -535,6 +561,7 @@ function updatePanel(data) {
     renderNamedEntries(traitList, data.traits, 'None recorded.');
     renderNpcs(data);
     renderThreats(data);
+    renderCorpses(data);
     renderBarriers(data);
     renderQuests(data);
     renderChoiceOptions(data);

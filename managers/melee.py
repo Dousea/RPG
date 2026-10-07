@@ -20,7 +20,8 @@ from managers.stats.status_effects import (
     player_status_effect_levels,
 )
 from managers.zombie_attack import weapon_level
-from modules.body import BodyLocation
+from managers.zombie_dress import make_crawler
+from modules.body import BodyLocation, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
@@ -118,6 +119,31 @@ def hits_taken_factor(hits_taken: int) -> float:
     return k.HITS_TAKEN_RAMP_FACTOR * (hits_taken - k.HITS_TAKEN_RAMP_OFFSET)
 
 
+def hit_part(kind: SwingKind, rng: random.Random) -> BodyPart:
+    """The part of a zombie a swing lands on: a floor attack or stomp aims at the head or neck."""
+    if kind in (SwingKind.FLOOR_ATTACK, SwingKind.STOMP):
+        parts = zombie_k.FLOOR_HIT_PARTS
+    else:
+        parts = zombie_k.STANDING_HIT_PARTS
+    return parts[rng.randrange(len(parts))]
+
+
+def zombie_defence(zombie: ZombieEntity, part: BodyPart) -> float:
+    """The percent of a hit on `part` that the zombie's clothes soak up, at most 85."""
+    scratch = bite = 0.0
+    for entity in zombie.worn.values():
+        item = entity.item
+        if not isinstance(item, ClothingItem) or part not in item.covers or part in entity.holes:
+            continue
+        share = item.neck_protection if part == BodyPart.NECK and item.neck_protection < 1 else 1.0
+        scratch += item.scratch_defense * share
+        bite += item.bite_defense * share
+    scratch = min(scratch, zombie_k.ZOMBIE_PART_DEFENCE_CAP)
+    bite = min(bite, zombie_k.ZOMBIE_PART_DEFENCE_CAP)
+    defence = (scratch * zombie_k.ZOMBIE_SCRATCH_WEIGHT + bite) * zombie_k.ZOMBIE_ARMOUR_FACTOR
+    return min(defence, float(zombie_k.ZOMBIE_MAX_DEFENCE))
+
+
 def shoe_power(player: PlayerEntity) -> float:
     shoes = player.worn.get(BodyLocation.SHOES)
     if shoes is None or not isinstance(shoes.item, ClothingItem):
@@ -132,6 +158,7 @@ class SwingResult:
     facts: list[str] = field(default_factory=list[str])
     sounds: list[Sound] = field(default_factory=list[Sound])
     killed: list[str] = field(default_factory=list[str])
+    stuck_knives: dict[str, ItemEntity] = field(default_factory=dict[str, ItemEntity])
 
 
 @dataclass
@@ -174,7 +201,7 @@ class MeleeEngine:
         held = equipped_weapon(player)
         held_melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
         weapon = held_melee or k.BARE_HANDS
-        kind = self._kind(shove, target.is_down(now), held_melee is not None)
+        kind = self._kind(shove, target.on_floor(now), held_melee is not None)
         targets = self._targets(world, player, target, weapon, now)
         levels = skill_levels(player)
         status_effects = player_status_effect_levels(player)
@@ -201,7 +228,7 @@ class MeleeEngine:
         for zombie in targets:
             if zombie.zombie_id in result.killed:
                 continue
-            self._knock(zombie, now, crit=crit)
+            self._knock(zombie, now, crit=crit, result=result)
             if zombie.state not in HUNTING:
                 zombie.state = ZombieState.CHASING
             zombie.time_since_seen = 0.0
@@ -233,14 +260,23 @@ class MeleeEngine:
             self._wear(swing)
         return result
 
-    @staticmethod
-    def _knock(zombie: ZombieEntity, now: int, *, crit: bool) -> None:
-        """A crit or a hit on the floor keeps it down; any other hit staggers it."""
-        if crit or zombie.is_down(now):
+    def _knock(self, zombie: ZombieEntity, now: int, *, crit: bool, result: SwingResult) -> None:
+        """A crit or a hit on the floor keeps it down; any other hit staggers it.
+
+        A zombie a hit flagged crawls instead of getting up; a crawler is only ever staggered.
+        """
+        if zombie.crawling or not (crit or zombie.is_down(now)):
+            zombie.staggered = True
+        elif zombie.become_crawler:
+            self._start_crawling(zombie, result)
+        else:
             zombie.down_until = now + k.DOWN_MINUTES
             zombie.staggered = False
-        else:
-            zombie.staggered = True
+
+    def _start_crawling(self, zombie: ZombieEntity, result: SwingResult) -> None:
+        make_crawler(zombie, self._rng)
+        zombie.staggered = True
+        result.facts.append(zombie_k.CRAWL_FACT.format(target=zombie.zombie_id))
 
     @staticmethod
     def _kind(shove: bool, down: bool, armed: bool) -> SwingKind:
@@ -266,7 +302,7 @@ class MeleeEngine:
                 if z is not target
                 and z.zone_id == player.current_location_id
                 and z.gap <= zombie_k.ATTACK_RANGE_TILES
-                and z.is_down(now) == target.is_down(now)
+                and z.on_floor(now) == target.on_floor(now)
                 and not (
                     target.side is not None
                     and z.side is not None
@@ -321,6 +357,8 @@ class MeleeEngine:
             zombie.health -= dealt * k.GLOBAL_MELEE_DAMAGE_REDUCTION_MULTIPLIER
             killed = zombie.health <= 0 or knife_death
             self._hit_facts(swing, zombie, killed=killed, jaw_stab=knife_death)
+            if not killed:
+                self._roll_crawler(swing, zombie)
         self._drain_hit(swing, dealt, health_before)
         self._award_xp(swing, split, killed=killed)
         self._add_noise(swing, jaw_stab=knife_death)
@@ -354,9 +392,10 @@ class MeleeEngine:
             ) * shoe_power(swing.player)
         split *= k.TIRED_FACTOR[status_effects[StatusEffect.ENDURANCE]]
         split *= k.TIRED_FACTOR[status_effects[StatusEffect.TIRED]]
-        if kind in (SwingKind.FLOOR_ATTACK, SwingKind.STOMP):
+        part = hit_part(kind, self._rng)
+        if kind in (SwingKind.FLOOR_ATTACK, SwingKind.STOMP) and part == BodyPart.HEAD:
             split *= k.HEAD_HIT_MULTIPLIER
-        split *= k.ZOMBIE_ARMOUR_FACTOR
+        split *= 1 - zombie_defence(zombie, part) / 100
         zombie.hits_taken += 1
         split *= hits_taken_factor(zombie.hits_taken)
         reach = k.REACH_FACTOR_PER_TILE * min(k.REACH_TILES, weapon.max_range) / weapon.max_range
@@ -375,6 +414,18 @@ class MeleeEngine:
         if swing.crit:
             dealt *= max(k.MIN_CRIT_MULTIPLIER, crit_multiplier)
         return dealt, split
+
+    def _roll_crawler(self, swing: _Swing, zombie: ZombieEntity) -> None:
+        """A weapon hit or stomp that does not kill may flag the zombie to crawl once it is down."""
+        if zombie.crawling:
+            return
+        odds = (
+            zombie_k.CRAWLER_ONE_IN_STOMP
+            if swing.kind == SwingKind.STOMP
+            else zombie_k.CRAWLER_ONE_IN_WEAPON
+        )
+        if self._rng.randrange(odds) == 0:
+            zombie.become_crawler = True
 
     def _endurance_scale(self, swing: _Swing) -> float:
         """The factors both endurance drains share: weapon skill, Fitness, the weapon and the scale."""
@@ -493,7 +544,7 @@ class MeleeEngine:
         swing.player.zombie_kills += 1
 
     def _maybe_stick_knife(self, swing: _Swing, zombie: ZombieEntity, was_attacking: bool) -> None:
-        """The knife may stay in the jaw; until corpses exist it falls to the zone floor."""
+        """The knife may stay in the jaw; it goes into the corpse the kill leaves."""
         base = k.STUCK_KNIFE_BASE_ATTACKING if was_attacking else k.STUCK_KNIFE_BASE_OTHER
         short_blade = swing.levels.get(k.SHORT_BLADE_SKILL, 0)
         odds = base + k.STUCK_KNIFE_PER_SHORT_BLADE * (short_blade + 1)
@@ -504,7 +555,7 @@ class MeleeEngine:
         for slot in CharacterHoldableSlot:
             if player.equipment[slot] is entity:
                 player.equipment[slot] = None
-        swing.world.locations[player.current_location_id].entities.append(entity)
+        swing.result.stuck_knives[zombie.zombie_id] = entity
         swing.result.facts.append(k.STUCK_KNIFE_FACT.format(target=zombie.zombie_id))
 
 

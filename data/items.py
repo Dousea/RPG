@@ -2,6 +2,7 @@ from data import barriers as barrier_k
 from data import melee as melee_k
 from data.clothing_coverage import covered_parts
 from data.clothing_items import STARTING_CLOTHES
+from data.zombie_clothing import ZOMBIE_CLOTHING
 from modules.body import BodyLocation
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
@@ -563,6 +564,7 @@ ITEMS: dict[str, BaseItem] = {
         uses=5,
     ),
     **MEDICAL_ITEMS,
+    **ZOMBIE_CLOTHING,
     **STARTING_CLOTHES,
 }
 

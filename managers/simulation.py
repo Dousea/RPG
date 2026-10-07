@@ -25,6 +25,7 @@ from data import status_effects, survival
 from data import thermal as thermal_k
 from data import traits as trait_k
 from data import zombie_lore as lore_k
+from data.clock import MINUTES_PER_DAY
 from data.exercises import find_exercise
 from data.npcs import TRUSTS_PLAYER, TRUSTS_PLAYER_BANDS
 from data.story_beats import STORY_BEATS, Beat
@@ -33,6 +34,8 @@ from data.time_costs import (
     MAX_PLAN_ACTIONS,
     MULTIPLIED_ACTIONS,
     NONE_TURN_MINUTES,
+    QUICK_ACTION_MIN,
+    SEARCH_MIN,
     SWING_MIN,
     WALK_TO_BARRIER_MIN,
     WINDOW_CLIMB_MIN,
@@ -45,10 +48,14 @@ from managers.barriers import barriers_between
 from managers.body import BodyEngine, action_time_multiplier, limp_factor
 from managers.climate import weather_change_facts
 from managers.combat import equipped_weapon, held_slots, roll_damage
+from managers.corpse_sickness import corpse_count, corpse_defence, smell_fact
+from managers.corpses import dress_as_player
 from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.first_aid import FirstAid
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.loot import contents_in_words, strip_unhappiness
+from managers.loot import search as loot_search
 from managers.melee import MeleeEngine
 from managers.noise import Sound, cough_sound
 from managers.skills import SkillEngine, skill_levels
@@ -66,7 +73,7 @@ from managers.stats.status_effects import (
 from managers.story import clock_minutes, holds
 from managers.thermoregulator import attack_metabolic
 from managers.validator import Accepted, ActionValidator, Rejected
-from managers.zombies import PlayerMinute, ZombieLoop, enter_zone, start_outbreak
+from managers.zombies import PlayerMinute, ZombieLoop, enter_zone, roll_zombie, start_outbreak
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -110,6 +117,7 @@ from modules.pace import Pace
 from modules.quest import QuestStatus
 from modules.resolution import (
     BarricadeKit,
+    CorpseItem,
     ExercisePlan,
     FirstAidTarget,
     HeldItem,
@@ -121,6 +129,7 @@ from modules.resolution import (
     PryTarget,
     ShuffleInZone,
     TargetBarrier,
+    TargetCorpse,
     TargetNpc,
     TargetZombie,
     TimeSpan,
@@ -424,6 +433,8 @@ class SimulationCore:
             metabolic=self._metabolic_target(action),
             traits=frozenset(player.traits),
             skills=skill_levels(player),
+            corpse_count=corpse_count(manager.world, player.current_location_id),
+            corpse_defence=corpse_defence(player),
         )
 
     def _metabolic_target(self, action: AnyAction | None) -> Metabolic:
@@ -500,6 +511,14 @@ class SimulationCore:
                 level_change_facts(self._name, before, player_status_effect_levels(manager.player))
             )
             self._weather_facts = []
+            smell = smell_fact(
+                manager.world,
+                manager.player.current_location_id,
+                corpse_count(manager.world, manager.player.current_location_id),
+                survival.CORPSE_SICKNESS_FREE_CORPSES,
+            )
+            if smell:
+                facts.append(smell)
             stat_facts = self.stats_engine.advance(
                 manager.player,
                 ran,
@@ -656,7 +675,28 @@ class SimulationCore:
         if player.stats.get(CharacterStat.ZOMBIE_INFECTION) >= body_k.RISE_INFECTION_MIN:
             fact = f"{fact.removesuffix('.')}{body_k.ROSE_AGAIN_SUFFIX}"
         narrative.death_cause = fact[:DEATH_CAUSE_MAX_LENGTH]
+        if player.stats.get(CharacterStat.ZOMBIE_INFECTION) >= body_k.RISE_INFECTION_MIN:
+            self._rise_as_zombie()
         return f"{fact} {self._name} has died. The game is over."
+
+    def _rise_as_zombie(self) -> None:
+        """The dead player's body becomes a zombie where it fell; their held items stay on the ground."""
+        manager = self.manager
+        player, world = manager.player, manager.world
+        now = manager.narrative.minutes
+        zone = manager.current_location
+        for slot in CharacterHoldableSlot:
+            held = player.equipment[slot]
+            if held is not None:
+                player.equipment[slot] = None
+                if held not in zone.entities:
+                    zone.entities.append(held)
+        started = world.outbreak_started_at if world.outbreak_started_at is not None else now
+        zombie_id = f"z{world.next_zombie_number}"
+        world.next_zombie_number += 1
+        zombie = roll_zombie(self._rng, zombie_id, zone.id, (now - started) / MINUTES_PER_DAY)
+        dress_as_player(zombie, player, now, self._rng)
+        world.zombies[zombie_id] = zombie
 
     # === Movement ===
 
@@ -823,7 +863,56 @@ class SimulationCore:
 
     # === Items ===
 
+    def _multiplied_minutes(self, minutes: int) -> int:
+        """`minutes` of a quick action, stretched by pain, mood and cold."""
+        return max(1, round(minutes * self._action_time_multiplier()))
+
+    def _resolve_take_from_corpse(self, accepted: Accepted) -> str:
+        taken = accepted.expect(CorpseItem)
+        manager = self.manager
+        corpse = manager.world.corpses[taken.corpse_id]
+        corpse.contents.remove(taken.entity)
+        manager.player.inventory.append(taken.entity)
+        manager.player.stats.add(
+            CharacterStat.UNHAPPINESS,
+            strip_unhappiness(manager.player.traits, self._multiplied_minutes(QUICK_ACTION_MIN)),
+        )
+        sex = lore_k.DEAD_WOMAN if corpse.female else lore_k.DEAD_MAN
+        return lore_k.TAKE_CORPSE_FACT.format(
+            name=self._name, sex=sex, item=taken.entity.item.name.lower()
+        )
+
+    def _resolve_search(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Walk up to the body, then go through it: the approach minutes come before the one search."""
+        target = accepted.expect(TargetCorpse)
+        manager = self.manager
+        facts: list[str] = []
+        spent = 0
+        if target.approach_minutes:
+            motion = Motion(Pace.WALK, approach_target=target.corpse_id)
+            spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
+        if manager.narrative.game_over:
+            return facts, spent
+        if self._interruption:
+            return [*facts, f"{self._name} never gets to search."], spent
+        corpse = manager.world.corpses.get(target.corpse_id)
+        if corpse is None:
+            gone = lore_k.CORPSE_GONE_FACT.format(name=self._name, corpse=target.corpse_id)
+            return [*facts, gone], spent
+        search_spent, search_facts = self._spend(SEARCH_MIN, accepted.action)
+        spent += search_spent
+        if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
+            loot_search(corpse, self._rng)
+            facts.append(
+                lore_k.SEARCH_FACT.format(
+                    name=self._name, corpse=corpse.corpse_id, items=contents_in_words(corpse)
+                )
+            )
+        return [*facts, *search_facts], spent
+
     def _resolve_take(self, accepted: Accepted) -> str:
+        if isinstance(accepted.resolved, CorpseItem):
+            return self._resolve_take_from_corpse(accepted)
         entity = accepted.expect(HeldItem).entity
         manager = self.manager
         manager.current_location.entities.remove(entity)
@@ -1312,6 +1401,7 @@ class SimulationCore:
         "MOVE_TO": _resolve_move,
         "STANCE": _resolve_stance,
         "TAKE": _resolve_take,
+        "SEARCH": _resolve_search,
         "DROP": _resolve_drop,
         "WEAR": _resolve_wear,
         "TAKE_OFF": _resolve_take_off,

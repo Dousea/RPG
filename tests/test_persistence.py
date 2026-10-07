@@ -19,6 +19,7 @@ from modules.action.types import (
 )
 from modules.body import BodyLocation, BodyPart
 from modules.character.state import CharacterCondition
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.quest import QuestState, QuestStatus
@@ -269,8 +270,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_19(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 19)
+    def test_schema_version_is_21(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 21)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -785,6 +786,109 @@ class ZombieSaveTests(IsolatedSaveTestCase):
         data["world"]["zombies"][0]["zone_id"] = "zone_moon"
         loaded = codec.from_dict(data)
         self.assertEqual(loaded.world.zombies, {})
+
+
+class LifecycleSaveTests(IsolatedSaveTestCase):
+    """Spec 14, Saves: corpses, the smell zone, crawler flags, outfits and worn items."""
+
+    def dressed_zombie(self) -> ZombieEntity:
+        jacket = ItemEntity(item=ITEMS["item_black_jacket"])
+        jacket.holes.add(BodyPart.TORSO_UPPER)
+        return ZombieEntity(
+            zombie_id="z4",
+            zone_id="zone_street",
+            health=1.5,
+            speed_type=3,
+            speed_mod=0.35,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            female=True,
+            outfit="police",
+            worn={BodyLocation.JACKET: jacket},
+            attached=ItemEntity(item=ITEMS["item_kitchen_knife"], condition=7),
+            crawling=True,
+            become_crawler=True,
+            was_fake_dead=True,
+            risen_from_player=True,
+        )
+
+    def test_a_zombie_keeps_its_outfit_worn_items_and_flags(self):
+        gm = GameManager()
+        gm.world.zombies["z4"] = self.dressed_zombie()
+        loaded = codec.from_dict(codec.to_dict(gm))
+        zombie = loaded.world.zombies["z4"]
+        self.assertEqual(loaded.world.zombies, gm.world.zombies)
+        self.assertTrue(zombie.female)
+        self.assertEqual(zombie.outfit, "police")
+        self.assertEqual(zombie.worn[BodyLocation.JACKET].holes, {BodyPart.TORSO_UPPER})
+        assert zombie.attached is not None
+        self.assertEqual(zombie.attached.condition, 7)
+        self.assertTrue(zombie.crawling and zombie.become_crawler)
+        self.assertTrue(zombie.was_fake_dead and zombie.risen_from_player)
+
+    def test_corpses_the_next_number_and_the_smell_zone_round_trip(self):
+        gm = GameManager()
+        gm.world.corpses["c2"] = CorpseEntity(
+            corpse_id="c2",
+            zone_id="zone_street",
+            gap=6.0,
+            female=False,
+            outfit="biker",
+            died_at=4400,
+            rot_at_death=2,
+            skeleton=False,
+            contents=[ItemEntity(item=ITEMS["item_crowbar"], condition=9)],
+            searched=True,
+            fake_dead=True,
+            crawling=True,
+            risen_from_player=False,
+        )
+        gm.world.next_corpse_number = 3
+        gm.world.smell_zone_id = "zone_street"
+        loaded = codec.from_dict(codec.to_dict(gm))
+        self.assertEqual(loaded.world.corpses, gm.world.corpses)
+        self.assertEqual(loaded.world.next_corpse_number, 3)
+        self.assertEqual(loaded.world.smell_zone_id, "zone_street")
+
+    def test_which_item_is_the_attached_weapon_survives_a_save(self):
+        gm = GameManager()
+        contents = [
+            ItemEntity(item=ITEMS["item_hammer"]),
+            ItemEntity(item=ITEMS["item_hand_axe"], condition=5),
+        ]
+        gm.world.corpses["c2"] = CorpseEntity(
+            corpse_id="c2",
+            zone_id="zone_street",
+            gap=6.0,
+            female=False,
+            outfit="biker",
+            died_at=4400,
+            rot_at_death=2,
+            contents=contents,
+            attached=contents[1],
+        )
+        loaded = codec.from_dict(codec.to_dict(gm)).world.corpses["c2"]
+        self.assertIs(loaded.attached, loaded.contents[1])
+        assert loaded.attached is not None
+        self.assertEqual(loaded.attached.item.id, "item_hand_axe")
+
+    def test_a_corpse_in_an_unknown_zone_is_dropped(self):
+        gm = GameManager()
+        gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_street",
+            gap=2.0,
+            female=True,
+            outfit="young",
+            died_at=0,
+            rot_at_death=1,
+        )
+        data = codec.to_dict(gm)
+        data["world"]["corpses"][0]["zone_id"] = "zone_moon"
+        self.assertEqual(codec.from_dict(data).world.corpses, {})
 
 
 class SocialSaveTests(IsolatedSaveTestCase):

@@ -7,6 +7,7 @@ from typing import Protocol
 from data import skills as skill_k
 from data import survival as k
 from data import traits as trait_k
+from data import zombie_lore as zombie_k
 from data.thermal import Metabolic
 from managers.skills import fitness_level
 from managers.stats.status_effects import status_effect_level
@@ -244,13 +245,20 @@ class IntoxicationDriver:
 
 
 class FoodSicknessDriver:
+    """Corpses add sickness and, while they do, the usual decay stops (spec 14)."""
+
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
-        if ctx.corpse_count > k.CORPSE_SICKNESS_FREE_CORPSES:
-            excess = min(
-                ctx.corpse_count - k.CORPSE_SICKNESS_FREE_CORPSES, k.CORPSE_SICKNESS_CORPSE_CAP
-            )
-            gain = k.CORPSE_SICKNESS_per_hour * excess * hours * (1 - ctx.corpse_defence / 100)
-            stats.add(CharacterStat.FOOD_SICKNESS, gain)
+        excess = min(
+            max(ctx.corpse_count - k.CORPSE_SICKNESS_FREE_CORPSES, 0), k.CORPSE_SICKNESS_CORPSE_CAP
+        )
+        rate = (
+            k.CORPSE_SICKNESS_per_hour
+            * excess
+            * (1 - ctx.corpse_defence / 100)
+            * trait_mult(zombie_k.CORPSE_SICKNESS_TRAIT_MULT, ctx.traits)
+        )
+        if rate > 0:
+            stats.add(CharacterStat.FOOD_SICKNESS, rate * hours)
         else:
             stats.remove(CharacterStat.FOOD_SICKNESS, k.FOOD_SICKNESS_DECREASE_per_hour * hours)
 

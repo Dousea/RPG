@@ -18,11 +18,13 @@ from adapters.engine import GameEngine
 from adapters.llm import NARRATOR_SYSTEM_PROMPT, DeltaCallback, LLMError
 from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
+from data.items import ITEMS
 from data.memory import BUDGET_MARGIN_TOKENS
 from data.presets import ORTON
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
 from modules.body import BodyLocation, BodyPart
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
 from tests.support import (
@@ -201,6 +203,53 @@ class TurnTests(EngineTestCase):
             [{"id": "z1", "distance_word": "close", "state_word": "coming at you"}],
         )
         self.assertIs(state["sneaking"], True)
+
+    def test_snapshot_carries_the_corpses_in_view_and_a_crawlers_state_word(self):
+        """Spec 14, What the narrator and the player see."""
+        manager = self.engine.game
+        manager.world.outbreak_started_at = 0
+        self.assertEqual(self.engine.state()["corpses"], [])
+        here = manager.player.current_location_id
+        manager.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id=here,
+            gap=3.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=2,
+            contents=[ItemEntity(item=ITEMS["item_jacket_police"])],
+            fake_dead=True,
+        )
+        expected = {
+            "id": "c1",
+            "distance_word": "close",
+            "rot_word": "decaying",
+            "searched": False,
+            "contents": [],
+        }
+        self.assertEqual(self.engine.state()["corpses"], [expected])
+        manager.world.corpses["c1"].searched = True
+        self.assertEqual(
+            self.engine.state()["corpses"],
+            [{**expected, "searched": True, "contents": ["police jacket"]}],
+        )
+        manager.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id=here,
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.4,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.CHASING,
+            gap=3.0,
+            crawling=True,
+        )
+        self.assertEqual(self.engine.state()["threats"][0]["state_word"], "crawling toward you")
 
     def test_snapshot_carries_the_barriers_of_the_zone_in_words_and_counts(self):
         """Spec 13, What the narrator and the player see."""

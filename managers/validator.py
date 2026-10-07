@@ -20,6 +20,7 @@ from data import barriers as barrier_k
 from data import body as body_k
 from data import exercises as ex
 from data import survival
+from data import zombie_lore as zombie_k
 from data.body_locations import EXCLUSIVE_LOCATIONS
 from data.clock import (
     SLEEP_CAP_MIN,
@@ -42,6 +43,7 @@ from managers.first_aid import (
 )
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
+from managers.loot import find_content, perceived_corpses, with_article
 from managers.social import locked_out
 from managers.stats.status_effects import status_effect_level
 from managers.story import visible_topics
@@ -66,6 +68,7 @@ from modules.action.types import (
     OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    SearchAction,
     ShoutAction,
     ShoveAction,
     SleepAction,
@@ -80,6 +83,7 @@ from modules.action.types import (
     WearAction,
 )
 from modules.entity.barrier import BarrierEntity, BarrierKind
+from modules.entity.corpse import CorpseEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.zombie import ZombieState
 from modules.item import (
@@ -92,6 +96,7 @@ from modules.item import (
 from modules.pace import Pace
 from modules.resolution import (
     BarricadeKit,
+    CorpseItem,
     ExercisePlan,
     FirstAidTarget,
     HeldItem,
@@ -105,6 +110,7 @@ from modules.resolution import (
     ShuffleInZone,
     StayPut,
     TargetBarrier,
+    TargetCorpse,
     TargetNpc,
     TargetZombie,
     TimeSpan,
@@ -115,15 +121,11 @@ GOAL_HORIZONS = GOAL_HORIZON_LABELS
 
 ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
 
+# Names that mean "the nearest corpse".
+CORPSE_WORDS = frozenset({"corpse", "the corpse", "a corpse", "body", "the body", "a body"})
+
 # Names that mean "the nearest zombie".
 ZOMBIE_WORDS = frozenset({"zombie", "the zombie", "a zombie", "zombies", "the zombies"})
-
-
-def _with_article(name: str) -> str:
-    """The name with "a" or "an"; plural names such as Jeans take none."""
-    if name.endswith("s") and not name.endswith("ss"):
-        return name
-    return f"{'an' if name[0].lower() in 'aeiou' else 'a'} {name}"
 
 
 @dataclass
@@ -292,12 +294,58 @@ class ActionValidator:
 
     def _validate_take(self, action: TakeAction) -> ValidationResult:
         manager = self.manager
+        if action.from_name is not None:
+            return self._validate_take_from(action, action.from_name)
         entity = manager._find_item_entity(manager._ground_items(), action.item_name)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' here to take.")
         if len(manager.player.inventory) >= manager.player.max_inventory_size:
             return Rejected(action, "Inventory is full.")
         return Accepted(action, HeldItem(entity))
+
+    def _validate_take_from(self, action: TakeAction, source: str) -> ValidationResult:
+        manager = self.manager
+        player = manager.player
+        if player.asleep:
+            return Rejected(action, zombie_k.ASLEEP_REFUSAL.format(name=self._name))
+        corpse = self._corpse_target(source)
+        if corpse is None:
+            return Rejected(action, zombie_k.NO_SUCH_CORPSE.format(target=source))
+        if not corpse.searched:
+            return Rejected(
+                action, zombie_k.NOT_SEARCHED.format(name=self._name, corpse=corpse.corpse_id)
+            )
+        entity = find_content(corpse, action.item_name)
+        if entity is None:
+            return Rejected(
+                action,
+                zombie_k.NOT_ON_CORPSE.format(corpse=corpse.corpse_id, item=action.item_name),
+            )
+        if len(player.inventory) >= player.max_inventory_size:
+            return Rejected(action, "Inventory is full.")
+        return Accepted(action, CorpseItem(corpse.corpse_id, entity))
+
+    def _validate_search(self, action: SearchAction) -> ValidationResult:
+        manager = self.manager
+        if manager.player.asleep:
+            return Rejected(action, zombie_k.ASLEEP_REFUSAL.format(name=self._name))
+        corpse = self._corpse_target(action.target_name)
+        if corpse is None:
+            return Rejected(action, zombie_k.NO_SUCH_CORPSE.format(target=action.target_name))
+        if corpse.searched:
+            return Rejected(
+                action, zombie_k.ALREADY_SEARCHED.format(name=self._name, corpse=corpse.corpse_id)
+            )
+        minutes = approach_minutes(corpse.gap, limp_factor(manager.player))
+        return Accepted(action, TargetCorpse(corpse.corpse_id, minutes))
+
+    def _corpse_target(self, name: str) -> CorpseEntity | None:
+        """The perceived body `name` points at: its id, or the nearest for "corpse"."""
+        needle = name.strip().casefold()
+        seen = perceived_corpses(self.manager)
+        if needle in CORPSE_WORDS:
+            return min(seen, key=lambda c: (c.gap, int(c.corpse_id[1:])), default=None)
+        return next((c for c in seen if c.corpse_id == needle), None)
 
     def _validate_drop(self, action: DropAction) -> ValidationResult:
         entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
@@ -319,7 +367,7 @@ class ActionValidator:
         if occupant is not None:
             return Rejected(
                 action,
-                f"{self._name} is already wearing {_with_article(occupant.item.name)} there.",
+                f"{self._name} is already wearing {with_article(occupant.item.name)} there.",
             )
         blocked = EXCLUSIVE_LOCATIONS.get(item.body_location, frozenset())
         for location, worn in player.worn.items():
@@ -631,7 +679,7 @@ class ActionValidator:
         if refusal := self._behind_a_barrier(zombie_target.zombie_id):
             return Rejected(action, refusal)
         zombie = manager.world.zombies[zombie_target.zombie_id]
-        if zombie.is_down(manager.narrative.minutes):
+        if zombie.on_floor(manager.narrative.minutes):
             return Rejected(action, "It's already down.")
         return Accepted(action, zombie_target)
 
@@ -819,6 +867,7 @@ class ActionValidator:
         "MOVE_TO": _validate_move,
         "STANCE": _validate_stance,
         "TAKE": _validate_take,
+        "SEARCH": _validate_search,
         "DROP": _validate_drop,
         "WEAR": _validate_wear,
         "TAKE_OFF": _validate_take_off,

@@ -10,7 +10,7 @@ from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
 from data.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
-from managers import thumping
+from managers import corpses, thumping
 from managers.barriers import can_see_through, connection_blocked, d_b
 from managers.body import kill, limp_factor
 from managers.game import GameManager
@@ -26,7 +26,9 @@ from managers.noise import (
 )
 from managers.skills import SkillEngine
 from managers.zombie_attack import AttackOutcome, resolve_attack
+from managers.zombie_dress import dress, make_crawler
 from modules.entity.barrier import BarrierEntity
+from modules.entity.corpse import CorpseEntity
 from modules.entity.player import PlayerEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
@@ -50,8 +52,10 @@ def population_curve(days: float) -> float:
     return k.POPULATION_START_MULTIPLIER + span * progress
 
 
-def roll_zombie(rng: random.Random, zombie_id: str, zone_id: str) -> ZombieEntity:
-    """One zombie as it is rolled at the outbreak: health, gait, sight and hearing."""
+def roll_zombie(
+    rng: random.Random, zombie_id: str, zone_id: str, days: float = 0.0
+) -> ZombieEntity:
+    """One zombie as it is rolled `days` after the outbreak: health, gait, senses and clothes."""
     health = rng.uniform(k.HEALTH_BASE_MIN, k.HEALTH_BASE_MAX) + rng.uniform(
         0.0, k.HEALTH_BONUS_MAX
     )
@@ -59,7 +63,7 @@ def roll_zombie(rng: random.Random, zombie_id: str, zone_id: str) -> ZombieEntit
     lunger = fast and rng.random() < k.FAST_SHAMBLER_LUNGER_CHANCE
     base = k.LUNGER_SPEED_MOD_BASE if lunger else k.SHAMBLER_SPEED_MOD_BASE
     speed_mod = base + rng.randrange(k.SPEED_MOD_STEPS) / k.SPEED_MOD_DIVISOR
-    return ZombieEntity(
+    zombie = ZombieEntity(
         zombie_id=zombie_id,
         zone_id=zone_id,
         health=health,
@@ -71,6 +75,8 @@ def roll_zombie(rng: random.Random, zombie_id: str, zone_id: str) -> ZombieEntit
         sight=rng.choice((k.SENSE_NORMAL, k.SENSE_POOR)),
         hearing=rng.choice((k.SENSE_NORMAL, k.SENSE_POOR)),
     )
+    dress(zombie, rng, days)
+    return zombie
 
 
 def stochastic_round(value: float, rng: random.Random) -> int:
@@ -95,10 +101,12 @@ def place_in_zone(zombie: ZombieEntity, zone: Location, rng: random.Random) -> N
     zombie.facing_cos = rng.uniform(-1.0, 1.0)
 
 
-def _spawn(world: World, zone_id: str, player_zone_id: str, rng: random.Random) -> ZombieEntity:
+def _spawn(
+    world: World, zone_id: str, player_zone_id: str, rng: random.Random, days: float
+) -> ZombieEntity:
     zombie_id = f"z{world.next_zombie_number}"
     world.next_zombie_number += 1
-    zombie = roll_zombie(rng, zombie_id, zone_id)
+    zombie = roll_zombie(rng, zombie_id, zone_id, days)
     if zone_id == player_zone_id:
         place_in_zone(zombie, world.locations[zone_id], rng)
     world.zombies[zombie_id] = zombie
@@ -113,13 +121,15 @@ def start_outbreak(world: World, minute: int, player_zone_id: str, rng: random.R
         if zone.id in k.SPAWN_CLEARED_ZONE_IDS:
             continue
         for _ in range(stochastic_round(zone_target(zone, 0), rng)):
-            _spawn(world, zone.id, player_zone_id, rng)
+            _spawn(world, zone.id, player_zone_id, rng, 0.0)
+    corpses.scatter(world, minute, rng, per_chunk)
 
 
-def kill_zombie(world: World, zombie_id: str) -> None:
+def kill_zombie(world: World, zombie_id: str) -> ZombieEntity:
     """Remove a dead zombie for good; its zone does not repopulate over it."""
     zombie = world.zombies.pop(zombie_id)
     world.zombie_kills[zombie.zone_id] = world.zombie_kills.get(zombie.zone_id, 0) + 1
+    return zombie
 
 
 def _zone_counts(world: World) -> dict[str, int]:
@@ -169,7 +179,7 @@ def redistribute(world: World, minute: int, player_zone_id: str, rng: random.Ran
             continue
         kills = world.zombie_kills.get(zone.id, 0)
         while counts[zone.id] + kills < targets[zone.id]:
-            _spawn(world, zone.id, player_zone_id, rng)
+            _spawn(world, zone.id, player_zone_id, rng, days)
             counts[zone.id] += 1
 
 
@@ -423,6 +433,9 @@ def enter_zone(world: World, zone_id: str, previous_zone_id: str, rng: random.Ra
         elif zombie.state == ZombieState.ALERTED and zombie.zone_id == previous_zone_id:
             zombie.state = ZombieState.IDLE
             zombie.sound_gap = 0.0
+    for corpse in world.corpses.values():
+        if corpse.zone_id == zone_id:
+            corpse.gap = float(rng.randint(1, zone.size_tiles))
 
 
 def shut_behind(
@@ -442,6 +455,7 @@ def shut_behind(
             zombie.state in _HUNTING
             and zombie.zone_id == previous_id
             and zombie.zombie_id not in released
+            and not zombie.crawling
         ):
             thumping.start(world, player, zombie, barrier, previous_id, rng)
 
@@ -515,11 +529,13 @@ class ZombieLoop:
         if self._visible is None:
             self._visible = self._visible_ids(light)
         self._redistribute_if_due(now)
+        corpses.update(world, now, self._rng)
         swing_sounds = self._swing(now, minute, report)
         self._hear(minute, [*extra_sounds, *swing_sounds], sample)
         self._move(now, minute, report)
         self._thump(minute, report)
-        spotted = self._spot(minute, sample, light, report)
+        risen = self._fake_dead(now, minute, report)
+        spotted = self._spot(minute, sample, light, report) or risen
         self._remember()
         reached = self._report_reach(minute)
         self._attack(now, minute, report)
@@ -544,7 +560,9 @@ class ZombieLoop:
             manager.player, world, now, minute.swing_target, shove=minute.shove
         )
         for zombie_id in result.killed:
-            kill_zombie(world, zombie_id)
+            body = corpses.kill_corpse(world, kill_zombie(world, zombie_id), now, self._rng)
+            if zombie_id in result.stuck_knives:
+                body.contents.append(result.stuck_knives[zombie_id])
         report.facts.extend(result.facts)
         return result.sounds
 
@@ -675,6 +693,9 @@ class ZombieLoop:
             else:
                 zombie.sound_gap = ahead
             return True
+        if zombie.crawling:
+            zombie.gap = stop
+            return True
         first = not thumping.thumpers_at(world, barrier.barrier_id)
         thumping.start(world, player, zombie, barrier, side, self._rng)
         zombie.gap = stop
@@ -760,6 +781,43 @@ class ZombieLoop:
             return
         if not minute.asleep:
             report.facts.extend(result.facts)
+
+    def _fake_dead(self, now: int, minute: PlayerMinute, report: MinuteReport) -> bool:
+        """Step 3b: the bodies in the player's zone; a fake-dead one the player passes close to gets up."""
+        manager = self._manager
+        world, player = manager.world, manager.player
+        limp = limp_factor(player)
+        rose = False
+        for body in sorted(world.corpses.values(), key=lambda c: int(c.corpse_id[1:])):
+            if body.zone_id != player.current_location_id:
+                continue
+            before = body.gap
+            if body.corpse_id == minute.approach_target:
+                body.gap = max(
+                    float(k.ATTACK_RANGE_TILES), before - k.WALK_APPROACH_TILES_PER_MIN * limp
+                )
+            if corpses.should_rise(body, before, body.gap, now):
+                self._rise(body, now, report)
+                rose = True
+        return rose
+
+    def _rise(self, body: CorpseEntity, now: int, report: MinuteReport) -> None:
+        world = self._manager.world
+        zombie_id = f"z{world.next_zombie_number}"
+        world.next_zombie_number += 1
+        days = (now - (world.outbreak_started_at or 0)) / MINUTES_PER_DAY
+        zombie = roll_zombie(self._rng, zombie_id, body.zone_id, days)
+        corpses.dress_from_corpse(zombie, body)
+        if body.crawling:
+            make_crawler(zombie, self._rng)
+        zombie.gap = body.gap
+        zombie.state = ZombieState.CHASING
+        zombie.facing_cos = 1.0
+        zombie.time_since_seen = 0.0
+        zombie.has_chased = True
+        world.zombies[zombie_id] = zombie
+        del world.corpses[body.corpse_id]
+        report.facts.append(k.RISE_CRAWLING_FACT if body.crawling else k.RISE_FACT)
 
     def _sees_through_barrier(self, zombie: ZombieEntity) -> bool:
         """Whether a thumper on the far side of a barrier of the player's zone sees through it."""
@@ -876,9 +934,14 @@ class ZombieLoop:
             and all(z.zombie_id == minute.approach_target for z in attackers)
         )
         hurt = False
+        counted = max(sum(1 for z in attackers if not z.crawling), 1)
         for zombie in attackers:
             assert zombie.side is not None
-            outcome = resolve_attack(player, zombie.side, len(attackers), self._rng)
+            outcome = resolve_attack(
+                player, zombie.side, counted, self._rng, crawler=zombie.crawling
+            )
+            if outcome.idle:
+                continue
             if outcome.dragged_down:
                 kill(player)
                 report.death_fact = k.DRAGGED_FACT.format(name=name)
@@ -922,7 +985,7 @@ class ThreatView:
     barrier_id: str | None = None  # spec 13: the barrier a thumper pounds on
 
 
-def _distance_word(gap: float) -> str:
+def distance_word(gap: float) -> str:
     for limit, word in k.DISTANCE_WORDS:
         if gap <= limit:
             return word
@@ -930,6 +993,8 @@ def _distance_word(gap: float) -> str:
 
 
 def _state_word(zombie: ZombieEntity, now: int) -> str:
+    if zombie.crawling:
+        return k.CRAWLER_STATE_WORDS[zombie.state.value]
     if zombie.is_down(now):
         return k.STATE_WORD_DOWN
     if zombie.state == ZombieState.ATTACKING and zombie.side == AttackSide.BEHIND:
@@ -961,7 +1026,7 @@ def threat_views(manager: GameManager) -> list[ThreatView]:
             views.append(
                 ThreatView(
                     zombie.zombie_id,
-                    _distance_word(zombie.gap),
+                    distance_word(zombie.gap),
                     _state_word(zombie, manager.narrative.minutes),
                 )
             )

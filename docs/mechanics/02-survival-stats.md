@@ -58,7 +58,7 @@ take is not part of it: it runs in the body minute ([health](12-health-and-infec
 | `weather` | none until weather lands |
 | `body` | energy, fluids and fatigue multipliers, all 1 until body temperature lands |
 | `skills` | each skill's level; Fitness reads 5 when none is recorded |
-| `corpse_count`, `corpse_defence` | 0 until the zombie lifecycle lands |
+| `corpse_count`, `corpse_defence` | the bodies the player stands among and the best worn defence ([The Zombie Lifecycle](14-zombie-lifecycle.md#corpse-sickness)) |
 | `traits` | empty until character creation lands |
 | `food_eaten_level` | 0 until eating gives a well-fed timer |
 
@@ -210,8 +210,9 @@ Falls by 45.36 × h.
 ### Food sickness
 
 - With more than 5 corpses nearby: +1.134 × min(corpses − 5, 20) × h, times
-  (1 − defence ÷ 100). No decay in that case.
-- Otherwise: −16.2 × h.
+  (1 − defence ÷ 100), times 0.75 Resilient or 1.25 Prone to Illness. The decay
+  stops while this applies.
+- Otherwise, or when the defence takes the rate to 0: −16.2 × h.
 
 ## Sleep
 

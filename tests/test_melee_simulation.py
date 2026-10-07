@@ -192,10 +192,10 @@ class DownAndStaggeredLoopTests(unittest.TestCase):
 
 
 class CritRng(random.Random):
-    """Every chance roll succeeds."""
+    """Every chance roll succeeds, except the one that turns a zombie into a crawler."""
 
     def randrange(self, start: int, stop: int | None = None, step: int = 1) -> int:
-        return 0
+        return start - 1 if stop is None and start in (15, 30) else 0
 
 
 def hold_crowbar(gm: GameManager) -> ItemEntity:

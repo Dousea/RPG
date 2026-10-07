@@ -17,6 +17,7 @@ from modules.action.types import (
     OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    SearchAction,
     ShoutAction,
     ShoveAction,
     SleepAction,
@@ -46,8 +47,12 @@ def describe_action(action: AnyAction) -> str:
             return "start sneaking"
         case StanceAction():
             return "stop sneaking"
+        case TakeAction(item_name=name, from_name=source) if source:
+            return f"take the {name} from {source}"
         case TakeAction(item_name=name):
             return f"take the {name}"
+        case SearchAction(target_name=name):
+            return f"search {name}"
         case DropAction(item_name=name):
             return f"drop the {name}"
         case WearAction(item_name=name):

@@ -40,6 +40,7 @@ from managers.climate import describe_weather
 from managers.combat import held_entity
 from managers.first_aid import bandage_items, disinfectant_items, part_word
 from managers.game import GameManager
+from managers.loot import corpse_views, perceived_corpses
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
 from managers.story import visible_topics
@@ -54,6 +55,7 @@ from modules.quest import QuestStatus
 logger = logging.getLogger(__name__)
 
 ZOMBIE_ID = re.compile(r"\bz\d+\b")
+CORPSE_ID = re.compile(r"\bc\d+\b")
 
 # Narrator-only: it names a prompt block, so the event log never stores it.
 NOTHING_DONE_FACT = (
@@ -63,9 +65,9 @@ NOTHING_DONE_FACT = (
 
 
 def zombie_ids_to_words(fact: str) -> str:
-    """The fact with every zombie id read as "the zombie", for text the narrator sees."""
-    worded = ZOMBIE_ID.sub("the zombie", fact)
-    return "T" + worded[1:] if ZOMBIE_ID.match(fact) else worded
+    """The fact with every zombie id read as "the zombie" and every corpse id as "the body"."""
+    worded = CORPSE_ID.sub("the body", ZOMBIE_ID.sub("the zombie", fact))
+    return "T" + worded[1:] if ZOMBIE_ID.match(fact) or CORPSE_ID.match(fact) else worded
 
 
 class ContextBuilder:
@@ -305,6 +307,11 @@ class ContextBuilder:
         lines = "\n".join(threats + people)
         return f"[IN VIEW]\n(Who and what the story must show this turn, however briefly.)\n{lines}\n\n"
 
+    def _corpses_section(self, *, with_id: bool) -> str:
+        """The bodies the player can see, in words: the parser gets ids to aim SEARCH at."""
+        lines = [view.line(with_id=with_id) for view in corpse_views(self.manager)]
+        return "\n".join(lines) or "None"
+
     def _parser_threats_section(self) -> str:
         """Seen zombies by id and distance only, so the parser can aim ATTACK at one."""
         lines = [
@@ -434,6 +441,11 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("npcs_here")
         if any(view.zombie_id is not None for view in threat_views(manager)):
             keys.add("threats")
+        bodies = perceived_corpses(manager)
+        if bodies:
+            keys.add("corpses")
+        if any(body.searched and body.contents for body in bodies):
+            keys.add("loot")
         if any(state.injured or state.bandaged for state in player.body.values()):
             keys.add("hurt")
         if barriers_of(manager.world, player.current_location_id):
@@ -450,6 +462,7 @@ Traits: {_lines(trait_lines) or "None"}
         ground = manager._ground_items()
         npcs = manager.npcs_in_location(player.current_location_id)
         held = held_entity(player)
+        bodies = perceived_corpses(manager)
         return SceneChoices(
             items_here=_names(ground),
             carried=tuple(dict.fromkeys(_names([*player.inventory, *ground]))),
@@ -463,6 +476,10 @@ Traits: {_lines(trait_lines) or "None"}
             npcs=tuple(npc.name for npc in npcs),
             zombie_ids=tuple(
                 view.zombie_id for view in threat_views(manager) if view.zombie_id is not None
+            ),
+            corpse_ids=tuple(body.corpse_id for body in bodies),
+            corpse_items=tuple(
+                entity.item.name for body in bodies if body.searched for entity in body.contents
             ),
             hurt_parts=tuple(
                 part_word(part)
@@ -628,6 +645,9 @@ door rather than refusing the move.)
 [THREATS]
 {self._parser_threats_section()}
 
+[CORPSES]
+{self._corpses_section(with_id=True)}
+
 [DOORS AND WINDOWS]
 {self._barriers_section()}
 
@@ -784,6 +804,11 @@ give them numbers.)
 these; never invent a zombie that is not listed, and never give a zombie a
 number.)
 {self._threats_section()}
+
+[CORPSES]
+(The dead {self._name} can see, and whether {self.manager.player.appearance.subject} has been through them. Describe
+only these; a body is only ever dead.)
+{self._corpses_section(with_id=False)}
 
 [OUTCOMES]
 (What actually happened this turn, already decided by the engine. Narrate

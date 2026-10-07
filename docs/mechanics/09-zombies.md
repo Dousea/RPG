@@ -410,7 +410,7 @@ laceration 25%, a scratch 7%. The part keeps the result, and the
   minute. Zombies act during them.
 - The swing always connects. What it does to the zombie, and the kill, are in
   [Melee Combat](11-melee-combat.md).
-- At 0 health the zombie is killed and removed; its zone's kill count goes up.
+- At 0 health the zombie is killed and removed, and leaves a corpse ([The Zombie Lifecycle](14-zombie-lifecycle.md#corpses)); its zone's kill count goes up.
 
 ## Interruptions
 

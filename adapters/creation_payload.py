@@ -14,6 +14,7 @@ from data.names import BEARD_STYLES, HAIR_COLOURS, HAIR_STYLES, SKIN_TONE_WORDS
 from data.occupations import OCCUPATIONS
 from data.presets import PRESETS
 from data.traits import TRAITS
+from data.zombie_clothing import ZOMBIE_CLOTHING
 from managers import creation
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
@@ -111,7 +112,7 @@ def creation_screen() -> dict[str, Any]:
         "clothing_items": {
             item_id: {"name": item.name, "location": item.body_location.value}
             for item_id, item in ITEMS.items()
-            if isinstance(item, ClothingItem)
+            if isinstance(item, ClothingItem) and item is not ZOMBIE_CLOTHING.get(item_id)
         },
         "min_points_to_accept": k.MIN_POINTS_TO_ACCEPT,
         "presets": {

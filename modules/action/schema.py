@@ -37,6 +37,8 @@ class SceneChoices:
     worn: tuple[str, ...] = ()
     npcs: tuple[str, ...] = ()
     zombie_ids: tuple[str, ...] = ()
+    corpse_ids: tuple[str, ...] = ()
+    corpse_items: tuple[str, ...] = ()
     hurt_parts: tuple[str, ...] = ()
     bandaged_parts: tuple[str, ...] = ()
     bandages: tuple[str, ...] = ()
@@ -92,7 +94,10 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             pattern = {"type": "string", "pattern": _duration_pattern(choices.times_of_day)}
             return _branch(name, {}, {"duration": pattern})
         case "TAKE":
-            return _item_branch(name, choices.items_here)
+            return _take_branch(name, choices)
+        case "SEARCH":
+            nearest = ("corpse",) if choices.corpse_ids else ()
+            return _target_branch(name, (*choices.corpse_ids, *nearest))
         case "DROP" | "USE_ITEM" | "EQUIP":
             return _item_branch(name, choices.carried)
         case "WEAR":
@@ -148,6 +153,15 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
                 return None
             return _branch(name, {"npc": _one_of(choices.npcs), "note": text})
     return None
+
+
+def _take_branch(name: str, choices: SceneChoices) -> JsonObject | None:
+    """TAKE an item off the ground, or from a searched corpse when one is named."""
+    names = (*choices.items_here, *choices.corpse_items)
+    if not names:
+        return None
+    optional = {"from": _one_of(choices.corpse_ids)} if choices.corpse_items else None
+    return _branch(name, {"item": _one_of(names)}, optional)
 
 
 def _item_branch(name: str, names: tuple[str, ...]) -> JsonObject | None:
@@ -245,6 +259,11 @@ def _ask_line(fields: JsonObject) -> str:
     return _line("ASK", _text(fields, "npc"), request, argument)
 
 
+def _take_line(fields: JsonObject) -> str:
+    source = _text(fields, "from")
+    return _line("TAKE", _text(fields, "item"), f"from {source}" if source else "")
+
+
 def _item_line(verb: str) -> Callable[[JsonObject], str]:
     return lambda fields: _line(verb, _text(fields, "item"))
 
@@ -266,7 +285,8 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "STANCE": lambda fields: _line("STANCE", _text(fields, "stance")),
     "WAIT": lambda fields: _line("WAIT", _text(fields, "duration")),
     "SLEEP": lambda fields: _line("SLEEP", _text(fields, "duration")),
-    "TAKE": _item_line("TAKE"),
+    "TAKE": _take_line,
+    "SEARCH": _target_line("SEARCH"),
     "DROP": _item_line("DROP"),
     "USE_ITEM": _item_line("USE_ITEM"),
     "EQUIP": _item_line("EQUIP"),

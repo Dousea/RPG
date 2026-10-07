@@ -311,6 +311,11 @@ EQUIVALENTS = [
         "ASK Emma about the_pharmacy",
     ),
     ({"verb": "GIVE", "item": "Bandage", "npc": "Emma"}, "GIVE Bandage to Emma"),
+    ({"verb": "SEARCH", "target": "c3"}, "SEARCH c3"),
+    (
+        {"verb": "TAKE", "item": "Police Jacket", "from": "c3"},
+        "TAKE Police Jacket from c3",
+    ),
     (
         {"verb": "ADD_GOAL", "horizon": "short_term", "text": "Find a weapon"},
         "ADD_GOAL short_term Find a weapon",
@@ -383,6 +388,8 @@ class PlanReadingTests(unittest.TestCase):
             worn=("Hoodie",),
             npcs=("Emma",),
             zombie_ids=("z3",),
+            corpse_ids=("c3",),
+            corpse_items=("Police Jacket",),
             hurt_parts=("left hand", "right hand"),
             bandaged_parts=("left hand",),
             bandages=("Adhesive Bandage",),

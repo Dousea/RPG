@@ -25,8 +25,19 @@ class StanceAction:
 
 @dataclass
 class TakeAction:
+    """Pick an item up off the ground, or take it from a searched corpse (spec 14)."""
+
     verb: ClassVar[str] = "TAKE"
     item_name: str
+    from_name: str | None = None
+
+
+@dataclass
+class SearchAction:
+    """Go through a corpse's pockets and clothes (spec 14)."""
+
+    verb: ClassVar[str] = "SEARCH"
+    target_name: str
 
 
 @dataclass
@@ -229,6 +240,7 @@ AnyAction = (
     MoveAction
     | StanceAction
     | TakeAction
+    | SearchAction
     | DropAction
     | WearAction
     | TakeOffAction

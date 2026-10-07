@@ -94,7 +94,8 @@ drift apart.
 | `STANCE` | `sneak` or `stand` | 0 |
 | `WAIT` | duration | as spent |
 | `SLEEP` | optional duration | as spent |
-| `TAKE` / `DROP` | item | 1 |
+| `TAKE` / `DROP` | item; `TAKE` also `<item> from <corpse>` | 1 |
+| `SEARCH` | corpse | 1, after the walk up to it |
 | `USE_ITEM` | item (eating and drinking too) | 1, or the food's time |
 | `WEAR` / `TAKE_OFF` | clothing item | 1 |
 | `EXERCISE` | type, optional minutes | as done |
@@ -167,8 +168,7 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[LAST TURN]` | the latest event-log entry (the attempt and its facts, zombie ids in words), so "again" and pronouns resolve; omitted with an empty log |
 | `[PLAYER INPUT]` | what the player typed |
 
-`[DOORS AND WINDOWS]` and `[CORPSES]` sit before and after `[ITEMS HERE]` once
-those mechanics land. The system prompt uses the character's name and pronouns.
+`[THREATS]`, `[CORPSES]` and `[DOORS AND WINDOWS]` follow `[NPCS HERE]` in that order. The system prompt uses the character's name and pronouns.
 
 ### Scene filtering
 
@@ -180,7 +180,8 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | --- | --- | --- |
 | `MOVE_TO`, `STANCE`, `WAIT`, `SLEEP`, `EXERCISE`, `SHOUT`, `ADD_GOAL`, `ADD_RELATIONSHIP_NOTE` | always | n/a |
 | `REMOVE_GOAL` | `goals` | the player has a goal |
-| `TAKE` | `items_here` | an item lies here |
+| `TAKE` | `items_here`, `loot` | an item lies here, or a searched corpse in view holds something |
+| `SEARCH` | `corpses` | a corpse is in view |
 | `DROP`, `USE_ITEM` | `carried` | an item is carried or lies here, so `TAKE` then `USE_ITEM` can be planned |
 | `WEAR` | `wearable` | clothing is carried or lies here, so `TAKE` then `WEAR` can be planned |
 | `TAKE_OFF` | `worn` | something is worn or in hand |

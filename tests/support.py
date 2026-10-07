@@ -187,3 +187,21 @@ class IsolatedSaveTestCase(unittest.TestCase):
 def simulate(gm: GameManager, *actions: AnyAction, rng: random.Random | None = None) -> list[str]:
     """Resolve actions through a fresh SimulationCore; refusals come back as facts."""
     return SimulationCore(gm, rng=rng).resolve(list(actions))
+
+
+class ScriptedRandom(random.Random):
+    """A `random.Random` whose `random()` and `randrange()` replay lists, then answer 0.
+
+    `randrange` ignores its bounds: the script holds the value the test wants drawn.
+    """
+
+    def __init__(self, random: list[float] | None = None, randrange: list[int] | None = None):
+        super().__init__(0)
+        self._floats = list(random or [])
+        self._ints = list(randrange or [])
+
+    def random(self) -> float:
+        return self._floats.pop(0) if self._floats else 0.0
+
+    def randrange(self, start: int, stop: int | None = None, step: int = 1) -> int:
+        return self._ints.pop(0) if self._ints else 0

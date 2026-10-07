@@ -40,6 +40,7 @@ from modules.character.faction import CharacterFaction
 from modules.character.skills import SkillState
 from modules.character.state import CharacterCondition
 from modules.entity.barrier import BarrierEntity
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
@@ -59,7 +60,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 19  # spec 13
+SCHEMA_VERSION = 21  # spec 14
 
 MAX_ID_LENGTH = 40
 
@@ -279,11 +280,86 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
 # === Serialization ===
 
 
+def _worn_to_dict(worn: dict[BodyLocation, ItemEntity]) -> dict[str, Any]:
+    return {location.value: _item_entity_to_dict(entity) for location, entity in worn.items()}
+
+
+def _worn_from_dict(value: Any) -> dict[BodyLocation, ItemEntity]:
+    """Saved worn items back to their locations; an item that does not fit its location is dropped."""
+    worn: dict[BodyLocation, ItemEntity] = {}
+    for location_name, item_data in _as_dict(value).items():
+        entity = _item_entity_from_dict(item_data) if item_data else None
+        try:
+            location = BodyLocation(location_name)
+        except ValueError:
+            logger.warning(f"Dropping unknown worn location '{location_name}'.")
+            continue
+        if entity is None:
+            continue
+        if not isinstance(entity.item, ClothingItem) or entity.item.body_location != location:
+            logger.warning(f"Dropping '{entity.item.id}' worn at '{location_name}'.")
+            continue
+        worn[location] = entity
+    return worn
+
+
+_ZOMBIE_ITEM_FIELDS = ("worn", "attached", "carried")
+
+
 def _zombie_to_dict(zombie: ZombieEntity) -> dict[str, Any]:
-    data = dataclasses.asdict(zombie)
+    data = {
+        f.name: getattr(zombie, f.name)
+        for f in dataclasses.fields(zombie)
+        if f.name not in _ZOMBIE_ITEM_FIELDS
+    }
     data["state"] = zombie.state.value
     data["side"] = zombie.side.value if zombie.side is not None else None
+    data["worn"] = _worn_to_dict(zombie.worn)
+    data["attached"] = _item_entity_to_dict(zombie.attached) if zombie.attached else None
+    data["carried"] = [_item_entity_to_dict(entity) for entity in zombie.carried]
     return data
+
+
+def _corpse_to_dict(corpse: CorpseEntity) -> dict[str, Any]:
+    data = {f.name: getattr(corpse, f.name) for f in dataclasses.fields(corpse)}
+    data["contents"] = [_item_entity_to_dict(entity) for entity in corpse.contents]
+    data["attached"] = next(
+        (i for i, entity in enumerate(corpse.contents) if entity is corpse.attached), None
+    )
+    return data
+
+
+def _corpse_from_dict(data: dict[str, Any], zone_ids: Any) -> CorpseEntity | None:
+    zone_id = str(data.get("zone_id", ""))
+    if zone_id not in zone_ids:
+        logger.warning(f"Dropping corpse in unknown zone '{zone_id}'.")
+        return None
+    try:
+        contents = [_item_entity_from_dict(_as_dict(entry)) for entry in data.get("contents", [])]
+        kept = [entity for entity in contents if entity is not None]
+        attached_at = data.get("attached")
+        attached = None
+        if isinstance(attached_at, int) and 0 <= attached_at < len(contents):
+            attached = contents[attached_at]
+        return CorpseEntity(
+            corpse_id=_as_text(data["corpse_id"], MAX_ID_LENGTH),
+            zone_id=zone_id,
+            gap=float(data.get("gap", 1.0)),
+            female=_as_bool(data.get("female", False)),
+            outfit=_as_text(data.get("outfit", ""), MAX_ID_LENGTH),
+            died_at=int(data["died_at"]),
+            rot_at_death=min(max(int(data.get("rot_at_death", 1)), 1), 3),
+            skeleton=_as_bool(data.get("skeleton", False)),
+            contents=kept,
+            attached=attached,
+            searched=_as_bool(data.get("searched", False)),
+            fake_dead=_as_bool(data.get("fake_dead", False)),
+            crawling=_as_bool(data.get("crawling", False)),
+            risen_from_player=_as_bool(data.get("risen_from_player", False)),
+        )
+    except (KeyError, TypeError, ValueError):
+        logger.warning("Dropping a corpse with unreadable fields.")
+        return None
 
 
 def _zombie_from_dict(data: dict[str, Any], zone_ids: Any) -> ZombieEntity | None:
@@ -322,6 +398,21 @@ def _zombie_from_dict(data: dict[str, Any], zone_ids: Any) -> ZombieEntity | Non
             thump_carry=float(data.get("thump_carry", 0.0)),
             thump_cooldown=int(data.get("thump_cooldown", 0)),
             was_chasing=_as_bool(data.get("was_chasing", False)),
+            female=_as_bool(data.get("female", False)),
+            outfit=_as_text(data.get("outfit", ""), MAX_ID_LENGTH),
+            worn=_worn_from_dict(data.get("worn")),
+            attached=(
+                _item_entity_from_dict(_as_dict(data["attached"])) if data.get("attached") else None
+            ),
+            carried=[
+                entity
+                for entity in (_item_entity_from_dict(_as_dict(e)) for e in data.get("carried", []))
+                if entity is not None
+            ],
+            crawling=_as_bool(data.get("crawling", False)),
+            become_crawler=_as_bool(data.get("become_crawler", False)),
+            was_fake_dead=_as_bool(data.get("was_fake_dead", False)),
+            risen_from_player=_as_bool(data.get("risen_from_player", False)),
         )
     except (KeyError, TypeError, ValueError):
         logger.warning("Dropping a zombie with unreadable fields.")
@@ -449,6 +540,9 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "zombie_kills": dict(manager.world.zombie_kills),
             "fired_beats": dict(manager.world.fired_beats),
             "zombies": [_zombie_to_dict(zombie) for zombie in manager.world.zombies.values()],
+            "corpses": [_corpse_to_dict(corpse) for corpse in manager.world.corpses.values()],
+            "next_corpse_number": manager.world.next_corpse_number,
+            "smell_zone_id": manager.world.smell_zone_id,
             "barriers": {
                 barrier_id: _barrier_to_dict(barrier)
                 for barrier_id, barrier in manager.world.barriers.items()
@@ -505,10 +599,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 slot.value: (_item_entity_to_dict(entity) if entity else None)
                 for slot, entity in player.equipment.items()
             },
-            "worn": {
-                location.value: _item_entity_to_dict(entity)
-                for location, entity in player.worn.items()
-            },
+            "worn": _worn_to_dict(player.worn),
             "conditions": [condition.value for condition in player.conditions],
             "zombie_kills": player.zombie_kills,
             "at_barrier": player.at_barrier,
@@ -615,6 +706,10 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         outbreak_started_at=_optional_minute(world_data.get("outbreak_started_at")),
         last_redistribution_minute=_optional_minute(world_data.get("last_redistribution_minute")),
         next_zombie_number=int(world_data.get("next_zombie_number", 1)),
+        next_corpse_number=int(world_data.get("next_corpse_number", 1)),
+        smell_zone_id=(
+            world_data["smell_zone_id"] if world_data.get("smell_zone_id") in locations else None
+        ),
         fired_beats=_int_map(world_data.get("fired_beats")),
         zombie_kills={
             zone_id: int(count)
@@ -626,6 +721,10 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         zombie = _zombie_from_dict(_as_dict(zombie_data), locations)
         if zombie is not None:
             world.zombies[zombie.zombie_id] = zombie
+    for corpse_data in world_data.get("corpses", []):
+        corpse = _corpse_from_dict(_as_dict(corpse_data), locations)
+        if corpse is not None:
+            world.corpses[corpse.corpse_id] = corpse
 
     player = _player_from_dict(data.get("player", {}), locations)
     npcs = _npcs_from_dict(data.get("npcs", []))
@@ -771,20 +870,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
             continue
         equipment[slot] = _item_entity_from_dict(item_data) if item_data else None
 
-    worn: dict[BodyLocation, ItemEntity] = {}
-    for location_name, item_data in data.get("worn", {}).items():
-        entity = _item_entity_from_dict(item_data) if item_data else None
-        try:
-            location = BodyLocation(location_name)
-        except ValueError:
-            logger.warning(f"Dropping unknown worn location '{location_name}'.")
-            continue
-        if entity is None:
-            continue
-        if not isinstance(entity.item, ClothingItem) or entity.item.body_location != location:
-            logger.warning(f"Dropping '{entity.item.id}' worn at '{location_name}'.")
-            continue
-        worn[location] = entity
+    worn = _worn_from_dict(data.get("worn"))
 
     conditions = []
     for name in data.get("conditions", []):

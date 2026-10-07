@@ -47,8 +47,7 @@ stitching wait for the other-injuries mechanic. Poultices, cauterising, sleeping
 pills and the non-lethal fake infection are not part of this game. Ripped
 sheets exist in the catalogue and nothing makes them yet. Dirty and bloody
 clothing are always false, so the infection roll's clothing terms never apply.
-Arm pain does not yet lower melee damage. The player who rises is only a suffix
-on the final fact.
+Arm pain does not yet lower melee damage.
 
 ## The body
 
@@ -512,8 +511,9 @@ the final minute:
 A zombie's drag-down or a killing wound ends the game with its own fact.
 
 **Rising.** Anyone who dies with `zombie_infection` of 0.001 or more rises. Any death
-while infected, whatever its cause, ends the final fact with "...and rose again." The
-player's body isn't built into a zombie yet, since the game is over.
+while infected, whatever its cause, ends the final fact with "...and rose again."
+The player's body becomes a zombie where they fell
+([The Zombie Lifecycle](14-zombie-lifecycle.md#the-player-who-rises)).
 
 ## Interruptions
 

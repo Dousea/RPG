@@ -47,6 +47,7 @@ class Wound:
 
 @dataclass
 class AttackOutcome:
+    idle: bool = False  # a crawler's attack that did nothing (spec 14)
     defended: bool = False
     dragged_down: bool = False
     blocked: bool = False
@@ -144,6 +145,18 @@ def roll_body_part(rng: random.Random, side: AttackSide, attackers: int) -> Body
     return part
 
 
+_CRAWLER_REACH_PARTS = _BODY_PARTS[_BODY_PARTS.index(BodyPart.GROIN) :]
+_CRAWLER_LEG_PARTS = _BODY_PARTS[_BODY_PARTS.index(BodyPart.UPPERLEG_L) :]
+
+
+def roll_crawler_body_part(rng: random.Random) -> BodyPart:
+    """The part a crawler bites: groin to foot one time in ten, else thigh to foot."""
+    parts = (
+        _CRAWLER_REACH_PARTS if rng.randrange(k.CRAWLER_GROIN_ONE_IN) == 0 else _CRAWLER_LEG_PARTS
+    )
+    return parts[rng.randrange(len(parts))]
+
+
 def roll_wound_damage(rng: random.Random) -> float:
     return (
         rng.randrange(k.DAMAGE_THOUSANDTHS)
@@ -189,22 +202,36 @@ def apply_wound(player: PlayerEntity, wound: Wound, rng: random.Random) -> None:
 
 
 def resolve_attack(
-    player: PlayerEntity, side: AttackSide, attackers: int, rng: random.Random
+    player: PlayerEntity,
+    side: AttackSide,
+    attackers: int,
+    rng: random.Random,
+    *,
+    crawler: bool = False,
 ) -> AttackOutcome:
-    """One zombie attack on the player, in the spec's order; a landed wound is applied."""
+    """One zombie attack on the player, in the spec's order; a landed wound is applied.
+
+    `attackers` counts the standing zombies on the player (at least 1). A crawler does nothing
+    half the time, cannot be defended against, never drags down and bites the legs.
+    """
     outcome = AttackOutcome()
-    if (
-        side == AttackSide.FRONT
-        and attackers <= k.DEFENCE_MAX_ATTACKERS
-        and rng.randrange(100) < player_defence(player, attackers)
-    ):
-        outcome.defended = True
-        return outcome
-    if attackers >= k.DRAG_DOWN_ATTACKERS:
-        outcome.dragged_down = True
-        return outcome
+    if crawler:
+        if rng.randrange(k.CRAWLER_ATTACK_NOTHING_ONE_IN) != 0:
+            outcome.idle = True
+            return outcome
+    else:
+        if (
+            side == AttackSide.FRONT
+            and attackers <= k.DEFENCE_MAX_ATTACKERS
+            and rng.randrange(100) < player_defence(player, attackers)
+        ):
+            outcome.defended = True
+            return outcome
+        if attackers >= k.DRAG_DOWN_ATTACKERS:
+            outcome.dragged_down = True
+            return outcome
     odds = wound_odds(weapon_level(player), attackers, side, player.traits)
-    part = roll_body_part(rng, side, attackers)
+    part = roll_crawler_body_part(rng) if crawler else roll_body_part(rng, side, attackers)
     damage = roll_wound_damage(rng)
     kind = roll_wound_kind(rng, odds)
     if kind is None:

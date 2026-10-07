@@ -30,6 +30,7 @@ from managers.context import NOTHING_DONE_FACT, ContextBuilder
 from managers.event_log import build_event_entry, event_stamp
 from managers.first_aid import part_word
 from managers.game import MAX_RECENT_EVENTS, GameManager
+from managers.loot import corpse_views
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects
@@ -447,10 +448,25 @@ class GameEngine:
                 }
                 for view in threat_views(manager)
             ],
+            "corpses": _corpses(manager),
             "barriers": _barriers(manager),
             "sneaking": player.sneaking,
             "zombie_kills": player.zombie_kills,
         }
+
+
+def _corpses(manager: GameManager) -> list[dict[str, Any]]:
+    """The bodies the player can see, in words; what a body holds shows only once it is searched."""
+    return [
+        {
+            "id": view.corpse_id,
+            "distance_word": view.distance_word,
+            "rot_word": view.rot_word,
+            "searched": view.searched,
+            "contents": list(view.contents) if view.searched else [],
+        }
+        for view in corpse_views(manager)
+    ]
 
 
 def _barriers(manager: GameManager) -> list[dict[str, Any]]:

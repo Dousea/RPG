@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 from .entity import BaseEntity
 from .entity.barrier import BarrierEntity
+from .entity.corpse import CorpseEntity
 from .entity.zombie import ZombieEntity
 
 
@@ -71,3 +72,8 @@ class World:
     fired_beats: dict[str, int] = field(default_factory=dict[str, int])
     # Doors and windows, each on the connection between two zones (spec 13).
     barriers: dict[str, BarrierEntity] = field(default_factory=dict[str, BarrierEntity])
+    # Dead bodies by id, numbered c1, c2, ... in order of creation (spec 14).
+    corpses: dict[str, CorpseEntity] = field(default_factory=dict[str, CorpseEntity])
+    next_corpse_number: int = 1
+    # The zone the smell of the dead was last reported in, so the fact is not repeated (spec 14).
+    smell_zone_id: str | None = None
