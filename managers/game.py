@@ -60,6 +60,15 @@ WORLD_START_DATE = date(2023, 10, 1)
 WORLD_SEED_LIMIT = 2**31
 
 
+def fresh_world_seed() -> int:
+    """A new world's seed, drawn fresh each game."""
+    return random.Random().randrange(WORLD_SEED_LIMIT)
+
+
+# The test suite swaps this for a fixed seed so weather is reproducible.
+new_world_seed = fresh_world_seed
+
+
 @dataclass
 class NarrativeState:
     """Story-level state that has no home on the entity model.
@@ -142,7 +151,7 @@ class GameManager:
             else World(
                 locations=build_starting_locations(),
                 barriers=build_starting_barriers(),
-                seed=random.Random().randrange(WORLD_SEED_LIMIT),
+                seed=new_world_seed(),
             )
         )
         self.climate = (
@@ -183,7 +192,7 @@ class GameManager:
     @classmethod
     def from_build(cls, build: CharacterBuild) -> "GameManager":
         """A new game for a character build, in a world with a fresh seed."""
-        seed = random.Random().randrange(WORLD_SEED_LIMIT)
+        seed = new_world_seed()
         world = World(
             locations=build_starting_locations(), barriers=build_starting_barriers(), seed=seed
         )

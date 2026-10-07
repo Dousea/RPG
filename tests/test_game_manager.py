@@ -6,6 +6,7 @@ tests/test_validator.py and tests/test_simulation.py.
 
 import unittest
 
+from data.presets import ORTON
 from managers.context import ContextBuilder
 from managers.game import (
     MAX_RECENT_EVENTS,
@@ -14,6 +15,16 @@ from managers.game import (
 )
 from modules.action.types import MoveAction, TakeAction
 from tests.support import adjust_regard, npc_of, resolve_actions
+
+
+class WorldSeedTests(unittest.TestCase):
+    """Spec 04, The world seed: tests get one fixed seed, so weather is reproducible."""
+
+    def test_every_test_game_has_the_same_seed(self):
+        self.assertEqual(GameManager().world.seed, GameManager().world.seed)
+
+    def test_from_build_uses_it_too(self):
+        self.assertEqual(GameManager.from_build(ORTON).world.seed, GameManager().world.seed)
 
 
 def _at(day: int, hour: int, minute: int) -> GameManager:

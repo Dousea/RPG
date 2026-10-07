@@ -486,26 +486,25 @@ class WorldSeedTest(unittest.TestCase):
     """Spec 04, The world seed."""
 
     def test_new_game_draws_a_seed_and_builds_its_climate(self):
-        from managers.game import GameManager
+        from managers.game import GameManager, fresh_world_seed
 
         game = GameManager()
         self.assertEqual(game.climate.seed, game.world.seed)
-        a, b = GameManager(), GameManager()
-        self.assertNotEqual(a.world.seed, b.world.seed)
+        self.assertNotEqual(fresh_world_seed(), fresh_world_seed())
 
     def test_the_seed_limit_is_two_to_the_thirty_first(self):
         import random
         from unittest import mock
 
         from managers import game as game_module
-        from managers.game import GameManager
+        from managers.game import fresh_world_seed
 
         class Top(random.Random):
             def randrange(self, start, stop=None, step=1):
                 return start - 1
 
         with mock.patch.object(game_module.random, "Random", Top):
-            self.assertEqual(GameManager().world.seed, 2**31 - 1)
+            self.assertEqual(fresh_world_seed(), 2**31 - 1)
 
     def test_offsets_are_drawn_up_to_eight_thousand(self):
         for seed in range(50):

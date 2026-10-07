@@ -22,3 +22,9 @@ os.environ["RPG_CONFIG"] = os.devnull
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+# A fresh world draws a random seed, and the seed drives the weather; one fixed
+# seed keeps every test's weather the same from run to run.
+import managers.game  # noqa: E402
+
+managers.game.new_world_seed = lambda: 1
