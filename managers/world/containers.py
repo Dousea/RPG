@@ -3,7 +3,7 @@
 import random
 
 from data.items import ITEMS
-from data.loot import containers as k
+from data.loot import containers as container_k
 from data.loot.catalogue import LOOT_CATALOGUE, LOOT_KIND_MODIFIERS
 from data.loot.tables import (
     BAG_TABLES,
@@ -49,12 +49,12 @@ def _randomise(rng: random.Random, entity: ItemEntity) -> None:
     """A spawn outside a shop is sometimes worn, or part used."""
     item = entity.item
     if isinstance(item, MeleeWeaponItem):
-        if rng.randrange(k.PERCENT_DENOMINATOR) < k.RANDOM_CONDITION_PCT:
+        if rng.randrange(container_k.PERCENT_DENOMINATOR) < container_k.RANDOM_CONDITION_PCT:
             entity.condition = max(1, rng.randint(0, item.condition_max))
     elif (
         isinstance(item, MedicalItem | StackItem)
         and item.uses > 1
-        and rng.randrange(k.PERCENT_DENOMINATOR) < k.RANDOM_USES_PCT
+        and rng.randrange(container_k.PERCENT_DENOMINATOR) < container_k.RANDOM_USES_PCT
     ):
         entity.uses = rng.randint(1, item.uses)
 
@@ -83,12 +83,12 @@ def _roll_list(
             if catalogue is None or item is None:
                 continue
             modifier = 1.0 if junk else LOOT_KIND_MODIFIERS[catalogue[1]]
-            mult = k.JUNK_CHANCE_MULT if junk else 1.0
+            mult = container_k.JUNK_CHANCE_MULT if junk else 1.0
             if modifier <= 0:
                 continue
             if (
-                rng.randrange(k.ROLL_DENOMINATOR)
-                >= chance * mult * k.CHANCE_PERCENT_SCALE * modifier
+                rng.randrange(container_k.ROLL_DENOMINATOR)
+                >= chance * mult * container_k.CHANCE_PERCENT_SCALE * modifier
             ):
                 continue
             entity = ItemEntity(item=item)

@@ -6,7 +6,7 @@ from data import melee as melee_k
 from data.character import skills as skill_k
 from data.character import traits as trait_k
 from data.items import ITEMS
-from data.world import barriers as k
+from data.world import barriers as barrier_k
 from managers import carry
 from managers.character.skills import SkillEngine, skill_levels
 from managers.combat import weapons
@@ -27,9 +27,12 @@ from modules.resolution import BarricadeKit, PryTarget
 
 def unbarricade_minutes(carpentry: int, *, handy: bool) -> int:
     """Minutes to pry a plank off: 200 frames less 5 per Carpentry level and 20 for Handy."""
-    frames = k.UNBARRICADE_TIME_FRAMES_BASE - k.UNBARRICADE_TIME_FRAMES_PER_CARPENTRY * carpentry
+    frames = (
+        barrier_k.UNBARRICADE_TIME_FRAMES_BASE
+        - barrier_k.UNBARRICADE_TIME_FRAMES_PER_CARPENTRY * carpentry
+    )
     if handy:
-        frames -= k.UNBARRICADE_TIME_FRAMES_HANDY_BONUS
+        frames -= barrier_k.UNBARRICADE_TIME_FRAMES_HANDY_BONUS
     return units.minutes_from_timed_action_frames(frames)
 
 
@@ -65,7 +68,7 @@ class BarrierActions:
     def open(self, barrier: BarrierEntity) -> list[str]:
         """Open it; thumpers behind it are let go. From the inside it also unlocks."""
         self._open(barrier)
-        return [k.OPEN_FACT.format(name=self._name, barrier=barrier.name)]
+        return [barrier_k.OPEN_FACT.format(name=self._name, barrier=barrier.name)]
 
     def _open(self, barrier: BarrierEntity) -> frozenset[str]:
         manager = self._manager
@@ -78,7 +81,7 @@ class BarrierActions:
     def close(self, barrier: BarrierEntity) -> list[str]:
         self.reach(barrier)
         barrier.open = False
-        return [k.CLOSE_FACT.format(name=self._name, barrier=barrier.name)]
+        return [barrier_k.CLOSE_FACT.format(name=self._name, barrier=barrier.name)]
 
     def open_to_cross(self, barrier: BarrierEntity) -> frozenset[str] | None:
         """Open a closed barrier on the way through; returns who that released, None if it was not closed."""
@@ -109,8 +112,10 @@ class BarrierActions:
         self._discard(plank)
         self._spend_nail(kit.nails)
         self.sounds.append(hammer_sound(carpentry))
-        facts.insert(0, k.BARRICADE_FACT.format(name=self._name, barrier=barrier.name))
-        facts.extend(self._skills.add_xp(player, skill_k.CARPENTRY, k.BARRICADE_XP_CARPENTRY))
+        facts.insert(0, barrier_k.BARRICADE_FACT.format(name=self._name, barrier=barrier.name))
+        facts.extend(
+            self._skills.add_xp(player, skill_k.CARPENTRY, barrier_k.BARRICADE_XP_CARPENTRY)
+        )
         return facts
 
     def unbarricade(self, target: PryTarget) -> list[str]:
@@ -120,7 +125,7 @@ class BarrierActions:
         barrier = target.barrier
         self.reach(barrier)
         health = barrier.barricades[player.current_location_id].pop()
-        plank_item = ITEMS[k.PLANK_ITEM_ID]
+        plank_item = ITEMS[barrier_k.PLANK_ITEM_ID]
         assert isinstance(plank_item, MeleeWeaponItem)
         plank = ItemEntity(item=plank_item)
         plank.condition = plank_condition(health, plank_item.condition_max)
@@ -129,12 +134,16 @@ class BarrierActions:
         else:
             manager.current_location.entities.append(plank)
         self.sounds.append(pry_sound())
-        facts = [k.UNBARRICADE_FACT.format(name=self._name, barrier=barrier.name)]
+        facts = [barrier_k.UNBARRICADE_FACT.format(name=self._name, barrier=barrier.name)]
         facts.extend(
-            self._skills.add_xp(player, skill_k.CARPENTRY, k.UNBARRICADE_XP_CARPENTRY, chain=False)
+            self._skills.add_xp(
+                player, skill_k.CARPENTRY, barrier_k.UNBARRICADE_XP_CARPENTRY, chain=False
+            )
         )
         facts.extend(
-            self._skills.add_xp(player, skill_k.STRENGTH, k.UNBARRICADE_XP_STRENGTH, chain=False)
+            self._skills.add_xp(
+                player, skill_k.STRENGTH, barrier_k.UNBARRICADE_XP_STRENGTH, chain=False
+            )
         )
         return facts
 
@@ -150,7 +159,7 @@ class BarrierActions:
         result = weapon_hit(barrier, side, door_damage(melee), levels[skill_k.STRENGTH], self._rng)
         facts = [self._hit_fact(melee, barrier)]
         if result.plank_broke:
-            facts.append(k.PLANK_BREAKS_FACT.format(barrier=barrier.name))
+            facts.append(barrier_k.PLANK_BREAKS_FACT.format(barrier=barrier.name))
         self.sounds.append(barrier_hit_sound())
         if result.gave:
             broke = thumping.gave_way(world, player, self._rng, barrier, side)
@@ -170,16 +179,18 @@ class BarrierActions:
     def _hit_fact(self, weapon: MeleeWeaponItem | None, barrier: BarrierEntity) -> str:
         if weapon is None:
             looks = self._manager.player.appearance
-            return k.HIT_HANDS_FACT.format(
+            return barrier_k.HIT_HANDS_FACT.format(
                 name=self._name, barrier=barrier.name, possessive=looks.possessive
             )
-        return k.HIT_FACT.format(name=self._name, weapon=weapon.name.lower(), barrier=barrier.name)
+        return barrier_k.HIT_FACT.format(
+            name=self._name, weapon=weapon.name.lower(), barrier=barrier.name
+        )
 
     def _exert(self, levels: dict[str, int]) -> None:
         player = self._manager.player
-        cost = k.DOOR_HIT_ENDURANCE_BY_FITNESS[levels[skill_k.FITNESS]]
+        cost = barrier_k.DOOR_HIT_ENDURANCE_BY_FITNESS[levels[skill_k.FITNESS]]
         if trait_k.JOGGER_ID in player.traits:
-            cost *= k.JOGGER_DOOR_ENDURANCE_MULT
+            cost *= barrier_k.JOGGER_DOOR_ENDURANCE_MULT
         player.stats.remove(CharacterStat.ENDURANCE, cost)
 
     def _discard(self, entity: ItemEntity) -> None:
@@ -198,7 +209,7 @@ class BarrierActions:
         assert isinstance(item, MeleeWeaponItem)
         levels = self._levels()
         upkeep = levels.get(melee_k.MAINTENANCE_SKILL, 0) + weapon_level(player) // 2
-        odds = int(item.condition_lower_chance * k.HAMMER_WEAR_MULT) + carpentry + upkeep
+        odds = int(item.condition_lower_chance * barrier_k.HAMMER_WEAR_MULT) + carpentry + upkeep
         if self._rng.randrange(max(odds, 1)) != 0:
             return []
         before = melee_k.condition_word(hammer.condition, item.condition_max)

@@ -73,8 +73,12 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
   packages.
 - **Imports:** call a function through its module (`from modules import
   units`, then `units.per_hour_from_frame(...)`), so a call says where it comes
-  from; import classes and constants by name, or a data module under a short
-  alias (`from data.character import traits as trait_k`). `typing`,
+  from; import classes and constants by name, or a data module whole. A module
+  imported whole has one name in every file: a data module `<name>_k`
+  (`from data.character import traits as trait_k`), a zombie data module
+  `zombie_<name>` (`lore as zombie_lore`), and a code module whose short name
+  is unclear outside its package a name that says its domain
+  (`from managers.corpses import bodies as corpses`). `typing`,
   `collections.abc` and `dataclasses` are imported by name. Ruff (ICN003)
   enforces this for the modules listed under `banned-from` in
   `pyproject.toml`; add a module there once it holds plain functions. Source:

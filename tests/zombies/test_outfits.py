@@ -7,7 +7,7 @@ from unittest import mock
 from data.items import ITEMS
 from data.loot.tables import BAG_TABLES, LootTable
 from data.zombies import loot as zombie_loot
-from data.zombies import outfits as outfits_data
+from data.zombies import outfits as zombie_outfits
 from data.zombies.lore import STANDING_HIT_PARTS
 from managers.combat.melee import SwingKind, hit_part, zombie_defence
 from managers.corpses import bodies as corpses
@@ -48,7 +48,7 @@ class OutfitPoolTests(unittest.TestCase):
     """Spec 14, Outfits: the pool of 27 and its chances."""
 
     def test_the_pool_is_the_27_outfits_with_their_chances(self):
-        pool = {name: (chance, sex) for name, chance, sex in outfits_data.ZOMBIE_OUTFIT_POOL}
+        pool = {name: (chance, sex) for name, chance, sex in zombie_outfits.ZOMBIE_OUTFIT_POOL}
         self.assertEqual(len(pool), 27)
         for name in ("generic01", "generic02", "generic03", "generic04", "generic05"):
             self.assertEqual(pool[name], (20, "any"))
@@ -73,11 +73,11 @@ class OutfitPoolTests(unittest.TestCase):
         self.assertEqual(pool["exterminator_suited"], (0.01, "any"))
 
     def test_every_outfit_has_a_reference_list_for_each_sex_it_is_pooled_for(self):
-        for name, _, sex in outfits_data.ZOMBIE_OUTFIT_POOL:
+        for name, _, sex in zombie_outfits.ZOMBIE_OUTFIT_POOL:
             sexes = {"any": ("male", "female"), "male": ("male",), "female": ("female",)}[sex]
             for each in sexes:
                 with self.subTest(outfit=name, sex=each):
-                    self.assertTrue(outfits_data.ZOMBIE_OUTFIT_REFERENCES[name][each])
+                    self.assertTrue(zombie_outfits.ZOMBIE_OUTFIT_REFERENCES[name][each])
 
     def test_generic_outfits_are_91_percent_of_males_and_87_percent_of_females(self):
         rng = random.Random(4)
@@ -89,7 +89,7 @@ class OutfitPoolTests(unittest.TestCase):
 
     def test_a_male_never_wears_a_female_outfit_and_the_reverse(self):
         rng = random.Random(5)
-        pool = {name: sex for name, _, sex in outfits_data.ZOMBIE_OUTFIT_POOL}
+        pool = {name: sex for name, _, sex in zombie_outfits.ZOMBIE_OUTFIT_POOL}
         for _ in range(3000):
             self.assertNotEqual(pool[zombie_dress.pick_outfit(rng, False)], "female")
             self.assertNotEqual(pool[zombie_dress.pick_outfit(rng, True)], "male")
@@ -100,7 +100,7 @@ class OutfitItemTests(unittest.TestCase):
 
     def dress(self, references, rolls):
         with mock.patch.dict(
-            outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": references}}
+            zombie_outfits.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": references}}
         ):
             return zombie_dress.dress_outfit("generic01", False, ScriptedRandom(**rolls))[0]
 
@@ -132,7 +132,7 @@ class OutfitItemTests(unittest.TestCase):
         self.assertEqual(entity.holes, set())
 
     def test_every_reference_item_is_in_the_catalogue_or_none(self):
-        for by_sex in outfits_data.ZOMBIE_OUTFIT_REFERENCES.values():
+        for by_sex in zombie_outfits.ZOMBIE_OUTFIT_REFERENCES.values():
             for references in by_sex.values():
                 for probability, choices in references:
                     self.assertTrue(0 < probability <= 1)
@@ -148,7 +148,7 @@ class OutfitBagTests(unittest.TestCase):
     def references(self):
         return [
             choices
-            for by_sex in outfits_data.ZOMBIE_OUTFIT_REFERENCES.values()
+            for by_sex in zombie_outfits.ZOMBIE_OUTFIT_REFERENCES.values()
             for references in by_sex.values()
             for _, choices in references
         ]
@@ -163,7 +163,9 @@ class OutfitBagTests(unittest.TestCase):
 
     def test_a_bag_reference_gives_a_carried_bag_and_no_worn_item(self):
         refs = ((1.0, ("item_schoolbag", "item_tshirt")),)
-        with mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}):
+        with mock.patch.dict(
+            zombie_outfits.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}
+        ):
             worn, bags = zombie_dress.dress_outfit(
                 "generic01", False, ScriptedRandom(random=[0.0], randrange=[0])
             )
@@ -175,7 +177,7 @@ class OutfitBagTests(unittest.TestCase):
         refs = ((1.0, ("item_satchel",)),)
         zombie = bare_zombie()
         with (
-            mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}),
+            mock.patch.dict(zombie_outfits.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}),
             mock.patch.object(zombie_dress, "pick_outfit", return_value="generic01"),
             mock.patch.object(zombie_dress, "attach_weapon"),
         ):
@@ -220,7 +222,9 @@ class OutfitBagTests(unittest.TestCase):
 
     def test_an_outfit_bag_is_marked_to_roll_and_a_player_bag_is_not(self):
         refs = ((1.0, ("item_schoolbag",)),)
-        with mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}):
+        with mock.patch.dict(
+            zombie_outfits.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}
+        ):
             _, bags = zombie_dress.dress_outfit(
                 "generic01", False, ScriptedRandom(random=[0.0], randrange=[0])
             )
@@ -273,7 +277,7 @@ class OutfitBagTests(unittest.TestCase):
         refs = ((1.0, ("item_schoolbag",)),)
         zone = GameManager().world.locations["zone_street"]
         with (
-            mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}),
+            mock.patch.dict(zombie_outfits.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}),
             mock.patch.object(zombie_dress, "pick_outfit", return_value="generic01"),
             mock.patch.object(zombie_dress, "attach_weapon"),
         ):
@@ -288,7 +292,7 @@ class ZombieClothingTests(unittest.TestCase):
     def test_the_catalogue_gained_about_270_clothing_items(self):
         used = {
             item_id
-            for by_sex in outfits_data.ZOMBIE_OUTFIT_REFERENCES.values()
+            for by_sex in zombie_outfits.ZOMBIE_OUTFIT_REFERENCES.values()
             for references in by_sex.values()
             for _, choices in references
             for item_id in choices

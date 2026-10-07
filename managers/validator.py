@@ -18,8 +18,8 @@ from dataclasses import dataclass
 
 from data import carry as carry_k
 from data.body import health as body_k
-from data.body import survival
-from data.character import exercises as ex
+from data.body import survival as survival_k
+from data.character import exercises as exercise_k
 from data.clothing.locations import EXCLUSIVE_LOCATIONS
 from data.items import ITEMS
 from data.loot import containers as container_k
@@ -31,7 +31,7 @@ from data.world.clock import (
     WAIT_CAP_MIN,
     minutes_until,
 )
-from data.zombies import lore as zombie_k
+from data.zombies import lore as zombie_lore
 from managers import carry
 from managers.body.first_aid import (
     bandage_items,
@@ -328,7 +328,7 @@ class ActionValidator:
 
     def _asleep(self, action: AnyAction) -> Rejected | None:
         if self.manager.player.asleep:
-            return Rejected(action, zombie_k.ASLEEP_REFUSAL.format(name=self._name))
+            return Rejected(action, zombie_lore.ASLEEP_REFUSAL.format(name=self._name))
         return None
 
     def _carried(self, name: str) -> ItemEntity | None:
@@ -453,10 +453,10 @@ class ActionValidator:
         player = self.manager.player
         corpse = self._corpse_target(source)
         if corpse is None:
-            return Rejected(action, zombie_k.NO_SUCH_CORPSE.format(target=source))
+            return Rejected(action, zombie_lore.NO_SUCH_CORPSE.format(target=source))
         if not corpse.searched:
             return Rejected(
-                action, zombie_k.NOT_SEARCHED.format(name=self._name, corpse=corpse.corpse_id)
+                action, zombie_lore.NOT_SEARCHED.format(name=self._name, corpse=corpse.corpse_id)
             )
         if action.all_items:
             entities = tuple(corpse.contents)
@@ -470,7 +470,7 @@ class ActionValidator:
         if entity is None:
             return Rejected(
                 action,
-                zombie_k.NOT_ON_CORPSE.format(corpse=corpse.corpse_id, item=action.item_name),
+                zombie_lore.NOT_ON_CORPSE.format(corpse=corpse.corpse_id, item=action.item_name),
             )
         if carry.over_the_limit(player, extra=[entity]):
             return Rejected(action, self._cant_carry())
@@ -528,7 +528,7 @@ class ActionValidator:
             return Rejected(action, carry_k.ALREADY_CARRYING.format(name=self._name))
         corpse = self._corpse_target(action.corpse_name)
         if corpse is None:
-            return Rejected(action, zombie_k.NO_SUCH_CORPSE.format(target=action.corpse_name))
+            return Rejected(action, zombie_lore.NO_SUCH_CORPSE.format(target=action.corpse_name))
         if any(player.equipment[slot] is not None for slot in CharacterHoldableSlot):
             return Rejected(action, carry_k.HANDS_FULL.format(name=self._name))
         minutes = approach_minutes(corpse.gap, limp_factor(player))
@@ -537,7 +537,7 @@ class ActionValidator:
     def _validate_search(self, action: SearchAction) -> ValidationResult:
         manager = self.manager
         if manager.player.asleep:
-            return Rejected(action, zombie_k.ASLEEP_REFUSAL.format(name=self._name))
+            return Rejected(action, zombie_lore.ASLEEP_REFUSAL.format(name=self._name))
         name = action.target_name
         if not (
             carry.clean_name(name) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(name.strip())
@@ -545,10 +545,11 @@ class ActionValidator:
             return self._search_place(action)
         corpse = self._corpse_target(action.target_name)
         if corpse is None:
-            return Rejected(action, zombie_k.NO_SUCH_CORPSE.format(target=action.target_name))
+            return Rejected(action, zombie_lore.NO_SUCH_CORPSE.format(target=action.target_name))
         if corpse.searched:
             return Rejected(
-                action, zombie_k.ALREADY_SEARCHED.format(name=self._name, corpse=corpse.corpse_id)
+                action,
+                zombie_lore.ALREADY_SEARCHED.format(name=self._name, corpse=corpse.corpse_id),
             )
         minutes = approach_minutes(corpse.gap, limp_factor(manager.player))
         return Accepted(action, TargetCorpse(corpse.corpse_id, minutes))
@@ -997,25 +998,29 @@ class ActionValidator:
         minutes = SLEEP_CAP_MIN
         now = self.manager.narrative.minutes
         if self.manager.narrative.time_of_day == "night":
-            minutes = min(minutes, minutes_until(now, survival.SLEEP_DEFAULT_WAKE_MINUTE_OF_DAY))
+            minutes = min(minutes, minutes_until(now, survival_k.SLEEP_DEFAULT_WAKE_MINUTE_OF_DAY))
         return Accepted(action, TimeSpan(minutes, clamped=False))
 
     def _validate_exercise(self, action: ExerciseAction) -> ValidationResult:
         player = self.manager.player
-        exercise = ex.find_exercise(action.exercise_name)
+        exercise = exercise_k.find_exercise(action.exercise_name)
         if exercise is None:
             return Rejected(action, f"Unknown exercise: '{action.exercise_name}'.")
-        minutes = action.minutes if action.minutes is not None else ex.EXERCISE_MINUTES_DEFAULT
+        minutes = (
+            action.minutes if action.minutes is not None else exercise_k.EXERCISE_MINUTES_DEFAULT
+        )
         valid = range(
-            ex.EXERCISE_MINUTES_MIN, ex.EXERCISE_MINUTES_MAX + 1, ex.EXERCISE_MINUTES_STEP
+            exercise_k.EXERCISE_MINUTES_MIN,
+            exercise_k.EXERCISE_MINUTES_MAX + 1,
+            exercise_k.EXERCISE_MINUTES_STEP,
         )
         if minutes not in valid:
             return Rejected(
                 action,
-                f"{exercise.name} takes {ex.EXERCISE_MINUTES_MIN} to {ex.EXERCISE_MINUTES_MAX} "
-                f"minutes, in steps of {ex.EXERCISE_MINUTES_STEP}.",
+                f"{exercise.name} takes {exercise_k.EXERCISE_MINUTES_MIN} to {exercise_k.EXERCISE_MINUTES_MAX} "
+                f"minutes, in steps of {exercise_k.EXERCISE_MINUTES_STEP}.",
             )
-        if endurance_level(player) > ex.EXERCISE_ENDURANCE_STOP_LEVEL:
+        if endurance_level(player) > exercise_k.EXERCISE_ENDURANCE_STOP_LEVEL:
             return Rejected(action, f"{self._name} is too exhausted to exercise.")
         if exercise.item_id and not any(
             e.item.id == exercise.item_id for e in carry.carried_items(player)
@@ -1027,12 +1032,12 @@ class ActionValidator:
     def _sleep_refusal(self) -> str:
         stats = self.manager.player.stats
         panic = status_effect_level(StatusEffect.PANIC, stats.get(CharacterStat.PANIC))
-        if panic >= survival.SLEEP_REFUSED_PANIC_LEVEL:
+        if panic >= survival_k.SLEEP_REFUSED_PANIC_LEVEL:
             return f"{self._name} is too panicked to sleep."
         pain = status_effect_level(StatusEffect.PAIN, stats.get(CharacterStat.PAIN))
         if (
-            pain >= survival.SLEEP_REFUSED_PAIN_LEVEL
-            and stats.get(CharacterStat.FATIGUE) <= survival.SLEEP_PAIN_FATIGUE_EXCEPTION
+            pain >= survival_k.SLEEP_REFUSED_PAIN_LEVEL
+            and stats.get(CharacterStat.FATIGUE) <= survival_k.SLEEP_PAIN_FATIGUE_EXCEPTION
         ):
             return f"{self._name} is in too much pain to sleep."
         return ""

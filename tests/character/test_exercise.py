@@ -4,7 +4,7 @@ import random
 import unittest
 from unittest import mock
 
-from data import time_costs
+from data import time_costs as time_cost_k
 from data.character.exercises import EXERCISES
 from data.items import ITEMS
 from managers.character.exercise import (
@@ -487,22 +487,22 @@ class ExerciseTimeCostTests(unittest.TestCase):
     """Spec 08, Exercise: the EXERCISE time cost row is the chosen or the run minutes."""
 
     def test_the_row_exists(self):
-        self.assertIn(ExerciseAction, time_costs.TIME_COSTS)
+        self.assertIn(ExerciseAction, time_cost_k.TIME_COSTS)
 
     def test_the_row_gives_the_chosen_minutes(self):
         action = ExerciseAction(exercise_name="squats", minutes=30)
         self.assertEqual(
-            time_costs.action_minutes(action, ExercisePlan(EXERCISES["squats"], 30)), 30
+            time_cost_k.action_minutes(action, ExercisePlan(EXERCISES["squats"], 30)), 30
         )
 
     def test_the_row_gives_the_minutes_run_when_stopped_early(self):
         action = ExerciseAction(exercise_name="squats", minutes=60)
-        self.assertEqual(time_costs.action_minutes(action, TimeSpan(7, False)), 7)
+        self.assertEqual(time_cost_k.action_minutes(action, TimeSpan(7, False)), 7)
 
     def test_the_resolver_takes_its_minutes_from_the_row(self):
         gm = game_with()
         before = gm.narrative.minutes
-        with mock.patch.dict(time_costs.TIME_COSTS, {ExerciseAction: 20}):
+        with mock.patch.dict(time_cost_k.TIME_COSTS, {ExerciseAction: 20}):
             simulate(gm, ExerciseAction(exercise_name="squats", minutes=10))
         self.assertEqual(gm.narrative.minutes - before, 20)
 

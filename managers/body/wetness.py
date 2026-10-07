@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from data.body import thermal as k
+from data.body import thermal as thermal_k
 from data.world.clock import MINUTES_PER_HOUR
 from managers.body.stats.drivers import StatContext
 from managers.body.thermoregulator import chunk_air, clamp
@@ -36,15 +36,18 @@ def rain_intensity(ctx: StatContext) -> float:
     sample = ctx.weather
     if sample is None or ctx.indoors or sample.precipitation_is_snow:
         return 0.0
-    if sample.precipitation_intensity < k.RAIN_MIN_INTENSITY:
+    if sample.precipitation_intensity < thermal_k.RAIN_MIN_INTENSITY:
         return 0.0
     return sample.precipitation_intensity
 
 
 def drying_rate(still_c: float) -> float:
-    if still_c > k.DRYING_REFERENCE_C:
-        return k.DRYING_BASE_RATE + (still_c - k.DRYING_REFERENCE_C) * k.DRYING_PER_DEGREE
-    return k.DRYING_BASE_RATE
+    if still_c > thermal_k.DRYING_REFERENCE_C:
+        return (
+            thermal_k.DRYING_BASE_RATE
+            + (still_c - thermal_k.DRYING_REFERENCE_C) * thermal_k.DRYING_PER_DEGREE
+        )
+    return thermal_k.DRYING_BASE_RATE
 
 
 def _layers(player: PlayerEntity, part: BodyPart) -> list[ItemEntity]:
@@ -58,32 +61,40 @@ def _water_resistance(entity: ItemEntity) -> float:
 
 def _pass_one(player: PlayerEntity, part: BodyPart, m: _Minute) -> int:
     """Skin sweat and evaporation; passes the delta outward through the layers. Returns perspiring parts."""
-    node = k.THERMAL_NODES[part]
+    node = thermal_k.THERMAL_NODES[part]
     secondary = clamp(player.thermal.secondary[part], 0.0, 1.0)
     perspiration = secondary**2 * (
-        k.PERSPIRATION_DIST_BASE + k.PERSPIRATION_DIST_SCALE * (1 - node.distance_to_core)
+        thermal_k.PERSPIRATION_DIST_BASE
+        + thermal_k.PERSPIRATION_DIST_SCALE * (1 - node.distance_to_core)
     )
-    if perspiration > k.PERSPIRATION_MIN:
+    if perspiration > thermal_k.PERSPIRATION_MIN:
         base = perspiration
     elif m.raining:
         base = 0.0
     else:
         skin_temp = player.thermal.skin[part]
-        evaporation = ((skin_temp - k.EVAPORATION_SKIN_FLOOR_C) / k.EVAPORATION_SKIN_RANGE_C) ** 2
+        evaporation = (
+            (skin_temp - thermal_k.EVAPORATION_SKIN_FLOOR_C) / thermal_k.EVAPORATION_SKIN_RANGE_C
+        ) ** 2
         base = -max(0.0, evaporation - m.rain)
-    base *= k.WETNESS_INCREASE_per_min if base > 0 else k.WETNESS_DECREASE_per_min
+    base *= thermal_k.WETNESS_INCREASE_per_min if base > 0 else thermal_k.WETNESS_DECREASE_per_min
     m.skin_delta[part] += base
     skin_after = m.skin_start[part] + m.skin_delta[part]
     perspiring = 1 if base > 0 else 0
-    touched = (base > 0 and skin_after >= k.WETNESS_HYSTERESIS_WET) or (
-        base < 0 and skin_after <= k.WETNESS_HYSTERESIS_DRY
+    touched = (base > 0 and skin_after >= thermal_k.WETNESS_HYSTERESIS_WET) or (
+        base < 0 and skin_after <= thermal_k.WETNESS_HYSTERESIS_DRY
     )
     if not touched:
         return perspiring
     delta = base
     if base > 0:
-        outdoor = clamp(m.still_c + k.SWEAT_OUTDOOR_OFFSET_C, 0.0, k.SWEAT_OUTDOOR_SPAN_C)
-        delta *= k.SWEAT_OUTDOOR_BASE + k.SWEAT_OUTDOOR_SCALE * outdoor / k.SWEAT_OUTDOOR_SPAN_C
+        outdoor = clamp(
+            m.still_c + thermal_k.SWEAT_OUTDOOR_OFFSET_C, 0.0, thermal_k.SWEAT_OUTDOOR_SPAN_C
+        )
+        delta *= (
+            thermal_k.SWEAT_OUTDOOR_BASE
+            + thermal_k.SWEAT_OUTDOOR_SCALE * outdoor / thermal_k.SWEAT_OUTDOOR_SPAN_C
+        )
     skipped = False
     for entity in _layers(player, part):
         if base > 0:
@@ -91,7 +102,7 @@ def _pass_one(player: PlayerEntity, part: BodyPart, m: _Minute) -> int:
         wet = m.start_item[id(entity)]
         if (
             part in entity.holes
-            or (base > 0 and wet >= k.LAYER_SOAK_MAX)
+            or (base > 0 and wet >= thermal_k.LAYER_SOAK_MAX)
             or (base < 0 and wet <= 0)
         ):
             skipped = True
@@ -112,10 +123,12 @@ def _pass_one(player: PlayerEntity, part: BodyPart, m: _Minute) -> int:
 def _pass_two(player: PlayerEntity, part: BodyPart, m: _Minute, perspiring: int) -> None:
     """Rain and air: the walk from the outermost layer inward, then the skin."""
     base = (
-        m.rain * k.WETNESS_INCREASE_per_min if m.raining else -m.drying * k.WETNESS_DECREASE_per_min
+        m.rain * thermal_k.WETNESS_INCREASE_per_min
+        if m.raining
+        else -m.drying * thermal_k.WETNESS_DECREASE_per_min
     )
     inner_to_outer = _layers(player, part)
-    divider = float(k.LAYER_DIVIDER)
+    divider = float(thermal_k.LAYER_DIVIDER)
     flagged = False
     for index in range(len(inner_to_outer) - 1, -1, -1):
         entity = inner_to_outer[index]
@@ -123,7 +136,7 @@ def _pass_two(player: PlayerEntity, part: BodyPart, m: _Minute, perspiring: int)
         if part in entity.holes:
             flagged = True
             continue
-        if m.raining and wet >= k.LAYER_SOAK_MAX:
+        if m.raining and wet >= thermal_k.LAYER_SOAK_MAX:
             flagged = True
             continue
         if not m.raining and wet <= 0:
@@ -150,9 +163,11 @@ def _pass_two(player: PlayerEntity, part: BodyPart, m: _Minute, perspiring: int)
         innermost = m.start_item[id(inner_to_outer[0])]
         skin_now = m.skin_start[part] + m.skin_delta[part]
         rain_reaches = (
-            m.raining and innermost >= k.SKIN_RAIN_INNER_MIN and skin_now <= k.LAYER_SOAK_MAX
+            m.raining
+            and innermost >= thermal_k.SKIN_RAIN_INNER_MIN
+            and skin_now <= thermal_k.LAYER_SOAK_MAX
         )
-        air_reaches = not m.raining and innermost <= k.SKIN_DRY_INNER_MAX
+        air_reaches = not m.raining and innermost <= thermal_k.SKIN_DRY_INNER_MAX
         if perspiring == 0 and (rain_reaches or air_reaches):
             m.skin_delta[part] += base / 2
     else:
@@ -183,10 +198,12 @@ def walk_minute(player: PlayerEntity, stats: Stats, ctx: StatContext) -> None:
         perspiring = _pass_one(player, part, m)
         _pass_two(player, part, m, perspiring)
     for key, entity in m.items.items():
-        entity.wetness = clamp(m.start_item[key] + m.item_delta[key], 0.0, k.LAYER_SOAK_MAX)
-    changes = [clamp(body + m.skin_delta[part], 0.0, k.LAYER_SOAK_MAX) - body for part in BodyPart]
+        entity.wetness = clamp(m.start_item[key] + m.item_delta[key], 0.0, thermal_k.LAYER_SOAK_MAX)
+    changes = [
+        clamp(body + m.skin_delta[part], 0.0, thermal_k.LAYER_SOAK_MAX) - body for part in BodyPart
+    ]
     mean_change = sum(changes) / len(changes)
-    stats.set(CharacterStat.WETNESS, body + (1 - k.BODY_MERGE_FACTOR) * mean_change)
+    stats.set(CharacterStat.WETNESS, body + (1 - thermal_k.BODY_MERGE_FACTOR) * mean_change)
 
 
 class WetnessDriver:

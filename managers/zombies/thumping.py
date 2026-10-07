@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 
 from data.character import traits as trait_k
 from data.items import ITEMS
-from data.world import barriers as k
-from data.zombies import lore as lore_k
+from data.world import barriers as barrier_k
+from data.zombies import lore as zombie_lore
 from managers.world.barriers import barriers_between, blocks, d_b, sound_stress, thump
 from managers.world.locations import zone_path
 from managers.zombies.noise import BarrierSound, Sound
@@ -65,7 +65,7 @@ def stop_gap(world: World, player: PlayerEntity, barrier: BarrierEntity, side: s
     if of_player_zone(barrier, player):
         return d_b(world, player, barrier) + 1
     path = zone_path(world.locations, side, player.current_location_id) or []
-    return len(path) * lore_k.HOP_TILES
+    return len(path) * zombie_lore.HOP_TILES
 
 
 def is_deaf(player: PlayerEntity) -> bool:
@@ -89,7 +89,9 @@ def start(
     zombie.state = ZombieState.THUMPING
     zombie.thump_barrier = barrier.barrier_id
     zombie.zone_id = side
-    zombie.thump_rate = k.THUMP_RATES_PER_MIN[rng.randrange(len(k.THUMP_RATES_PER_MIN))]
+    zombie.thump_rate = barrier_k.THUMP_RATES_PER_MIN[
+        rng.randrange(len(barrier_k.THUMP_RATES_PER_MIN))
+    ]
     zombie.thump_carry = 0.0
     zombie.side = None
     if of_player_zone(barrier, player):
@@ -99,7 +101,7 @@ def start(
 def _stop(zombie: ZombieEntity) -> None:
     zombie.thump_barrier = None
     zombie.thump_carry = 0.0
-    zombie.thump_cooldown = k.THUMP_COOLDOWN_MIN
+    zombie.thump_cooldown = barrier_k.THUMP_COOLDOWN_MIN
 
 
 def release(world: World, player: PlayerEntity, barrier: BarrierEntity) -> frozenset[str]:
@@ -114,7 +116,7 @@ def release(world: World, player: PlayerEntity, barrier: BarrierEntity) -> froze
             zombie.time_since_seen = 0.0
             zombie.has_chased = True
             zombie.facing_cos = 1.0
-            zombie.gap = k.LUNGE_GAP
+            zombie.gap = barrier_k.LUNGE_GAP
             continue
         zombie.state = ZombieState.ALERTED
         if of_player_zone(barrier, player):
@@ -125,7 +127,7 @@ def release(world: World, player: PlayerEntity, barrier: BarrierEntity) -> froze
             zombie.state = ZombieState.IDLE
             zombie.sound_gap = 0.0
         else:
-            zombie.sound_gap = len(path) * lore_k.HOP_TILES
+            zombie.sound_gap = len(path) * zombie_lore.HOP_TILES
     return frozenset(zombie.zombie_id for zombie in released)
 
 
@@ -138,10 +140,10 @@ def stop_for_sound(zombie: ZombieEntity, distance: float) -> None:
 
 def drop_planks(world: World, side: str, rng: random.Random) -> None:
     """A broken door drops 1 or 2 planks on the side it was hit from."""
-    count = rng.randint(k.BROKEN_DOOR_PLANKS_MIN, k.BROKEN_DOOR_PLANKS_MAX)
+    count = rng.randint(barrier_k.BROKEN_DOOR_PLANKS_MIN, barrier_k.BROKEN_DOOR_PLANKS_MAX)
     zone = world.locations[side]
     for _ in range(count):
-        zone.entities.append(ItemEntity(item=ITEMS[k.PLANK_ITEM_ID]))
+        zone.entities.append(ItemEntity(item=ITEMS[barrier_k.PLANK_ITEM_ID]))
 
 
 def in_players_building(world: World, player: PlayerEntity, barrier: BarrierEntity) -> bool:
@@ -153,7 +155,11 @@ def in_players_building(world: World, player: PlayerEntity, barrier: BarrierEnti
 
 
 def break_fact(barrier: BarrierEntity) -> str:
-    template = k.DOOR_BREAKS_FACT if barrier.kind == BarrierKind.DOOR else k.WINDOW_BREAKS_FACT
+    template = (
+        barrier_k.DOOR_BREAKS_FACT
+        if barrier.kind == BarrierKind.DOOR
+        else barrier_k.WINDOW_BREAKS_FACT
+    )
     return template.format(barrier=barrier.name)
 
 
@@ -197,11 +203,11 @@ def _thump_once(
     ours = of_player_zone(barrier, player)
     distance = d_b(world, player, barrier)
     if ours:
-        report.stress += sound_stress(distance, k.THUMP_SOUND_RADIUS, deaf=deaf)
+        report.stress += sound_stress(distance, barrier_k.THUMP_SOUND_RADIUS, deaf=deaf)
     result = thump(barrier, zombie.zone_id, len(thumpers_at(world, barrier.barrier_id)))
     if result.plank_broke and ours:
         report.plank_broke = True
-        report.facts.append(k.PLANK_BREAKS_FACT.format(barrier=barrier.name))
+        report.facts.append(barrier_k.PLANK_BREAKS_FACT.format(barrier=barrier.name))
     if result.gave:
         _gave_way(world, player, rng, barrier, zombie.zone_id, report)
     elif not blocks(barrier):
@@ -233,9 +239,13 @@ def _gave_way(
     if barrier.kind == BarrierKind.DOOR:
         drop_planks(world, side, rng)
     released = release(world, player, barrier) if not blocks(barrier) else frozenset()
-    report.sounds.append(BarrierSound(Sound(k.BREAK_SOUND_RADIUS, k.BREAK_SOUND_VOLUME), released))
+    report.sounds.append(
+        BarrierSound(Sound(barrier_k.BREAK_SOUND_RADIUS, barrier_k.BREAK_SOUND_VOLUME), released)
+    )
     if of_player_zone(barrier, player):
-        report.stress += sound_stress(d_b(world, player, barrier), k.BREAK_SOUND_RADIUS, deaf=deaf)
+        report.stress += sound_stress(
+            d_b(world, player, barrier), barrier_k.BREAK_SOUND_RADIUS, deaf=deaf
+        )
     if in_players_building(world, player, barrier):
         report.barrier_broke = True
         report.facts.append(break_fact(barrier))

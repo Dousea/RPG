@@ -19,10 +19,11 @@ from dataclasses import dataclass
 from data import carry as carry_k
 from data import melee as melee_k
 from data.body import health as body_k
-from data.body import status_effects, survival
+from data.body import status_effects as status_effect_k
+from data.body import survival as survival_k
 from data.body import thermal as thermal_k
 from data.body.thermal import Metabolic
-from data.character import exercises as ex_k
+from data.character import exercises as exercise_k
 from data.character import skills as skill_k
 from data.character import traits as trait_k
 from data.character.exercises import find_exercise
@@ -45,7 +46,7 @@ from data.time_costs import (
 )
 from data.world import barriers as barrier_k
 from data.world.clock import MINUTES_PER_DAY
-from data.zombies import lore as lore_k
+from data.zombies import lore as zombie_lore
 from managers import carry
 from managers.body.first_aid import FirstAid
 from managers.body.health import BodyEngine, action_time_multiplier, limp_factor
@@ -529,7 +530,7 @@ class SimulationCore:
         weakens = isinstance(action, WaitAction | SleepAction | ExerciseAction)
         resting = isinstance(action, WaitAction | SleepAction)
         while spent < minutes and not self._interruption:
-            block = min(survival.MAX_CHUNK_MINUTES, minutes - spent)
+            block = min(survival_k.MAX_CHUNK_MINUTES, minutes - spent)
             beat_in = self._next_clock_beat_in()
             if beat_in is not None:
                 block = min(block, beat_in)
@@ -554,7 +555,7 @@ class SimulationCore:
                 manager.world,
                 manager.player.current_location_id,
                 corpse_count(manager.world, manager.player.current_location_id),
-                survival.CORPSE_SICKNESS_FREE_CORPSES,
+                survival_k.CORPSE_SICKNESS_FREE_CORPSES,
             )
             if smell:
                 facts.append(smell)
@@ -954,8 +955,8 @@ class SimulationCore:
             CharacterStat.UNHAPPINESS,
             strip_unhappiness(manager.player.traits, self._transfer_minutes(transfer)),
         )
-        sex = lore_k.DEAD_WOMAN if corpse.female else lore_k.DEAD_MAN
-        return lore_k.TAKE_CORPSE_FACT.format(
+        sex = zombie_lore.DEAD_WOMAN if corpse.female else zombie_lore.DEAD_MAN
+        return zombie_lore.TAKE_CORPSE_FACT.format(
             name=self._name, sex=sex, item=entity.item.name.lower()
         )
 
@@ -988,7 +989,7 @@ class SimulationCore:
                 CharacterStat.UNHAPPINESS,
                 strip_unhappiness(manager.player.traits, self._transfer_minutes(transfer)),
             )
-            sex = lore_k.DEAD_WOMAN if source.female else lore_k.DEAD_MAN
+            sex = zombie_lore.DEAD_WOMAN if source.female else zombie_lore.DEAD_MAN
             return carry_k.TAKE_ALL_CORPSE_FACT.format(name=self._name, items=items, sex=sex)
         if source is None:
             fact = carry_k.TAKE_ALL_GROUND_FACT.format(name=self._name, items=items)
@@ -1061,14 +1062,14 @@ class SimulationCore:
             return [*facts, f"{self._name} never gets to search."], spent
         corpse = manager.world.corpses.get(target.corpse_id)
         if corpse is None:
-            gone = lore_k.CORPSE_GONE_FACT.format(name=self._name, corpse=target.corpse_id)
+            gone = zombie_lore.CORPSE_GONE_FACT.format(name=self._name, corpse=target.corpse_id)
             return [*facts, gone], spent
         search_spent, search_facts = self._spend(SEARCH_MIN, accepted.action)
         spent += search_spent
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             loot_search(corpse, self._rng)
             facts.append(
-                lore_k.SEARCH_FACT.format(
+                zombie_lore.SEARCH_FACT.format(
                     name=self._name, corpse=corpse.corpse_id, items=contents_in_words(corpse)
                 )
             )
@@ -1205,14 +1206,14 @@ class SimulationCore:
         stats.add(CharacterStat.UNHAPPINESS, item.unhappy_change)
         stats.add(CharacterStat.BOREDOM, item.boredom_change)
         stats.add(CharacterStat.STRESS, item.stress_change)
-        fed = abs(item.hunger_change) * status_effects.FOOD_EATEN_PER_HUNGER
+        fed = abs(item.hunger_change) * status_effect_k.FOOD_EATEN_PER_HUNGER
         if "drink" in item.tags:
             player.food_eaten_timer += fed
         elif stats.get(CharacterStat.HUNGER) == 0:
             if item.cooked:
-                fed *= status_effects.FOOD_EATEN_COOKED_MULT
+                fed *= status_effect_k.FOOD_EATEN_COOKED_MULT
             player.food_eaten_timer = min(
-                status_effects.FOOD_EATEN_CAP, player.food_eaten_timer + fed
+                status_effect_k.FOOD_EATEN_CAP, player.food_eaten_timer + fed
             )
         if item.alcohol:
             stats.add(
@@ -1498,9 +1499,9 @@ class SimulationCore:
     def _resolve_shout(self, accepted: Accepted) -> str:
         """A shout is a world sound; the zombie loop hears it in the next minute it runs."""
         radius, volume = (
-            (lore_k.SHOUT_SNEAK_RADIUS, lore_k.SHOUT_SNEAK_VOLUME)
+            (zombie_lore.SHOUT_SNEAK_RADIUS, zombie_lore.SHOUT_SNEAK_VOLUME)
             if self.manager.player.sneaking
-            else (lore_k.SHOUT_RADIUS, lore_k.SHOUT_VOLUME)
+            else (zombie_lore.SHOUT_RADIUS, zombie_lore.SHOUT_VOLUME)
         )
         self._pending_sounds.append(Sound(radius=radius, volume=volume))
         self._shouted = True
@@ -1550,7 +1551,7 @@ class SimulationCore:
         facts: list[str] = []
         wake_fact = ""
         while spent < wanted and not self.manager.narrative.game_over:
-            chunk = min(survival.MAX_CHUNK_MINUTES, wanted - spent)
+            chunk = min(survival_k.MAX_CHUNK_MINUTES, wanted - spent)
             advanced, stat_facts = self._spend(chunk, accepted.action, asleep=True)
             spent += advanced
             facts.extend(stat_facts)
@@ -1595,7 +1596,10 @@ class SimulationCore:
                 )
             if self._interruption:
                 break
-            if endurance_level(player) > ex_k.EXERCISE_ENDURANCE_STOP_LEVEL and spent < planned:
+            if (
+                endurance_level(player) > exercise_k.EXERCISE_ENDURANCE_STOP_LEVEL
+                and spent < planned
+            ):
                 stopped = True
                 break
         if self.manager.narrative.game_over:
@@ -1622,7 +1626,7 @@ class SimulationCore:
         zombie_woke = self._interruption not in ("", INTERRUPTED_BY_WEAKENING)
         if self._zombies_seen_this_chunk > 0 or zombie_woke:
             panic = self._rng.uniform(
-                survival.SLEEP_INTERRUPTION_PANIC_MIN, survival.SLEEP_INTERRUPTION_PANIC_MAX
+                survival_k.SLEEP_INTERRUPTION_PANIC_MIN, survival_k.SLEEP_INTERRUPTION_PANIC_MAX
             )
             player.stats.add(CharacterStat.PANIC, panic)
             return f"A zombie wakes {self._name} in a panic."
@@ -1630,16 +1634,16 @@ class SimulationCore:
             return f"{self._name} wakes, badly hurt."
         stats = player.stats
         if status_effect_level(StatusEffect.HUNGRY, stats.get(CharacterStat.HUNGER)) >= (
-            survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
+            survival_k.SLEEP_WAKE_STATUS_EFFECT_LEVEL
         ):
             return f"Hunger wakes {self._name}."
         if status_effect_level(StatusEffect.THIRST, stats.get(CharacterStat.THIRST)) >= (
-            survival.SLEEP_WAKE_STATUS_EFFECT_LEVEL
+            survival_k.SLEEP_WAKE_STATUS_EFFECT_LEVEL
         ):
             return f"Thirst wakes {self._name}."
         if (
             stats.get(CharacterStat.FATIGUE) <= 0
-            and slept_minutes >= survival.SLEEP_FATIGUE_WAKE_MIN_HOURS * 60
+            and slept_minutes >= survival_k.SLEEP_FATIGUE_WAKE_MIN_HOURS * 60
         ):
             return f"{self._name} wakes fully rested."
         return ""

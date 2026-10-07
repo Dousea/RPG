@@ -8,7 +8,7 @@ from enum import StrEnum
 from data import melee as melee_k
 from data.character import skills as skill_k
 from data.character import traits as trait_k
-from data.zombies import lore as k
+from data.zombies import lore as zombie_lore
 from managers.body.health import land_wound
 from managers.body.stats.status_effects import defence_penalty, player_status_effect_levels
 from managers.character.skills import skill_levels
@@ -83,12 +83,12 @@ def defence_value(
 ) -> int:
     """The percent chance the player shoves a front attacker off."""
     return (
-        k.DEFENCE_WEAPON_LEVEL_WEIGHT * weapon_level
-        + k.DEFENCE_FITNESS_WEIGHT * fitness
-        + k.DEFENCE_STRENGTH_WEIGHT * strength
-        - k.DEFENCE_ATTACKER_PENALTY * attackers
+        zombie_lore.DEFENCE_WEAPON_LEVEL_WEIGHT * weapon_level
+        + zombie_lore.DEFENCE_FITNESS_WEIGHT * fitness
+        + zombie_lore.DEFENCE_STRENGTH_WEIGHT * strength
+        - zombie_lore.DEFENCE_ATTACKER_PENALTY * attackers
         - defence_penalty(endurance, tired, drunk)
-        - k.DEFENCE_HEAVY_LOAD_PENALTY * heavy_load
+        - zombie_lore.DEFENCE_HEAVY_LOAD_PENALTY * heavy_load
     )
 
 
@@ -110,38 +110,50 @@ def player_defence(player: PlayerEntity, attackers: int) -> int:
 def wound_odds(level: int, attackers: int, side: AttackSide, traits: list[str]) -> WoundOdds:
     """The thresholds for whether an attack wounds, and how badly."""
     extra = attackers - 1
-    base = k.WOUND_BASE + k.MELEE_COMBAT_MOD[level] - k.WOUND_BASE_PER_EXTRA_ATTACKER * extra
-    bite = k.WOUND_BITE - k.WOUND_BITE_PER_EXTRA_ATTACKER * extra
-    laceration = k.WOUND_LACERATION - k.WOUND_LACERATION_PER_EXTRA_ATTACKER * extra
+    base = (
+        zombie_lore.WOUND_BASE
+        + zombie_lore.MELEE_COMBAT_MOD[level]
+        - zombie_lore.WOUND_BASE_PER_EXTRA_ATTACKER * extra
+    )
+    bite = zombie_lore.WOUND_BITE - zombie_lore.WOUND_BITE_PER_EXTRA_ATTACKER * extra
+    laceration = (
+        zombie_lore.WOUND_LACERATION - zombie_lore.WOUND_LACERATION_PER_EXTRA_ATTACKER * extra
+    )
     if side == AttackSide.BEHIND:
-        base -= k.BEHIND_BASE_PENALTY
-        bite -= k.BEHIND_BITE_PENALTY
-        laceration -= k.BEHIND_LACERATION_PENALTY
-        if attackers > k.BEHIND_CROWD_ATTACKERS:
-            bite -= k.BEHIND_CROWD_PENALTY
-            laceration -= k.BEHIND_CROWD_PENALTY
+        base -= zombie_lore.BEHIND_BASE_PENALTY
+        bite -= zombie_lore.BEHIND_BITE_PENALTY
+        laceration -= zombie_lore.BEHIND_LACERATION_PENALTY
+        if attackers > zombie_lore.BEHIND_CROWD_ATTACKERS:
+            bite -= zombie_lore.BEHIND_CROWD_PENALTY
+            laceration -= zombie_lore.BEHIND_CROWD_PENALTY
     elif side in (AttackSide.LEFT, AttackSide.RIGHT):
-        base -= k.SIDE_BASE_PENALTY
-        bite -= k.SIDE_BITE_PENALTY
-        laceration -= k.SIDE_LACERATION_PENALTY
+        base -= zombie_lore.SIDE_BASE_PENALTY
+        bite -= zombie_lore.SIDE_BITE_PENALTY
+        laceration -= zombie_lore.SIDE_LACERATION_PENALTY
     if trait_k.THICK_SKINNED_ID in traits:
-        base = int(base * k.SKIN_FACTOR)
+        base = int(base * zombie_lore.SKIN_FACTOR)
     if trait_k.THIN_SKINNED_ID in traits:
-        base = int(base / k.SKIN_FACTOR)
+        base = int(base / zombie_lore.SKIN_FACTOR)
     return WoundOdds(base=base, laceration=laceration, bite=bite)
 
 
 def roll_body_part(rng: random.Random, side: AttackSide, attackers: int) -> BodyPart:
     """The part a zombie hits; a head or neck hit is often turned into an arm or the torso."""
-    wide = rng.randrange(k.BODY_PART_WIDE_ODDS) == 0
-    span = k.BODY_PART_ROLL_WIDE if wide else k.BODY_PART_ROLL_NARROW
+    wide = rng.randrange(zombie_lore.BODY_PART_WIDE_ODDS) == 0
+    span = zombie_lore.BODY_PART_ROLL_WIDE if wide else zombie_lore.BODY_PART_ROLL_NARROW
     part = _BODY_PARTS[rng.randrange(span)]
     if side == AttackSide.BEHIND:
-        neck_chance = k.NECK_FROM_BEHIND_PER_ATTACKER * attackers + k.NECK_FROM_BEHIND_BASE
+        neck_chance = (
+            zombie_lore.NECK_FROM_BEHIND_PER_ATTACKER * attackers
+            + zombie_lore.NECK_FROM_BEHIND_BASE
+        )
         if rng.randrange(100) < neck_chance:
             part = BodyPart.NECK
-    if part in (BodyPart.HEAD, BodyPart.NECK) and rng.randrange(100) > k.HEAD_RETRY_ABOVE[side]:
-        part = _BODY_PARTS[rng.randrange(k.BODY_PART_RETRY_RANGE)]
+    if (
+        part in (BodyPart.HEAD, BodyPart.NECK)
+        and rng.randrange(100) > zombie_lore.HEAD_RETRY_ABOVE[side]
+    ):
+        part = _BODY_PARTS[rng.randrange(zombie_lore.BODY_PART_RETRY_RANGE)]
     return part
 
 
@@ -152,16 +164,18 @@ _CRAWLER_LEG_PARTS = _BODY_PARTS[_BODY_PARTS.index(BodyPart.UPPERLEG_L) :]
 def roll_crawler_body_part(rng: random.Random) -> BodyPart:
     """The part a crawler bites: groin to foot one time in ten, else thigh to foot."""
     parts = (
-        _CRAWLER_REACH_PARTS if rng.randrange(k.CRAWLER_GROIN_ONE_IN) == 0 else _CRAWLER_LEG_PARTS
+        _CRAWLER_REACH_PARTS
+        if rng.randrange(zombie_lore.CRAWLER_GROIN_ONE_IN) == 0
+        else _CRAWLER_LEG_PARTS
     )
     return parts[rng.randrange(len(parts))]
 
 
 def roll_wound_damage(rng: random.Random) -> float:
     return (
-        rng.randrange(k.DAMAGE_THOUSANDTHS)
-        / k.DAMAGE_THOUSANDTHS
-        * (rng.randrange(k.DAMAGE_STEPS) + k.DAMAGE_OFFSET)
+        rng.randrange(zombie_lore.DAMAGE_THOUSANDTHS)
+        / zombie_lore.DAMAGE_THOUSANDTHS
+        * (rng.randrange(zombie_lore.DAMAGE_STEPS) + zombie_lore.DAMAGE_OFFSET)
     )
 
 
@@ -178,7 +192,7 @@ def roll_wound_kind(rng: random.Random, odds: WoundOdds) -> WoundKind | None:
 
 
 def roll_zombie_infection(kind: WoundKind, rng: random.Random) -> bool:
-    chance = k.ZOMBIE_INFECTION_CHANCE_PERCENT[kind]
+    chance = zombie_lore.ZOMBIE_INFECTION_CHANCE_PERCENT[kind]
     return chance >= 100 or rng.randrange(100) < chance
 
 
@@ -193,7 +207,7 @@ def clothing_defence(player: PlayerEntity, part: BodyPart, kind: WoundKind) -> i
         if part == BodyPart.NECK:
             share *= item.neck_protection
         total += share
-    return min(math.floor(total), k.CLOTHING_DEFENCE_CAP)
+    return min(math.floor(total), zombie_lore.CLOTHING_DEFENCE_CAP)
 
 
 def apply_wound(player: PlayerEntity, wound: Wound, rng: random.Random) -> None:
@@ -216,18 +230,18 @@ def resolve_attack(
     """
     outcome = AttackOutcome()
     if crawler:
-        if rng.randrange(k.CRAWLER_ATTACK_NOTHING_ONE_IN) != 0:
+        if rng.randrange(zombie_lore.CRAWLER_ATTACK_NOTHING_ONE_IN) != 0:
             outcome.idle = True
             return outcome
     else:
         if (
             side == AttackSide.FRONT
-            and attackers <= k.DEFENCE_MAX_ATTACKERS
+            and attackers <= zombie_lore.DEFENCE_MAX_ATTACKERS
             and rng.randrange(100) < player_defence(player, attackers)
         ):
             outcome.defended = True
             return outcome
-        if attackers >= k.DRAG_DOWN_ATTACKERS:
+        if attackers >= zombie_lore.DRAG_DOWN_ATTACKERS:
             outcome.dragged_down = True
             return outcome
     odds = wound_odds(weapon_level(player), attackers, side, player.traits)

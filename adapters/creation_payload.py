@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from data.character import creation as k
+from data.character import creation as creation_k
 from data.character.names import BEARD_STYLES, HAIR_COLOURS, HAIR_STYLES, SKIN_TONE_WORDS
 from data.character.occupations import OCCUPATIONS
 from data.character.presets import PRESETS
@@ -87,12 +87,12 @@ def creation_screen() -> dict[str, Any]:
             "bad": [trait_entry(t.id) for t in selectable if t.cost < 0],
             "granted": [trait_entry(t.id) for t in TRAITS.values() if t.profession_only],
         },
-        "skills": {skill: _skill_name(skill) for skill in k.SKILLS},
-        "base_skills": {"fitness": k.BASE_FITNESS, "strength": k.BASE_STRENGTH},
+        "skills": {skill: _skill_name(skill) for skill in creation_k.SKILLS},
+        "base_skills": {"fitness": creation_k.BASE_FITNESS, "strength": creation_k.BASE_STRENGTH},
         "skill_limits": {
-            "min": k.SKILL_LEVEL_MIN,
-            "max": k.SKILL_LEVEL_MAX,
-            "boost_cap": k.SKILL_BOOST_CAP,
+            "min": creation_k.SKILL_LEVEL_MIN,
+            "max": creation_k.SKILL_LEVEL_MAX,
+            "boost_cap": creation_k.SKILL_BOOST_CAP,
         },
         "appearance": {
             "genders": [g.value for g in Gender],
@@ -100,9 +100,9 @@ def creation_screen() -> dict[str, Any]:
             "hair_styles": list(HAIR_STYLES),
             "hair_colours": list(HAIR_COLOURS),
             "beard_styles": list(BEARD_STYLES),
-            "name_max_chars": k.NAME_MAX_CHARS,
-            "job_title_max_chars": k.JOB_TITLE_MAX_CHARS,
-            "backstory_max_chars": k.BACKSTORY_MAX_CHARS,
+            "name_max_chars": creation_k.NAME_MAX_CHARS,
+            "job_title_max_chars": creation_k.JOB_TITLE_MAX_CHARS,
+            "backstory_max_chars": creation_k.BACKSTORY_MAX_CHARS,
         },
         "outfits": {
             "default": _outfit_lists(DEFAULT_CLOTHING),
@@ -114,7 +114,7 @@ def creation_screen() -> dict[str, Any]:
             for item_id, item in ITEMS.items()
             if isinstance(item, ClothingItem) and item is not ZOMBIE_CLOTHING.get(item_id)
         },
-        "min_points_to_accept": k.MIN_POINTS_TO_ACCEPT,
+        "min_points_to_accept": creation_k.MIN_POINTS_TO_ACCEPT,
         "presets": {
             preset_id: {
                 **build_to_payload(build),
@@ -144,7 +144,7 @@ def build_from_payload(payload: dict[str, Any]) -> CharacterBuild | None:
         gender = Gender(looks.get("gender", Gender.MALE.value))
     except ValueError:
         return None
-    skin_tone = looks.get("skin_tone", k.SKIN_TONE_MIN)
+    skin_tone = looks.get("skin_tone", creation_k.SKIN_TONE_MIN)
     texts = {
         key: _text(looks.get(key, ""))
         for key in ("forename", "surname", "hair_style", "hair_colour", "beard_style", "backstory")

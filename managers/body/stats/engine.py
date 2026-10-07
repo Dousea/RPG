@@ -5,7 +5,7 @@ import logging
 import random
 from collections.abc import Callable
 
-from data.body import survival as k
+from data.body import survival as survival_k
 from data.body.status_effects import FOOD_EATEN_DRAIN_per_hour
 from data.world.clock import MINUTES_PER_HOUR
 from managers.body.cold import ColdDriver
@@ -59,7 +59,7 @@ class StatsEngine:
         remaining = minutes
         body_given = ctx.body != BodyMultipliers()
         while remaining > 0:
-            chunk = min(k.MAX_CHUNK_MINUTES, remaining)
+            chunk = min(survival_k.MAX_CHUNK_MINUTES, remaining)
             if not body_given:
                 thermal = player.thermal
                 ctx = dataclasses.replace(

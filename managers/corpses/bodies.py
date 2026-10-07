@@ -6,7 +6,7 @@ import random
 from collections.abc import Callable
 
 from data.world.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
-from data.zombies import lore as k
+from data.zombies import lore as zombie_lore
 from managers.zombies.dress import dress
 from modules.body.parts import LAYER_ORDER, BodyLocation, BodyPart
 from modules.character.appearance import Gender
@@ -24,7 +24,7 @@ _PARTS = list(BodyPart)
 
 def chunk_chance(per_chunk: float) -> float:
     """The chance a chunk holds a corpse when the outbreak starts."""
-    return k.CORPSE_CHUNK_CHANCE_FACTOR * per_chunk
+    return zombie_lore.CORPSE_CHUNK_CHANCE_FACTOR * per_chunk
 
 
 def _lerp(start: float, end: float, delta: float) -> float:
@@ -34,14 +34,16 @@ def _lerp(start: float, end: float, delta: float) -> float:
 def rot_stage_at_death(days: float, rng: random.Random) -> int:
     """The rot stage of a body made `days` after the outbreak: always 1 for the first 20 days."""
     days_survived = max(int(days), 0)
-    if days_survived <= k.ROT_FRESH_DAYS:
+    if days_survived <= zombie_lore.ROT_FRESH_DAYS:
         return 1
-    late = days_survived >= k.ROT_LATE_DAYS
-    stage1_end = k.ROT_STAGE1_LATE if late else k.ROT_STAGE1_MID
-    stage2_end = k.ROT_STAGE2_LATE if late else k.ROT_STAGE2_MID
-    delta = (days_survived - k.ROT_FRESH_DAYS) / (k.ROT_MID_DAYS - k.ROT_FRESH_DAYS)
-    chance1 = _lerp(k.ROT_STAGE1_START, stage1_end, delta)
-    chance2 = _lerp(k.ROT_STAGE2_START, stage2_end, delta)
+    late = days_survived >= zombie_lore.ROT_LATE_DAYS
+    stage1_end = zombie_lore.ROT_STAGE1_LATE if late else zombie_lore.ROT_STAGE1_MID
+    stage2_end = zombie_lore.ROT_STAGE2_LATE if late else zombie_lore.ROT_STAGE2_MID
+    delta = (days_survived - zombie_lore.ROT_FRESH_DAYS) / (
+        zombie_lore.ROT_MID_DAYS - zombie_lore.ROT_FRESH_DAYS
+    )
+    chance1 = _lerp(zombie_lore.ROT_STAGE1_START, stage1_end, delta)
+    chance2 = _lerp(zombie_lore.ROT_STAGE2_START, stage2_end, delta)
     roll = rng.randrange(100)
     if roll < chance1:
         return 1
@@ -87,7 +89,7 @@ def add_random_holes(worn: dict[BodyLocation, ItemEntity], rng: random.Random, c
     """`count` holes, each at a random part on the outermost layer covering it that has none there."""
     outer_first = sorted(worn.items(), key=lambda pair: LAYER_ORDER[pair[0]], reverse=True)
     for _ in range(count):
-        part = _PARTS[rng.randrange(k.BODY_PART_COUNT)]
+        part = _PARTS[rng.randrange(zombie_lore.BODY_PART_COUNT)]
         for _, entity in outer_first:
             item = entity.item
             if isinstance(item, ClothingItem) and part in item.covers and part not in entity.holes:
@@ -100,13 +102,13 @@ def _shell() -> ZombieEntity:
         zombie_id="",
         zone_id="",
         health=0.0,
-        speed_type=k.SPEED_TYPE_SHAMBLER,
+        speed_type=zombie_lore.SPEED_TYPE_SHAMBLER,
         speed_mod=0.0,
         lunger=False,
-        strength=k.ZOMBIE_STRENGTH,
-        memory=k.ZOMBIE_MEMORY_FRAMES,
-        sight=k.SENSE_NORMAL,
-        hearing=k.SENSE_NORMAL,
+        strength=zombie_lore.ZOMBIE_STRENGTH,
+        memory=zombie_lore.ZOMBIE_MEMORY_FRAMES,
+        sight=zombie_lore.SENSE_NORMAL,
+        hearing=zombie_lore.SENSE_NORMAL,
     )
 
 
@@ -121,12 +123,12 @@ def outbreak_corpse(world: World, zone: Location, minute: int, rng: random.Rando
         died_at=minute,
         rot_at_death=1,
     )
-    if rng.randrange(k.CORPSE_SKELETON_ONE_IN) == 0:
+    if rng.randrange(zombie_lore.CORPSE_SKELETON_ONE_IN) == 0:
         body.skeleton = True
     else:
         shell = _shell()
         dress(shell, rng, 0.0)
-        add_random_holes(shell.worn, rng, k.CORPSE_RANDOM_HOLES)
+        add_random_holes(shell.worn, rng, zombie_lore.CORPSE_RANDOM_HOLES)
         body.female, body.outfit = shell.female, shell.outfit
         body.contents = [
             *shell.worn.values(),
@@ -134,9 +136,9 @@ def outbreak_corpse(world: World, zone: Location, minute: int, rng: random.Rando
             *([shell.attached] if shell.attached else []),
         ]
         body.attached = shell.attached
-        if rng.randrange(k.CORPSE_FAKE_DEAD_ONE_IN) == 0:
+        if rng.randrange(zombie_lore.CORPSE_FAKE_DEAD_ONE_IN) == 0:
             body.fake_dead = True
-            body.crawling = rng.randrange(k.CORPSE_FAKE_DEAD_CRAWLER_ONE_IN) == 0
+            body.crawling = rng.randrange(zombie_lore.CORPSE_FAKE_DEAD_CRAWLER_ONE_IN) == 0
     world.corpses[body.corpse_id] = body
     return body
 
@@ -146,7 +148,7 @@ def scatter(
 ) -> None:
     """The bodies already lying around at the outbreak: at most one per chunk, none where the player starts."""
     for zone in world.locations.values():
-        if zone.id in k.SPAWN_CLEARED_ZONE_IDS:
+        if zone.id in zombie_lore.SPAWN_CLEARED_ZONE_IDS:
             continue
         chance = chunk_chance(per_chunk(zone.zombie_intensity))
         for _ in range(zone.chunks):
@@ -156,7 +158,9 @@ def scatter(
 
 def reanimate_delay_minutes(rng: random.Random) -> float:
     """How long the player's body lies before it gets up: uniform from 0 up to a minute."""
-    return rng.uniform(0.0, k.REANIMATE_DELAY_MAX_MIN) % k.REANIMATE_DELAY_MAX_MIN
+    return (
+        rng.uniform(0.0, zombie_lore.REANIMATE_DELAY_MAX_MIN) % zombie_lore.REANIMATE_DELAY_MAX_MIN
+    )
 
 
 def dress_as_player(
@@ -172,16 +176,20 @@ def dress_as_player(
     zombie.worn = dict(player.worn)
     zombie.attached = None
     zombie.carried = list(player.inventory)
-    zombie.gap = float(k.ATTACK_RANGE_TILES)
+    zombie.gap = float(zombie_lore.ATTACK_RANGE_TILES)
     zombie.state = ZombieState.IDLE
     zombie.down_until = now + math.ceil(reanimate_delay_minutes(rng))
 
 
 def should_rise(corpse: CorpseEntity, gap_before: float, gap_after: float, now: int) -> bool:
     """Whether a fake-dead body gets up this minute: the player's gap to it touched 2 to 4 tiles."""
-    if not corpse.fake_dead or corpse.skeleton or now - corpse.died_at < k.FAKE_DEAD_WAKEUP_MIN:
+    if (
+        not corpse.fake_dead
+        or corpse.skeleton
+        or now - corpse.died_at < zombie_lore.FAKE_DEAD_WAKEUP_MIN
+    ):
         return False
-    near, far = k.FAKE_DEAD_RING_TILES
+    near, far = zombie_lore.FAKE_DEAD_RING_TILES
     return min(gap_before, gap_after) <= far and max(gap_before, gap_after) >= near
 
 
@@ -211,7 +219,8 @@ def age_hours(corpse: CorpseEntity, now: int) -> float:
 def rot_stage(corpse: CorpseEntity, now: int) -> int:
     """The rot stage 1 to 3: it climbs a stage every 72 hours."""
     return min(
-        k.ROT_STAGE_MAX, corpse.rot_at_death + int(age_hours(corpse, now) // k.ROT_STAGE_HOURS)
+        zombie_lore.ROT_STAGE_MAX,
+        corpse.rot_at_death + int(age_hours(corpse, now) // zombie_lore.ROT_STAGE_HOURS),
     )
 
 
@@ -219,12 +228,15 @@ def update(world: World, now: int, rng: random.Random) -> None:
     """One minute of rot for every body, in id order: past removal age a body goes, or turns to bones."""
     for corpse in list(world.corpses.values()):
         age = age_hours(corpse, now)
-        if age < k.HOURS_FOR_CORPSE_REMOVAL:
+        if age < zombie_lore.HOURS_FOR_CORPSE_REMOVAL:
             continue
         if corpse.skeleton:
-            if age >= k.HOURS_FOR_CORPSE_REMOVAL + k.SKELETON_REMOVAL_EXTRA_HOURS:
+            if (
+                age
+                >= zombie_lore.HOURS_FOR_CORPSE_REMOVAL + zombie_lore.SKELETON_REMOVAL_EXTRA_HOURS
+            ):
                 del world.corpses[corpse.corpse_id]
-        elif rng.randrange(k.SKELETON_ROT_ONE_IN) == 0:
+        elif rng.randrange(zombie_lore.SKELETON_ROT_ONE_IN) == 0:
             corpse.skeleton = True
             corpse.contents = []
         else:

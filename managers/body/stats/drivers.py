@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from data import carry as carry_k
-from data.body import survival as k
+from data.body import survival as survival_k
 from data.body.thermal import Metabolic
 from data.character import skills as skill_k
 from data.character import traits as trait_k
-from data.zombies import lore as zombie_k
+from data.zombies import lore as zombie_lore
 from managers import carry
 from managers.body.stats.status_effects import status_effect_level
 from managers.character.skills import fitness_level
@@ -39,7 +39,7 @@ class StatContext:
     indoors: bool = False
     talking: bool = False
     npcs_present: bool = False
-    bed_type: str = k.DEFAULT_BED_TYPE
+    bed_type: str = survival_k.DEFAULT_BED_TYPE
     hours_survived: float = 0.0
     new_zombies_seen: int = 0
     sound_stress: float = 0.0  # spec 13: stress from barrier sounds over the chunk
@@ -84,20 +84,21 @@ class HungerDriver:
         )
         if ctx.asleep:
             if ctx.food_eaten_level == 0:
-                rate = k.HUNGER_INCREASE_WHILE_ASLEEP_per_hour
+                rate = survival_k.HUNGER_INCREASE_WHILE_ASLEEP_per_hour
                 stats.add(CharacterStat.HUNGER, rate * appetite * hours)
             return
         if ctx.food_eaten_level == 0:
             rate = (
-                k.HUNGER_INCREASE_WHEN_EXERCISE_per_hour / k.HUNGER_EXERCISE_FASTED_DIVISOR
+                survival_k.HUNGER_INCREASE_WHEN_EXERCISE_per_hour
+                / survival_k.HUNGER_EXERCISE_FASTED_DIVISOR
                 if ctx.exercising
-                else k.HUNGER_INCREASE_per_hour
+                else survival_k.HUNGER_INCREASE_per_hour
             )
         else:
             rate = (
-                k.HUNGER_INCREASE_WHEN_EXERCISE_per_hour
+                survival_k.HUNGER_INCREASE_WHEN_EXERCISE_per_hour
                 if ctx.exercising
-                else k.HUNGER_INCREASE_WHEN_WELL_FED_per_hour
+                else survival_k.HUNGER_INCREASE_WHEN_WELL_FED_per_hour
             )
         stats.add(CharacterStat.HUNGER, rate * appetite * hours * ctx.body.energy)
 
@@ -105,11 +106,13 @@ class HungerDriver:
 class ThirstDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
         if ctx.asleep:
-            stats.add(CharacterStat.THIRST, k.THIRST_SLEEPING_INCREASE_per_hour * hours)
+            stats.add(CharacterStat.THIRST, survival_k.THIRST_SLEEPING_INCREASE_per_hour * hours)
             return
-        rate = k.THIRST_INCREASE_per_hour * trait_mult(trait_k.THIRST_TRAIT_MULT, ctx.traits)
+        rate = survival_k.THIRST_INCREASE_per_hour * trait_mult(
+            trait_k.THIRST_TRAIT_MULT, ctx.traits
+        )
         if ctx.exercising:
-            rate *= k.THIRST_EXERCISE_MULTIPLIER
+            rate *= survival_k.THIRST_EXERCISE_MULTIPLIER
         stats.add(CharacterStat.THIRST, rate * hours * ctx.body.fluids)
 
 
@@ -118,27 +121,29 @@ class FatigueDriver:
         fatigue = stats.get(CharacterStat.FATIGUE)
         if ctx.asleep:
             rate = (
-                k.SLEEP_FATIGUE_LOW_per_hour
-                if fatigue <= k.SLEEP_FATIGUE_LOW_THRESHOLD
-                else k.SLEEP_FATIGUE_HIGH_per_hour
+                survival_k.SLEEP_FATIGUE_LOW_per_hour
+                if fatigue <= survival_k.SLEEP_FATIGUE_LOW_THRESHOLD
+                else survival_k.SLEEP_FATIGUE_HIGH_per_hour
             )
-            bed = k.BED_MULTIPLIERS.get(ctx.bed_type, k.BED_MULTIPLIERS[k.DEFAULT_BED_TYPE])
+            bed = survival_k.BED_MULTIPLIERS.get(
+                ctx.bed_type, survival_k.BED_MULTIPLIERS[survival_k.DEFAULT_BED_TYPE]
+            )
             recovery = trait_mult(trait_k.SLEEP_RECOVERY_TRAIT_MULT, ctx.traits)
             hours_needed = trait_mult(trait_k.SLEEP_HOURS_TRAIT_MULT, ctx.traits)
             stats.remove(CharacterStat.FATIGUE, rate * bed * recovery / hours_needed * hours)
             return
-        loss = max(k.FATIGUE_ENDURANCE_FLOOR, 1 - stats.get(CharacterStat.ENDURANCE))
-        gain = k.FATIGUE_INCREASE_per_hour * loss * hours * ctx.body.fatigue
+        loss = max(survival_k.FATIGUE_ENDURANCE_FLOOR, 1 - stats.get(CharacterStat.ENDURANCE))
+        gain = survival_k.FATIGUE_INCREASE_per_hour * loss * hours * ctx.body.fatigue
         gain *= trait_mult(trait_k.FATIGUE_GAIN_TRAIT_MULT, ctx.traits)
         if ctx.resting:
-            gain /= k.FATIGUE_RESTING_DIVISOR
+            gain /= survival_k.FATIGUE_RESTING_DIVISOR
         stats.add(CharacterStat.FATIGUE, gain)
 
 
 class StressDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
         stats.add(CharacterStat.STRESS, ctx.sound_stress)
-        stats.remove(CharacterStat.STRESS, k.STRESS_DECREASE_per_hour * hours)
+        stats.remove(CharacterStat.STRESS, survival_k.STRESS_DECREASE_per_hour * hours)
 
 
 class EnduranceDriver:
@@ -146,34 +151,34 @@ class EnduranceDriver:
         fatigue = stats.get(CharacterStat.FATIGUE)
         recovery = _recovery_mod(ctx)
         if ctx.asleep:
-            delta = k.SLEEPING_ENDURANCE_REGEN_per_hour * recovery
+            delta = survival_k.SLEEPING_ENDURANCE_REGEN_per_hour * recovery
         elif ctx.exercising:
-            drain = k.EXERCISE_ENDURANCE_DRAIN_per_hour
+            drain = survival_k.EXERCISE_ENDURANCE_DRAIN_per_hour
             if ctx.carrying_corpse and ctx.walking:
                 drain = carry_k.CORPSE_CARRY_ENDURANCE_DRAIN_per_hour
             delta = -drain * carry_k.HEAVY_ENDURANCE_MULT[ctx.heavy_load]
         elif ctx.resting:
             delta = (
-                k.IMOBILE_ENDURANCE_INCREASE_per_hour
-                * k.SITTING_ENDURANCE_MULTIPLIER
-                * (1 - k.SITTING_FATIGUE_PENALTY * fatigue)
+                survival_k.IMOBILE_ENDURANCE_INCREASE_per_hour
+                * survival_k.SITTING_ENDURANCE_MULTIPLIER
+                * (1 - survival_k.SITTING_FATIGUE_PENALTY * fatigue)
                 * recovery
             )
         elif ctx.walking:
             level = status_effect_level(StatusEffect.ENDURANCE, stats.get(CharacterStat.ENDURANCE))
             if ctx.heavy_load >= carry_k.OVERLOAD_MIN_LEVEL:
-                sneak = k.SNEAK_ENDURANCE_FACTOR if ctx.sneaking else 1.0
+                sneak = survival_k.SNEAK_ENDURANCE_FACTOR if ctx.sneaking else 1.0
                 drain = carry.walk_drain_per_hour(ctx.heavy_load, ctx.traits)
                 delta = -drain * sneak
             elif ctx.heavy_load > carry_k.REGENERATES_UP_TO_LEVEL:
                 delta = 0.0
-            elif level >= k.WALKING_DRAIN_ENDURANCE_LEVEL:
-                sneak = k.SNEAK_ENDURANCE_FACTOR if ctx.sneaking else 1.0
-                delta = -k.WALKING_ENDURANCE_DRAIN_per_hour * sneak
+            elif level >= survival_k.WALKING_DRAIN_ENDURANCE_LEVEL:
+                sneak = survival_k.SNEAK_ENDURANCE_FACTOR if ctx.sneaking else 1.0
+                delta = -survival_k.WALKING_ENDURANCE_DRAIN_per_hour * sneak
             else:
                 delta = (
-                    k.IMOBILE_ENDURANCE_INCREASE_per_hour
-                    / k.WALKING_ENDURANCE_DIVISOR
+                    survival_k.IMOBILE_ENDURANCE_INCREASE_per_hour
+                    / survival_k.WALKING_ENDURANCE_DIVISOR
                     * (1 - fatigue)
                     * recovery
                 )
@@ -181,8 +186,8 @@ class EnduranceDriver:
             delta = 0.0
         else:
             delta = (
-                k.IMOBILE_ENDURANCE_INCREASE_per_hour
-                * (1 - k.STANDING_FATIGUE_PENALTY * fatigue)
+                survival_k.IMOBILE_ENDURANCE_INCREASE_per_hour
+                * (1 - survival_k.STANDING_FATIGUE_PENALTY * fatigue)
                 * recovery
             )
         stats.add(CharacterStat.ENDURANCE, delta * hours)
@@ -195,12 +200,12 @@ class IdlenessDriver:
         if ctx.exercising:
             stats.reset(CharacterStat.IDLENESS)
         elif ctx.resting:
-            rate = k.IDLE_INCREASE_per_hour
+            rate = survival_k.IDLE_INCREASE_per_hour
             if ctx.indoors:
-                rate += k.IDLE_INDOORS_BONUS_per_hour
+                rate += survival_k.IDLE_INDOORS_BONUS_per_hour
             stats.add(CharacterStat.IDLENESS, rate * hours)
         else:
-            stats.remove(CharacterStat.IDLENESS, k.IDLE_DECREASE_per_hour * hours)
+            stats.remove(CharacterStat.IDLENESS, survival_k.IDLE_DECREASE_per_hour * hours)
 
 
 class BoredomDriver:
@@ -210,22 +215,24 @@ class BoredomDriver:
         boredom = CharacterStat.BOREDOM
         idleness = stats.get(CharacterStat.IDLENESS)
         if not ctx.resting and not ctx.indoors:
-            stats.remove(boredom, k.BOREDOM_DECREASE_per_hour * hours)
+            stats.remove(boredom, survival_k.BOREDOM_DECREASE_per_hour * hours)
         else:
             if ctx.resting:
-                stats.add(boredom, k.BOREDOM_INCREASE_per_hour * idleness * hours)
+                stats.add(boredom, survival_k.BOREDOM_INCREASE_per_hour * idleness * hours)
             else:
-                busy = k.BOREDOM_INCREASE_per_hour / k.BOREDOM_BUSY_INCREASE_DIVISOR
+                busy = (
+                    survival_k.BOREDOM_INCREASE_per_hour / survival_k.BOREDOM_BUSY_INCREASE_DIVISOR
+                )
                 stats.add(boredom, busy * idleness * hours)
-                if idleness < k.BOREDOM_BUSY_IDLENESS_LIMIT:
-                    stats.remove(boredom, k.BOREDOM_BUSY_DECAY_per_hour * hours)
+                if idleness < survival_k.BOREDOM_BUSY_IDLENESS_LIMIT:
+                    stats.remove(boredom, survival_k.BOREDOM_BUSY_DECAY_per_hour * hours)
             if ctx.talking:
-                stats.remove(boredom, k.BOREDOM_TALKING_DECAY_per_hour * hours)
+                stats.remove(boredom, survival_k.BOREDOM_TALKING_DECAY_per_hour * hours)
             if ctx.npcs_present:
-                stats.remove(boredom, k.BOREDOM_NPC_DECAY_per_hour * hours)
-        if stats.get(CharacterStat.INTOXICATION) > k.BOREDOM_DRUNK_THRESHOLD:
-            stats.remove(boredom, k.BOREDOM_DRUNK_DECAY_per_hour * hours)
-        if stats.get(CharacterStat.PANIC) > k.BOREDOM_PANIC_RESET_THRESHOLD:
+                stats.remove(boredom, survival_k.BOREDOM_NPC_DECAY_per_hour * hours)
+        if stats.get(CharacterStat.INTOXICATION) > survival_k.BOREDOM_DRUNK_THRESHOLD:
+            stats.remove(boredom, survival_k.BOREDOM_DRUNK_DECAY_per_hour * hours)
+        if stats.get(CharacterStat.PANIC) > survival_k.BOREDOM_PANIC_RESET_THRESHOLD:
             stats.reset(boredom)
 
 
@@ -234,29 +241,36 @@ class UnhappinessDriver:
         bored = status_effect_level(StatusEffect.BORED, stats.get(CharacterStat.BOREDOM))
         stress = status_effect_level(StatusEffect.STRESS, stats.get(CharacterStat.STRESS))
         gain = 0.0
-        if bored >= k.UNHAPPINESS_STATUS_EFFECT_LEVEL:
-            gain += k.UNHAPPINESS_INCREASE_per_hour * bored
-        if stress >= k.UNHAPPINESS_STATUS_EFFECT_LEVEL:
-            gain += k.UNHAPPINESS_INCREASE_per_hour * k.UNHAPPINESS_STRESS_FACTOR * stress
+        if bored >= survival_k.UNHAPPINESS_STATUS_EFFECT_LEVEL:
+            gain += survival_k.UNHAPPINESS_INCREASE_per_hour * bored
+        if stress >= survival_k.UNHAPPINESS_STATUS_EFFECT_LEVEL:
+            gain += (
+                survival_k.UNHAPPINESS_INCREASE_per_hour
+                * survival_k.UNHAPPINESS_STRESS_FACTOR
+                * stress
+            )
         stats.add(CharacterStat.UNHAPPINESS, gain * hours)
 
 
 class PanicDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
-        gain = k.PANIC_PER_ZOMBIE * ctx.new_zombies_seen
+        gain = survival_k.PANIC_PER_ZOMBIE * ctx.new_zombies_seen
         stats.add(CharacterStat.PANIC, gain * trait_mult(trait_k.PANIC_GAIN_TRAIT_MULT, ctx.traits))
         if trait_k.DESENSITIZED_ID in ctx.traits:
             stats.reset(CharacterStat.PANIC)
-        months = min(k.PANIC_REDUCTION_MONTH_CAP, int(ctx.hours_survived // k.HOURS_PER_MONTH))
-        rate = k.PANIC_REDUCTION_per_hour * (1 + months)
+        months = min(
+            survival_k.PANIC_REDUCTION_MONTH_CAP,
+            int(ctx.hours_survived // survival_k.HOURS_PER_MONTH),
+        )
+        rate = survival_k.PANIC_REDUCTION_per_hour * (1 + months)
         if ctx.asleep:
-            rate *= k.PANIC_REDUCTION_ASLEEP_FACTOR
+            rate *= survival_k.PANIC_REDUCTION_ASLEEP_FACTOR
         stats.remove(CharacterStat.PANIC, rate * hours)
 
 
 class IntoxicationDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
-        stats.remove(CharacterStat.INTOXICATION, k.INTOXICATION_DECREASE_per_hour * hours)
+        stats.remove(CharacterStat.INTOXICATION, survival_k.INTOXICATION_DECREASE_per_hour * hours)
 
 
 class FoodSicknessDriver:
@@ -264,18 +278,21 @@ class FoodSicknessDriver:
 
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
         excess = min(
-            max(ctx.corpse_count - k.CORPSE_SICKNESS_FREE_CORPSES, 0), k.CORPSE_SICKNESS_CORPSE_CAP
+            max(ctx.corpse_count - survival_k.CORPSE_SICKNESS_FREE_CORPSES, 0),
+            survival_k.CORPSE_SICKNESS_CORPSE_CAP,
         )
         rate = (
-            k.CORPSE_SICKNESS_per_hour
+            survival_k.CORPSE_SICKNESS_per_hour
             * excess
             * (1 - ctx.corpse_defence / 100)
-            * trait_mult(zombie_k.CORPSE_SICKNESS_TRAIT_MULT, ctx.traits)
+            * trait_mult(zombie_lore.CORPSE_SICKNESS_TRAIT_MULT, ctx.traits)
         )
         if rate > 0:
             stats.add(CharacterStat.FOOD_SICKNESS, rate * hours)
         else:
-            stats.remove(CharacterStat.FOOD_SICKNESS, k.FOOD_SICKNESS_DECREASE_per_hour * hours)
+            stats.remove(
+                CharacterStat.FOOD_SICKNESS, survival_k.FOOD_SICKNESS_DECREASE_per_hour * hours
+            )
 
 
 def default_drivers() -> list[StatDriver]:

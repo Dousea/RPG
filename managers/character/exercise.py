@@ -3,7 +3,7 @@
 import math
 import random
 
-from data.character import exercises as k
+from data.character import exercises as exercise_k
 from data.character.skills import FITNESS, STRENGTH
 from data.world.clock import MINUTES_PER_HOUR
 from managers import carry
@@ -13,8 +13,8 @@ from modules.body.stats import CharacterStat, StatusEffect
 from modules.character.exercise import ExerciseDefinition
 from modules.entity.player import PlayerEntity
 
-STRENGTH_REGIONS = {"arms": k.XP_ARMS_STRENGTH, "chest": k.XP_CHEST_STRENGTH}
-FITNESS_REGIONS = {"legs": k.XP_LEGS_FITNESS, "abs": k.XP_ABS_FITNESS}
+STRENGTH_REGIONS = {"arms": exercise_k.XP_ARMS_STRENGTH, "chest": exercise_k.XP_CHEST_STRENGTH}
+FITNESS_REGIONS = {"legs": exercise_k.XP_LEGS_FITNESS, "abs": exercise_k.XP_ABS_FITNESS}
 
 
 def endurance_level(player: PlayerEntity) -> int:
@@ -28,27 +28,27 @@ def tired_level(player: PlayerEntity) -> int:
 def rep_speed(fitness: int, endurance_status_effect_level: int) -> float:
     """The animation speed: faster with Fitness, slower when winded, never below 1 when struggling."""
     speed = (
-        fitness / k.SPEED_FITNESS_DIVISOR / k.SPEED_FITNESS_SCALE
-        - endurance_status_effect_level / k.SPEED_ENDURANCE_DIVISOR
+        fitness / exercise_k.SPEED_FITNESS_DIVISOR / exercise_k.SPEED_FITNESS_SCALE
+        - endurance_status_effect_level / exercise_k.SPEED_ENDURANCE_DIVISOR
     )
-    speed = min(speed, k.SPEED_MAX)
-    return k.SPEED_STRUGGLE_VALUE if speed < k.SPEED_STRUGGLE_BELOW else speed
+    speed = min(speed, exercise_k.SPEED_MAX)
+    return exercise_k.SPEED_STRUGGLE_VALUE if speed < exercise_k.SPEED_STRUGGLE_BELOW else speed
 
 
 def reps_per_minute(
     exercise: ExerciseDefinition, fitness: int, endurance_status_effect_level: int
 ) -> float:
     speed = rep_speed(fitness, endurance_status_effect_level)
-    return k.REP_SECONDS_PER_GAME_MINUTE * speed / exercise.rep_period_s
+    return exercise_k.REP_SECONDS_PER_GAME_MINUTE * speed / exercise.rep_period_s
 
 
 def starting_regularity(occupation_id: str, seed: int) -> dict[str, float]:
     """Each exercise's regularity at the start, drawn once from the world seed."""
-    bounds = k.STARTING_REGULARITY.get(occupation_id)
+    bounds = exercise_k.STARTING_REGULARITY.get(occupation_id)
     if bounds is None:
-        return {exercise_id: 0.0 for exercise_id in k.EXERCISES}
+        return {exercise_id: 0.0 for exercise_id in exercise_k.EXERCISES}
     rng = random.Random(seed)
-    return {exercise_id: float(rng.randrange(*bounds)) for exercise_id in k.EXERCISES}
+    return {exercise_id: float(rng.randrange(*bounds)) for exercise_id in exercise_k.EXERCISES}
 
 
 class ExerciseEngine:
@@ -62,37 +62,43 @@ class ExerciseEngine:
         state = player.exercise
         fitness = fitness_level(skill_levels(player))
         gain = (
-            k.REGULARITY_GAIN
-            * math.log(k.REGULARITY_LOG_NUMERATOR)
-            / math.log(fitness / k.REGULARITY_FITNESS_DIVISOR + k.REGULARITY_FITNESS_OFFSET)
+            exercise_k.REGULARITY_GAIN
+            * math.log(exercise_k.REGULARITY_LOG_NUMERATOR)
+            / math.log(
+                fitness / exercise_k.REGULARITY_FITNESS_DIVISOR
+                + exercise_k.REGULARITY_FITNESS_OFFSET
+            )
         )
-        regularity = min(k.REGULARITY_MAX, state.regularity.get(exercise.id, 0.0) + gain)
+        regularity = min(exercise_k.REGULARITY_MAX, state.regularity.get(exercise.id, 0.0) + gain)
         state.regularity[exercise.id] = regularity
         state.last_done_minute[exercise.id] = now
 
-        heavy = k.HEAVY_FACTOR if exercise.heavy else 1.0
+        heavy = exercise_k.HEAVY_FACTOR if exercise.heavy else 1.0
         load_level = player_status_effect_levels(player)[StatusEffect.HEAVY_LOAD]
         cost = (
             carry.fitness_endurance_mult(load_level)
-            * k.ENDURANCE_PER_REP
-            * math.log(regularity / k.ENDURANCE_REGULARITY_DIVISOR + k.ENDURANCE_REGULARITY_OFFSET)
-            / math.log(k.ENDURANCE_LOG_BASE_ARG)
+            * exercise_k.ENDURANCE_PER_REP
+            * math.log(
+                regularity / exercise_k.ENDURANCE_REGULARITY_DIVISOR
+                + exercise_k.ENDURANCE_REGULARITY_OFFSET
+            )
+            / math.log(exercise_k.ENDURANCE_LOG_BASE_ARG)
             * heavy
         )
         player.stats.remove(CharacterStat.ENDURANCE, cost)
 
         stiffness = (
-            k.STIFFNESS_PER_REP
-            * (k.STIFFNESS_REGULARITY_BASE - regularity)
-            / k.STIFFNESS_REGULARITY_DIVISOR
+            exercise_k.STIFFNESS_PER_REP
+            * (exercise_k.STIFFNESS_REGULARITY_BASE - regularity)
+            / exercise_k.STIFFNESS_REGULARITY_DIVISOR
             * heavy
-            * (1 + tired_level(player) // k.TIRED_STIFFNESS_DIVISOR)
+            * (1 + tired_level(player) // exercise_k.TIRED_STIFFNESS_DIVISOR)
         )
         for region in exercise.regions:
             held = state.future_stiffness.get(region, 0.0)
-            state.future_stiffness[region] = min(k.STIFFNESS_CAP, held + stiffness)
+            state.future_stiffness[region] = min(exercise_k.STIFFNESS_CAP, held + stiffness)
             if state.region_timers.get(region, 0) <= 0:
-                state.region_timers[region] = k.STIFFNESS_TIMER_TICKS
+                state.region_timers[region] = exercise_k.STIFFNESS_TIMER_TICKS
 
         facts: list[str] = []
         for region in exercise.regions:
@@ -107,12 +113,12 @@ class ExerciseEngine:
     def tick(self, player: PlayerEntity, now: int) -> None:
         """One 10-minute boundary: regularity decay, then the region timers and drains."""
         state = player.exercise
-        grace = k.REGULARITY_GRACE_HOURS * MINUTES_PER_HOUR
+        grace = exercise_k.REGULARITY_GRACE_HOURS * MINUTES_PER_HOUR
         for exercise_id, last in state.last_done_minute.items():
             if now - last > grace:
                 held = state.regularity.get(exercise_id, 0.0)
-                state.regularity[exercise_id] = max(0.0, held - k.REGULARITY_DECAY)
-        for region in k.REGION_PARTS:
+                state.regularity[exercise_id] = max(0.0, held - exercise_k.REGULARITY_DECAY)
+        for region in exercise_k.REGION_PARTS:
             timer = state.region_timers.get(region)
             if timer is None:
                 continue
@@ -124,9 +130,9 @@ class ExerciseEngine:
     def _drain(self, player: PlayerEntity, region: str) -> None:
         state = player.exercise
         waiting = state.future_stiffness.get(region, 0.0)
-        unit = min(k.STIFFNESS_DRAIN_PER_TICK, waiting)
-        for part in k.REGION_PARTS[region]:
-            player.body[part].stiffness += k.STIFFNESS_PER_UNIT * unit
+        unit = min(exercise_k.STIFFNESS_DRAIN_PER_TICK, waiting)
+        for part in exercise_k.REGION_PARTS[region]:
+            player.body[part].stiffness += exercise_k.STIFFNESS_PER_UNIT * unit
         state.future_stiffness[region] = waiting - unit
         if state.future_stiffness[region] <= 0:
             del state.future_stiffness[region]

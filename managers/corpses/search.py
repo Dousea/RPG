@@ -8,7 +8,7 @@ from data import carry as carry_k
 from data.loot import containers as container_k
 from data.loot.catalogue import LOOT_KIND_MODIFIERS
 from data.loot.tables import LootTable
-from data.zombies import lore as k
+from data.zombies import lore as zombie_lore
 from data.zombies.loot import DEFAULT_LOOT_TABLES, OUTFIT_LOOT_TABLES
 from managers.corpses.bodies import rot_stage
 from managers.game import GameManager
@@ -111,7 +111,7 @@ def items_in_words(entities: Iterable[ItemEntity]) -> str:
 
 def contents_in_words(corpse: CorpseEntity) -> str:
     """What a body holds, by name, for a fact."""
-    return names_in_words(corpse.contents) or k.SEARCH_NOTHING
+    return names_in_words(corpse.contents) or zombie_lore.SEARCH_NOTHING
 
 
 def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | None:
@@ -128,8 +128,8 @@ def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | None:
 
 def strip_unhappiness(traits: list[str], minutes: int) -> float:
     """The unhappiness taking items off a body costs: 1.8 a minute, changed by how hardened the player is."""
-    amount = k.CORPSE_STRIP_UNHAPPINESS_PER_MIN * minutes
-    for trait, factor in k.STRIP_UNHAPPINESS_TRAIT_MULT.items():
+    amount = zombie_lore.CORPSE_STRIP_UNHAPPINESS_PER_MIN * minutes
+    for trait, factor in zombie_lore.STRIP_UNHAPPINESS_TRAIT_MULT.items():
         if trait in traits:
             amount *= factor
     return amount
@@ -142,7 +142,7 @@ def perceived_corpses(manager: GameManager) -> list[CorpseEntity]:
         return []
     sample = manager.climate.sample(manager.narrative.minutes)
     light = light_level(manager.current_location.indoors, world.power_on, sample.daylight)
-    sight = k.SIGHT_RANGE * max(k.SIGHT_RANGE_MIN_LIGHT, light)
+    sight = zombie_lore.SIGHT_RANGE * max(zombie_lore.SIGHT_RANGE_MIN_LIGHT, light)
     here = manager.player.current_location_id
     return sorted(
         (c for c in world.corpses.values() if c.zone_id == here and c.gap <= sight),
@@ -170,7 +170,7 @@ class CorpseView:
             parts.append(self.rot_word)
         elif self.searched:
             parts.append(self.rot_word)
-            parts.append(f"searched: {', '.join(self.contents) or k.SEARCH_NOTHING}")
+            parts.append(f"searched: {', '.join(self.contents) or zombie_lore.SEARCH_NOTHING}")
         else:
             parts.extend([self.looks, self.rot_word, "not searched"])
         return " - " + ", ".join(parts)
@@ -183,9 +183,9 @@ def _layer(entity: ItemEntity) -> int:
 
 
 def _looks(corpse: CorpseEntity) -> str:
-    person = k.WOMAN_WORD if corpse.female else k.MAN_WORD
+    person = zombie_lore.WOMAN_WORD if corpse.female else zombie_lore.MAN_WORD
     clothes = [e for e in corpse.contents if isinstance(e.item, ClothingItem)]
-    garments = sorted(clothes, key=_layer, reverse=True)[: k.CORPSE_LOOK_ITEMS]
+    garments = sorted(clothes, key=_layer, reverse=True)[: zombie_lore.CORPSE_LOOK_ITEMS]
     names = [with_article(e.item.name.lower()) for e in garments]
     if not names:
         return person
@@ -202,7 +202,9 @@ def corpse_views(manager: GameManager) -> list[CorpseView]:
             distance_word=carry_k.CARRIED_WORD
             if c.corpse_id == manager.player.carrying_corpse
             else distance_word(c.gap),
-            rot_word=k.SKELETON_WORD if c.skeleton else k.ROT_WORDS[rot_stage(c, now)],
+            rot_word=zombie_lore.SKELETON_WORD
+            if c.skeleton
+            else zombie_lore.ROT_WORDS[rot_stage(c, now)],
             searched=c.searched,
             skeleton=c.skeleton,
             looks=_looks(c),

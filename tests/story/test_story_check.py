@@ -3,7 +3,7 @@
 import logging
 import unittest
 
-from data.story import check as words
+from data.story import check as story_check_k
 from managers.game import GameManager
 from managers.story.check import StateQuestion, build_questions
 from modules.entity.zombie import ZombieEntity, ZombieState
@@ -70,8 +70,13 @@ class BuildQuestionsTests(unittest.TestCase):
             self.assertEqual(build_questions(self.manager, ["z12 lunges.", "z7 falls."]), [])
 
     def test_no_text_carries_a_digit(self):
-        self.assertFalse(any(c.isdigit() for c in words.ZOMBIE_DEATH_QUESTION))
-        self.assertFalse(any(c.isdigit() for c in words.ZOMBIE_DEAD_FACT + words.ZOMBIE_ALIVE_FACT))
+        self.assertFalse(any(c.isdigit() for c in story_check_k.ZOMBIE_DEATH_QUESTION))
+        self.assertFalse(
+            any(
+                c.isdigit()
+                for c in story_check_k.ZOMBIE_DEAD_FACT + story_check_k.ZOMBIE_ALIVE_FACT
+            )
+        )
 
     def test_a_question_is_frozen(self):
         (question,) = build_questions(self.manager, ["z12 lunges."])

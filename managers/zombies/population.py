@@ -9,7 +9,7 @@ from data.character import skills as skill_k
 from data.character import traits as trait_k
 from data.world import barriers as barrier_k
 from data.world.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
-from data.zombies import lore as k
+from data.zombies import lore as zombie_lore
 from managers.body.health import kill, limp_factor
 from managers.character.skills import SkillEngine
 from managers.combat.melee import MeleeEngine
@@ -41,40 +41,42 @@ from modules.world.weather import WeatherSample
 
 def per_chunk(zombie_intensity: int) -> float:
     """Zombies per 8x8-tile chunk for a 0-255 zone intensity."""
-    return k.PER_CHUNK_BASE + k.PER_CHUNK_SCALE * (
-        zombie_intensity * k.INTENSITY_HALF_FACTOR / k.INTENSITY_MAX
+    return zombie_lore.PER_CHUNK_BASE + zombie_lore.PER_CHUNK_SCALE * (
+        zombie_intensity * zombie_lore.INTENSITY_HALF_FACTOR / zombie_lore.INTENSITY_MAX
     )
 
 
 def population_curve(days: float) -> float:
     """The population multiplier `days` after the outbreak: linear to the peak day, then flat."""
-    span = k.POPULATION_PEAK_MULTIPLIER - k.POPULATION_START_MULTIPLIER
-    progress = min(max(days, 0.0) / k.POPULATION_PEAK_DAY, 1.0)
-    return k.POPULATION_START_MULTIPLIER + span * progress
+    span = zombie_lore.POPULATION_PEAK_MULTIPLIER - zombie_lore.POPULATION_START_MULTIPLIER
+    progress = min(max(days, 0.0) / zombie_lore.POPULATION_PEAK_DAY, 1.0)
+    return zombie_lore.POPULATION_START_MULTIPLIER + span * progress
 
 
 def roll_zombie(
     rng: random.Random, zombie_id: str, zone_id: str, days: float = 0.0
 ) -> ZombieEntity:
     """One zombie as it is rolled `days` after the outbreak: health, gait, senses and clothes."""
-    health = rng.uniform(k.HEALTH_BASE_MIN, k.HEALTH_BASE_MAX) + rng.uniform(
-        0.0, k.HEALTH_BONUS_MAX
+    health = rng.uniform(zombie_lore.HEALTH_BASE_MIN, zombie_lore.HEALTH_BASE_MAX) + rng.uniform(
+        0.0, zombie_lore.HEALTH_BONUS_MAX
     )
     fast = rng.random() < 0.5
-    lunger = fast and rng.random() < k.FAST_SHAMBLER_LUNGER_CHANCE
-    base = k.LUNGER_SPEED_MOD_BASE if lunger else k.SHAMBLER_SPEED_MOD_BASE
-    speed_mod = base + rng.randrange(k.SPEED_MOD_STEPS) / k.SPEED_MOD_DIVISOR
+    lunger = fast and rng.random() < zombie_lore.FAST_SHAMBLER_LUNGER_CHANCE
+    base = zombie_lore.LUNGER_SPEED_MOD_BASE if lunger else zombie_lore.SHAMBLER_SPEED_MOD_BASE
+    speed_mod = base + rng.randrange(zombie_lore.SPEED_MOD_STEPS) / zombie_lore.SPEED_MOD_DIVISOR
     zombie = ZombieEntity(
         zombie_id=zombie_id,
         zone_id=zone_id,
         health=health,
-        speed_type=k.SPEED_TYPE_FAST_SHAMBLER if fast else k.SPEED_TYPE_SHAMBLER,
+        speed_type=zombie_lore.SPEED_TYPE_FAST_SHAMBLER
+        if fast
+        else zombie_lore.SPEED_TYPE_SHAMBLER,
         speed_mod=speed_mod,
         lunger=lunger,
-        strength=k.ZOMBIE_STRENGTH,
-        memory=k.ZOMBIE_MEMORY_FRAMES,
-        sight=rng.choice((k.SENSE_NORMAL, k.SENSE_POOR)),
-        hearing=rng.choice((k.SENSE_NORMAL, k.SENSE_POOR)),
+        strength=zombie_lore.ZOMBIE_STRENGTH,
+        memory=zombie_lore.ZOMBIE_MEMORY_FRAMES,
+        sight=rng.choice((zombie_lore.SENSE_NORMAL, zombie_lore.SENSE_POOR)),
+        hearing=rng.choice((zombie_lore.SENSE_NORMAL, zombie_lore.SENSE_POOR)),
     )
     dress(zombie, rng, days)
     return zombie
@@ -91,7 +93,7 @@ def zone_target(zone: Location, days: float) -> float:
     return (
         zone.chunks
         * per_chunk(zone.zombie_intensity)
-        * k.POPULATION_MULTIPLIER
+        * zombie_lore.POPULATION_MULTIPLIER
         * population_curve(days)
     )
 
@@ -119,7 +121,7 @@ def start_outbreak(world: World, minute: int, player_zone_id: str, rng: random.R
     world.outbreak_started_at = minute
     world.last_redistribution_minute = minute
     for zone in world.locations.values():
-        if zone.id in k.SPAWN_CLEARED_ZONE_IDS:
+        if zone.id in zombie_lore.SPAWN_CLEARED_ZONE_IDS:
             continue
         for _ in range(stochastic_round(zone_target(zone, 0), rng)):
             _spawn(world, zone.id, player_zone_id, rng, 0.0)
@@ -204,7 +206,7 @@ def redistribution_due(world: World, minute: int) -> bool:
     """Whether 12 game hours have passed since the zombies were last redistributed."""
     if world.last_redistribution_minute is None:
         return False
-    interval = k.REDISTRIBUTE_HOURS * MINUTES_PER_HOUR
+    interval = zombie_lore.REDISTRIBUTE_HOURS * MINUTES_PER_HOUR
     return minute - world.last_redistribution_minute >= interval
 
 
@@ -219,19 +221,19 @@ def sound_attract(
     """How strongly a sound draws a zombie `distance` tiles away; 0 when it is not heard."""
     radius = sound.radius
     if zombie.poor_hearing:
-        radius *= k.HEARING_POOR_FACTOR
+        radius *= zombie_lore.HEARING_POOR_FACTOR
     radius *= (
         1
-        - k.HEARING_RAIN_FACTOR * sample.precipitation_intensity
-        - k.HEARING_FOG_FACTOR * sample.fog_intensity
+        - zombie_lore.HEARING_RAIN_FACTOR * sample.precipitation_intensity
+        - zombie_lore.HEARING_FOG_FACTOR * sample.fog_intensity
     )
     if radius <= 0 or distance > radius:
         return 0.0
     delta = distance**2 / radius**2
     if other_zone:
-        delta *= k.HEARING_OTHER_ZONE_FACTOR
+        delta *= zombie_lore.HEARING_OTHER_ZONE_FACTOR
     if indoor_mismatch:
-        delta *= k.HEARING_INDOOR_MISMATCH_FACTOR
+        delta *= zombie_lore.HEARING_INDOOR_MISMATCH_FACTOR
     return sound.volume * min(max(1 - delta, 0.0), 1.0)
 
 
@@ -260,30 +262,30 @@ def light_level(indoors: bool, power_on: bool, daylight: float) -> float:
     """How well the player can be seen where they stand, 0 to 1."""
     if not indoors:
         return daylight
-    return 1.0 if power_on else k.UNLIT_INDOOR_LIGHT * daylight
+    return 1.0 if power_on else zombie_lore.UNLIT_INDOOR_LIGHT * daylight
 
 
 def vision_radius(zombie: ZombieEntity, light: float, sample: WeatherSample) -> float:
     """How far in tiles a zombie sees; the clamp comes after the sight factor."""
     lost = max(
-        (1 - light) * k.VISION_DARK_TILES,
-        sample.precipitation_intensity * k.VISION_RAIN_TILES
-        + sample.fog_intensity * k.VISION_FOG_TILES,
+        (1 - light) * zombie_lore.VISION_DARK_TILES,
+        sample.precipitation_intensity * zombie_lore.VISION_RAIN_TILES
+        + sample.fog_intensity * zombie_lore.VISION_FOG_TILES,
     )
-    radius = k.VISION_RADIUS - lost
+    radius = zombie_lore.VISION_RADIUS - lost
     if zombie.poor_sight:
-        radius *= k.VISION_POOR_FACTOR
-    return min(max(radius, k.VISION_RADIUS_MIN), k.VISION_RADIUS_MAX)
+        radius *= zombie_lore.VISION_POOR_FACTOR
+    return min(max(radius, zombie_lore.VISION_RADIUS_MIN), zombie_lore.VISION_RADIUS_MAX)
 
 
 def facing_factor(facing_cos: float) -> float:
-    for limit, factor in k.FACING_BELOW:
+    for limit, factor in zombie_lore.FACING_BELOW:
         if facing_cos < limit:
             return factor
-    for limit, factor in k.FACING_UP_TO:
+    for limit, factor in zombie_lore.FACING_UP_TO:
         if facing_cos <= limit:
             return factor
-    return k.FACING_ABOVE_FACTOR
+    return zombie_lore.FACING_ABOVE_FACTOR
 
 
 def spot_chance(
@@ -298,42 +300,46 @@ def spot_chance(
     if zombie.gap > vision_radius(zombie, light, sample):
         raw = 0.0
     raw *= facing_factor(zombie.facing_cos)
-    raw *= k.PACE_MOVEMENT_MOD[pace]
-    if zombie.gap < k.SPOT_NEAR_TILES and not player.sneaking:
-        raw *= k.SPOT_NEAR_FACTOR
+    raw *= zombie_lore.PACE_MOVEMENT_MOD[pace]
+    if zombie.gap < zombie_lore.SPOT_NEAR_TILES and not player.sneaking:
+        raw *= zombie_lore.SPOT_NEAR_FACTOR
     if player.sneaking:
         raw *= sneak_spot_mod(perk_level(player, skill_k.SNEAKING))
     if zombie.bonus_spot_time > 0:
-        raw *= k.SPOT_BONUS_FACTOR
+        raw *= zombie_lore.SPOT_BONUS_FACTOR
     if zombie.poor_sight:
-        raw *= k.SPOT_POOR_SIGHT_FACTOR
+        raw *= zombie_lore.SPOT_POOR_SIGHT_FACTOR
     if trait_k.INCONSPICUOUS_ID in player.traits:
-        raw *= k.INCONSPICUOUS_SPOT_FACTOR
+        raw *= zombie_lore.INCONSPICUOUS_SPOT_FACTOR
     if trait_k.CONSPICUOUS_ID in player.traits:
-        raw *= k.CONSPICUOUS_SPOT_FACTOR
-    per_frame = min(math.floor(raw), k.SPOT_CAP) / k.SPOT_CAP
-    return SpotChance(raw, per_frame, 1 - (1 - per_frame) ** k.FRAMES_PER_MINUTE)
+        raw *= zombie_lore.CONSPICUOUS_SPOT_FACTOR
+    per_frame = min(math.floor(raw), zombie_lore.SPOT_CAP) / zombie_lore.SPOT_CAP
+    return SpotChance(raw, per_frame, 1 - (1 - per_frame) ** zombie_lore.FRAMES_PER_MINUTE)
 
 
 def detection_range(player: PlayerEntity) -> float:
     """How far in tiles the player hears a zombie."""
-    reach = k.HEARING_RANGE_DEAF if trait_k.DEAF_ID in player.traits else k.HEARING_RANGE_BASE
+    reach = (
+        zombie_lore.HEARING_RANGE_DEAF
+        if trait_k.DEAF_ID in player.traits
+        else zombie_lore.HEARING_RANGE_BASE
+    )
     if trait_k.KEEN_HEARING_ID in player.traits:
-        reach += k.HEARING_RANGE_KEEN
+        reach += zombie_lore.HEARING_RANGE_KEEN
     if trait_k.HARD_OF_HEARING_ID in player.traits:
-        reach -= k.HEARING_RANGE_HARD
+        reach -= zombie_lore.HEARING_RANGE_HARD
     muffling = 1.0
     for entity in player.worn.values():
         if isinstance(entity.item, ClothingItem) and entity.item.hearing_modifier > 0:
             muffling *= entity.item.hearing_modifier
-    reach = k.HEARING_RANGE_FLOOR + (max(reach, k.HEARING_RANGE_FLOOR) - k.HEARING_RANGE_FLOOR) * (
-        muffling
-    )
+    reach = zombie_lore.HEARING_RANGE_FLOOR + (
+        max(reach, zombie_lore.HEARING_RANGE_FLOOR) - zombie_lore.HEARING_RANGE_FLOOR
+    ) * (muffling)
     stats = player.stats
     return (
         reach
         - stats.get(CharacterStat.FATIGUE)
-        - stats.get(CharacterStat.INTOXICATION) * k.HEARING_RANGE_INTOXICATION_PER_POINT
+        - stats.get(CharacterStat.INTOXICATION) * zombie_lore.HEARING_RANGE_INTOXICATION_PER_POINT
     )
 
 
@@ -348,7 +354,7 @@ class Perception:
 
 def perceived_zombies(world: World, player: PlayerEntity, light: float) -> list[Perception]:
     """The zombies in the player's zone that the player can see or hear, in id order."""
-    sight = k.SIGHT_RANGE * max(k.SIGHT_RANGE_MIN_LIGHT, light)
+    sight = zombie_lore.SIGHT_RANGE * max(zombie_lore.SIGHT_RANGE_MIN_LIGHT, light)
     hearing = detection_range(player)
     result: list[Perception] = []
     for zombie in _by_id(world.zombies.values()):
@@ -400,15 +406,16 @@ def _by_id(zombies: Iterable[ZombieEntity]) -> list[ZombieEntity]:
 def chase_speed(zombie: ZombieEntity) -> float:
     """Tiles per game minute a zombie closes on its target."""
     distance_factor = min(
-        max(zombie.gap / k.CHASE_GAP_DIVISOR, k.CHASE_GAP_FACTOR_MIN), k.CHASE_GAP_FACTOR_MAX
+        max(zombie.gap / zombie_lore.CHASE_GAP_DIVISOR, zombie_lore.CHASE_GAP_FACTOR_MIN),
+        zombie_lore.CHASE_GAP_FACTOR_MAX,
     )
-    return k.CHASE_SPEED_TILES_PER_MIN * zombie.speed_mod * distance_factor
+    return zombie_lore.CHASE_SPEED_TILES_PER_MIN * zombie.speed_mod * distance_factor
 
 
 def approach_minutes(gap: float, speed_factor: float = 1.0) -> int:
     """Minutes the player needs to walk up to a zombie `gap` tiles away; a limp slows the walk."""
-    walk = k.WALK_APPROACH_TILES_PER_MIN * speed_factor
-    return max(0, math.ceil((gap - k.ATTACK_RANGE_TILES) / walk))
+    walk = zombie_lore.WALK_APPROACH_TILES_PER_MIN * speed_factor
+    return max(0, math.ceil((gap - zombie_lore.ATTACK_RANGE_TILES) / walk))
 
 
 _HUNTING = (ZombieState.CHASING, ZombieState.ATTACKING)
@@ -550,10 +557,10 @@ class ZombieLoop:
         self._clear_staggered()
         if spotted:
             report.interrupted = True
-            report.interruption_fact = k.SPOTTED_FACT
+            report.interruption_fact = zombie_lore.SPOTTED_FACT
         if reached:
             report.interrupted = True
-            report.interruption_fact = k.REACHED_FACT
+            report.interruption_fact = zombie_lore.REACHED_FACT
         self._visible, new = self._diff_visible(light)
         report.new_seen = new
         return report
@@ -590,7 +597,7 @@ class ZombieLoop:
         world = self._manager.world
         while redistribution_due(world, now):
             assert world.last_redistribution_minute is not None
-            world.last_redistribution_minute += k.REDISTRIBUTE_HOURS * MINUTES_PER_HOUR
+            world.last_redistribution_minute += zombie_lore.REDISTRIBUTE_HOURS * MINUTES_PER_HOUR
             redistribute(
                 world,
                 world.last_redistribution_minute,
@@ -605,7 +612,7 @@ class ZombieLoop:
         path = zone_path(
             manager.world.locations, zombie.zone_id, manager.player.current_location_id
         )
-        return None if path is None else len(path) * k.HOP_TILES
+        return None if path is None else len(path) * zombie_lore.HOP_TILES
 
     def _hear(self, minute: PlayerMinute, extra: Sequence[Sound], sample: WeatherSample) -> None:
         manager = self._manager
@@ -657,7 +664,9 @@ class ZombieLoop:
         size = world.locations[player_zone].size_tiles
         limp = limp_factor(player)
         opens = (
-            k.PACE_SPEED_TILES_PER_MIN[minute.pace] * limp if minute.approach_target is None else 0
+            zombie_lore.PACE_SPEED_TILES_PER_MIN[minute.pace] * limp
+            if minute.approach_target is None
+            else 0
         )
         for zombie in _by_id(world.zombies.values()):
             if zombie.is_down(now):
@@ -668,7 +677,8 @@ class ZombieLoop:
                 self._follow_sound(zombie, size, minute, report)
             if zombie.zombie_id == minute.approach_target:
                 zombie.gap = max(
-                    float(k.ATTACK_RANGE_TILES), zombie.gap - k.WALK_APPROACH_TILES_PER_MIN * limp
+                    float(zombie_lore.ATTACK_RANGE_TILES),
+                    zombie.gap - zombie_lore.WALK_APPROACH_TILES_PER_MIN * limp,
                 )
 
     def _held_at_barrier(
@@ -741,7 +751,7 @@ class ZombieLoop:
     ) -> None:
         manager = self._manager
         player_zone = manager.player.current_location_id
-        gap = max(float(k.ATTACK_RANGE_TILES), zombie.gap - chase_speed(zombie) + opens)
+        gap = max(float(zombie_lore.ATTACK_RANGE_TILES), zombie.gap - chase_speed(zombie) + opens)
         if self._held_at_barrier(zombie, gap, minute, report):
             return
         zombie.gap = gap
@@ -755,9 +765,9 @@ class ZombieLoop:
         player_zone = manager.player.current_location_id
         step = chase_speed(zombie)
         if zombie.zone_id == player_zone:
-            zombie.gap = max(float(k.ATTACK_RANGE_TILES), zombie.gap - step)
+            zombie.gap = max(float(zombie_lore.ATTACK_RANGE_TILES), zombie.gap - step)
             zombie.sound_gap -= step
-            if zombie.gap <= k.ATTACK_RANGE_TILES:
+            if zombie.gap <= zombie_lore.ATTACK_RANGE_TILES:
                 zombie.state = ZombieState.CHASING
                 zombie.time_since_seen = 0.0
                 zombie.has_chased = True
@@ -769,7 +779,7 @@ class ZombieLoop:
         zombie.sound_gap -= step
         if zombie.sound_gap <= size:
             zombie.zone_id = player_zone
-            zombie.gap = max(float(k.ATTACK_RANGE_TILES), zombie.sound_gap)
+            zombie.gap = max(float(zombie_lore.ATTACK_RANGE_TILES), zombie.sound_gap)
 
     def _thump(self, minute: PlayerMinute, report: MinuteReport) -> None:
         """Step 3a: the thumpers deal their thumps; what breaks may stop the player."""
@@ -805,7 +815,8 @@ class ZombieLoop:
             before = body.gap
             if body.corpse_id == minute.approach_target:
                 body.gap = max(
-                    float(k.ATTACK_RANGE_TILES), before - k.WALK_APPROACH_TILES_PER_MIN * limp
+                    float(zombie_lore.ATTACK_RANGE_TILES),
+                    before - zombie_lore.WALK_APPROACH_TILES_PER_MIN * limp,
                 )
             if corpses.should_rise(body, before, body.gap, now):
                 self._rise(body, now, report)
@@ -828,7 +839,9 @@ class ZombieLoop:
         zombie.has_chased = True
         world.zombies[zombie_id] = zombie
         del world.corpses[body.corpse_id]
-        report.facts.append(k.RISE_CRAWLING_FACT if body.crawling else k.RISE_FACT)
+        report.facts.append(
+            zombie_lore.RISE_CRAWLING_FACT if body.crawling else zombie_lore.RISE_FACT
+        )
 
     def _sees_through_barrier(self, zombie: ZombieEntity) -> bool:
         """Whether a thumper on the far side of a barrier of the player's zone sees through it."""
@@ -862,13 +875,16 @@ class ZombieLoop:
                 zombie.facing_cos = 1.0
             result = spot_chance(zombie, player, sample, light, minute.pace)
             rolled = True
-            if result.raw > k.SNEAK_XP_CLOSE_CHANCE and zombie.gap <= k.SNEAK_XP_CLOSE_TILES:
+            if (
+                result.raw > zombie_lore.SNEAK_XP_CLOSE_CHANCE
+                and zombie.gap <= zombie_lore.SNEAK_XP_CLOSE_TILES
+            ):
                 close_call = True
             if self._rng.random() < result.per_minute:
                 spotted_any = True
                 zombie.time_since_seen = 0.0
                 zombie.has_chased = True
-                zombie.bonus_spot_time = float(k.SPOT_BONUS_FRAMES)
+                zombie.bonus_spot_time = float(zombie_lore.SPOT_BONUS_FRAMES)
                 zombie.facing_cos = 1.0
                 if thumper:
                     zombie.was_chasing = True
@@ -880,17 +896,19 @@ class ZombieLoop:
         return newly
 
     def _sneak_xp(self, report: MinuteReport) -> None:
-        chance = 1 - (1 - k.SNEAK_XP_PER_FRAME_CHANCE) ** k.FRAMES_PER_MINUTE
+        chance = 1 - (1 - zombie_lore.SNEAK_XP_PER_FRAME_CHANCE) ** zombie_lore.FRAMES_PER_MINUTE
         for skill_id in (skill_k.SNEAKING, skill_k.LIGHTFOOTED):
             if self._rng.random() < chance:
                 report.facts.extend(
-                    self._skills.add_xp(self._manager.player, skill_id, k.SNEAK_XP_AMOUNT)
+                    self._skills.add_xp(self._manager.player, skill_id, zombie_lore.SNEAK_XP_AMOUNT)
                 )
 
     def _remember(self) -> None:
         for zombie in _by_id(self._manager.world.zombies.values()):
-            zombie.time_since_seen += k.FRAMES_PER_MINUTE
-            zombie.bonus_spot_time = max(0.0, zombie.bonus_spot_time - k.FRAMES_PER_MINUTE)
+            zombie.time_since_seen += zombie_lore.FRAMES_PER_MINUTE
+            zombie.bonus_spot_time = max(
+                0.0, zombie.bonus_spot_time - zombie_lore.FRAMES_PER_MINUTE
+            )
             if zombie.state in _HUNTING and zombie.time_since_seen > zombie.memory:
                 zombie.state = ZombieState.IDLE
                 zombie.side = None
@@ -903,7 +921,7 @@ class ZombieLoop:
         for zombie in _by_id(manager.world.zombies.values()):
             if zombie.state not in _HUNTING:
                 continue
-            within = zombie.zone_id == player_zone and zombie.gap <= k.ATTACK_RANGE_TILES
+            within = zombie.zone_id == player_zone and zombie.gap <= zombie_lore.ATTACK_RANGE_TILES
             if within and zombie.state != ZombieState.ATTACKING:
                 zombie.state = ZombieState.ATTACKING
                 zombie.has_chased = True
@@ -955,7 +973,7 @@ class ZombieLoop:
                 continue
             if outcome.dragged_down:
                 kill(player)
-                report.death_fact = k.DRAGGED_FACT.format(name=name)
+                report.death_fact = zombie_lore.DRAGGED_FACT.format(name=name)
                 report.interrupted = True
                 return
             report.facts.append(self._attack_fact(outcome, name))
@@ -975,14 +993,16 @@ class ZombieLoop:
     @staticmethod
     def _attack_fact(outcome: AttackOutcome, name: str) -> str:
         if outcome.defended:
-            return k.DEFENDED_FACT.format(name=name)
+            return zombie_lore.DEFENDED_FACT.format(name=name)
         if outcome.blocked:
-            return k.BLOCKED_FACT.format(name=name)
+            return zombie_lore.BLOCKED_FACT.format(name=name)
         if outcome.wound is None:
-            return k.THUMP_FACT.format(name=name)
+            return zombie_lore.THUMP_FACT.format(name=name)
         wound = outcome.wound
-        return k.WOUND_FACT.format(
-            verb=k.WOUND_VERBS[wound.kind], name=name, part=k.BODY_PART_WORDS[wound.part]
+        return zombie_lore.WOUND_FACT.format(
+            verb=zombie_lore.WOUND_VERBS[wound.kind],
+            name=name,
+            part=zombie_lore.BODY_PART_WORDS[wound.part],
         )
 
 
@@ -997,32 +1017,34 @@ class ThreatView:
 
 
 def distance_word(gap: float) -> str:
-    for limit, word in k.DISTANCE_WORDS:
+    for limit, word in zombie_lore.DISTANCE_WORDS:
         if gap <= limit:
             return word
-    return k.DISTANCE_WORD_FAR
+    return zombie_lore.DISTANCE_WORD_FAR
 
 
 def _state_word(zombie: ZombieEntity, now: int) -> str:
     if zombie.crawling:
-        return k.CRAWLER_STATE_WORDS[zombie.state.value]
+        return zombie_lore.CRAWLER_STATE_WORDS[zombie.state.value]
     if zombie.is_down(now):
-        return k.STATE_WORD_DOWN
+        return zombie_lore.STATE_WORD_DOWN
     if zombie.state == ZombieState.ATTACKING and zombie.side == AttackSide.BEHIND:
-        return k.STATE_WORD_BEHIND
+        return zombie_lore.STATE_WORD_BEHIND
     if zombie.lunger and zombie.has_chased:
-        return k.STATE_WORD_FAST
-    return k.STATE_WORDS[zombie.state]
+        return zombie_lore.STATE_WORD_FAST
+    return zombie_lore.STATE_WORDS[zombie.state]
 
 
 def _thumper_view(manager: GameManager, seen: Perception) -> ThreatView:
     zombie = seen.zombie
     barrier = manager.world.barriers[zombie.thump_barrier or ""]
     if seen.seen:
-        where = k.THUMPER_SEEN_WORD.format(barrier=barrier.name)
-        return ThreatView(zombie.zombie_id, where, k.STATE_WORD_THUMPING, barrier.barrier_id)
+        where = zombie_lore.THUMPER_SEEN_WORD.format(barrier=barrier.name)
+        return ThreatView(
+            zombie.zombie_id, where, zombie_lore.STATE_WORD_THUMPING, barrier.barrier_id
+        )
     return ThreatView(
-        None, "", k.THUMPER_HEARD_WORD.format(barrier=barrier.name), barrier.barrier_id
+        None, "", zombie_lore.THUMPER_HEARD_WORD.format(barrier=barrier.name), barrier.barrier_id
     )
 
 
@@ -1043,6 +1065,6 @@ def threat_views(manager: GameManager) -> list[ThreatView]:
             )
         else:
             hunting = zombie.state in _HUNTING
-            word = k.HEARD_WORD_HUNTING if hunting else k.HEARD_WORD_OTHER
+            word = zombie_lore.HEARD_WORD_HUNTING if hunting else zombie_lore.HEARD_WORD_OTHER
             views.append(ThreatView(None, "", word))
     return views

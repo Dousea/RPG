@@ -4,7 +4,7 @@ import random
 import unittest
 
 from data.items import ITEMS
-from data.story import social
+from data.story import social as social_k
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.validator import ActionValidator, Rejected
@@ -57,7 +57,7 @@ class ApproachTableTests(unittest.TestCase):
     """Spec 10, Approaches: the table."""
 
     def test_the_table_is_keyed_on_the_parsers_eight_labels(self):
-        self.assertEqual(set(social.TALK_APPROACHES), set(TALK_APPROACH_LABELS))
+        self.assertEqual(set(social_k.TALK_APPROACHES), set(TALK_APPROACH_LABELS))
         self.assertEqual(len(TALK_APPROACH_LABELS), 8)
 
     def test_each_approach_applies_its_deltas_npc_to_player(self):

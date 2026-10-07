@@ -2,7 +2,8 @@
 
 import unittest
 
-from data.character import exercises, skills
+from data.character import exercises as exercise_k
+from data.character import skills as skill_k
 from data.character.creation import SKILLS as CREATION_SKILLS
 
 
@@ -10,9 +11,9 @@ class SkillListTests(unittest.TestCase):
     """Spec 08, Skills."""
 
     def test_there_are_35_skills_in_six_categories(self):
-        self.assertEqual(len(skills.SKILLS), 35)
+        self.assertEqual(len(skill_k.SKILLS), 35)
         counts: dict[str, int] = {}
-        for skill in skills.SKILLS.values():
+        for skill in skill_k.SKILLS.values():
             counts[skill.category] = counts.get(skill.category, 0) + 1
         self.assertEqual(
             counts,
@@ -27,18 +28,18 @@ class SkillListTests(unittest.TestCase):
         )
 
     def test_display_names(self):
-        self.assertEqual(skills.SKILLS["long_blunt"].name, "Long Blunt")
-        self.assertEqual(skills.SKILLS["carpentry"].name, "Carpentry")
-        self.assertEqual(skills.SKILLS["running"].name, "Running")
-        self.assertEqual(skills.SKILLS["animal_care"].name, "Animal Care")
+        self.assertEqual(skill_k.SKILLS["long_blunt"].name, "Long Blunt")
+        self.assertEqual(skill_k.SKILLS["carpentry"].name, "Carpentry")
+        self.assertEqual(skill_k.SKILLS["running"].name, "Running")
+        self.assertEqual(skill_k.SKILLS["animal_care"].name, "Animal Care")
 
     def test_every_creation_skill_is_a_skill(self):
         for skill in CREATION_SKILLS:
-            self.assertIn(skill, skills.SKILLS)
+            self.assertIn(skill, skill_k.SKILLS)
 
     def test_only_fitness_and_strength_are_passive(self):
         self.assertEqual(
-            [s.id for s in skills.SKILLS.values() if s.passive], ["fitness", "strength"]
+            [s.id for s in skill_k.SKILLS.values() if s.passive], ["fitness", "strength"]
         )
 
 
@@ -47,27 +48,27 @@ class XpTableTests(unittest.TestCase):
 
     def test_normal_skill_table(self):
         self.assertEqual(
-            skills.XP_PER_LEVEL, (75, 150, 300, 750, 1500, 3000, 4500, 6000, 7500, 9000)
+            skill_k.XP_PER_LEVEL, (75, 150, 300, 750, 1500, 3000, 4500, 6000, 7500, 9000)
         )
 
     def test_passive_table(self):
         self.assertEqual(
-            skills.XP_PER_LEVEL_PASSIVE,
+            skill_k.XP_PER_LEVEL_PASSIVE,
             (1500, 3000, 6000, 9000, 18000, 30000, 60000, 90000, 120000, 150000),
         )
 
     def test_level_three_of_a_normal_skill_needs_525(self):
-        self.assertEqual(skills.total_xp_for_level("axe", 3), 525)
+        self.assertEqual(skill_k.total_xp_for_level("axe", 3), 525)
 
     def test_fitness_level_six_needs_67500(self):
-        self.assertEqual(skills.total_xp_for_level("fitness", 6), 67500)
+        self.assertEqual(skill_k.total_xp_for_level("fitness", 6), 67500)
 
     def test_the_level_ten_totals(self):
-        self.assertEqual(skills.total_xp_for_level("axe", 10), 32775)
-        self.assertEqual(skills.total_xp_for_level("strength", 10), 487500)
+        self.assertEqual(skill_k.total_xp_for_level("axe", 10), 32775)
+        self.assertEqual(skill_k.total_xp_for_level("strength", 10), 487500)
 
     def test_level_zero_needs_nothing(self):
-        self.assertEqual(skills.total_xp_for_level("axe", 0), 0)
+        self.assertEqual(skill_k.total_xp_for_level("axe", 0), 0)
 
 
 class ExerciseTableTests(unittest.TestCase):
@@ -76,7 +77,7 @@ class ExerciseTableTests(unittest.TestCase):
     def test_seven_exercises_with_their_periods_and_mods(self):
         rows = {
             e.id: (e.regions, e.heavy, e.xp_mod, e.rep_period_s, e.item_id)
-            for e in exercises.EXERCISES.values()
+            for e in exercise_k.EXERCISES.values()
         }
         self.assertEqual(
             rows,

@@ -6,11 +6,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from data import melee as k
+from data import melee as melee_k
 from data.character import skills as skill_k
 from data.character import traits as trait_k
 from data.melee import condition_word
-from data.zombies import lore as zombie_k
+from data.zombies import lore as zombie_lore
 from managers.body.stats.status_effects import (
     crit_penalty,
     damage_after_status_effects,
@@ -51,10 +51,10 @@ class SwingKind(Enum):
 
 def crit_skill_level(weapon: MeleeWeaponItem, skills: Mapping[str, int]) -> int:
     """The level the crit chance reads: the last of the weapon's categories in the fixed check order."""
-    level = skills.get(k.CATEGORY_SKILL[k.CRIT_SKILL_ORDER[0]], 0)
-    for category in k.CRIT_SKILL_ORDER:
+    level = skills.get(melee_k.CATEGORY_SKILL[melee_k.CRIT_SKILL_ORDER[0]], 0)
+    for category in melee_k.CRIT_SKILL_ORDER:
         if category in weapon.categories:
-            level = skills.get(k.CATEGORY_SKILL[category], 0)
+            level = skills.get(melee_k.CATEGORY_SKILL[category], 0)
     return level
 
 
@@ -75,56 +75,58 @@ def crit_chance(
     status_effect_penalty = crit_penalty(endurance, heavy_load, panic)
     if shove:
         percent = int(
-            k.SHOVE_CRIT_BASE
-            + k.SHOVE_CRIT_PER_STRENGTH * skills.get(skill_k.STRENGTH, 0)
+            melee_k.SHOVE_CRIT_BASE
+            + melee_k.SHOVE_CRIT_PER_STRENGTH * skills.get(skill_k.STRENGTH, 0)
             - status_effect_penalty
         )
     else:
         raw = (
-            weapon.critical_chance * k.SHARPNESS
-            + k.CRIT_PER_SKILL_LEVEL * crit_skill_level(weapon, skills)
+            weapon.critical_chance * melee_k.SHARPNESS
+            + melee_k.CRIT_PER_SKILL_LEVEL * crit_skill_level(weapon, skills)
             - status_effect_penalty
         )
-        percent = int(min(max(raw, k.CRIT_CLAMP_MIN), k.CRIT_CLAMP_MAX))
+        percent = int(min(max(raw, melee_k.CRIT_CLAMP_MIN), melee_k.CRIT_CLAMP_MAX))
     if behind:
-        percent += k.BEHIND_CRIT_BONUS_BARE_UNAWARE if bare_unaware else k.BEHIND_CRIT_BONUS
+        percent += (
+            melee_k.BEHIND_CRIT_BONUS_BARE_UNAWARE if bare_unaware else melee_k.BEHIND_CRIT_BONUS
+        )
     return percent
 
 
 def skill_damage_mod(weapon: MeleeWeaponItem, skills: Mapping[str, int]) -> float:
     level = max(
         (
-            skills.get(k.CATEGORY_SKILL[category], 0)
+            skills.get(melee_k.CATEGORY_SKILL[category], 0)
             for category in weapon.categories
-            if category in k.WEAPON_LEVEL_CATEGORIES
+            if category in melee_k.WEAPON_LEVEL_CATEGORIES
         ),
         default=0,
     )
-    if level >= k.SKILL_DAMAGE_MOD_HIGH_LEVEL:
-        return k.SKILL_DAMAGE_MOD_HIGH
-    if level >= k.SKILL_DAMAGE_MOD_MID_LEVEL:
-        return k.SKILL_DAMAGE_MOD_MID
+    if level >= melee_k.SKILL_DAMAGE_MOD_HIGH_LEVEL:
+        return melee_k.SKILL_DAMAGE_MOD_HIGH
+    if level >= melee_k.SKILL_DAMAGE_MOD_MID_LEVEL:
+        return melee_k.SKILL_DAMAGE_MOD_MID
     return 1.0
 
 
 def hit_split(damage: float, n: int, stats: Stats) -> float:
     """The damage one target takes after the share by target number and the panic and stress cuts."""
-    return damage_after_status_effects(damage / (k.HIT_SPLIT_DIVISOR_PER_N * n), stats)
+    return damage_after_status_effects(damage / (melee_k.HIT_SPLIT_DIVISOR_PER_N * n), stats)
 
 
 def hits_taken_factor(hits_taken: int) -> float:
     """The ramp a zombie's own hit count puts on the damage it takes."""
-    if hits_taken < k.HITS_TAKEN_RAMP_FROM:
+    if hits_taken < melee_k.HITS_TAKEN_RAMP_FROM:
         return 1.0
-    return k.HITS_TAKEN_RAMP_FACTOR * (hits_taken - k.HITS_TAKEN_RAMP_OFFSET)
+    return melee_k.HITS_TAKEN_RAMP_FACTOR * (hits_taken - melee_k.HITS_TAKEN_RAMP_OFFSET)
 
 
 def hit_part(kind: SwingKind, rng: random.Random) -> BodyPart:
     """The part of a zombie a swing lands on: a floor attack or stomp aims at the head or neck."""
     if kind in (SwingKind.FLOOR_ATTACK, SwingKind.STOMP):
-        parts = zombie_k.FLOOR_HIT_PARTS
+        parts = zombie_lore.FLOOR_HIT_PARTS
     else:
-        parts = zombie_k.STANDING_HIT_PARTS
+        parts = zombie_lore.STANDING_HIT_PARTS
     return parts[rng.randrange(len(parts))]
 
 
@@ -138,16 +140,18 @@ def zombie_defence(zombie: ZombieEntity, part: BodyPart) -> float:
         share = item.neck_protection if part == BodyPart.NECK and item.neck_protection < 1 else 1.0
         scratch += item.scratch_defense * share
         bite += item.bite_defense * share
-    scratch = min(scratch, zombie_k.ZOMBIE_PART_DEFENCE_CAP)
-    bite = min(bite, zombie_k.ZOMBIE_PART_DEFENCE_CAP)
-    defence = (scratch * zombie_k.ZOMBIE_SCRATCH_WEIGHT + bite) * zombie_k.ZOMBIE_ARMOUR_FACTOR
-    return min(defence, float(zombie_k.ZOMBIE_MAX_DEFENCE))
+    scratch = min(scratch, zombie_lore.ZOMBIE_PART_DEFENCE_CAP)
+    bite = min(bite, zombie_lore.ZOMBIE_PART_DEFENCE_CAP)
+    defence = (
+        scratch * zombie_lore.ZOMBIE_SCRATCH_WEIGHT + bite
+    ) * zombie_lore.ZOMBIE_ARMOUR_FACTOR
+    return min(defence, float(zombie_lore.ZOMBIE_MAX_DEFENCE))
 
 
 def shoe_power(player: PlayerEntity) -> float:
     shoes = player.worn.get(BodyLocation.SHOES)
     if shoes is None or not isinstance(shoes.item, ClothingItem):
-        return k.BAREFOOT_STOMP_POWER
+        return melee_k.BAREFOOT_STOMP_POWER
     return shoes.item.stomp_power
 
 
@@ -200,12 +204,12 @@ class MeleeEngine:
         target = world.zombies[target_id]
         held = weapons.equipped_weapon(player)
         held_melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
-        weapon = held_melee or k.BARE_HANDS
+        weapon = held_melee or melee_k.BARE_HANDS
         kind = self._kind(shove, target.on_floor(now), held_melee is not None)
         targets = self._targets(world, player, target, weapon, now)
         levels = skill_levels(player)
         status_effects = player_status_effect_levels(player)
-        close_kill = weapon.is_stab and _hunters(world, player) <= k.CLOSE_KILL_MAX_HUNTERS
+        close_kill = weapon.is_stab and _hunters(world, player) <= melee_k.CLOSE_KILL_MAX_HUNTERS
         crit = self._roll_crit(kind, weapon, target, levels, status_effects, close_kill)
         swing = _Swing(
             player=player,
@@ -246,7 +250,7 @@ class MeleeEngine:
             world=world,
             now=now,
             kind=SwingKind.HIT,
-            weapon=held_melee or k.BARE_HANDS,
+            weapon=held_melee or melee_k.BARE_HANDS,
             weapon_entity=weapons.held_entity(player) if held_melee else None,
             levels=skill_levels(player),
             status_effects=player_status_effect_levels(player),
@@ -270,13 +274,13 @@ class MeleeEngine:
         elif zombie.become_crawler:
             self._start_crawling(zombie, result)
         else:
-            zombie.down_until = now + k.DOWN_MINUTES
+            zombie.down_until = now + melee_k.DOWN_MINUTES
             zombie.staggered = False
 
     def _start_crawling(self, zombie: ZombieEntity, result: SwingResult) -> None:
         make_crawler(zombie, self._rng)
         zombie.staggered = True
-        result.facts.append(zombie_k.CRAWL_FACT.format(target=zombie.zombie_id))
+        result.facts.append(zombie_lore.CRAWL_FACT.format(target=zombie.zombie_id))
 
     @staticmethod
     def _kind(shove: bool, down: bool, armed: bool) -> SwingKind:
@@ -301,7 +305,7 @@ class MeleeEngine:
                 for z in world.zombies.values()
                 if z is not target
                 and z.zone_id == player.current_location_id
-                and z.gap <= zombie_k.ATTACK_RANGE_TILES
+                and z.gap <= zombie_lore.ATTACK_RANGE_TILES
                 and z.on_floor(now) == target.on_floor(now)
                 and not (
                     target.side is not None
@@ -324,7 +328,7 @@ class MeleeEngine:
     ) -> bool:
         """Whether the swing crits: a knife only on a close kill, and then automatically from behind."""
         unaware = target.state in (ZombieState.IDLE, ZombieState.ALERTED)
-        behind = target.facing_cos < k.BEHIND_FACING_COS
+        behind = target.facing_cos < melee_k.BEHIND_FACING_COS
         if weapon.is_stab:
             if not close_kill:
                 return False
@@ -338,7 +342,7 @@ class MeleeEngine:
             panic=status_effects[StatusEffect.PANIC],
             shove=kind in (SwingKind.SHOVE, SwingKind.STOMP),
             behind=behind,
-            bare_unaware=weapon is k.BARE_HANDS and unaware,
+            bare_unaware=weapon is melee_k.BARE_HANDS and unaware,
         )
         return self._rng.randrange(100) < chance
 
@@ -350,11 +354,11 @@ class MeleeEngine:
         killed = False
         if kind == SwingKind.SHOVE:
             name = swing.player.appearance.forename
-            fact = k.SHOVE_DOWN_FACT if swing.crit else k.SHOVE_FACT
+            fact = melee_k.SHOVE_DOWN_FACT if swing.crit else melee_k.SHOVE_FACT
             swing.result.facts.append(fact.format(name=name, target=zombie.zombie_id))
         else:
             dealt, split = self._damage(swing, zombie, index, knife_death=knife_death)
-            zombie.health -= dealt * k.GLOBAL_MELEE_DAMAGE_REDUCTION_MULTIPLIER
+            zombie.health -= dealt * melee_k.GLOBAL_MELEE_DAMAGE_REDUCTION_MULTIPLIER
             killed = zombie.health <= 0 or knife_death
             self._hit_facts(swing, zombie, killed=killed, jaw_stab=knife_death)
             if not killed:
@@ -381,38 +385,46 @@ class MeleeEngine:
         )
         roll = self._rng.uniform(weapon.min_damage, weapon.max_damage)
         damage = roll * skill_damage_mod(weapon, levels)
-        damage *= k.STRENGTH_DAMAGE_MOD[levels[skill_k.STRENGTH]]
+        damage *= melee_k.STRENGTH_DAMAGE_MOD[levels[skill_k.STRENGTH]]
         if kind != SwingKind.STOMP:
-            damage = damage / k.ARMS_PAIN_DIVISOR * k.ARM_SPEED_FACTOR
+            damage = damage / melee_k.ARMS_PAIN_DIVISOR * melee_k.ARM_SPEED_FACTOR
         split = hit_split(damage, index, swing.player.stats)
         if kind == SwingKind.STOMP:
             split = (
-                self._rng.uniform(k.STOMP_ROLL_MIN, k.STOMP_ROLL_MAX)
-                + k.STOMP_STRENGTH_BONUS * levels[skill_k.STRENGTH]
+                self._rng.uniform(melee_k.STOMP_ROLL_MIN, melee_k.STOMP_ROLL_MAX)
+                + melee_k.STOMP_STRENGTH_BONUS * levels[skill_k.STRENGTH]
             ) * shoe_power(swing.player)
-        split *= k.TIRED_FACTOR[status_effects[StatusEffect.ENDURANCE]]
-        split *= k.TIRED_FACTOR[status_effects[StatusEffect.TIRED]]
+        split *= melee_k.TIRED_FACTOR[status_effects[StatusEffect.ENDURANCE]]
+        split *= melee_k.TIRED_FACTOR[status_effects[StatusEffect.TIRED]]
         part = hit_part(kind, self._rng)
         if kind in (SwingKind.FLOOR_ATTACK, SwingKind.STOMP) and part == BodyPart.HEAD:
-            split *= k.HEAD_HIT_MULTIPLIER
+            split *= melee_k.HEAD_HIT_MULTIPLIER
         split *= 1 - zombie_defence(zombie, part) / 100
         zombie.hits_taken += 1
         split *= hits_taken_factor(zombie.hits_taken)
-        reach = k.REACH_FACTOR_PER_TILE * min(k.REACH_TILES, weapon.max_range) / weapon.max_range
-        if knife_death:
-            reach *= k.KNIFE_DEATH_REACH_MULTIPLIER
-        dealt = split * reach
-        if kind in (SwingKind.HIT, SwingKind.FLOOR_ATTACK) and zombie.facing_cos < k.NOT_FACING_COS:
-            dealt *= k.NOT_FACING_MULTIPLIER
-        dealt *= k.NON_PLAYER_RECEIVED_DAMAGE_MULTIPLIER
-        dealt *= k.BASE_WEAPON_DAMAGE_MULTIPLIER + k.WEAPON_LEVEL_DAMAGE_STEP * weapon_level(
-            swing.player
+        reach = (
+            melee_k.REACH_FACTOR_PER_TILE
+            * min(melee_k.REACH_TILES, weapon.max_range)
+            / weapon.max_range
         )
-        crit_multiplier = weapon.crit_dmg_multiplier * k.SHARPNESS_MULT
+        if knife_death:
+            reach *= melee_k.KNIFE_DEATH_REACH_MULTIPLIER
+        dealt = split * reach
+        if (
+            kind in (SwingKind.HIT, SwingKind.FLOOR_ATTACK)
+            and zombie.facing_cos < melee_k.NOT_FACING_COS
+        ):
+            dealt *= melee_k.NOT_FACING_MULTIPLIER
+        dealt *= melee_k.NON_PLAYER_RECEIVED_DAMAGE_MULTIPLIER
+        dealt *= (
+            melee_k.BASE_WEAPON_DAMAGE_MULTIPLIER
+            + melee_k.WEAPON_LEVEL_DAMAGE_STEP * weapon_level(swing.player)
+        )
+        crit_multiplier = weapon.crit_dmg_multiplier * melee_k.SHARPNESS_MULT
         if kind == SwingKind.FLOOR_ATTACK:
-            dealt *= max(k.FLOOR_ATTACK_MIN_CRIT_MULTIPLIER, crit_multiplier)
+            dealt *= max(melee_k.FLOOR_ATTACK_MIN_CRIT_MULTIPLIER, crit_multiplier)
         if swing.crit:
-            dealt *= max(k.MIN_CRIT_MULTIPLIER, crit_multiplier)
+            dealt *= max(melee_k.MIN_CRIT_MULTIPLIER, crit_multiplier)
         return dealt, split
 
     def _roll_crawler(self, swing: _Swing, zombie: ZombieEntity) -> None:
@@ -420,9 +432,9 @@ class MeleeEngine:
         if zombie.crawling:
             return
         odds = (
-            zombie_k.CRAWLER_ONE_IN_STOMP
+            zombie_lore.CRAWLER_ONE_IN_STOMP
             if swing.kind == SwingKind.STOMP
-            else zombie_k.CRAWLER_ONE_IN_WEAPON
+            else zombie_lore.CRAWLER_ONE_IN_WEAPON
         )
         if self._rng.randrange(odds) == 0:
             zombie.become_crawler = True
@@ -433,21 +445,22 @@ class MeleeEngine:
         fatigue = 1.0
         for category in weapon.categories:
             if (
-                category in k.WEAPON_LEVEL_CATEGORIES
-                and swing.levels.get(k.CATEGORY_SKILL[category], 0) >= k.WEAPON_FATIGUE_LEVEL
+                category in melee_k.WEAPON_LEVEL_CATEGORIES
+                and swing.levels.get(melee_k.CATEGORY_SKILL[category], 0)
+                >= melee_k.WEAPON_FATIGUE_LEVEL
             ):
-                fatigue = k.WEAPON_FATIGUE_MOD_LEVEL8
-        fitness = k.FITNESS_FATIGUE_MOD[swing.levels[skill_k.FITNESS]]
-        return fatigue * fitness * weapon.endurance_mod * k.ENDURANCE_LOSS_SCALE
+                fatigue = melee_k.WEAPON_FATIGUE_MOD_LEVEL8
+        fitness = melee_k.FITNESS_FATIGUE_MOD[swing.levels[skill_k.FITNESS]]
+        return fatigue * fitness * weapon.endurance_mod * melee_k.ENDURANCE_LOSS_SCALE
 
     def _drain_swing(self, swing: _Swing) -> None:
         loss = (
-            max(swing.weapon.weight, k.SWING_ENDURANCE_MIN_WEIGHT)
-            * k.SWING_ENDURANCE_WEIGHT_FACTOR
+            max(swing.weapon.weight, melee_k.SWING_ENDURANCE_MIN_WEIGHT)
+            * melee_k.SWING_ENDURANCE_WEIGHT_FACTOR
             * self._endurance_scale(swing)
         )
         if trait_k.ASTHMATIC_ID in swing.player.traits:
-            loss *= k.ASTHMATIC_ENDURANCE_MULTIPLIER
+            loss *= melee_k.ASTHMATIC_ENDURANCE_MULTIPLIER
         swing.player.stats.remove(CharacterStat.ENDURANCE, loss)
 
     def _drain_hit(self, swing: _Swing, dealt: float, health_before: float) -> None:
@@ -455,49 +468,57 @@ class MeleeEngine:
         if swing.kind == SwingKind.SHOVE:
             hit_mod = 1.0
         elif swing.close_kill:
-            hit_mod = k.ENDURANCE_LOSS_CLOSE_KILL_MODIFIER
+            hit_mod = melee_k.ENDURANCE_LOSS_CLOSE_KILL_MODIFIER
         else:
             hit_mod = min(1.0, min(dealt, health_before) / weapon.max_damage)
         loss = (
-            weapon.weight * k.HIT_ENDURANCE_WEIGHT_FACTOR * self._endurance_scale(swing) * hit_mod
+            weapon.weight
+            * melee_k.HIT_ENDURANCE_WEIGHT_FACTOR
+            * self._endurance_scale(swing)
+            * hit_mod
         )
         if swing.kind == SwingKind.STOMP:
-            loss *= k.ENDURANCE_LOSS_FLOOR_SHOVE_MULTIPLIER
+            loss *= melee_k.ENDURANCE_LOSS_FLOOR_SHOVE_MULTIPLIER
         swing.player.stats.remove(CharacterStat.ENDURANCE, loss)
 
     def _award_xp(self, swing: _Swing, split: float, *, killed: bool) -> None:
         player, weapon = swing.player, swing.weapon
         facts = self._skills.hit_xp(player, weapon, split, swing.hit_count)
         if not killed and weapon.knockback_on_no_death:
-            facts.extend(self._skills.add_xp(player, skill_k.STRENGTH, k.KNOCKBACK_STRENGTH_XP))
+            facts.extend(
+                self._skills.add_xp(player, skill_k.STRENGTH, melee_k.KNOCKBACK_STRENGTH_XP)
+            )
         swing.result.facts.extend(facts)
 
     def _add_noise(self, swing: _Swing, *, jaw_stab: bool) -> None:
         sounds = swing.result.sounds
-        sounds.append(Sound(k.HIT_SOUND_ANY, k.HIT_SOUND_ANY_VOLUME))
+        sounds.append(Sound(melee_k.HIT_SOUND_ANY, melee_k.HIT_SOUND_ANY_VOLUME))
         if jaw_stab:
-            sounds.append(Sound(k.HIT_SOUND_STAB, k.HIT_SOUND_STAB))
+            sounds.append(Sound(melee_k.HIT_SOUND_STAB, melee_k.HIT_SOUND_STAB))
             return
-        sounds.append(Sound(k.HIT_SOUND_BASE, k.HIT_SOUND_BASE))
-        if swing.kind == SwingKind.STOMP or self._rng.randrange(k.HIT_SOUND_LOUD_ODDS) == 0:
-            sounds.append(Sound(k.HIT_SOUND_LOUD, k.HIT_SOUND_LOUD))
-        elif self._rng.randrange(k.HIT_SOUND_LOUDER_ODDS) == 0:
-            sounds.append(Sound(k.HIT_SOUND_LOUDER, k.HIT_SOUND_LOUDER))
+        sounds.append(Sound(melee_k.HIT_SOUND_BASE, melee_k.HIT_SOUND_BASE))
+        if swing.kind == SwingKind.STOMP or self._rng.randrange(melee_k.HIT_SOUND_LOUD_ODDS) == 0:
+            sounds.append(Sound(melee_k.HIT_SOUND_LOUD, melee_k.HIT_SOUND_LOUD))
+        elif self._rng.randrange(melee_k.HIT_SOUND_LOUDER_ODDS) == 0:
+            sounds.append(Sound(melee_k.HIT_SOUND_LOUDER, melee_k.HIT_SOUND_LOUDER))
 
     def _wear(self, swing: _Swing) -> None:
         """Each hit with a weapon may wear it, and trains Maintenance."""
         player, weapon, entity = swing.player, swing.weapon, swing.weapon_entity
         assert entity is not None
-        maintenance = swing.levels.get(k.MAINTENANCE_SKILL, 0)
+        maintenance = swing.levels.get(melee_k.MAINTENANCE_SKILL, 0)
         odds = weapon.condition_lower_chance + maintenance + weapon_level(player) // 2
         if self._rng.randrange(max(odds, 1)) == 0:
             self._lose_condition(swing, entity)
-        if not weapon.no_maintenance_xp and self._rng.randrange(100) < k.MAINTENANCE_XP_CHANCE:
-            if weapon.condition_lower_chance > k.MAINTENANCE_XP_NUMERATOR_MIN:
-                xp = k.MAINTENANCE_XP_NUMERATOR / weapon.condition_lower_chance
+        if (
+            not weapon.no_maintenance_xp
+            and self._rng.randrange(100) < melee_k.MAINTENANCE_XP_CHANCE
+        ):
+            if weapon.condition_lower_chance > melee_k.MAINTENANCE_XP_NUMERATOR_MIN:
+                xp = melee_k.MAINTENANCE_XP_NUMERATOR / weapon.condition_lower_chance
             else:
-                xp = k.MAINTENANCE_XP_FIXED
-            swing.result.facts.extend(self._skills.add_xp(player, k.MAINTENANCE_SKILL, xp))
+                xp = melee_k.MAINTENANCE_XP_FIXED
+            swing.result.facts.extend(self._skills.add_xp(player, melee_k.MAINTENANCE_SKILL, xp))
 
     @staticmethod
     def _lose_condition(swing: _Swing, entity: ItemEntity) -> None:
@@ -512,9 +533,9 @@ class MeleeEngine:
                     player.equipment[slot] = None
             player.inventory.append(entity)
             swing.weapon_entity = None
-            swing.result.facts.append(k.BREAK_FACT.format(weapon=name))
+            swing.result.facts.append(melee_k.BREAK_FACT.format(weapon=name))
         elif after != before:
-            swing.result.facts.append(k.WEAR_FACTS[after].format(weapon=name))
+            swing.result.facts.append(melee_k.WEAR_FACTS[after].format(weapon=name))
 
     @staticmethod
     def _hit_facts(swing: _Swing, zombie: ZombieEntity, *, killed: bool, jaw_stab: bool) -> None:
@@ -523,31 +544,35 @@ class MeleeEngine:
         weapon_name = swing.weapon.name.lower()
         facts = swing.result.facts
         if jaw_stab:
-            facts.append(k.JAW_STAB_FACT.format(target=label))
+            facts.append(melee_k.JAW_STAB_FACT.format(target=label))
         elif swing.kind == SwingKind.STOMP:
-            facts.append(k.STOMP_FACT.format(name=name, target=label))
+            facts.append(melee_k.STOMP_FACT.format(name=name, target=label))
         elif swing.kind == SwingKind.FLOOR_ATTACK:
-            facts.append(k.FLOOR_ATTACK_FACT.format(name=name, weapon=weapon_name, target=label))
+            facts.append(
+                melee_k.FLOOR_ATTACK_FACT.format(name=name, weapon=weapon_name, target=label)
+            )
         elif killed:
-            facts.append(k.HIT_KILL_FACT.format(name=name, weapon=weapon_name, target=label))
+            facts.append(melee_k.HIT_KILL_FACT.format(name=name, weapon=weapon_name, target=label))
         elif swing.crit:
-            facts.append(k.CRIT_FACT.format(target=label))
+            facts.append(melee_k.CRIT_FACT.format(target=label))
         else:
-            facts.append(k.HIT_FACT.format(name=name, weapon=weapon_name, target=label))
+            facts.append(melee_k.HIT_FACT.format(name=name, weapon=weapon_name, target=label))
         if killed:
-            facts.append(k.KILL_FACT.format(target=label))
+            facts.append(melee_k.KILL_FACT.format(target=label))
 
     @staticmethod
     def _kill(swing: _Swing, zombie: ZombieEntity) -> None:
         swing.result.killed.append(zombie.zombie_id)
-        swing.player.stats.add(CharacterStat.STRESS, k.KILL_STRESS_DELTA)
+        swing.player.stats.add(CharacterStat.STRESS, melee_k.KILL_STRESS_DELTA)
         swing.player.zombie_kills += 1
 
     def _maybe_stick_knife(self, swing: _Swing, zombie: ZombieEntity, was_attacking: bool) -> None:
         """The knife may stay in the jaw; it goes into the corpse the kill leaves."""
-        base = k.STUCK_KNIFE_BASE_ATTACKING if was_attacking else k.STUCK_KNIFE_BASE_OTHER
-        short_blade = swing.levels.get(k.SHORT_BLADE_SKILL, 0)
-        odds = base + k.STUCK_KNIFE_PER_SHORT_BLADE * (short_blade + 1)
+        base = (
+            melee_k.STUCK_KNIFE_BASE_ATTACKING if was_attacking else melee_k.STUCK_KNIFE_BASE_OTHER
+        )
+        short_blade = swing.levels.get(melee_k.SHORT_BLADE_SKILL, 0)
+        odds = base + melee_k.STUCK_KNIFE_PER_SHORT_BLADE * (short_blade + 1)
         entity = swing.weapon_entity
         if entity is None or self._rng.randrange(odds) != 0:
             return
@@ -556,7 +581,7 @@ class MeleeEngine:
             if player.equipment[slot] is entity:
                 player.equipment[slot] = None
         swing.result.stuck_knives[zombie.zombie_id] = entity
-        swing.result.facts.append(k.STUCK_KNIFE_FACT.format(target=zombie.zombie_id))
+        swing.result.facts.append(melee_k.STUCK_KNIFE_FACT.format(target=zombie.zombie_id))
 
 
 def _hunters(world: World, player: PlayerEntity) -> int:

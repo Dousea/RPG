@@ -6,7 +6,7 @@ Resolution only; the validator decides legality. Every score change goes through
 
 import random
 
-from data.story import social as k
+from data.story import social as social_k
 from data.story.topics import Topic
 from managers import carry
 from managers.game import GameManager
@@ -45,7 +45,7 @@ def locked_out(manager: GameManager, npc: NpcEntity, request: str) -> bool:
     refused = manager.narrative.social_log.refused_at(npc.npc_id, request)
     if refused is None:
         return False
-    return manager.narrative.minutes - refused < k.ASK_REFUSAL_LOCKOUT_MIN
+    return manager.narrative.minutes - refused < social_k.ASK_REFUSAL_LOCKOUT_MIN
 
 
 class SocialManager:
@@ -92,7 +92,7 @@ class SocialManager:
             if delta <= 0:
                 return delta
             delta = int(delta / repeats)
-            return int(delta * k.GUARDED_POSITIVE_FACTOR) if guarded else delta
+            return int(delta * social_k.GUARDED_POSITIVE_FACTOR) if guarded else delta
 
         d_affection, d_trust = scaled(affection), scaled(trust)
         if d_affection:
@@ -122,10 +122,10 @@ class SocialManager:
     # === TALK and GIVE ===
 
     def talk(self, npc: NpcEntity, approach: str) -> list[str]:
-        row = k.TALK_APPROACHES[approach]
+        row = social_k.TALK_APPROACHES[approach]
         affection = row.affection
         if approach == "flirt" and not npc.romance_eligible:
-            affection = k.FLIRT_INELIGIBLE_AFFECTION
+            affection = social_k.FLIRT_INELIGIBLE_AFFECTION
         lead = row.fact.format(name=self._name, npc=npc.name)
         return [lead, *self._apply(npc, approach, affection, row.trust)]
 
@@ -133,7 +133,7 @@ class SocialManager:
         carry.take_out(self._manager.player, entity)
         npc.inventory.append(entity)
         food = isinstance(entity.item, ConsumableItem)
-        delta = k.GIVE_FOOD_DELTA if food else k.GIVE_OTHER_DELTA
+        delta = social_k.GIVE_FOOD_DELTA if food else social_k.GIVE_OTHER_DELTA
         lead = f"{self._name} gives {npc.name} the {entity.item.name}."
         return [lead, *self._apply(npc, GIVE_KEY, delta.affection, delta.trust)]
 
@@ -142,10 +142,12 @@ class SocialManager:
     def follow_chance(self, npc: NpcEntity) -> float:
         if self.disposition_of(npc) in _GUARDED_DISPOSITIONS:
             return 0.0
-        return clamp01(self.trust_of(npc) / k.ASK_FOLLOW_TRUST_DIVISOR)
+        return clamp01(self.trust_of(npc) / social_k.ASK_FOLLOW_TRUST_DIVISOR)
 
     def give_chance(self, npc: NpcEntity) -> float:
-        return clamp01((self.trust_of(npc) - k.ASK_GIVE_TRUST_OFFSET) / k.ASK_GIVE_TRUST_DIVISOR)
+        return clamp01(
+            (self.trust_of(npc) - social_k.ASK_GIVE_TRUST_OFFSET) / social_k.ASK_GIVE_TRUST_DIVISOR
+        )
 
     def _refuse(self, npc: NpcEntity, request: str) -> None:
         self._log().refuse(npc.npc_id, request, self._manager.narrative.minutes)

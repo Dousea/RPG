@@ -4,7 +4,7 @@ import random
 
 from data.items import ITEMS
 from data.loot.catalogue import LOOT_CATALOGUE
-from data.zombies import lore as k
+from data.zombies import lore as zombie_lore
 from data.zombies.loot import ATTACHED_WEAPONS, CUSTOM_OUTFIT_WEAPONS, StuckWeaponEntry
 from data.zombies.outfits import ZOMBIE_OUTFIT_POOL, ZOMBIE_OUTFIT_REFERENCES
 from modules.body.parts import BodyLocation, BodyPart
@@ -75,7 +75,7 @@ def _pick_definition(names: list[str], outfit: str, days: float, rng: random.Ran
 
 
 def _condition(maximum: int, rng: random.Random) -> int:
-    low = max(k.ATTACHED_CONDITION_FLOOR, maximum - k.ATTACHED_CONDITION_SPREAD)
+    low = max(zombie_lore.ATTACHED_CONDITION_FLOOR, maximum - zombie_lore.ATTACHED_CONDITION_SPREAD)
     return low + rng.randrange(maximum - low) if maximum > low else low
 
 
@@ -113,7 +113,7 @@ def attach_weapon(zombie: ZombieEntity, rng: random.Random, days: float) -> list
         else:
             custom = None
     if not names:
-        if rng.randrange(_PERCENT) + 1 > k.CHANCE_OF_ATTACHED_WEAPON:
+        if rng.randrange(_PERCENT) + 1 > zombie_lore.CHANCE_OF_ATTACHED_WEAPON:
             return []
         names = list(ATTACHED_WEAPONS)
     rolled: list[str] = []
@@ -136,13 +136,14 @@ def make_crawler(zombie: ZombieEntity, rng: random.Random) -> None:
     zombie.become_crawler = False
     zombie.lunger = False
     zombie.speed_mod = (
-        k.CRAWLER_SPEED_MOD_BASE + rng.randrange(k.SPEED_MOD_STEPS) / k.SPEED_MOD_DIVISOR
+        zombie_lore.CRAWLER_SPEED_MOD_BASE
+        + rng.randrange(zombie_lore.SPEED_MOD_STEPS) / zombie_lore.SPEED_MOD_DIVISOR
     )
 
 
 def dress(zombie: ZombieEntity, rng: random.Random, days: float) -> None:
     """Give a new zombie a sex, an outfit, its clothes and perhaps a weapon."""
-    zombie.female = rng.randrange(k.FEMALE_ONE_IN) == 0
+    zombie.female = rng.randrange(zombie_lore.FEMALE_ONE_IN) == 0
     zombie.outfit = pick_outfit(rng, zombie.female)
     zombie.worn, zombie.carried = dress_outfit(zombie.outfit, zombie.female, rng)
     attach_weapon(zombie, rng, days)

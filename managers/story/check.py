@@ -3,7 +3,7 @@
 import logging
 from dataclasses import dataclass
 
-from data.story import check as words
+from data.story import check as story_check_k
 from managers.context import ZOMBIE_ID
 from managers.game import GameManager
 
@@ -35,10 +35,15 @@ def build_questions(manager: GameManager, outcome_facts: list[str]) -> list[Stat
     (zombie_id,) = ids
     if zombie_id in manager.world.zombies:
         allowed = frozenset({"no", "unclear"})
-        correction = words.ZOMBIE_ALIVE_FACT
+        correction = story_check_k.ZOMBIE_ALIVE_FACT
     else:
         allowed = frozenset({"yes", "unclear"})
-        correction = words.ZOMBIE_DEAD_FACT
+        correction = story_check_k.ZOMBIE_DEAD_FACT
     return [
-        StateQuestion(words.ZOMBIE_DEATH_QUESTION, words.ZOMBIE_DEATH_OPTIONS, allowed, correction)
+        StateQuestion(
+            story_check_k.ZOMBIE_DEATH_QUESTION,
+            story_check_k.ZOMBIE_DEATH_OPTIONS,
+            allowed,
+            correction,
+        )
     ]

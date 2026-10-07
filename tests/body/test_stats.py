@@ -2,7 +2,7 @@
 
 import unittest
 
-from data.body import survival
+from data.body import survival as survival_k
 from managers.body.stats.status_effects import (
     active_status_effects,
     bleeding_level,
@@ -103,34 +103,34 @@ class RateConversionTests(unittest.TestCase):
 
     def test_constants_convert_to_the_per_hour_values(self):
         cases = {
-            survival.HUNGER_INCREASE_per_hour: 0.03456,
-            survival.HUNGER_INCREASE_WHEN_EXERCISE_per_hour: 0.06912,
-            survival.HUNGER_INCREASE_WHILE_ASLEEP_per_hour: 0.0036,
-            survival.THIRST_INCREASE_per_hour: 0.0288,
-            survival.STRESS_DECREASE_per_hour: 0.108,
-            survival.EXERCISE_ENDURANCE_DRAIN_per_hour: 0.2808,
-            survival.IMOBILE_ENDURANCE_INCREASE_per_hour: 0.3348,
-            survival.SLEEPING_ENDURANCE_REGEN_per_hour: 0.2232,
-            survival.IDLE_INCREASE_per_hour: 1.8,
-            survival.IDLE_DECREASE_per_hour: 21.6,
-            survival.BOREDOM_DECREASE_per_hour: 41.58,
-            survival.BOREDOM_INCREASE_per_hour: 10.8,
-            survival.UNHAPPINESS_INCREASE_per_hour: 5.4,
-            survival.PANIC_REDUCTION_per_hour: 405,
-            survival.INTOXICATION_DECREASE_per_hour: 45.36,
-            survival.FOOD_SICKNESS_DECREASE_per_hour: 16.2,
-            survival.CORPSE_SICKNESS_per_hour: 1.134,
+            survival_k.HUNGER_INCREASE_per_hour: 0.03456,
+            survival_k.HUNGER_INCREASE_WHEN_EXERCISE_per_hour: 0.06912,
+            survival_k.HUNGER_INCREASE_WHILE_ASLEEP_per_hour: 0.0036,
+            survival_k.THIRST_INCREASE_per_hour: 0.0288,
+            survival_k.STRESS_DECREASE_per_hour: 0.108,
+            survival_k.EXERCISE_ENDURANCE_DRAIN_per_hour: 0.2808,
+            survival_k.IMOBILE_ENDURANCE_INCREASE_per_hour: 0.3348,
+            survival_k.SLEEPING_ENDURANCE_REGEN_per_hour: 0.2232,
+            survival_k.IDLE_INCREASE_per_hour: 1.8,
+            survival_k.IDLE_DECREASE_per_hour: 21.6,
+            survival_k.BOREDOM_DECREASE_per_hour: 41.58,
+            survival_k.BOREDOM_INCREASE_per_hour: 10.8,
+            survival_k.UNHAPPINESS_INCREASE_per_hour: 5.4,
+            survival_k.PANIC_REDUCTION_per_hour: 405,
+            survival_k.INTOXICATION_DECREASE_per_hour: 45.36,
+            survival_k.FOOD_SICKNESS_DECREASE_per_hour: 16.2,
+            survival_k.CORPSE_SICKNESS_per_hour: 1.134,
         }
         for actual, expected in cases.items():
             self.assertAlmostEqual(actual, expected, places=3)
 
     def test_walking_endurance_drain_is_a_real_frame_rate(self):
-        self.assertAlmostEqual(survival.WALKING_ENDURANCE_DRAIN_per_hour, 0.0501, places=3)
+        self.assertAlmostEqual(survival_k.WALKING_ENDURANCE_DRAIN_per_hour, 0.0501, places=3)
 
     def test_health_loss_rates(self):
-        self.assertAlmostEqual(survival.STARVING_HP_LOSS_per_hour, 3.564, places=3)
-        self.assertAlmostEqual(survival.DYING_OF_THIRST_HP_LOSS_per_hour, 17.82, places=3)
-        self.assertAlmostEqual(survival.FEVER_HP_LOSS_per_hour, 178.2, places=3)
+        self.assertAlmostEqual(survival_k.STARVING_HP_LOSS_per_hour, 3.564, places=3)
+        self.assertAlmostEqual(survival_k.DYING_OF_THIRST_HP_LOSS_per_hour, 17.82, places=3)
+        self.assertAlmostEqual(survival_k.FEVER_HP_LOSS_per_hour, 178.2, places=3)
 
 
 class StatusEffectThresholdTests(unittest.TestCase):

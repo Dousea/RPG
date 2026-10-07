@@ -2,7 +2,7 @@
 
 import random
 
-from data.body import health as k
+from data.body import health as body_k
 from data.character import traits as trait_k
 from data.items import ALCOHOL_WIPES_ID, ITEMS
 from data.zombies import lore as zombie_lore
@@ -18,7 +18,7 @@ from modules.item import MedicalItem
 _PART_BY_WORD: dict[str, BodyPart] = {
     **{word: BodyPart(value) for value, word in zombie_lore.BODY_PART_WORDS.items()},
     **{part.value.replace("_", " "): part for part in BodyPart},
-    **k.PART_ALIASES,
+    **body_k.PART_ALIASES,
 }
 
 
@@ -40,11 +40,11 @@ def most_needed_part(player: PlayerEntity) -> BodyPart | None:
             continue
         score = 0
         if state.bleeding_time > 0:
-            score += k.MOST_NEEDED_BLEEDING
+            score += body_k.MOST_NEEDED_BLEEDING
         if state.scratch_time > 0:
-            score += k.MOST_NEEDED_SCRATCH
+            score += body_k.MOST_NEEDED_SCRATCH
         if state.bite_time > 0:
-            score += k.MOST_NEEDED_BITE
+            score += body_k.MOST_NEEDED_BITE
         if score > best_score:
             best, best_score = part, score
     return best
@@ -89,16 +89,18 @@ class FirstAid:
         item = entity.item
         assert isinstance(item, MedicalItem)
         state = player.body[part]
-        level = skill_levels(player).get(k.FIRST_AID_SKILL, 0)
+        level = skill_levels(player).get(body_k.FIRST_AID_SKILL, 0)
         facts: list[str] = []
         if trait_k.FEAR_OF_BLOOD_ID in player.traits and state.bleeding_time > 0:
-            player.stats.add(CharacterStat.PANIC, k.FEAR_OF_BLOOD_PANIC)
+            player.stats.add(CharacterStat.PANIC, body_k.FEAR_OF_BLOOD_PANIC)
         life = 0.0
         if not item.dirty:
-            life = self._rng.uniform(*k.BANDAGE_LIFE_RANGE) * (level + 1) + item.bandage_power
-        facts.append(k.BANDAGE_FACT.format(name=player.appearance.forename, part=part_word(part)))
+            life = self._rng.uniform(*body_k.BANDAGE_LIFE_RANGE) * (level + 1) + item.bandage_power
+        facts.append(
+            body_k.BANDAGE_FACT.format(name=player.appearance.forename, part=part_word(part))
+        )
         if state.bandage_xp_ready and life > 0:
-            facts.extend(self._skills.add_xp(player, k.FIRST_AID_SKILL, k.BANDAGE_XP))
+            facts.extend(self._skills.add_xp(player, body_k.FIRST_AID_SKILL, body_k.BANDAGE_XP))
             state.bandage_xp_ready = False
         state.bandage = item.id
         state.bandage_life = life
@@ -118,30 +120,30 @@ class FirstAid:
         if returned is not None:
             player.inventory.append(ItemEntity(item=ITEMS[returned]))
         clear_bandage(state)
-        fact = k.REMOVE_DIRTY_BANDAGE_FACT if soaked else k.REMOVE_BANDAGE_FACT
+        fact = body_k.REMOVE_DIRTY_BANDAGE_FACT if soaked else body_k.REMOVE_BANDAGE_FACT
         return [fact.format(name=player.appearance.forename, part=part_word(part))]
 
     def disinfect(self, player: PlayerEntity, part: BodyPart, entity: ItemEntity) -> list[str]:
         state = player.body[part]
-        level = skill_levels(player).get(k.FIRST_AID_SKILL, 0)
-        state.alcohol += k.DISINFECT_ALCOHOL
+        level = skill_levels(player).get(body_k.FIRST_AID_SKILL, 0)
+        state.alcohol += body_k.DISINFECT_ALCOHOL
         state.extra_pain += (
-            k.DISINFECT_EXTRA_PAIN_BASE - level * k.DISINFECT_EXTRA_PAIN_PER_FIRST_AID
+            body_k.DISINFECT_EXTRA_PAIN_BASE - level * body_k.DISINFECT_EXTRA_PAIN_PER_FIRST_AID
         )
         self._spend_use(player, entity)
-        return [k.DISINFECT_FACT.format(name=player.appearance.forename, part=part_word(part))]
+        return [body_k.DISINFECT_FACT.format(name=player.appearance.forename, part=part_word(part))]
 
     def take_pill(self, player: PlayerEntity, entity: ItemEntity) -> list[str]:
-        player.pain_effect_minutes = k.PAINKILLER_MINUTES
+        player.pain_effect_minutes = body_k.PAINKILLER_MINUTES
         self._spend_use(player, entity)
-        return [k.PAINKILLER_FACT.format(name=player.appearance.forename)]
+        return [body_k.PAINKILLER_FACT.format(name=player.appearance.forename)]
 
     def take_antibiotic(self, player: PlayerEntity, entity: ItemEntity) -> list[str]:
         item = entity.item
         assert isinstance(item, MedicalItem)
         player.reduce_infection_power = item.reduce_infection_power
         self._spend_use(player, entity)
-        return [k.ANTIBIOTIC_FACT.format(name=player.appearance.forename)]
+        return [body_k.ANTIBIOTIC_FACT.format(name=player.appearance.forename)]
 
     @staticmethod
     def _spend_use(player: PlayerEntity, entity: ItemEntity) -> None:

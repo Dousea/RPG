@@ -1,6 +1,6 @@
 """Status effect levels read off the survival stats, their penalties, and what a drink adds (spec 03)."""
 
-from data.body import status_effects
+from data.body import status_effects as status_effect_k
 from data.body.status_effects import (
     BLEEDING_LEVEL_CAP,
     CRIT_PENALTY_ENDURANCE,
@@ -56,7 +56,7 @@ def bleeding_level(bleeding_parts: int, neck: bool) -> int:
 def hypothermia_level(core: float, intoxication: float) -> int:
     """The Hypothermia level the player sees: levels 1 and 2 hide while intoxication is above 30 and 70."""
     level = status_effect_level(StatusEffect.HYPOTHERMIA, core)
-    suppress_1, suppress_2 = status_effects.HYPOTHERMIA_SUPPRESS_INTOXICATION
+    suppress_1, suppress_2 = status_effect_k.HYPOTHERMIA_SUPPRESS_INTOXICATION
     if (level == 1 and intoxication > suppress_1) or (level == 2 and intoxication > suppress_2):
         return 0
     return level
@@ -207,9 +207,9 @@ def level_change_fact_texts(name: str) -> frozenset[str]:
 
 def alcohol_intoxication(item: ConsumableItem, hunger: float) -> float:
     """Intoxication a drink adds, given hunger after the drink's own hunger change."""
-    amount = status_effects.ALCOHOL_INTOXICATION_PER_UNIT * item.alcohol
-    if hunger > status_effects.ALCOHOL_HUNGER_HIGH:
-        amount *= status_effects.ALCOHOL_HUNGER_HIGH_MULT
-    elif hunger > status_effects.ALCOHOL_HUNGER_MID:
-        amount *= status_effects.ALCOHOL_HUNGER_MID_MULT
+    amount = status_effect_k.ALCOHOL_INTOXICATION_PER_UNIT * item.alcohol
+    if hunger > status_effect_k.ALCOHOL_HUNGER_HIGH:
+        amount *= status_effect_k.ALCOHOL_HUNGER_HIGH_MULT
+    elif hunger > status_effect_k.ALCOHOL_HUNGER_MID:
+        amount *= status_effect_k.ALCOHOL_HUNGER_MID_MULT
     return amount

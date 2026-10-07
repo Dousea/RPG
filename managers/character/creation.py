@@ -4,7 +4,7 @@ import math
 import random
 from collections.abc import Iterable
 
-from data.character import creation as k
+from data.character import creation as creation_k
 from data.character.names import (
     BEARD_STYLES,
     FEMALE_FORENAMES,
@@ -96,15 +96,18 @@ def resolve(build: CharacterBuild) -> ResolvedCharacter:
         )
     )
     traits = (*granted, *build.traits)
-    levels = {skill: 0 for skill in k.SKILLS}
-    levels["fitness"] = k.BASE_FITNESS
-    levels["strength"] = k.BASE_STRENGTH
+    levels = {skill: 0 for skill in creation_k.SKILLS}
+    levels["fitness"] = creation_k.BASE_FITNESS
+    levels["strength"] = creation_k.BASE_STRENGTH
     sources = [occupation.boosts, *(TRAITS[t].boosts for t in traits)]
     for boosts in sources:
         for skill, amount in boosts.items():
             levels[skill] += amount
-    skills = {s: max(k.SKILL_LEVEL_MIN, min(k.SKILL_LEVEL_MAX, v)) for s, v in levels.items()}
-    skill_boosts = {s: min(k.SKILL_BOOST_CAP, v) for s, v in skills.items()}
+    skills = {
+        s: max(creation_k.SKILL_LEVEL_MIN, min(creation_k.SKILL_LEVEL_MAX, v))
+        for s, v in levels.items()
+    }
+    skill_boosts = {s: min(creation_k.SKILL_BOOST_CAP, v) for s, v in skills.items()}
     return ResolvedCharacter(
         granted_traits=granted,
         traits=traits,
@@ -150,14 +153,16 @@ def _allowed_outfit_items(build: CharacterBuild, traits: Iterable[str]) -> set[s
 
 def _validate_appearance(appearance: Appearance) -> list[str]:
     errors: list[str] = []
-    if not 1 <= len(appearance.forename) <= k.NAME_MAX_CHARS:
-        errors.append(f"The forename must be 1 to {k.NAME_MAX_CHARS} characters.")
-    if len(appearance.surname) > k.NAME_MAX_CHARS:
-        errors.append(f"The surname can be at most {k.NAME_MAX_CHARS} characters.")
-    if len(appearance.backstory) > k.BACKSTORY_MAX_CHARS:
-        errors.append(f"The backstory can be at most {k.BACKSTORY_MAX_CHARS} characters.")
-    if not k.SKIN_TONE_MIN <= appearance.skin_tone <= k.SKIN_TONE_MAX:
-        errors.append(f"The skin tone must be {k.SKIN_TONE_MIN} to {k.SKIN_TONE_MAX}.")
+    if not 1 <= len(appearance.forename) <= creation_k.NAME_MAX_CHARS:
+        errors.append(f"The forename must be 1 to {creation_k.NAME_MAX_CHARS} characters.")
+    if len(appearance.surname) > creation_k.NAME_MAX_CHARS:
+        errors.append(f"The surname can be at most {creation_k.NAME_MAX_CHARS} characters.")
+    if len(appearance.backstory) > creation_k.BACKSTORY_MAX_CHARS:
+        errors.append(f"The backstory can be at most {creation_k.BACKSTORY_MAX_CHARS} characters.")
+    if not creation_k.SKIN_TONE_MIN <= appearance.skin_tone <= creation_k.SKIN_TONE_MAX:
+        errors.append(
+            f"The skin tone must be {creation_k.SKIN_TONE_MIN} to {creation_k.SKIN_TONE_MAX}."
+        )
     if appearance.hair_style not in HAIR_STYLES:
         errors.append(f"Unknown hair style '{appearance.hair_style}'.")
     if appearance.hair_colour not in HAIR_COLOURS:
@@ -197,13 +202,13 @@ def validate(build: CharacterBuild) -> list[str]:
     if build.occupation_id not in OCCUPATIONS:
         return [f"Unknown occupation '{build.occupation_id}'."]
     errors = _validate_appearance(build.appearance)
-    if len(build.job_title) > k.JOB_TITLE_MAX_CHARS:
-        errors.append(f"The job title can be at most {k.JOB_TITLE_MAX_CHARS} characters.")
+    if len(build.job_title) > creation_k.JOB_TITLE_MAX_CHARS:
+        errors.append(f"The job title can be at most {creation_k.JOB_TITLE_MAX_CHARS} characters.")
     trait_errors = _validate_traits(build)
     errors.extend(trait_errors)
     if not any(t.startswith("Unknown trait") for t in trait_errors):
         points = _points(build.occupation_id, build.traits)
-        if points < k.MIN_POINTS_TO_ACCEPT:
+        if points < creation_k.MIN_POINTS_TO_ACCEPT:
             errors.append(f"The build is {-points} points over: it needs at least 0 points left.")
     allowed = _allowed_outfit_items(build, build.traits if not trait_errors else ())
     locations: set[BodyLocation] = set()
@@ -222,13 +227,13 @@ def _random_appearance(rng: random.Random) -> Appearance:
     gender = rng.choice(list(Gender))
     forenames = FEMALE_FORENAMES if gender == Gender.FEMALE else MALE_FORENAMES
     beard = ""
-    if gender == Gender.MALE and rng.randrange(100) < k.RANDOM_BEARD_CHANCE:
+    if gender == Gender.MALE and rng.randrange(100) < creation_k.RANDOM_BEARD_CHANCE:
         beard = rng.choice([style for style in BEARD_STYLES if style])
     return Appearance(
         forename=rng.choice(forenames),
         surname=rng.choice(SURNAMES),
         gender=gender,
-        skin_tone=rng.randint(k.SKIN_TONE_MIN, k.SKIN_TONE_MAX),
+        skin_tone=rng.randint(creation_k.SKIN_TONE_MIN, creation_k.SKIN_TONE_MAX),
         hair_style=rng.choice(HAIR_STYLES),
         hair_colour=rng.choice(HAIR_COLOURS),
         beard_style=beard,
@@ -259,15 +264,19 @@ def _random_traits(rng: random.Random, occupation_id: str) -> tuple[str, ...]:
 
     for good in (True, False):
         pool = [t.id for t in selectable if (t.cost > 0) == good]
-        for _ in range(rng.randint(k.RANDOM_TRAITS_PER_SIDE_MIN, k.RANDOM_TRAITS_PER_SIDE_MAX)):
+        for _ in range(
+            rng.randint(
+                creation_k.RANDOM_TRAITS_PER_SIDE_MIN, creation_k.RANDOM_TRAITS_PER_SIDE_MAX
+            )
+        ):
             options = [t for t in pool if can_add(t)]
             if options:
                 chosen.append(rng.choice(options))
-    for _ in range(k.RANDOM_ADJUST_ROUNDS_MAX):
+    for _ in range(creation_k.RANDOM_ADJUST_ROUNDS_MAX):
         points = _points(occupation_id, chosen)
-        if k.RANDOM_POINTS_MIN <= points <= k.RANDOM_POINTS_MAX:
+        if creation_k.RANDOM_POINTS_MIN <= points <= creation_k.RANDOM_POINTS_MAX:
             return tuple(chosen)
-        too_many_points = points > k.RANDOM_POINTS_MAX
+        too_many_points = points > creation_k.RANDOM_POINTS_MAX
         removable = [t for t in chosen if (TRAITS[t].cost < 0) == too_many_points]
         addable = [t.id for t in selectable if (t.cost > 0) == too_many_points and can_add(t.id)]
         if removable and (not addable or rng.random() < 0.5):
@@ -283,7 +292,11 @@ def randomize(rng: random.Random) -> CharacterBuild:
     while True:
         occupation_id = rng.choice(occupations)
         traits = _random_traits(rng, occupation_id)
-        if k.RANDOM_POINTS_MIN <= _points(occupation_id, traits) <= k.RANDOM_POINTS_MAX:
+        if (
+            creation_k.RANDOM_POINTS_MIN
+            <= _points(occupation_id, traits)
+            <= creation_k.RANDOM_POINTS_MAX
+        ):
             break
     appearance = _random_appearance(rng)
     return CharacterBuild(

@@ -5,7 +5,7 @@ import logging
 import random
 from dataclasses import dataclass
 
-from data.world import climate as k
+from data.world import climate as climate_k
 from data.world.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
 from modules.world.weather import (
     AirFront,
@@ -31,21 +31,21 @@ class ClimateEngine:
         self.seed = seed
         self.start_date = start_date
         self.start_minute_of_day = start_minute_of_day
-        self.offsets = simplex_offsets(seed, k.SIMPLEX_OFFSET_MAX)
-        self.season = k.SEASON_MODEL
+        self.offsets = simplex_offsets(seed, climate_k.SIMPLEX_OFFSET_MAX)
+        self.season = climate_k.SEASON_MODEL
         self.values = ClimateValues(
             offsets=self.offsets,
-            air_mass_hours=k.AIR_MASS_NOISE_FREQUENCY,
-            humidity_hours=k.HUMIDITY_NOISE_HOURS,
-            wind_hours=k.WIND_NOISE_HOURS,
-            wind_angle_hours=k.WIND_ANGLE_NOISE_HOURS,
-            cloud_hours=k.CLOUD_NOISE_HOURS,
-            wind_base_max=k.WIND_BASE_MAX,
-            cloud_base_max=k.CLOUD_BASE_MAX,
-            fog_seed=k.FOG_SEED,
-            fog_peak_after_dawn=k.FOG_PEAK_AFTER_DAWN_HOURS,
-            fog_clear_after_dawn=k.FOG_CLEAR_AFTER_DAWN_HOURS,
-            daylight_ramp=k.DAYLIGHT_RAMP_HOURS,
+            air_mass_hours=climate_k.AIR_MASS_NOISE_FREQUENCY,
+            humidity_hours=climate_k.HUMIDITY_NOISE_HOURS,
+            wind_hours=climate_k.WIND_NOISE_HOURS,
+            wind_angle_hours=climate_k.WIND_ANGLE_NOISE_HOURS,
+            cloud_hours=climate_k.CLOUD_NOISE_HOURS,
+            wind_base_max=climate_k.WIND_BASE_MAX,
+            cloud_base_max=climate_k.CLOUD_BASE_MAX,
+            fog_seed=climate_k.FOG_SEED,
+            fog_peak_after_dawn=climate_k.FOG_PEAK_AFTER_DAWN_HOURS,
+            fog_clear_after_dawn=climate_k.FOG_CLEAR_AFTER_DAWN_HOURS,
+            daylight_ramp=climate_k.DAYLIGHT_RAMP_HOURS,
         )
         self.front = AirFront(positive=self.values.air_mass(0) > 0, strength=0.0, start_hour=0)
         self.period: WeatherPeriod | None = None
@@ -66,7 +66,7 @@ class ClimateEngine:
         values = self.values
         temperature = self.season.day_temperature(
             day, hour
-        ) + k.AIR_MASS_TEMP_EFFECT_C * values.air_mass(hours)
+        ) + climate_k.AIR_MASS_TEMP_EFFECT_C * values.air_mass(hours)
         dawn, dusk = self.season.dawn_dusk(day)
         humidity = values.humidity(hours)
         wind = values.wind(hours)
@@ -80,9 +80,9 @@ class ClimateEngine:
             precipitation = stage.precipitation
             wind = max(wind, stage.wind)
             cloud = max(cloud, stage.cloud)
-            humidity = max(humidity, k.STAGE_HUMIDITY_FLOOR)
+            humidity = max(humidity, climate_k.STAGE_HUMIDITY_FLOOR)
             thunder = stage.thunder
-        fog = k.FOG_BASE + k.FOG_DAY_SCALE * values.fog(day, hour, dawn)
+        fog = climate_k.FOG_BASE + climate_k.FOG_DAY_SCALE * values.fog(day, hour, dawn)
         return WeatherSample(
             air_temperature=temperature,
             humidity=humidity,
@@ -90,7 +90,7 @@ class ClimateEngine:
             wind_angle=values.wind_angle(hours),
             cloud_intensity=cloud,
             precipitation_intensity=precipitation,
-            precipitation_is_snow=temperature < k.SNOW_BELOW_C,
+            precipitation_is_snow=temperature < climate_k.SNOW_BELOW_C,
             fog_intensity=fog,
             daylight=values.daylight(hour, dawn, dusk),
             stage=stage_name,
@@ -117,7 +117,7 @@ class ClimateEngine:
         if positive == self.front.positive:
             return
         slope = abs(self.values.air_mass(hour + 1) - self.values.air_mass(hour - 1)) / 2
-        strength = min(1.0, slope * k.FRONT_STRENGTH_GAIN)
+        strength = min(1.0, slope * climate_k.FRONT_STRENGTH_GAIN)
         self.front = AirFront(positive=positive, strength=strength, start_hour=hour)
         self.start_period(hour, strength)
 
@@ -127,14 +127,18 @@ class ClimateEngine:
         rng = random.Random(
             period_seed(day.year, day.month - 1, day.day, self.offsets[0], self.offsets[1])
         )
-        low, high = k.PERIOD_HOURS_RANGE
-        rain_scale = k.MONTHLY_RAIN[day.month - 1] / k.PERIOD_MEAN_RAIN
-        total = rng.uniform(low, high) * rain_scale * k.RAIN_TIME_MULTIPLIER
-        tier = sum(strength >= bound for bound in k.STRENGTH_TIERS)
-        templates = k.STAGE_TEMPLATES[tier]
-        if self.sample(hour * MINUTES_PER_HOUR).air_temperature < k.SNOW_BELOW_C:
-            templates = tuple(k.COLD_STORM_STAGE if t.name == "storm" else t for t in templates)
-        self.period = WeatherPeriod.generate(rng, float(hour), total, templates, k.STAGE_JITTER)
+        low, high = climate_k.PERIOD_HOURS_RANGE
+        rain_scale = climate_k.MONTHLY_RAIN[day.month - 1] / climate_k.PERIOD_MEAN_RAIN
+        total = rng.uniform(low, high) * rain_scale * climate_k.RAIN_TIME_MULTIPLIER
+        tier = sum(strength >= bound for bound in climate_k.STRENGTH_TIERS)
+        templates = climate_k.STAGE_TEMPLATES[tier]
+        if self.sample(hour * MINUTES_PER_HOUR).air_temperature < climate_k.SNOW_BELOW_C:
+            templates = tuple(
+                climate_k.COLD_STORM_STAGE if t.name == "storm" else t for t in templates
+            )
+        self.period = WeatherPeriod.generate(
+            rng, float(hour), total, templates, climate_k.STAGE_JITTER
+        )
         self.periods_started += 1
         logger.debug(f"Weather period starts at hour {hour}, strength {strength:.2f}.")
         return self.period
@@ -150,20 +154,20 @@ def felt_air_temperature(
     if not indoors:
         return temperature
     if power_on:
-        return k.INDOOR_POWERED_C
-    pull = k.INDOOR_PULL_BASE + k.INDOOR_PULL_DAYLIGHT * daylight
-    difference = temperature - k.INDOOR_POWERED_C
+        return climate_k.INDOOR_POWERED_C
+    pull = climate_k.INDOOR_PULL_BASE + climate_k.INDOOR_PULL_DAYLIGHT * daylight
+    difference = temperature - climate_k.INDOOR_POWERED_C
     if difference <= 0:
-        mult = k.UPPER_FLOOR_DIFF_MULT if floor >= 1 else 1.0
+        mult = climate_k.UPPER_FLOOR_DIFF_MULT if floor >= 1 else 1.0
         return temperature - difference * pull * mult
     if floor >= 1:
-        return temperature - difference * (pull + k.UPPER_FLOOR_NIGHT_TERM * (1 - daylight))
-    return temperature - difference * k.UPPER_FLOOR_DIFF_MULT * pull
+        return temperature - difference * (pull + climate_k.UPPER_FLOOR_NIGHT_TERM * (1 - daylight))
+    return temperature - difference * climate_k.UPPER_FLOOR_DIFF_MULT * pull
 
 
 def wind_chill_temperature(temperature: float, wind_kmh: float) -> float:
     """The wind-chill temperature: the formula's value, or the temperature if that is lower."""
-    a, b, c, d, e = k.WINDCHILL_TERMS
+    a, b, c, d, e = climate_k.WINDCHILL_TERMS
     wind = wind_kmh**d
     return min(a + b * temperature - c * wind + e * temperature * wind, temperature)
 
@@ -209,31 +213,31 @@ def _band_word(value: float, bands: tuple[tuple[float, str], ...]) -> str | None
 
 
 def wind_word(wind: float) -> str:
-    return _band_word(wind, k.WIND_BANDS) or k.WIND_STILL_WORD
+    return _band_word(wind, climate_k.WIND_BANDS) or climate_k.WIND_STILL_WORD
 
 
 def cloud_word(cloud: float) -> str:
-    return _band_word(cloud, k.CLOUD_BANDS) or k.CLOUD_BANDS[0][1]
+    return _band_word(cloud, climate_k.CLOUD_BANDS) or climate_k.CLOUD_BANDS[0][1]
 
 
 def fog_word(fog: float) -> str | None:
     """The fog word, or None when the fog is too thin to mention."""
-    if fog <= k.FOG_MENTION_ABOVE:
+    if fog <= climate_k.FOG_MENTION_ABOVE:
         return None
-    if fog == k.FOG_VERY_THICK:
-        return k.FOG_VERY_THICK_WORD
-    return _band_word(fog, k.FOG_BANDS)
+    if fog == climate_k.FOG_VERY_THICK:
+        return climate_k.FOG_VERY_THICK_WORD
+    return _band_word(fog, climate_k.FOG_BANDS)
 
 
 def temperature_word(celsius: float) -> str:
-    return _band_word(celsius, k.TEMPERATURE_BANDS) or k.TEMPERATURE_BANDS[0][1]
+    return _band_word(celsius, climate_k.TEMPERATURE_BANDS) or climate_k.TEMPERATURE_BANDS[0][1]
 
 
 def precipitation_phrase(stage: str | None, snow: bool) -> str:
     """What is falling, from the stage name; rain becomes snow when it snows."""
     if stage is None:
-        return k.DRY_WORD
-    rain_phrase, snow_phrase = k.STAGE_PHRASES[stage]
+        return climate_k.DRY_WORD
+    rain_phrase, snow_phrase = climate_k.STAGE_PHRASES[stage]
     return snow_phrase if snow else rain_phrase
 
 
@@ -259,7 +263,7 @@ def describe_weather(sample: WeatherSample, indoors: bool) -> str:
 def weather_summary(sample: WeatherSample) -> str:
     """One short line for the player's panel."""
     parts = [precipitation_phrase(sample.stage, sample.precipitation_is_snow)]
-    if parts[0] == k.DRY_WORD:
+    if parts[0] == climate_k.DRY_WORD:
         parts = [cloud_word(sample.cloud_intensity)]
     parts.append(temperature_word(sample.air_temperature))
     return ", ".join(parts)

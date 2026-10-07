@@ -10,7 +10,7 @@ import dataclasses
 import logging
 from typing import Any
 
-from data.character import creation as k_creation
+from data.character import creation as creation_k
 from data.character.exercises import EXERCISES, REGION_PARTS
 from data.character.skills import MAX_LEVEL, SKILLS, total_xp_for_level
 from data.character.traits import TRAITS
@@ -120,16 +120,16 @@ def _appearance_from_dict(data: dict[str, Any]) -> Appearance:
     except ValueError:
         logger.warning(f"Unknown gender '{data.get('gender')}'; using male.")
         gender = Gender.MALE
-    name_cap = k_creation.NAME_MAX_CHARS
+    name_cap = creation_k.NAME_MAX_CHARS
     return Appearance(
         forename=_as_text(data.get("forename", ""), name_cap),
         surname=_as_text(data.get("surname", ""), name_cap),
         gender=gender,
-        skin_tone=int(data.get("skin_tone", k_creation.SKIN_TONE_MIN)),
+        skin_tone=int(data.get("skin_tone", creation_k.SKIN_TONE_MIN)),
         hair_style=_as_text(data.get("hair_style", ""), MAX_ID_LENGTH),
         hair_colour=_as_text(data.get("hair_colour", ""), MAX_ID_LENGTH),
         beard_style=_as_text(data.get("beard_style", ""), MAX_ID_LENGTH),
-        backstory=_as_text(data.get("backstory", ""), k_creation.BACKSTORY_MAX_CHARS),
+        backstory=_as_text(data.get("backstory", ""), creation_k.BACKSTORY_MAX_CHARS),
     )
 
 
@@ -996,7 +996,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         food_eaten_timer=float(data.get("food_eaten_timer", 0.0)),
         appearance=_appearance_from_dict(_as_dict(data.get("appearance"))),
         occupation_id=_as_text(data.get("occupation_id", ""), MAX_ID_LENGTH),
-        job_title=_as_text(data.get("job_title", ""), k_creation.JOB_TITLE_MAX_CHARS),
+        job_title=_as_text(data.get("job_title", ""), creation_k.JOB_TITLE_MAX_CHARS),
         traits=_known_trait_ids(data.get("trait_ids", [])),
         skills=_skills_from_dict(data.get("skills")),
         skill_boosts=_int_map(data.get("skill_boosts")),

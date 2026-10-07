@@ -3,7 +3,7 @@
 import random
 from dataclasses import dataclass
 
-from data.world import barriers as k
+from data.world import barriers as barrier_k
 from managers import carry
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
@@ -66,7 +66,9 @@ def state_word(barrier: BarrierEntity) -> str:
 
 def can_see_through(barrier: BarrierEntity) -> bool:
     """Whether a zombie on one side sees the other: not past a closed door or three planks."""
-    if any(len(planks) >= k.SIGHT_BLOCKING_PLANKS for planks in barrier.barricades.values()):
+    if any(
+        len(planks) >= barrier_k.SIGHT_BLOCKING_PLANKS for planks in barrier.barricades.values()
+    ):
         return False
     if barrier.kind == BarrierKind.DOOR:
         return barrier.open or barrier.broken
@@ -106,10 +108,10 @@ def thump(barrier: BarrierEntity, side: str, thumpers: int) -> Damage:
     if (
         target.kind == BARRIER
         and barrier.kind == BarrierKind.DOOR
-        and thumpers < k.THUMPERS_TO_BREAK_DOOR
+        and thumpers < barrier_k.THUMPERS_TO_BREAK_DOOR
     ):
         return Damage(target)
-    return _hurt(barrier, target, k.THUMP_STRENGTH)
+    return _hurt(barrier, target, barrier_k.THUMP_STRENGTH)
 
 
 def door_damage(weapon: MeleeWeaponItem | None, sharpness_mult: float = 1.0) -> int:
@@ -120,7 +122,7 @@ def door_damage(weapon: MeleeWeaponItem | None, sharpness_mult: float = 1.0) -> 
 
 
 def strength_factor(strength: int) -> float:
-    return k.DOOR_DAMAGE_STRENGTH_MULT[strength]
+    return barrier_k.DOOR_DAMAGE_STRENGTH_MULT[strength]
 
 
 def weapon_hit(
@@ -131,44 +133,44 @@ def weapon_hit(
     if target is None:
         return Damage(None)
     if target.kind == BARRICADE:
-        return _hurt(barrier, target, damage * k.BARRICADE_HIT_MULT)
+        return _hurt(barrier, target, damage * barrier_k.BARRICADE_HIT_MULT)
     if barrier.kind == BarrierKind.WINDOW:
         return _hurt(barrier, target, barrier.health)
     factor = strength_factor(strength)
-    amount = int(damage * k.DOOR_HIT_MULT * factor)
-    if rng.randrange(k.DOOR_HIT_EXTRA_ONE_IN) == 0:
-        amount += int(damage * k.DOOR_HIT_EXTRA_MULT * factor)
+    amount = int(damage * barrier_k.DOOR_HIT_MULT * factor)
+    if rng.randrange(barrier_k.DOOR_HIT_EXTRA_ONE_IN) == 0:
+        amount += int(damage * barrier_k.DOOR_HIT_EXTRA_MULT * factor)
     return _hurt(barrier, target, amount)
 
 
 def plank_health(condition: int, condition_max: int, carpentry: int) -> int:
     """The health of a plank nailed up at a Carpentry level."""
-    base = int(condition / condition_max * k.PLANK_BASE_HEALTH)
+    base = int(condition / condition_max * barrier_k.PLANK_BASE_HEALTH)
     # The epsilon keeps float error from truncating 300 x 1.14 to 341 instead of 342.
-    return int(base * k.BARRICADE_MOD_BY_CARPENTRY[carpentry] + 1e-9)
+    return int(base * barrier_k.BARRICADE_MOD_BY_CARPENTRY[carpentry] + 1e-9)
 
 
 def plank_condition(health: int, condition_max: int) -> int:
     """The condition a pried-off plank comes back with, never below 1."""
-    share = min(health / k.PLANK_BASE_HEALTH, 1)
+    share = min(health / barrier_k.PLANK_BASE_HEALTH, 1)
     return int(max(condition_max * share, 1))
 
 
 def hammer_mod(carpentry: int) -> float:
-    return k.HAMMER_MOD_BY_CARPENTRY[carpentry]
+    return barrier_k.HAMMER_MOD_BY_CARPENTRY[carpentry]
 
 
 def sound_stress(distance: float, radius: float, *, deaf: bool) -> float:
     """The stress one barrier sound adds over its life to a player `distance` tiles from it."""
     if deaf or distance >= radius:
         return 0.0
-    return k.STRESS_PER_BARRIER_SOUND * (1 - distance / radius)
+    return barrier_k.STRESS_PER_BARRIER_SOUND * (1 - distance / radius)
 
 
 def d_b(world: World, player: PlayerEntity, barrier: BarrierEntity) -> float:
     """The player's distance to a barrier of their zone: 1 at that barrier, else half the zone."""
     if player.at_barrier == barrier.barrier_id:
-        return k.PLAYER_AT_BARRIER_DISTANCE
+        return barrier_k.PLAYER_AT_BARRIER_DISTANCE
     return world.locations[player.current_location_id].size_tiles / 2
 
 

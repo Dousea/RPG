@@ -1,6 +1,6 @@
 """Standing among many bodies: how many count, how well the player is shielded, the smell (spec 14)."""
 
-from data.zombies import lore as k
+from data.zombies import lore as zombie_lore
 from modules.entity.player import PlayerEntity
 from modules.item import ClothingItem
 from modules.world.location import World
@@ -14,7 +14,9 @@ def corpse_count(world: World, zone_id: str) -> int:
         for zone in world.locations.values()
         if zone.id == zone_id or (building is not None and zone.building == building)
     }
-    return min(sum(1 for c in world.corpses.values() if c.zone_id in zones), k.CORPSE_COUNT_MAX)
+    return min(
+        sum(1 for c in world.corpses.values() if c.zone_id in zones), zombie_lore.CORPSE_COUNT_MAX
+    )
 
 
 def corpse_defence(player: PlayerEntity) -> float:
@@ -39,4 +41,4 @@ def smell_fact(world: World, zone_id: str, count: int, free_count: int) -> str |
     if world.smell_zone_id == zone_id:
         return None
     world.smell_zone_id = zone_id
-    return k.SMELL_FACT
+    return zombie_lore.SMELL_FACT
