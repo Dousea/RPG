@@ -10,7 +10,7 @@ from data.zombie_outfits import ZOMBIE_OUTFIT_POOL, ZOMBIE_OUTFIT_REFERENCES
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity
-from modules.item import ClothingItem, MeleeWeaponItem
+from modules.item import ClothingItem, ContainerItem, MeleeWeaponItem
 
 _PERCENT = 100
 
@@ -28,10 +28,13 @@ def pick_outfit(rng: random.Random, female: bool) -> str:
     return pool[-1][0]
 
 
-def dress_items(outfit: str, female: bool, rng: random.Random) -> dict[BodyLocation, ItemEntity]:
-    """The items an outfit puts on a zombie, references in table order."""
+def dress_outfit(
+    outfit: str, female: bool, rng: random.Random
+) -> tuple[dict[BodyLocation, ItemEntity], list[ItemEntity]]:
+    """The clothes an outfit puts on a zombie and the bags it carries, references in table order."""
     references = ZOMBIE_OUTFIT_REFERENCES[outfit]["female" if female else "male"]
     worn: dict[BodyLocation, ItemEntity] = {}
+    bags: list[ItemEntity] = []
     for probability, choices in references:
         if rng.random() > probability:
             continue
@@ -39,7 +42,9 @@ def dress_items(outfit: str, female: bool, rng: random.Random) -> dict[BodyLocat
         item = ITEMS.get(item_id) if item_id is not None else None
         if isinstance(item, ClothingItem) and item.body_location not in worn:
             worn[item.body_location] = ItemEntity(item=item)
-    return worn
+        elif isinstance(item, ContainerItem):
+            bags.append(ItemEntity(item=item, loot_pending=True))
+    return worn, bags
 
 
 def attached_pool(outfit: str, days: float) -> list[tuple[str, StuckWeaponEntry]]:
@@ -139,5 +144,5 @@ def dress(zombie: ZombieEntity, rng: random.Random, days: float) -> None:
     """Give a new zombie a sex, an outfit, its clothes and perhaps a weapon."""
     zombie.female = rng.randrange(k.FEMALE_ONE_IN) == 0
     zombie.outfit = pick_outfit(rng, zombie.female)
-    zombie.worn = dress_items(zombie.outfit, zombie.female, rng)
+    zombie.worn, zombie.carried = dress_outfit(zombie.outfit, zombie.female, rng)
     attach_weapon(zombie, rng, days)

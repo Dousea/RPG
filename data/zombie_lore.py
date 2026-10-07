@@ -29,6 +29,12 @@ ZONE_ZOMBIE_FIELDS: dict[str, tuple[int, int, int]] = {  # spec 09
     "zone_street": (40, 6, 96),
     "zone_bodega": (10, 1, 63),
     "zone_neighborhood": (80, 16, 64),
+    "zone_flat_vacant": (8, 1, 0),  # spec 25
+    "zone_flat_tenant": (8, 1, 64),  # spec 25
+    "zone_pharmacy": (14, 2, 63),  # spec 25
+    "zone_clinic": (20, 3, 48),  # spec 25
+    "zone_supermarket": (30, 6, 63),  # spec 25
+    "zone_hardware": (20, 3, 63),  # spec 25
 }
 
 STANDING_HIT_PARTS = (  # spec 14: a weapon hit or shove on a standing zombie lands on one, uniformly

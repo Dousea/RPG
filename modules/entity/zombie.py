@@ -66,7 +66,7 @@ class ZombieEntity:
     risen_from_player: bool = False  # spec 14: it is the player's own body
     carried: list[ItemEntity] = field(
         default_factory=list[ItemEntity]
-    )  # spec 14: only the player's body carries items
+    )  # spec 14, 25: the player's body's things and an outfit's bags
 
     def is_down(self, now: int) -> bool:
         """Whether it is on the floor during the minute that starts at clock minute `now`."""

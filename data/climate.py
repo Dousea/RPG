@@ -98,6 +98,12 @@ INDOORS_BY_ZONE = {  # spec 04
     "zone_street": False,
     "zone_bodega": True,
     "zone_neighborhood": False,
+    "zone_flat_vacant": True,  # spec 25
+    "zone_flat_tenant": True,  # spec 25
+    "zone_pharmacy": True,  # spec 25
+    "zone_clinic": True,  # spec 25
+    "zone_supermarket": True,  # spec 25
+    "zone_hardware": True,  # spec 25
 }
 
 # Lower bounds are exclusive; the last band whose bound the value exceeds wins.

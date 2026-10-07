@@ -277,10 +277,441 @@ ROOM_LAYOUTS: dict[str, tuple[RoomSpec, ...]] = {  # spec 25
         ),
     ),
 }
+
+
+def _c(
+    container_id: str,
+    name: str,
+    kind: str,
+    aliases: tuple[str, ...],
+    source: tuple[str, str],
+    capacity: float = DEFAULT_CONTAINER_CAPACITY,
+) -> ContainerSpec:
+    return ContainerSpec(container_id, name, kind, aliases, source=source, capacity=capacity)
+
+
+def _flat_rooms(prefix: str, *, vacant: bool) -> tuple[RoomSpec, ...]:
+    """The apartment's rooms stocked from tables; the vacant flat keeps only four of its containers."""
+    kitchen = [
+        _c(
+            f"{prefix}_kitchen_counter",
+            "kitchen counter",
+            "counter",
+            ("counter", "worktop"),
+            ("kitchen", "counter"),
+        ),
+        _c(
+            f"{prefix}_kitchen_cupboards",
+            "kitchen cupboards",
+            "cupboards",
+            ("cupboards", "cupboard"),
+            ("kitchen", "overhead"),
+        ),
+    ]
+    bedroom = [
+        _c(f"{prefix}_wardrobe", "wardrobe", "wardrobe", ("closet",), ("bedroom", "wardrobe"))
+    ]
+    bathroom = [
+        _c(
+            f"{prefix}_medicine_cabinet",
+            "medicine cabinet",
+            "medicine",
+            ("cabinet", "medicine chest"),
+            ("bathroom", "medicine"),
+        )
+    ]
+    living: list[ContainerSpec] = []
+    if not vacant:
+        kitchen += [
+            _c(f"{prefix}_fridge", "fridge", "fridge", ("refrigerator",), ("all", "fridge")),
+            _c(
+                f"{prefix}_freezer",
+                "freezer",
+                "freezer",
+                (),
+                ("kitchen", "freezer"),
+                FREEZER_CAPACITY,
+            ),
+        ]
+        bedroom += [
+            _c(
+                f"{prefix}_dresser",
+                "dresser",
+                "dresser",
+                ("drawers", "chest of drawers"),
+                ("bedroom", "dresser"),
+            ),
+            _c(
+                f"{prefix}_bedside_table",
+                "bedside table",
+                "sidetable",
+                ("nightstand", "bedside"),
+                ("bedroom", "sidetable"),
+            ),
+        ]
+        bathroom += [
+            _c(
+                f"{prefix}_bathroom_counter",
+                "bathroom counter",
+                "counter",
+                ("counter", "vanity"),
+                ("bathroom", "counter"),
+            )
+        ]
+        living = [
+            _c(
+                f"{prefix}_side_table",
+                "side table",
+                "sidetable",
+                ("table",),
+                ("livingroom", "sidetable"),
+            ),
+            _c(
+                f"{prefix}_living_room_shelves",
+                "living room shelves",
+                "shelves",
+                ("shelves", "bookshelf"),
+                ("livingroom", "shelves"),
+            ),
+        ]
+    return (
+        RoomSpec("kitchen", "kitchen", "kitchen", ("kitchenette",), tuple(kitchen)),
+        RoomSpec("bedroom", "bedroom", "bedroom", ("bed room",), tuple(bedroom)),
+        RoomSpec("bathroom", "bathroom", "bathroom", ("washroom",), tuple(bathroom)),
+        RoomSpec(
+            "living_room", "living room", "livingroom", ("lounge", "sitting room"), tuple(living)
+        ),
+    )
+
+
+_COUNTER = ("counter",)
+_SHELVES = ("shelves", "shelf unit")
+_FRIDGE = ("fridge",)
+_CRATES = ("crates", "crate")
+_DESK = ("desk",)
+
+ROOM_LAYOUTS.update(  # spec 25: The rooms
+    {
+        "zone_flat_vacant": _flat_rooms("vacant", vacant=True),
+        "zone_flat_tenant": _flat_rooms("tenant", vacant=False),
+        "zone_pharmacy": (
+            RoomSpec(
+                "shop_floor",
+                "shop floor",
+                "pharmacy",
+                ("shop", "shopfront"),
+                (
+                    _c(
+                        "pharmacy_counter",
+                        "pharmacy counter",
+                        "counter",
+                        _COUNTER,
+                        ("pharmacy", "counter"),
+                    ),
+                    _c(
+                        "pharmacy_left_shelves",
+                        "left shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("pharmacy", "shelves"),
+                    ),
+                    _c(
+                        "pharmacy_right_shelves",
+                        "right shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("pharmacy", "shelves"),
+                    ),
+                    _c(
+                        "pharmacy_shop_fridge",
+                        "shop fridge",
+                        "fridge",
+                        _FRIDGE,
+                        ("pharmacy", "fridge"),
+                    ),
+                ),
+            ),
+            RoomSpec(
+                "back_room",
+                "back room",
+                "pharmacystorage",
+                ("storeroom", "stockroom"),
+                (
+                    _c(
+                        "pharmacy_dispensing_counter",
+                        "dispensing counter",
+                        "counter",
+                        _COUNTER,
+                        ("pharmacystorage", "counter"),
+                    ),
+                    _c(
+                        "pharmacy_medicine_fridge",
+                        "medicine fridge",
+                        "fridge",
+                        _FRIDGE,
+                        ("pharmacystorage", "fridge"),
+                    ),
+                    _c(
+                        "pharmacy_supply_crates",
+                        "supply crates",
+                        "crate",
+                        _CRATES,
+                        ("pharmacystorage", "other"),
+                    ),
+                ),
+            ),
+        ),
+        "zone_clinic": (
+            RoomSpec(
+                "exam_room",
+                "exam room",
+                "medical",
+                ("examination room", "consulting room"),
+                (
+                    _c(
+                        "clinic_exam_counter",
+                        "exam counter",
+                        "counter",
+                        _COUNTER,
+                        ("medical", "counter"),
+                    ),
+                    _c("clinic_exam_desk", "exam desk", "desk", _DESK, ("medical", "desk")),
+                    _c(
+                        "clinic_side_table",
+                        "side table",
+                        "sidetable",
+                        ("table",),
+                        ("medical", "sidetable"),
+                    ),
+                ),
+            ),
+            RoomSpec(
+                "office",
+                "office",
+                "medicaloffice",
+                (),
+                (
+                    _c(
+                        "clinic_office_desk",
+                        "office desk",
+                        "desk",
+                        _DESK,
+                        ("medicaloffice", "desk"),
+                    ),
+                    _c(
+                        "clinic_office_counter",
+                        "office counter",
+                        "counter",
+                        _COUNTER,
+                        ("medicaloffice", "counter"),
+                    ),
+                ),
+            ),
+            RoomSpec(
+                "supply_room",
+                "supply room",
+                "medicalstorage",
+                ("storeroom", "stockroom"),
+                (
+                    _c(
+                        "clinic_supply_counter",
+                        "supply counter",
+                        "counter",
+                        _COUNTER,
+                        ("medicalstorage", "counter"),
+                    ),
+                    _c(
+                        "clinic_supply_shelves",
+                        "supply shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("medicalstorage", "metal_shelves"),
+                    ),
+                    _c(
+                        "clinic_supply_fridge",
+                        "supply fridge",
+                        "fridge",
+                        _FRIDGE,
+                        ("medicalstorage", "fridge"),
+                    ),
+                    _c(
+                        "clinic_supply_crates",
+                        "supply crates",
+                        "crate",
+                        _CRATES,
+                        ("medicalstorage", "other"),
+                    ),
+                    _c(
+                        "clinic_supply_desk",
+                        "supply desk",
+                        "desk",
+                        _DESK,
+                        ("medicalstorage", "desk"),
+                    ),
+                ),
+            ),
+        ),
+        "zone_supermarket": (
+            RoomSpec(
+                "aisles",
+                "aisles",
+                "grocery",
+                ("shop floor", "shop", "shopfront"),
+                (
+                    _c(
+                        "supermarket_checkout_counter",
+                        "checkout counter",
+                        "counter",
+                        ("counter", "checkout", "till"),
+                        ("grocery", "counter"),
+                    ),
+                    _c(
+                        "supermarket_aisle_shelves_1",
+                        "first aisle shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("grocery", "shelves"),
+                    ),
+                    _c(
+                        "supermarket_aisle_shelves_2",
+                        "second aisle shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("grocery", "shelves"),
+                    ),
+                    _c(
+                        "supermarket_aisle_shelves_3",
+                        "third aisle shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("grocery", "shelves"),
+                    ),
+                    _c(
+                        "supermarket_aisle_shelves_4",
+                        "fourth aisle shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("grocery", "shelves"),
+                    ),
+                    _c(
+                        "supermarket_drinks_fridge",
+                        "drinks fridge",
+                        "fridge",
+                        _FRIDGE,
+                        ("grocery", "fridge"),
+                    ),
+                ),
+            ),
+            RoomSpec(
+                "stockroom",
+                "stockroom",
+                "grocerystorage",
+                ("back room", "storeroom"),
+                (
+                    _c(
+                        "supermarket_stockroom_fridge",
+                        "stockroom fridge",
+                        "fridge",
+                        _FRIDGE,
+                        ("grocerystorage", "fridge"),
+                    ),
+                    _c(
+                        "supermarket_stock_crates_1",
+                        "first stock crates",
+                        "crate",
+                        _CRATES,
+                        ("grocerystorage", "other"),
+                    ),
+                    _c(
+                        "supermarket_stock_crates_2",
+                        "second stock crates",
+                        "crate",
+                        _CRATES,
+                        ("grocerystorage", "other"),
+                    ),
+                ),
+            ),
+        ),
+        "zone_hardware": (
+            RoomSpec(
+                "shop_floor",
+                "shop floor",
+                "toolstore",
+                ("shop", "shopfront"),
+                (
+                    _c(
+                        "hardware_tool_counter",
+                        "tool counter",
+                        "counter",
+                        _COUNTER,
+                        ("toolstore", "counter"),
+                    ),
+                    _c(
+                        "hardware_shelves_1",
+                        "first shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("toolstore", "shelves"),
+                    ),
+                    _c(
+                        "hardware_shelves_2",
+                        "second shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("toolstore", "shelves"),
+                    ),
+                    _c(
+                        "hardware_shelves_3",
+                        "third shelves",
+                        "shelves",
+                        _SHELVES,
+                        ("toolstore", "shelves"),
+                    ),
+                    _c(
+                        "hardware_shop_crates",
+                        "shop crates",
+                        "crate",
+                        _CRATES,
+                        ("toolstore", "other"),
+                    ),
+                ),
+            ),
+            RoomSpec(
+                "storeroom",
+                "storeroom",
+                "toolstorestorage",
+                ("back room", "stockroom"),
+                (
+                    _c(
+                        "hardware_storeroom_crates_1",
+                        "first storeroom crates",
+                        "crate",
+                        _CRATES,
+                        ("toolstorestorage", "other"),
+                    ),
+                    _c(
+                        "hardware_storeroom_crates_2",
+                        "second storeroom crates",
+                        "crate",
+                        _CRATES,
+                        ("toolstorestorage", "other"),
+                    ),
+                ),
+            ),
+        ),
+    }
+)
+
 ENTRY_ROOMS = {  # spec 25: the room a zone is entered into
     "zone_home": "living_room",
     "zone_building": "hallway",
     "zone_bodega": "shop_floor",
+    "zone_flat_vacant": "living_room",
+    "zone_flat_tenant": "living_room",
+    "zone_pharmacy": "shop_floor",
+    "zone_clinic": "exam_room",
+    "zone_supermarket": "aisles",
+    "zone_hardware": "shop_floor",
 }
 
 

@@ -47,12 +47,27 @@ ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_street": ("street", "block"),
     "zone_bodega": ("bodega", "corner store", "store", "shop"),
     "zone_neighborhood": ("neighborhood", "neighbourhood"),
+    "zone_flat_vacant": ("vacant flat",),
+    "zone_flat_tenant": ("tenant flat", "tenant's flat"),
+    "zone_pharmacy": ("pharmacy", "drugstore"),
+    "zone_clinic": ("clinic",),
+    "zone_supermarket": ("supermarket", "grocery store"),
+    "zone_hardware": ("hardware store", "tool store"),
 }
 
 ALLEY_CONTENTS = [PLANK_ITEM_ID, PLANK_ITEM_ID]  # spec 13
 APARTMENT_BLOCK_ID = "apartment_block"  # spec 13
 BUILDING_ZONE_IDS = ("zone_home", "zone_building")  # spec 13
 CORNER_STORE_ID = "corner_store"  # spec 13
+OWN_BUILDINGS = {  # spec 25: the zone to its own building id, so a barrier of it wakes only that place
+    "zone_flat_vacant": "flat_vacant",
+    "zone_flat_tenant": "flat_tenant",
+    "zone_pharmacy": "pharmacy",
+    "zone_clinic": "clinic",
+    "zone_supermarket": "supermarket",
+    "zone_hardware": "hardware_store",
+}
+FLAT_ZONE_IDS = ("zone_flat_vacant", "zone_flat_tenant")  # spec 25: floor 1, like zone_home
 
 
 def build_starting_locations() -> dict[str, Location]:
@@ -96,7 +111,12 @@ def build_starting_locations() -> dict[str, Location]:
                 "stairwell, the elevator, the ground-floor lobby and its mailboxes, "
                 "the laundry room in the basement, and your neighbours' doors."
             ),
-            connections={"in": "zone_home", "out": "zone_street"},
+            connections={
+                "in": "zone_home",
+                "out": "zone_street",
+                "vacant flat": "zone_flat_vacant",  # spec 25
+                "tenant flat": "zone_flat_tenant",  # spec 25
+            },
             # upstairs/downstairs/office/entrance are generic enough to
             # mean anywhere, so they are not global aliases -- they become a
             # spot in the current zone instead. "storage room" stays
@@ -170,23 +190,23 @@ def build_starting_locations() -> dict[str, Location]:
             name="The Neighborhood",
             description=(
                 "The wider few blocks: a coffee shop, the pharmacy, a supermarket, "
-                "a walk-in clinic, the subway entrance, the park."
+                "a walk-in clinic, a hardware store, the subway entrance, the park."
             ),
-            connections={"in": "zone_street"},
+            connections={
+                "in": "zone_street",
+                "pharmacy": "zone_pharmacy",  # spec 25
+                "clinic": "zone_clinic",  # spec 25
+                "supermarket": "zone_supermarket",  # spec 25
+                "hardware store": "zone_hardware",  # spec 25
+            },
             # Bare "store" and "shop" are not aliases anywhere -- too generic
-            # (any shop). "grocery store" here and "corner store" (zone_bodega)
-            # stay, being specific.
+            # (any shop).
             aliases=[
                 "neighborhood",
                 "neighbourhood",
                 "coffee shop",
                 "cafe",
-                "pharmacy",
-                "drugstore",
-                "supermarket",
-                "grocery store",
                 "shops",
-                "clinic",
                 "hospital",
                 "subway",
                 "station",
@@ -196,11 +216,77 @@ def build_starting_locations() -> dict[str, Location]:
                 "town",
             ],
         ),
+        "zone_flat_vacant": Location(
+            id="zone_flat_vacant",
+            name="The Vacant Flat",
+            description=(
+                "A flat nobody has lived in for months: bare floors, a kitchen "
+                "counter, a wardrobe with the doors ajar and a medicine cabinet "
+                "on the bathroom wall."
+            ),
+            connections={"out": "zone_building"},
+            aliases=["vacant flat"],
+        ),
+        "zone_flat_tenant": Location(
+            id="zone_flat_tenant",
+            name="The Tenant's Flat",
+            description=(
+                "A neighbour's flat, lived in and left in a hurry: a kitchen, a "
+                "bedroom, a bathroom and a living room, the door locked from outside."
+            ),
+            connections={"out": "zone_building"},
+            aliases=["tenant flat"],
+            bed_type="floor",  # spec 02
+            place_bed_types={"bedroom": "average_bed", "bed": "average_bed"},  # spec 02
+        ),
+        "zone_pharmacy": Location(
+            id="zone_pharmacy",
+            name="The Pharmacy",
+            description=(
+                "A small pharmacy: the shop floor with its counter, shelves and "
+                "fridge, and a back room with the dispensing counter. The door is "
+                "shuttered, so the window is the way in."
+            ),
+            connections={"out": "zone_neighborhood"},
+            aliases=["pharmacy", "drugstore"],
+        ),
+        "zone_clinic": Location(
+            id="zone_clinic",
+            name="The Clinic",
+            description=(
+                "A walk-in clinic: an exam room, an office and a supply room behind them."
+            ),
+            connections={"out": "zone_neighborhood"},
+            aliases=["clinic", "walk-in clinic"],
+        ),
+        "zone_supermarket": Location(
+            id="zone_supermarket",
+            name="The Supermarket",
+            description=(
+                "A big supermarket: long aisles of shelves, the checkout counter, "
+                "and a stockroom at the back. The doors are locked, so the window "
+                "is the way in."
+            ),
+            connections={"out": "zone_neighborhood"},
+            aliases=["supermarket", "grocery store"],
+        ),
+        "zone_hardware": Location(
+            id="zone_hardware",
+            name="The Hardware Store",
+            description=(
+                "A hardware store: the shop floor with its counter, shelves and "
+                "stock crates, and a storeroom behind. The front door is locked."
+            ),
+            connections={"out": "zone_neighborhood"},
+            aliases=["hardware store", "tool store"],
+        ),
     }
 
     for zone_id, indoors in INDOORS_BY_ZONE.items():
         locations[zone_id].indoors = indoors
     locations["zone_home"].floor = 1  # spec 06
+    for zone_id in FLAT_ZONE_IDS:
+        locations[zone_id].floor = 1  # spec 25
     for zone_id, (size_tiles, chunks, intensity) in ZONE_ZOMBIE_FIELDS.items():
         locations[zone_id].size_tiles = size_tiles
         locations[zone_id].chunks = chunks
@@ -209,6 +295,8 @@ def build_starting_locations() -> dict[str, Location]:
     for zone_id in BUILDING_ZONE_IDS:
         locations[zone_id].building = APARTMENT_BLOCK_ID  # spec 13
     locations["zone_bodega"].building = CORNER_STORE_ID
+    for zone_id, building in OWN_BUILDINGS.items():
+        locations[zone_id].building = building
 
     for zone_id, entry_room in ENTRY_ROOMS.items():
         locations[zone_id].rooms = build_rooms(zone_id)

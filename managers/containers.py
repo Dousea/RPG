@@ -17,7 +17,7 @@ from modules.entity.item import ItemEntity
 from modules.item import ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
 from modules.room import ContainerEntity, RoomEntity
 
-__all__ = ["open_container", "pick_procedural", "roll_table"]
+__all__ = ["fill_bag", "open_container", "pick_procedural", "roll_table"]
 
 
 def pick_procedural(
@@ -148,6 +148,22 @@ def open_container(rng: random.Random, room: RoomEntity, container: ContainerEnt
     if table is not None:
         held = sum(e.weight for e in container.contents)
         container.contents.extend(roll_table(rng, table, capacity=container.capacity, held=held))
+
+
+def fill_bag(rng: random.Random, entity: ItemEntity) -> None:
+    """Fill an outfit's bag from its own table, once; any other bag, or one that holds things, is left."""
+    item = entity.item
+    if not isinstance(item, ContainerItem) or not entity.loot_pending:
+        return
+    entity.loot_pending = False
+    if entity.contents:
+        return
+    for name, (item_id, _kind) in LOOT_CATALOGUE.items():
+        if item_id == item.id and name in BAG_TABLES:
+            entity.contents = roll_table(
+                rng, BAG_TABLES[name], capacity=item.capacity, randomise=False
+            )
+            return
 
 
 def unopened(room: RoomEntity) -> tuple[ContainerEntity, ...]:

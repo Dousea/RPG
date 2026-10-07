@@ -56,8 +56,32 @@ class ZoneFieldTests(unittest.TestCase):
                 "zone_street": (40, 6, 96),
                 "zone_bodega": (10, 1, 63),
                 "zone_neighborhood": (80, 16, 64),
+                "zone_flat_vacant": (8, 1, 0),
+                "zone_flat_tenant": (8, 1, 64),
+                "zone_pharmacy": (14, 2, 63),
+                "zone_clinic": (20, 3, 48),
+                "zone_supermarket": (30, 6, 63),
+                "zone_hardware": (20, 3, 63),
             },
         )
+
+
+class NewZoneTargetTests(unittest.TestCase):
+    """Spec 25, The new zones: the outbreak target of each new zone."""
+
+    def test_each_target_at_the_outbreak(self):
+        zones = build_starting_locations()
+        expected = {
+            "zone_flat_vacant": 0.04,
+            "zone_flat_tenant": 1.0,
+            "zone_pharmacy": 2.0,
+            "zone_clinic": 2.3,
+            "zone_supermarket": 6.0,
+            "zone_hardware": 3.0,
+        }
+        for zone_id, target in expected.items():
+            with self.subTest(zone_id):
+                self.assertAlmostEqual(zone_target(zones[zone_id], 0), target, delta=0.02)
 
 
 if __name__ == "__main__":
@@ -167,7 +191,17 @@ class RedistributionTests(unittest.TestCase):
             for z in self.world.zombies.values()
             if int(z.zombie_id[1:]) <= 40
         }
-        self.assertEqual(set(movers.values()), {"zone_neighborhood", "zone_street"})
+        self.assertEqual(
+            set(movers.values()),
+            {
+                "zone_neighborhood",
+                "zone_street",
+                "zone_pharmacy",
+                "zone_clinic",
+                "zone_supermarket",
+                "zone_hardware",
+            },
+        )
         self.assertEqual(self.counts()["zone_street"], 9)
 
     def test_busy_zombies_stay_put(self):
@@ -192,8 +226,8 @@ class RedistributionTests(unittest.TestCase):
         self.assertGreaterEqual(self.counts()["zone_street"], 11)
 
     def test_a_closed_door_stops_movement_and_new_zombies(self):
-        self.world.barriers["door_lobby"].open = False
-        self.world.barriers["door_apartment"].open = False
+        for barrier_id in ("door_lobby", "door_apartment", "door_flat_vacant", "door_flat_tenant"):
+            self.world.barriers[barrier_id].open = False
         self.add("zone_street", 20)
         redistribute(self.world, 720, "zone_home", self.rng)
         self.assertEqual(self.counts()["zone_building"], 0)
@@ -208,6 +242,13 @@ class RedistributionTests(unittest.TestCase):
             health=500,
             max_health=500,
         )
+        for barrier_id in (
+            "door_clinic",
+            "door_hardware",
+            "window_pharmacy",
+            "window_supermarket",
+        ):
+            self.world.barriers[barrier_id].open = False
         redistribute(self.world, 720, "zone_home", self.rng)
         self.assertEqual(self.counts()["zone_neighborhood"], 0)
 

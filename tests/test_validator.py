@@ -159,8 +159,8 @@ class MovementValidationTests(unittest.TestCase):
         # The validator only decides what a move means; it never writes
         # state. A spot move resolved via the validator alone (SimulationCore
         # not invoked) must leave current_place untouched.
-        result = _accepted(self.validator.validate(MoveAction(destination="the pharmacy")))
-        self.assertEqual(result.expect(MoveToZone).place, "the pharmacy")
+        result = _accepted(self.validator.validate(MoveAction(destination="the park")))
+        self.assertEqual(result.expect(MoveToZone).place, "the park")
         self.assertEqual(self.gm.player.current_place, "")
         self.assertEqual(self.gm.player.current_location_id, "zone_home")
 

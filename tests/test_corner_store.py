@@ -54,7 +54,9 @@ class CornerStoreZoneTests(unittest.TestCase):
         simulate(gm, SearchAction(target_name="snack shelves"), rng=ScriptedRandom())
         shelves = store.rooms["shop_floor"].containers[2]
         self.assertEqual(shelves.name, "snack shelves")
-        self.assertEqual({e.item.id for e in shelves.contents}, {"item_water_bottle"})
+        self.assertEqual(
+            {e.item.id for e in shelves.contents}, {"item_water_bottle", "item_soda_can"}
+        )
 
     def test_bodega_resolves_to_the_store_and_the_street_no_longer_claims_it(self):
         gm = GameManager()
@@ -143,8 +145,8 @@ class CornerStoreSaveTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.path = os.path.join(directory.name, "save.json")
 
-    def test_the_schema_is_23(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 23)
+    def test_the_schema_is_24(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 24)
 
     def test_the_smashed_window_and_the_store_round_trip(self):
         gm = on_the_street()

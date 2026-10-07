@@ -10,7 +10,7 @@ from data import zombie_lore as k
 from data.loot_catalogue import LOOT_KIND_MODIFIERS
 from data.loot_tables import LootTable
 from data.zombie_loot import DEFAULT_LOOT_TABLES, OUTFIT_LOOT_TABLES
-from managers.containers import roll_table
+from managers.containers import fill_bag, roll_table
 from managers.corpses import rot_stage
 from managers.game import GameManager
 from managers.zombies import distance_word, light_level
@@ -54,10 +54,13 @@ def _sex(corpse: CorpseEntity) -> str:
 
 
 def search(corpse: CorpseEntity, rng: random.Random) -> None:
-    """Go through a body: its pockets are rolled once and everything it holds can be taken."""
+    """Go through a body: its pockets are rolled once, its bags fill from their tables, and everything it holds can be taken."""
     if corpse.searched:
         return
+    worn_and_carried = list(corpse.contents)
     corpse.contents.extend(roll_pockets(corpse, rng))
+    for entity in worn_and_carried:
+        fill_bag(rng, entity)
     corpse.searched = True
 
 

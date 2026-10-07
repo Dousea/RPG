@@ -61,8 +61,10 @@ once. They replace the old door entity.
 A **barrier of a zone** is any barrier on one of its connections.
 
 `Location.building` names the building a zone is part of. `zone_home` and
-`zone_building` are the `apartment_block`, `zone_bodega` is the `corner_store`.
-The street and the neighbourhood have none.
+`zone_building` are the `apartment_block`, `zone_bodega` is the `corner_store`,
+and each of the six zones of [Carrying, Containers and Loot](25-carrying-containers-and-loot.md#the-new-zones)
+is a building of its own, so a barrier of one wakes only that place. The street
+and the neighbourhood have none.
 
 ### The shipped barriers
 
@@ -71,6 +73,12 @@ The street and the neighbourhood have none.
 | `door_apartment` | door, 500 | `zone_home` and `zone_building` | `zone_home` | closed, locked, key `item_apartment_key` |
 | `door_lobby` | door, 500 | `zone_building` and `zone_street` | `zone_building` | closed, unlocked |
 | `window_bodega` | window, 50 | `zone_street` and `zone_bodega` | `zone_bodega` | closed, locked, no key |
+| `door_flat_vacant` | door, 500 | `zone_building` and `zone_flat_vacant` | `zone_flat_vacant` | closed, unlocked |
+| `door_flat_tenant` | door, 500 | `zone_building` and `zone_flat_tenant` | `zone_flat_tenant` | closed, locked, no key |
+| `window_pharmacy` | window, 50 | `zone_neighborhood` and `zone_pharmacy` | `zone_pharmacy` | closed, locked, no key |
+| `door_clinic` | door, 500 | `zone_neighborhood` and `zone_clinic` | `zone_clinic` | closed, unlocked |
+| `window_supermarket` | window, 100 | `zone_neighborhood` and `zone_supermarket` | `zone_supermarket` | closed, locked, no key |
+| `door_hardware` | door, 500 | `zone_neighborhood` and `zone_hardware` | `zone_hardware` | closed, locked, no key |
 
 - The apartment door starts locked: from the building side it needs the key
   while it is locked, from inside it doesn't. Opening a locked barrier from its
@@ -79,8 +87,10 @@ The street and the neighbourhood have none.
 - The shop window is the only way into the corner store (`zone_bodega`, the
   `corner_store` building): its door is chained shut from inside. It has no key,
   so from the street it can't be opened, only smashed or boarded up; from inside
-  it opens and unlocks. A zombie shut in the store thumps it from within. Double
-  panes (`max_health` 100) are tested only with fixtures.
+  it opens and unlocks. A zombie shut in the store thumps it from within. The
+  supermarket window is a double pane (`max_health` 100).
+- The new flats and shops each have exactly one barrier. A locked one with no key
+  can't be opened from outside, only smashed or boarded up.
 
 ### The player's distance to a barrier
 

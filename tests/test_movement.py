@@ -69,12 +69,12 @@ class MovementResolutionTests(unittest.TestCase):
         self.assertEqual(gm.player.current_location_id, "zone_street")
 
     def test_move_by_alias_keeps_the_alias_as_the_spot(self):
-        # "the pharmacy" is the neighborhood as far as the simulation cares,
+        # "the park" is the neighborhood as far as the simulation cares,
         # but the words are where Orton actually is, so they are worth keeping.
         gm = GameManager()
-        simulate(gm, MoveAction(destination="the pharmacy"))
+        simulate(gm, MoveAction(destination="the park"))
         self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
-        self.assertEqual(gm.player.current_place, "the pharmacy")
+        self.assertEqual(gm.player.current_place, "the park")
 
     def test_naming_the_zone_itself_clears_the_spot(self):
         gm = GameManager()
@@ -127,13 +127,13 @@ class FinalFixWaveMoveRoutingTests(unittest.TestCase):
     """R1-R7: routing cases from the final whole-branch code review,
     reproduced through SimulationCore (final-fix-wave.md)."""
 
-    def test_r1_clinics_bathroom_stays_in_the_neighborhood_as_a_spot(self):
+    def test_r1_hospitals_bathroom_stays_in_the_neighborhood_as_a_spot(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_neighborhood"
         before_tick = gm.narrative.time_of_day
-        facts = simulate(gm, MoveAction(destination="the clinic's bathroom"))
+        facts = simulate(gm, MoveAction(destination="the hospital's bathroom"))
         self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
-        self.assertEqual(gm.player.current_place, "the clinic's bathroom")
+        self.assertEqual(gm.player.current_place, "the hospital's bathroom")
         self.assertEqual(gm.narrative.time_of_day, before_tick)
         self.assertFalse(facts[0].startswith("Refused:"))
 

@@ -274,6 +274,13 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class RoomSaveTests(IsolatedSaveTestCase):
     """Spec 25, Saves: each container's opened flag and contents, each room's proc_spawned, current_room."""
 
+    def test_a_bags_pending_roll_round_trips(self):
+        for pending in (True, False):
+            bag = ItemEntity(item=ITEMS["item_schoolbag"], loot_pending=pending)
+            loaded = codec._item_entity_from_dict(codec._item_entity_to_dict(bag))
+            assert loaded is not None
+            self.assertEqual(loaded.loot_pending, pending)
+
     def test_rooms_containers_and_the_current_room_round_trip(self):
         gm = GameManager()
         counter = ContainerEntity(
@@ -324,11 +331,50 @@ class RoomSaveTests(IsolatedSaveTestCase):
         self.assertEqual((second.opened, second.fixed, second.source), (False, True, None))
 
 
+class NewZoneSaveTests(IsolatedSaveTestCase):
+    """Spec 25, Saves: the six zones, their rooms and their barriers survive a round trip."""
+
+    def test_an_opened_clinic_container_and_a_broken_in_window_round_trip(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_clinic"
+        gm.player.current_room = "exam_room"
+        clinic = gm.world.locations["zone_clinic"]
+        counter = clinic.rooms["exam_room"].containers[0]
+        counter.opened = True
+        counter.contents.append(ItemEntity(item=ITEMS["item_bandage"]))
+        clinic.rooms["exam_room"].proc_spawned = {"medical_clinic_drugs": 1}
+        gm.world.barriers["window_pharmacy"].broken = True
+        gm.world.barriers["door_flat_tenant"].locked = False
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.player.current_location_id, "zone_clinic")
+        self.assertEqual(loaded.player.current_room, "exam_room")
+        got = loaded.world.locations["zone_clinic"].rooms["exam_room"]
+        self.assertTrue(got.containers[0].opened)
+        self.assertEqual([e.item.id for e in got.containers[0].contents], ["item_bandage"])
+        self.assertEqual(got.proc_spawned, {"medical_clinic_drugs": 1})
+        self.assertTrue(loaded.world.barriers["window_pharmacy"].broken)
+        self.assertFalse(loaded.world.barriers["door_flat_tenant"].locked)
+        self.assertEqual(
+            loaded.world.locations["zone_neighborhood"].connections["clinic"], "zone_clinic"
+        )
+
+    def test_a_schema_23_save_is_refused(self):
+        files.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["version"] = 23
+        with open(self.save_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        self.assertIsNone(files.load(self.save_path))
+
+
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_23(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 23)
+    def test_schema_version_is_24(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 24)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -1163,7 +1209,18 @@ class BarrierSaveTests(IsolatedSaveTestCase):
         del data["world"]["barriers"]
         loaded = codec.from_dict(data)
         self.assertEqual(
-            set(loaded.world.barriers), {"door_apartment", "door_lobby", "window_bodega"}
+            set(loaded.world.barriers),
+            {
+                "door_apartment",
+                "door_lobby",
+                "window_bodega",
+                "door_flat_vacant",
+                "door_flat_tenant",
+                "window_pharmacy",
+                "door_clinic",
+                "window_supermarket",
+                "door_hardware",
+            },
         )
 
     def test_thumping_fields_round_trip(self):

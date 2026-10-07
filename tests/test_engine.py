@@ -272,6 +272,20 @@ class TurnTests(EngineTestCase):
             counter["contents"], ["Canned Beans", "Water Bottle", "Kitchen Knife", "Frying Pan"]
         )
 
+    def test_snapshot_lists_the_rooms_of_a_new_zone(self):
+        """Spec 25, Places and items: `rooms` follows the player into the clinic."""
+        manager = self.engine.game
+        manager.player.current_location_id = "zone_clinic"
+        manager.player.current_room = "exam_room"
+        rooms = self.engine.state()["rooms"]
+        self.assertEqual(
+            [(room["name"], room["here"]) for room in rooms],
+            [("exam room", True), ("office", False), ("supply room", False)],
+        )
+        self.assertEqual(
+            [c["name"] for c in rooms[0]["containers"]], ["exam counter", "exam desk", "side table"]
+        )
+
     def test_snapshot_rooms_is_empty_in_a_zone_without_rooms(self):
         self.engine.game.player.current_location_id = "zone_street"
         self.assertEqual(self.engine.state()["rooms"], [])

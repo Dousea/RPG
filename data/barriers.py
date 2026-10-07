@@ -15,8 +15,63 @@ SHOP_WINDOW_ID = "window_bodega"
 APARTMENT_KEY_ID = "item_apartment_key"
 
 
+def _place_barriers() -> list[BarrierEntity]:
+    """The one barrier of each flat and shop; none has a key (spec 25)."""
+
+    def door(barrier_id: str, parent: str, zone: str, name: str, *, locked: bool) -> BarrierEntity:
+        return BarrierEntity(
+            barrier_id=barrier_id,
+            kind=BarrierKind.DOOR,
+            zones=(parent, zone),
+            inside_zone=zone,
+            name=name,
+            aliases=["door", "the door", name],
+            health=DOOR_HEALTH,
+            max_health=DOOR_HEALTH,
+            locked=locked,
+        )
+
+    def window(barrier_id: str, zone: str, name: str, health: int) -> BarrierEntity:
+        return BarrierEntity(
+            barrier_id=barrier_id,
+            kind=BarrierKind.WINDOW,
+            zones=("zone_neighborhood", zone),
+            inside_zone=zone,
+            name=name,
+            aliases=["window", "the window", name],
+            health=health,
+            max_health=health,
+            locked=True,
+        )
+
+    return [
+        door(
+            "door_flat_vacant",
+            "zone_building",
+            "zone_flat_vacant",
+            "vacant flat door",
+            locked=False,
+        ),
+        door(
+            "door_flat_tenant", "zone_building", "zone_flat_tenant", "tenant flat door", locked=True
+        ),
+        window("window_pharmacy", "zone_pharmacy", "pharmacy window", WINDOW_HEALTH_SINGLE),
+        door("door_clinic", "zone_neighborhood", "zone_clinic", "clinic door", locked=False),
+        window(
+            "window_supermarket", "zone_supermarket", "supermarket window", WINDOW_HEALTH_DOUBLE
+        ),
+        door(
+            "door_hardware",
+            "zone_neighborhood",
+            "zone_hardware",
+            "hardware store door",
+            locked=True,
+        ),
+    ]
+
+
 def build_starting_barriers() -> dict[str, BarrierEntity]:
-    """The two shipped doors and the shop window."""
+    """The shipped doors and windows."""
     barriers = [
         BarrierEntity(
             barrier_id=APARTMENT_DOOR_ID,
@@ -51,6 +106,7 @@ def build_starting_barriers() -> dict[str, BarrierEntity]:
             max_health=WINDOW_HEALTH_SINGLE,
             locked=True,
         ),
+        *_place_barriers(),
     ]
     return {barrier.barrier_id: barrier for barrier in barriers}
 

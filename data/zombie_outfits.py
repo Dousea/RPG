@@ -530,7 +530,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
     },
     "evacuee": {
         "male": (
-            (0.2, (None, None)),
+            (0.2, ("item_duffel_bag", "item_schoolbag")),
             (
                 0.7,
                 (
@@ -568,10 +568,10 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
                     "item_hat_surgical_mask",
                 ),
             ),
-            (0.05, (None,)),
+            (0.05, ("item_fanny_pack",)),
         ),
         "female": (
-            (0.2, (None, None)),
+            (0.2, ("item_duffel_bag", "item_schoolbag")),
             (
                 0.7,
                 (
@@ -612,7 +612,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
                     "item_hat_surgical_mask",
                 ),
             ),
-            (0.05, (None,)),
+            (0.05, ("item_fanny_pack",)),
         ),
     },
     "exterminator_suited": {
@@ -754,7 +754,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
             (0.7, ("item_vest_high_viz", "item_vest_foreman")),
             (0.3, ("item_ring_left_ring_finger_gold", "item_ring_left_ring_finger_silver")),
             (0.3, (None, None, None, None)),
-            (0.3, (None,)),
+            (0.3, ("item_satchel",)),
             (1.0, ("item_belt2",)),
         ),
     },
@@ -1864,7 +1864,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
                     "item_jumper_vneck",
                 ),
             ),
-            (0.1, (None,)),
+            (0.1, ("item_fanny_pack",)),
             (1.0, ("item_shoes_random", "item_shoes_sandals", "item_shoes_trainer_tint")),
             (0.3, (None, None, None)),
             (0.01, (None,)),
@@ -1934,7 +1934,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
                     "item_jumper_vneck",
                 ),
             ),
-            (0.1, (None,)),
+            (0.1, ("item_fanny_pack",)),
             (
                 1.0,
                 (
@@ -2020,7 +2020,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
     "student": {
         "male": (
             (0.7, ("item_jacket_varsity",)),
-            (0.5, (None, None, None)),
+            (0.5, ("item_schoolbag", "item_satchel", None)),
             (1.0, ("item_shoes_random", "item_shoes_trainer_tint")),
             (
                 0.2,
@@ -2064,7 +2064,7 @@ ZOMBIE_OUTFIT_REFERENCES: dict[
         ),
         "female": (
             (0.5, ("item_jacket_varsity",)),
-            (0.5, (None, None, None)),
+            (0.5, ("item_schoolbag", "item_satchel", None)),
             (1.0, ("item_shoes_random", "item_shoes_trainer_tint")),
             (
                 0.2,

@@ -90,7 +90,9 @@ An outfit is a list of references per sex. Each has a probability (1 when not
 stated) and a list of choices: its own item and the alternatives. For each
 reference, in order, the zombie wears it when a roll of 0 to 1 is at most the
 probability, and the item is one of the choices, uniformly. A choice that is not
-in the catalogue (a bag, a watch) leaves nothing. An item whose body location is
+in the catalogue (a watch, a bag the game has no row for) leaves nothing. A bag
+that is in the catalogue goes into what the zombie carries, and its corpse fills
+it from its own table when first searched. An item whose body location is
 already taken is skipped.
 
 The catalogue gained every item the outfits can produce, 289 clothing items

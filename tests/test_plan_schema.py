@@ -202,21 +202,41 @@ class ClosedFieldTests(unittest.TestCase):
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(
             enum_of(names["ATTACK"], "target"),
-            ["Emma", "Marcus", zombie.zombie_id, "zombie", "apartment door", "lobby door"],
+            [
+                "Emma",
+                "Marcus",
+                zombie.zombie_id,
+                "zombie",
+                "apartment door",
+                "lobby door",
+                "vacant flat door",
+                "tenant flat door",
+            ],
         )
         self.assertEqual(enum_of(names["SHOVE"], "target"), [zombie.zombie_id])
 
     def test_attack_offers_no_nearest_zombie_when_none_is_seen(self):
         names = branches(ContextBuilder(building_scene()).build_plan_schema())
         self.assertEqual(
-            enum_of(names["ATTACK"], "target"), ["Emma", "Marcus", "apartment door", "lobby door"]
+            enum_of(names["ATTACK"], "target"),
+            [
+                "Emma",
+                "Marcus",
+                "apartment door",
+                "lobby door",
+                "vacant flat door",
+                "tenant flat door",
+            ],
         )
 
     def test_the_door_verbs_offer_the_barriers_of_the_zone(self):
         names = branches(ContextBuilder(building_scene()).build_plan_schema())
         for verb in ("OPEN", "CLOSE", "BARRICADE", "UNBARRICADE"):
             with self.subTest(verb=verb):
-                self.assertEqual(enum_of(names[verb], "target"), ["apartment door", "lobby door"])
+                self.assertEqual(
+                    enum_of(names[verb], "target"),
+                    ["apartment door", "lobby door", "vacant flat door", "tenant flat door"],
+                )
 
     def test_talk_ask_and_give(self):
         gm = building_scene()

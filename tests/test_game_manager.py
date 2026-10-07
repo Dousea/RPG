@@ -108,14 +108,29 @@ class StartingStateTests(unittest.TestCase):
         for key, location in self.gm.world.locations.items():
             self.assertEqual(key, location.id)
 
-    def test_zone_roster_is_exactly_the_five_zones(self):
+    def test_zone_roster_is_the_five_starting_zones_and_the_six_new_ones(self):
         self.assertEqual(
             set(self.gm.world.locations.keys()),
-            {"zone_home", "zone_building", "zone_street", "zone_bodega", "zone_neighborhood"},
+            {
+                "zone_home",
+                "zone_building",
+                "zone_street",
+                "zone_bodega",
+                "zone_neighborhood",
+                "zone_flat_vacant",
+                "zone_flat_tenant",
+                "zone_pharmacy",
+                "zone_clinic",
+                "zone_supermarket",
+                "zone_hardware",
+            },
         )
 
     def test_resolve_location_by_alias(self):
-        self.assertEqual(self.gm.resolve_location("the pharmacy").id, "zone_neighborhood")
+        self.assertEqual(self.gm.resolve_location("the pharmacy").id, "zone_pharmacy")
+        subway = self.gm.resolve_location("the subway")
+        assert subway is not None
+        self.assertEqual(subway.id, "zone_neighborhood")
         self.assertEqual(self.gm.resolve_location("emma's apartment").id, "zone_building")
         # Whole-word fallback: "emma's apartment" is a more specific alias of
         # zone_building, so this must not collide with it.
@@ -151,9 +166,11 @@ class StartingStateTests(unittest.TestCase):
             self.gm.resolve_location("the alley behind the building").id,
             "zone_street",
         )
-        found = self.gm.resolve_location("the pharmacy across from the park")
+        found = self.gm.resolve_location("the park across from the pharmacy")
         self.assertIsNotNone(found)
         self.assertEqual(found and found.id, "zone_neighborhood")
+        found = self.gm.resolve_location("the pharmacy across from the park")
+        self.assertEqual(found and found.id, "zone_pharmacy")
 
         # R3 must stay unchanged: from zone_street, "the street" (position 1)
         # still beats "my apartment" (position 3).

@@ -61,7 +61,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 23  # spec 25
+SCHEMA_VERSION = 24  # spec 25
 
 MAX_ID_LENGTH = 40
 
@@ -252,6 +252,7 @@ def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
         "condition": entity.condition,
         "uses": entity.uses,
         "contents": [_item_entity_to_dict(inner) for inner in entity.contents],
+        "loot_pending": entity.loot_pending,
     }
 
 
@@ -277,6 +278,7 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
         except ValueError:
             logger.warning(f"Dropping unknown body part '{name}' from a hole.")
     if isinstance(entity.item, ContainerItem):
+        entity.loot_pending = bool(data.get("loot_pending", False))
         entity.contents = [
             inner
             for inner in (_item_entity_from_dict(_as_dict(c)) for c in data.get("contents", []))

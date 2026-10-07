@@ -71,11 +71,11 @@ class ShippedBarrierTests(unittest.TestCase):
         self.assertFalse(barrier.open)
         self.assertEqual(barrier.health, 500)
 
-    def test_the_only_shipped_window_is_the_shop_window(self):
+    def test_the_shipped_windows_are_the_shop_the_pharmacy_and_the_supermarket(self):
         windows = {
             b.barrier_id for b in build_starting_barriers().values() if b.kind == BarrierKind.WINDOW
         }
-        self.assertEqual(windows, {"window_bodega"})
+        self.assertEqual(windows, {"window_bodega", "window_pharmacy", "window_supermarket"})
 
     def test_the_building_zones_are_the_apartment_block(self):
         locations = GameManager().world.locations

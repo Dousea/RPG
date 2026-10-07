@@ -7,14 +7,18 @@ from unittest import mock
 from data import zombie_loot
 from data import zombie_outfits as outfits_data
 from data.items import ITEMS
+from data.loot_tables import BAG_TABLES, LootTable
 from data.zombie_lore import STANDING_HIT_PARTS
-from managers import zombie_dress
+from managers import corpses, loot, zombie_dress
+from managers.corpses import kill_corpse, outbreak_corpse
+from managers.game import GameManager
 from managers.melee import SwingKind, hit_part, zombie_defence
 from managers.zombies import roll_zombie, start_outbreak
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
-from modules.item import ClothingItem
+from modules.item import ClothingItem, ContainerItem
+from modules.location import World
 from tests.support import ScriptedRandom
 from tests.test_melee import FixedRng, add, street_game, swing
 
@@ -96,7 +100,7 @@ class OutfitItemTests(unittest.TestCase):
         with mock.patch.dict(
             outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": references}}
         ):
-            return zombie_dress.dress_items("generic01", False, ScriptedRandom(**rolls))
+            return zombie_dress.dress_outfit("generic01", False, ScriptedRandom(**rolls))[0]
 
     def test_a_reference_is_worn_when_the_roll_is_at_most_its_probability(self):
         refs = ((0.3, ("item_tshirt",)),)
@@ -134,6 +138,148 @@ class OutfitItemTests(unittest.TestCase):
                         self.assertTrue(item_id is None or item_id in ITEMS, item_id)
 
 
+class OutfitBagTests(unittest.TestCase):
+    """Spec 25, New items: bags in outfits resolve, and a bag on a corpse fills when searched."""
+
+    BAGS = {"item_schoolbag", "item_duffel_bag", "item_satchel", "item_fanny_pack"}
+
+    def references(self):
+        return [
+            choices
+            for by_sex in outfits_data.ZOMBIE_OUTFIT_REFERENCES.values()
+            for references in by_sex.values()
+            for _, choices in references
+        ]
+
+    def test_the_bag_references_name_catalogue_bags(self):
+        found = {
+            item_id for choices in self.references() for item_id in choices if item_id in ITEMS
+        }
+        bags = {i for i in found if isinstance(ITEMS[i], ContainerItem)}
+        self.assertEqual(bags, self.BAGS)
+        self.assertEqual(sum(1 for choices in self.references() if self.BAGS & set(choices)), 9)
+
+    def test_a_bag_reference_gives_a_carried_bag_and_no_worn_item(self):
+        refs = ((1.0, ("item_schoolbag", "item_tshirt")),)
+        with mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}):
+            worn, bags = zombie_dress.dress_outfit(
+                "generic01", False, ScriptedRandom(random=[0.0], randrange=[0])
+            )
+        self.assertEqual(worn, {})
+        self.assertEqual([b.item.id for b in bags], ["item_schoolbag"])
+        self.assertEqual(bags[0].contents, [])
+
+    def test_dressing_a_zombie_puts_the_bag_in_what_it_carries(self):
+        refs = ((1.0, ("item_satchel",)),)
+        zombie = bare_zombie()
+        with (
+            mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}),
+            mock.patch.object(zombie_dress, "pick_outfit", return_value="generic01"),
+            mock.patch.object(zombie_dress, "attach_weapon"),
+        ):
+            zombie_dress.dress(zombie, ScriptedRandom(random=[0.0], randrange=[1, 0]), 0.0)
+        self.assertEqual([e.item.id for e in zombie.carried], ["item_satchel"])
+
+    def test_a_searched_body_fills_its_bag_from_the_bags_table_once(self):
+        table = LootTable(1, (("nails", 100.0),), 1, (), False)
+        zombie = bare_zombie()
+        zombie.carried = [ItemEntity(item=ITEMS["item_schoolbag"], loot_pending=True)]
+        body = kill_corpse(World(), zombie, 0, random.Random(1))
+        self.assertEqual(body.contents[0].contents, [])
+        with (
+            mock.patch.dict(BAG_TABLES, {"bag_schoolbag": table}),
+            mock.patch.object(loot, "roll_pockets", return_value=[]),
+        ):
+            loot.search(body, ScriptedRandom())
+            bag = body.contents[0]
+            self.assertEqual([e.item.id for e in bag.contents], ["item_nails"])
+            loot.search(body, ScriptedRandom())
+        self.assertEqual(len(bag.contents), 1)
+
+    def test_a_bag_that_already_holds_things_is_not_refilled(self):
+        zombie = bare_zombie()
+        bag = ItemEntity(
+            item=ITEMS["item_duffel_bag"],
+            contents=[ItemEntity(item=ITEMS["item_bandage"])],
+            loot_pending=True,
+        )
+        zombie.carried = [bag]
+        body = kill_corpse(World(), zombie, 0, random.Random(1))
+        with mock.patch.object(loot, "roll_pockets", return_value=[]):
+            loot.search(body, ScriptedRandom())
+        self.assertEqual([e.item.id for e in bag.contents], ["item_bandage"])
+
+    def search_with(self, body, table):
+        with (
+            mock.patch.dict(BAG_TABLES, {"bag_schoolbag": table}),
+            mock.patch.object(loot, "roll_pockets", return_value=[]),
+        ):
+            loot.search(body, ScriptedRandom())
+
+    def test_an_outfit_bag_is_marked_to_roll_and_a_player_bag_is_not(self):
+        refs = ((1.0, ("item_schoolbag",)),)
+        with mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}):
+            _, bags = zombie_dress.dress_outfit(
+                "generic01", False, ScriptedRandom(random=[0.0], randrange=[0])
+            )
+        self.assertTrue(bags[0].loot_pending)
+        self.assertFalse(ItemEntity(item=ITEMS["item_schoolbag"]).loot_pending)
+
+    def test_a_bag_from_the_players_inventory_is_not_filled_on_the_body(self):
+        table = LootTable(1, (("nails", 100.0),), 1, (), False)
+        zombie = bare_zombie()
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        zombie.carried = [bag]
+        body = kill_corpse(World(), zombie, 0, random.Random(1))
+        self.search_with(body, table)
+        self.assertEqual(bag.contents, [])
+
+    def test_a_bag_is_not_filled_again_after_the_body_rises_and_dies(self):
+        table = LootTable(1, (("nails", 100.0),), 1, (), False)
+        zombie = bare_zombie()
+        zombie.carried = [ItemEntity(item=ITEMS["item_schoolbag"], loot_pending=True)]
+        body = kill_corpse(World(), zombie, 0, random.Random(1))
+        self.search_with(body, table)
+        bag = body.contents[0]
+        bag.contents.clear()
+        risen = bare_zombie()
+        corpses.dress_from_corpse(risen, body)
+        again = kill_corpse(World(), risen, 5, random.Random(1))
+        self.search_with(again, table)
+        self.assertEqual(bag.contents, [])
+
+    def test_a_filled_outfit_bag_never_exceeds_its_capacity(self):
+        item = ITEMS["item_fanny_pack"]
+        assert isinstance(item, ContainerItem)
+        table = LootTable(40, (("tinned_beans", 100.0),), 0, (), False)
+        filled = 0
+        for seed in range(30):
+            zombie = bare_zombie()
+            zombie.carried = [ItemEntity(item=item, loot_pending=True)]
+            body = kill_corpse(World(), zombie, 0, random.Random(seed))
+            with (
+                mock.patch.dict(BAG_TABLES, {"bag_fanny_pack_front": table}),
+                mock.patch.object(loot, "roll_pockets", return_value=[]),
+            ):
+                loot.search(body, random.Random(seed))
+            held = sum(e.weight for e in body.contents[0].contents)
+            self.assertLessEqual(round(held, 4), item.capacity)
+            filled += bool(body.contents[0].contents)
+        self.assertGreater(filled, 0)
+
+    def test_the_outbreak_corpses_carry_their_bags(self):
+        refs = ((1.0, ("item_schoolbag",)),)
+        zone = GameManager().world.locations["zone_street"]
+        with (
+            mock.patch.dict(outfits_data.ZOMBIE_OUTFIT_REFERENCES, {"generic01": {"male": refs}}),
+            mock.patch.object(zombie_dress, "pick_outfit", return_value="generic01"),
+            mock.patch.object(zombie_dress, "attach_weapon"),
+        ):
+            rng = ScriptedRandom(random=[0.0], randrange=[1, 1, 1, 0])
+            body = outbreak_corpse(World(), zone, 0, rng)
+        self.assertIn("item_schoolbag", [e.item.id for e in body.contents])
+
+
 class ZombieClothingTests(unittest.TestCase):
     """Spec 14, Outfits: the catalogue holds every item the outfits can produce."""
 
@@ -147,7 +293,7 @@ class ZombieClothingTests(unittest.TestCase):
             if item_id is not None
         }
         self.assertGreaterEqual(len(used), 270)
-        self.assertTrue(all(isinstance(ITEMS[i], ClothingItem) for i in used))
+        self.assertTrue(all(isinstance(ITEMS[i], ClothingItem | ContainerItem) for i in used))
 
     def test_a_police_jacket_has_its_clothing_stats(self):
         item = ITEMS["item_jacket_police"]
@@ -228,7 +374,10 @@ class AttachedWeaponTests(unittest.TestCase):
             zombie = bare_zombie()
             zombie_dress.attach_weapon(zombie, rng, 5.0)
             if zombie.attached is not None:
-                self.assertEqual(zombie.attached.item.id, "item_hand_axe")
+                self.assertIn(
+                    zombie.attached.item.id,
+                    {"item_hand_axe", "item_meat_cleaver", "item_screwdriver"},
+                )
 
     def test_from_day_ten_about_043_percent_carry_a_kitchen_knife(self):
         rng = random.Random(32)

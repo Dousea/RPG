@@ -128,7 +128,11 @@ def outbreak_corpse(world: World, zone: Location, minute: int, rng: random.Rando
         dress(shell, rng, 0.0)
         add_random_holes(shell.worn, rng, k.CORPSE_RANDOM_HOLES)
         body.female, body.outfit = shell.female, shell.outfit
-        body.contents = [*shell.worn.values(), *([shell.attached] if shell.attached else [])]
+        body.contents = [
+            *shell.worn.values(),
+            *shell.carried,
+            *([shell.attached] if shell.attached else []),
+        ]
         body.attached = shell.attached
         if rng.randrange(k.CORPSE_FAKE_DEAD_ONE_IN) == 0:
             body.fake_dead = True

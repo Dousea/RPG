@@ -79,6 +79,12 @@ Zombies ignore NPCs.
 | `zone_street` | 40 | 6 | 96 | 9 |
 | `zone_bodega` | 10 | 1 | 63 | about 1 |
 | `zone_neighborhood` | 80 | 16 | 64 | 16 |
+| `zone_flat_vacant` | 8 | 1 | 0 | about 0.04 |
+| `zone_flat_tenant` | 8 | 1 | 64 | about 1 |
+| `zone_pharmacy` | 14 | 2 | 63 | about 2 |
+| `zone_clinic` | 20 | 3 | 48 | about 2.3 |
+| `zone_supermarket` | 30 | 6 | 63 | about 6 |
+| `zone_hardware` | 20 | 3 | 63 | about 3 |
 
 `size_tiles` is the farthest a zombie in the zone can be from the player.
 `chunks` counts 8×8-tile chunks. `zombie_intensity` is a byte, 0 to 255.

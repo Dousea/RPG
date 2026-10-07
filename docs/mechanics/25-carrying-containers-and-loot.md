@@ -1,13 +1,13 @@
 # Carrying, Containers and Loot
 
-> **Status: Stages 1–2 implemented** (carrying, loot containers). Stage 3 (new places and items) is not built yet.
+> **Status: Implemented.**
 
-Everything the player has now weighs something. A Strength-based capacity sets
+Everything the player has weighs something. A Strength-based capacity sets
 when the load starts to hurt, bags hold things and ease the weight while they
 are worn or held, and a body can be picked up and carried. The Heavy Load
 status effect, which earlier mechanics read as 0, is live.
 
-The mechanic ships in three stages. This document describes the first two.
+The mechanic ships in three stages. This document describes all three.
 
 1. **Carrying**: weight, capacity, Heavy Load and what it switches on, bags,
    `PUT`, and carrying a corpse.
@@ -38,6 +38,13 @@ Ids and names stay generic: `schoolbag`, `toolbox`, `satchel`.
 | Heavy Load in the endurance driver and the status effect row | `managers/stats/drivers.py`, `managers/stats/status_effects.py`, `data/status_effects.py` |
 | The overload loss | `managers/body.py` |
 | The verbs `PUT` and `CARRY`, `TAKE all` | `modules/action/types.py`, `modules/action/parser.py`, `managers/validator.py`, `managers/simulation.py` |
+| The six new zones, their exits and aliases | `data/locations.py` |
+| Their room layouts | `data/containers.py` |
+| Their barriers | `data/barriers.py` |
+| Their zombie fields and indoors flags | `data/zombie_lore.py`, `data/climate.py` |
+| The new foods, drinks and weapons | `data/loot_items.py`, `data/items.py` |
+| The loot tables and the item mapping (generated) | `data/loot_tables.py`, `data/loot_catalogue.py` |
+| Bags in zombie outfits and on corpses | `data/zombie_outfits.py`, `managers/zombie_dress.py`, `managers/loot.py` |
 
 ## Converting rates to game hours
 
@@ -251,7 +258,7 @@ below half, nothing. Strength skips the XP boost.
 
 ### Rooms
 
-A zone keeps being the unit of movement, and now holds typed rooms. A room has
+A zone is the unit of movement and holds typed rooms. A room has
 containers; a container has a name, a capacity in kilograms, and either a fixed
 list of items or a loot table.
 
@@ -269,6 +276,7 @@ Shipped layouts:
 | Your Apartment | kitchen: kitchen counter, kitchen cupboards, fridge, freezer. Bedroom: wardrobe, dresser, bedside table. Bathroom: medicine cabinet, bathroom counter. Living room (where the player starts): side table, living room shelves |
 | Your Building | hallway (entry): first-aid cabinet. Laundry room: laundry counter. Basement: storage shelves, tool cabinet |
 | The Corner Store | shop floor (entry): till counter, store fridge, snack shelves, drinks shelves. Storeroom: stock crates |
+| The new zones | see [The rooms](#the-rooms) |
 
 The street and the neighbourhood have no rooms.
 
@@ -329,8 +337,8 @@ the rest of that list stops. A full junk list does not stop the main list.
   a bag is empty.
 
 A body's pockets use the same roll with the body's 12 kg as the capacity. The
-tables are generated data: `data/loot_tables.py` holds 35 item lists, the
-container sources and 14 bag tables; `data/loot_catalogue.py` maps each table
+tables are generated data: `data/loot_tables.py` holds 78 item lists, 42
+container sources and 16 bag tables; `data/loot_catalogue.py` maps each table
 item name to a catalogue item and its kind. Only items that exist in the game are
 rolled, so the tables grow with the catalogue.
 
@@ -352,7 +360,141 @@ alley planks and the neighbourhood's baseball bat stay on the ground.
 
 ## Places and items
 
-Not built yet.
+### The new zones
+
+Six zones join the map. Each is indoors, has its own building id (so a barrier
+of it wakes only that place), has exactly one barrier, and is entered into one
+room.
+
+| Zone | Name | Off | Exit key | Size (tiles), chunks, intensity | Zombies at the outbreak | Barrier |
+| --- | --- | --- | --- | --- | --- | --- |
+| `zone_flat_vacant` | The Vacant Flat | the building | `vacant flat` | 8, 1, 0 | about 0.04 | door, 500, closed, unlocked |
+| `zone_flat_tenant` | The Tenant's Flat | the building | `tenant flat` | 8, 1, 64 | about 1 | door, 500, closed, locked, no key |
+| `zone_pharmacy` | The Pharmacy | the neighbourhood | `pharmacy` | 14, 2, 63 | about 2 | window, one pane (50), closed, locked |
+| `zone_clinic` | The Clinic | the neighbourhood | `clinic` | 20, 3, 48 | about 2.3 | door, 500, closed, unlocked |
+| `zone_supermarket` | The Supermarket | the neighbourhood | `supermarket` | 30, 6, 63 | about 6 | window, two panes (100), closed, locked |
+| `zone_hardware` | The Hardware Store | the neighbourhood | `hardware store` | 20, 3, 63 | about 3 | door, 500, closed, locked, no key |
+
+- The two flats are on floor 1, like the apartment; the shops are on floor 0.
+  The tenant's flat sleeps on the floor with a bed in its bedroom, as the
+  apartment does; the vacant flat has no bed.
+- The building gains the exits `vacant flat` and `tenant flat`; the
+  neighbourhood gains `pharmacy`, `clinic`, `supermarket` and `hardware store`.
+  Each new zone's `out` goes back.
+- **Aliases.** The neighbourhood's `pharmacy`, `drugstore`, `supermarket`,
+  `grocery store` and `clinic` moved to the new zones, which add `walk-in
+  clinic`, `hardware store` and `tool store`. `hospital`, `coffee shop`, `park`
+  and the others stay with the neighbourhood. "Emma's apartment" stays an alias of
+  the building. No new alias is a bare generic word (`flat`, `shop`, `store`,
+  `door`): "the shop" and "the store" name no zone.
+- **Leaving.** "Leave the pharmacy" from the pharmacy goes out to the
+  neighbourhood, as "leave the apartment" does from home. Naming another zone in
+  an exit phrase walks out of nothing.
+- **Barriers.** Each barrier's name is its place and its kind ("pharmacy
+  window", "tenant flat door"); a bare "door" or "window" means the one in the
+  zone the player is in. A locked barrier with no key can only be smashed or
+  boarded up from outside. Moving to a zone behind a locked one stops at it
+  ("at the locked window to The Pharmacy").
+- **Entry room.** The flats' living room, the shops' shop floor (the
+  supermarket's aisles) and the clinic's exam room. A player who enters a zone is
+  in its entry room.
+
+### The rooms
+
+A container is built only if one of its tables can drop an item that exists in
+the game; the rest are left out and come back as the catalogue grows. Names are
+unique inside a zone.
+
+| Zone | Rooms and containers |
+| --- | --- |
+| The Tenant's Flat | the apartment's rooms, every container stocked from tables: kitchen (counter, cupboards, fridge, freezer), bedroom (wardrobe, dresser, bedside table), bathroom (medicine cabinet, bathroom counter), living room (side table, living room shelves) |
+| The Vacant Flat | kitchen (counter, cupboards), bedroom (wardrobe), bathroom (medicine cabinet), an empty living room |
+| The Pharmacy | shop floor: pharmacy counter, left shelves, right shelves, shop fridge. Back room: dispensing counter, medicine fridge, supply crates |
+| The Clinic | exam room: exam counter, exam desk, side table. Office: office desk, office counter. Supply room: supply counter, supply shelves, supply fridge, supply crates, supply desk |
+| The Supermarket | aisles: checkout counter, four aisle shelf units (first to fourth), drinks fridge. Stockroom: stockroom fridge, two stock crates |
+| The Hardware Store | shop floor: tool counter, three shelf units, shop crates. Storeroom: two storeroom crates |
+
+A room with several shelf units shares one count of the tables it has used, so
+each unit forces a different table: the supermarket's four units take four of
+its twelve shelf tables before any repeats. The tenant's flat holds no fixed
+items, so its freezer and living room shelves open empty until the catalogue has
+something for them.
+
+### Item mapping
+
+The loot tables name items by their table name. `data/loot_catalogue.py` maps
+each to a catalogue id and a kind. The generator keeps only mapped names, so a
+table can only ever name items that exist; an unmapped name is skipped without a
+roll.
+
+| Table item | Catalogue id | Kind |
+| --- | --- | --- |
+| painkillers, bandages, wipes, antibiotics, disinfectant | the matching medical items | medical |
+| ripped sheets (clean and dirty), water bottle | the matching items | other |
+| granola bar, canned beans, and every row of [New items](#new-items) except the weapons | the matching foods and drinks | canned food |
+| instant noodles | `item_instant_noodles` | food |
+| hammer, crowbar, hand axe, plank, bat, kitchen knife, pan, dumbbell, barbell, and the eight weapons below | the matching weapons | weapon |
+| nails | `item_nails` | material |
+| each bag | the matching bag; a handbag and a purse are one item, so are the two plastic bags | container |
+| a piece of clothing that is in the zombie clothing catalogue | the same id | clothing |
+
+The four crisps variants are one item. The diet and other cola cans, the grape
+juice box and the other shovel and sledgehammer variants have different values
+and stay out. Books, tools, cookware, ingredients, raw and perishable food,
+alcohol, light sources, firearms and ammunition, keys and the rest of the long
+list wait for the mechanics that give them behaviour.
+
+### New items
+
+Values follow the same rule as the first items: hunger, thirst and stress as
+fractions, unhappiness as points, a drink's effect scaled by how much it holds.
+A can ships opened: the can opener comes with crafting.
+
+| Item | Hunger | Thirst | Unhappy | Weight (kg) |
+| --- | --- | --- | --- | --- |
+| Canned soup | -0.25 | -0.04 | 0 | 0.8 |
+| Canned tuna | -0.18 | 0 | 0 | 0.3 |
+| Canned corn | -0.16 | -0.04 | 0 | 0.8 |
+| Canned peaches | -0.15 | 0 | -10 | 0.8 |
+| Canned chili | -0.16 | 0 | 0 | 0.8 |
+| Canned sardines | -0.14 | 0 | 0 | 0.3 |
+| Canned bolognese, corned beef | -0.24 | 0 | 0 | 0.8 |
+| Canned carrots | -0.12 | -0.04 | 0 | 0.8 |
+| Canned fruit cocktail, pineapple | -0.15 | 0 | -10 | 0.8 |
+| Canned fruit beverage | -0.15 | -0.85 | -10 | 0.8 |
+| Canned condensed milk | -0.10 | -0.10 | 0 | 0.8 |
+| Canned mushroom soup | -0.10 | -0.04 | 0 | 0.8 |
+| Canned peas | -0.16 | -0.03 | 0 | 0.8 |
+| Canned potatoes | -0.18 | -0.07 | 0 | 0.8 |
+| Canned tomatoes | -0.12 | -0.08 | 0 | 0.8 |
+| Crackers | -0.05 | 0 | 0 | 0.1 |
+| Chocolate bar | -0.20 | 0 | -10 | 0.2 |
+| Crisps | -0.15 | 0 | -5 | 0.2 |
+| Soda can | -0.036 | -0.09 | -3 | 0.6 |
+| Juice box | -0.02 | -0.06 | -10 (and stress -0.04) | 0.3 |
+
+The bags are the stage 1 rows, unchanged. Eight melee weapons join the
+catalogue with the same fields as the first weapons:
+
+| Weapon | Kind | Weight (kg) | Hands | Damage against an NPC |
+| --- | --- | --- | --- | --- |
+| Rolling pin | small blunt | 1.5 | one | 2 |
+| Meat cleaver | axe | 1.0 | one | 3 |
+| Screwdriver | small blade (stabs) | 0.5 | one | 3 |
+| Wrench | small blunt | 1.0 | one | 4 |
+| Pipe wrench | small blunt | 1.5 | one | 4 |
+| Tire iron | small blunt (pries planks off) | 1.5 | one | 4 |
+| Shovel | blunt | 2.0 | two | 8 |
+| Sledgehammer | blunt | 6.0 | two | 14 |
+
+**Bags on the dead.** A zombie's outfit can carry a bag: the schoolbag, the
+duffel bag, the satchel or the fanny pack, in nine outfit references. The bag
+goes into what the zombie carries, not what it wears, and stays on its corpse.
+A bag the zombie was dressed in fills from its own table the first time its
+corpse is searched, after the pockets, and never again: not when emptied, and
+not when the body rises and dies once more. Bags from the player's own
+inventory never roll. Weapons stuck in a zombie include the meat cleaver and the
+screwdriver before day ten.
 
 ## Verbs
 
@@ -377,7 +519,7 @@ its transfer time.
 
 - **`TAKE <item> from <corpse, bag or container>`, `TAKE all`, `TAKE all from
   <source>`:** the plain `TAKE <item>` (the ground) and `from <corpse>` stay; the
-  source may now be a carried bag or an opened container in the room the player
+  source may be a carried bag or an opened container in the room the player
   is in ("The kitchen counter hasn't been gone through."; "The kitchen counter is
   in the kitchen, not here."; "The kitchen counter holds no 'x'."). `TAKE all` with no source takes everything
   on the ground; with a source, everything in it, as one action. Refused: no
@@ -484,11 +626,12 @@ costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
 
 ## Saves
 
-Schema 23. Stage 1 adds nested `contents` on every item, `carrying_corpse` and
+Schema 24. Stage 1 adds nested `contents` on every item, `carrying_corpse` and
 `carrying_skeleton` on the player, and bags in the shoulder slot and worn at the
 body. Stage 2 adds each zone's rooms (every container's `opened` flag, fixed flag
 and contents, each room's table counts), the zone's entry room and the player's
-room. Incompatible saves are discarded.
+room. Stage 3 adds the six zones and their barriers to the starting world.
+Incompatible saves are discarded.
 
 ## Edge cases
 
@@ -519,3 +662,10 @@ Stage 2: `tests/test_loot_rolls.py` (the roll, the pick, the cutoff, the table
 shape and the catalogue), `tests/test_rooms.py` (the layouts, the starting kit,
 name resolution, room moves), `tests/test_containers.py` (`SEARCH`, `TAKE` and
 `PUT` with containers), `tests/test_plan_schema.py`, `tests/test_corner_store.py`.
+
+Stage 3: `tests/test_loot_data.py` (the new foods, drinks and weapons, the item
+mapping, every container bound to a generated table, every container opening
+within its capacity), `tests/test_places.py` (the zones, their barriers,
+aliases, exit phrases and rooms), `tests/test_population.py` (the outbreak
+targets), `tests/test_zombie_outfits.py` (bags on the dead), plus the schema and
+`/play` checks in `tests/test_persistence.py` and `tests/test_engine.py`.

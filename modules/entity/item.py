@@ -15,6 +15,7 @@ class ItemEntity(BaseEntity):
     contents: list["ItemEntity"] = field(
         default_factory=list["ItemEntity"]
     )  # a bag's items; spec 25
+    loot_pending: bool = False  # a bag from an outfit that has not rolled its table yet; spec 25
 
     def __post_init__(self):
         super().__post_init__()

@@ -107,6 +107,7 @@ advances with the clock.
 | `zone_building` | yes |
 | `zone_street` | no |
 | `zone_neighborhood` | no |
+| the two flats, the pharmacy, the clinic, the supermarket and the hardware store | yes |
 
 Indoors, rain and wind do not reach the player. The weather still exists and the
 narrator can still hear it.
