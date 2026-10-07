@@ -619,7 +619,8 @@ costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
   A zone without rooms says "None". `SEARCH` is listed when the zone has rooms,
   `TAKE` when an opened container in the room holds something, and `PUT` when
   one is opened. The plan schema offers the zone's rooms and containers to
-  `SEARCH`, and the opened containers of the room to `TAKE ... from` and `PUT`.
+  `SEARCH`, and the opened containers of the zone, and what is in them, to `TAKE`
+  and `PUT`, so a plan can move to a room and take from it.
 - **Player (UI).** The inventory screen shows the weight against the capacity
   in kilograms and each bag with its place and contents; Heavy Load shows in the
   status strip. `/play` gains `carry` (`weight`, `max_weight`, `level`, `bags`)
@@ -652,6 +653,24 @@ Incompatible saves are discarded.
 - **A container is never refilled,** even when the player empties it.
 - **A full container during a fill** stops only the list that overflowed.
 - **A saved room that no longer exists** counts as no room.
+
+## Known limitations
+
+Found in the 2026-10-08 playtest.
+
+- **`TAKE all` with a bare floor empties one container.** The fallback takes from
+  the first opened container of the room that holds anything; "search the exam room
+  and take everything" took the counter's items and left the side table's mask.
+  *Fix:* resolve it as one transfer per stocked container in the room, in layout
+  order.
+- **Take-all facts list without counts.** "Orton takes a bandage, painkillers,
+  alcohol wipes, painkillers from the supply crates." repeats a name and has no
+  "and". *Fix:* build it with the counted listing the `SEARCH` fact already uses
+  ("a bandage, two painkillers and alcohol wipes").
+- **Equal items don't group.** After three finds the inventory lists "Alcohol
+  Wipes (5 left)" three times. *Fix:* group equal names with equal condition words
+  in `[INVENTORY]` and on the inventory screen ("Alcohol Wipes (5 left) x3"); the
+  items stay separate in state.
 
 ## Testing
 

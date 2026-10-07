@@ -200,7 +200,7 @@ empty list is `NONE`.
 
 - **One branch per listed verb.** Each branch fixes the verb and names its fields. A
   field is a closed choice wherever the scene gives a closed set: `TAKE` takes an item
-  lying here, `DROP`, `USE_ITEM`, `EQUIP` and `GIVE` one carried or lying here (so
+  lying here or in an opened container of the zone, `DROP`, `USE_ITEM`, `EQUIP` and `GIVE` one carried or lying here (so
   "take the water bottle and drink" plans `TAKE` then `USE_ITEM`; the validator still
   refuses one that wasn't taken first), `UNEQUIP` the held
   item, `TAKE_OFF` a worn one, `WEAR` a garment carried or lying here (so a `TAKE` and a
@@ -592,6 +592,85 @@ characters on load and emptied when the narrator fails. Older saves are discarde
 - **A beat whose minute passed in a turn that spent no time** fires after the next
   action, at that later minute.
 - **Repetition across midnight.** The per-day counts reset at 00:00.
+
+## Known limitations
+
+Found in a full playtest on 2026-10-08 (new game to the third day, 89 turns, one
+26B model parsing and narrating, narrator thinking on, the fact check off). Each
+entry says what goes wrong and how to fix it.
+
+### Parser
+
+- **A plan is constrained by the scene it starts in.** The schema's closed sets
+  come from the scene before the turn, so a plan that moves and then acts can't
+  name what is at the destination. "Head to the supermarket and smash the window"
+  swung at the clinic door, the one barrier the clinic offered. Rooms of the same
+  zone are covered: every opened container of the zone is offered
+  ([carrying-and-loot](carrying-and-loot.md#verbs)). *Fix:* split the plan at its
+  first zone-changing `MOVE_TO`. Resolve up to the move, rebuild the scene and the
+  schema, and ask the parser for the rest of the input, with `[LAST TURN]` saying
+  what was done.
+- **Optional fields stay empty.** The model never fills an optional field: `TAKE`'s
+  `from` (the validator now falls back to the room's opened containers) and `TALK`'s
+  `speech`, so the narrator invents what was said. *Fix:* make a field required
+  wherever the engine needs it (`speech` as a possibly empty string), and add
+  parser eval cases for quoted and reported speech.
+- **The server ignores `pattern`.** LM Studio accepted `"morning"` and `"07:00"`
+  for a duration, and the grammar refused both ("it wasn't clear how"). *Fix:* let
+  the [duration grammar](clock.md#actions) read a bare time of day or `HH:MM` as
+  `until` it, so the schema's pattern no longer has to hold.
+- **Questions to an NPC become requests.** "Ask Marcus what he's reading" and
+  "ask Marcus if he has a hammer" parsed as `ASK follow`; "ask Emma if she's okay"
+  as `ASK stay`. *Fix:* a parser rule with an example sending a question to `TALK`
+  `chat` with its `speech` (a rule plus example fixed the absent-NPC misparse), and
+  eval cases in `evals/parser_cases.yaml`.
+- **When no verb fits, the schema forces a wrong one.** The schema has no way to
+  say "the player asked for something the engine can't do", so the model picks the
+  nearest branch: "lock the door" became `BARRICADE`, "drink from the tap" became
+  `USE_ITEM` on the frying pan, "put on the jacket" with nothing wearable became
+  `EQUIP` on the key, "put on the schoolbag" became `PUT` the bag into itself, "pocket
+  the key" became `PUT` the knife in the bag. *Fix:* an `UNSUPPORTED <text>` branch
+  that the engine refuses in words ("Orton can't lock the door: there is no way to
+  yet."), so the narrator gets an honest refusal. The missing verbs themselves are in
+  [doors](doors.md#known-limitations) (locking) and
+  [status effects](status-effects.md#known-limitations) (tap water).
+
+### Narrator
+
+- **Refused actions are narrated as done.** Six times in 89 turns: all three
+  actions refused and the story pockets the key and draws the knife; a `TAKE all`
+  refused and the story bags the loot; one garment worn and the story dresses in
+  four; a door "locked" with no lock action; tap water drunk with no such action.
+  The "Refused didn't happen" rule is in the system prompt only. *Fix:* end the
+  prompt with what must not be shown, the way `[IN VIEW]` ends it with what must:
+  a `[DID NOT HAPPEN]` list naming each refused action and its non-event ("Orton
+  does not get the knife out; he still holds the key"). A fact naming the non-event
+  beat a system-prompt rule in an earlier A/B. Then add a fact-check question per
+  refused action ("Does the story say Orton took the kitchen knife?"); the yes/no
+  form separated well for kills.
+- **Found items are denied.** Twice a `SEARCH` that listed finds was narrated as
+  bare ("the floor is bare except for the debris"). *Fix:* list the turn's finds in
+  `[IN VIEW]`, and a fact-check question "does the story say nothing was found?".
+- **Small state slips.** The crowbar held while it is in the pack, the schoolbag
+  set down on a table, a zombie that is a woman one turn and a man two turns later,
+  "a Sunday morning" every day, morning light at 02:00 after a wake. *Fix:* put the
+  held item, the time of day and each corpse's sex word in `[IN VIEW]`.
+- **Paragraphs repeat across turns.** Four combat turns in a row reused Emma's
+  "silent scream" and Marcus's "wide, unblinking eyes" nearly word for word. *Fix:*
+  a rule tied to `[LAST SCENE]` ("write no sentence it already has"), or a
+  repetition sampler (DRY) where the server offers one.
+- **Outcome facts leak internal ids.** A quest fact reads "Quest
+  'quest_supply_run' objective complete: take:item_crowbar." *Fix:* render it from
+  the quest's title and the objective's text in `data/story/quests.py`.
+
+### People
+
+- **Bystanders don't react.** Jen watched Orton smash two shop windows and beat on
+  a door, and nothing changed; Emma and Marcus watched him fight and kill a zombie
+  in the hallway, did nothing, and then "respond warmly" to small talk. NPCs have
+  no witness reactions and no part in a fight. *Fix:* witnessed events (a break-in,
+  a fight, a kill) as relationship modifiers with a reaction fact, and a fight
+  reaction per NPC (flee, help, freeze) from their personality.
 
 ## Testing
 

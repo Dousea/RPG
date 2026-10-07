@@ -519,6 +519,28 @@ from the data. Saves of other versions are discarded and a new game starts.
   broken door drops and the hammer wear use the simulation's injected random
   source, in that order, thumpers in id order.
 
+## Known limitations
+
+Found in the 2026-10-08 playtest.
+
+- **Breaking a door down is unplayable.** A door takes about 24 crowbar swings,
+  and the player gets one per turn: "keep hitting it until it gives" and "hit it
+  five times" each parsed to one `ATTACK`. *Fix:* an optional count or "until it
+  gives" on `ATTACK <barrier>`, resolved as a multi-minute action like a room
+  `SEARCH`: one swing a minute, ending when the barrier breaks, on an interruption
+  (a zombie notices, Endurance runs low) or at a cap of 30 swings.
+- **No way to lock a door.** Opening the apartment door from inside unlocks it
+  for good, and no verb locks it again, so after the first trip out home is never
+  locked. "Close and lock the door" parsed to `CLOSE` plus `BARRICADE`. *Fix:*
+  `LOCK <barrier>` and `UNLOCK <barrier>`, 0 minutes like `OPEN`: from inside
+  always, from outside with the barrier's key.
+- **A blocked move names a door for a window.** "Move to The Corner Store:
+  blocked -- the door to The Corner Store is locked" when the barrier is the shop
+  window. *Fix:* use the barrier's kind word in the fact.
+- **Smashing glass by hand is free.** A bare-handed window smash breaks the glass
+  with no injury. *Fix, if wanted:* a chance of a hand laceration from the
+  [health](health.md) wounds, lower with gloves.
+
 ## Testing
 
 - `tests/world/test_barriers.py`: blocking, vision, the order a thump lands, thump and

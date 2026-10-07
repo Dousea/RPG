@@ -310,6 +310,16 @@ are gone. A save of any other version is discarded.
 - Death mid-span stops the clock at the minute where it happened.
 - Drivers use no randomness. The only random value is the interruption panic.
 
+## Known limitations
+
+Found in the 2026-10-08 playtest.
+
+- **"Sleep until morning" wakes in the night.** Waking fully rested ends the
+  sleep before its target, so the player woke at 03:20 and 02:00, and the narrator,
+  told only "Orton wakes fully rested.", wrote morning light both times. The rule is
+  sound; the fact hides the time. *Fix:* the wake fact says when ("Orton wakes
+  fully rested in the middle of the night."), from the clock's time-of-day word.
+
 ## Testing
 
 - `tests/body/test_stats.py`: ranges, defaults, clamping, dict round-trip, and each

@@ -480,6 +480,16 @@ worn item saves its holes.
   references in table order, then the attached weapon; pockets in table order;
   the minute loop's corpse steps in id order.
 
+## Known limitations
+
+Found in the 2026-10-08 playtest.
+
+- **Clothing names read like catalogue rows.** A searched body held "t-shirt -
+  striped polo" and "baseball cap - state", and those strings reach the facts and
+  the screen. *Fix:* have the generator emit a display name ("striped polo shirt",
+  "baseball cap"); `data/zombies/clothing.py` is generated, so change its output,
+  not the file.
+
 ## Testing
 
 | Module | What it covers |

@@ -244,13 +244,19 @@ it (`quest_storage_room`, the quest that needed it, was replaced by
 `quest_supply_run`). It exists only as dead catalog content, and a v2 save
 that already held one keeps it, unremapped.
 
-**A zone change costs one tick regardless of distance.** `SimulationCore._resolve_move`
-advances the clock exactly once for a `"zone"`-kind move, whether the walk
-crossed one connection or several (`GameManager.zone_path` can return a
-multi-hop path). A spot move within the current zone costs nothing. This is
-a coarser model than distance-scaled travel time; it was accepted as the
-zones-era mapping of "movement costs time" onto a system that no longer has
-per-room adjacency.
+**Playtest findings (2026-10-08).** A full run from a new game to the third day
+found parser, narrator and rule gaps. Each is recorded, with a suggested fix, in
+the Known limitations section of the doc that owns it:
+[LLM contract](mechanics/llm-contract.md#known-limitations) (plans constrained by
+the starting scene, empty optional fields, the server ignoring `pattern`, questions
+parsed as requests, forced wrong verbs, refused actions narrated as done, finds
+denied, repeated paragraphs, quest ids in facts, bystanders who don't react),
+[doors](mechanics/doors.md#known-limitations) (one swing per turn, no lock verb),
+[carrying and loot](mechanics/carrying-and-loot.md#known-limitations),
+[status effects](mechanics/status-effects.md#known-limitations),
+[survival stats](mechanics/survival-stats.md#known-limitations),
+[clock](mechanics/clock.md#known-limitations) (a flat 10 minutes per zone hop) and
+[zombie lifecycle](mechanics/zombie-lifecycle.md#known-limitations).
 
 ---
 

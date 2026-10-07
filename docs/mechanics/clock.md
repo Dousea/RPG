@@ -147,6 +147,16 @@ game starts.
 - `WAIT until night` from 08:00 lands on 22:00 the same day. `WAIT until morning`
   at 07:00 lands on 06:00 the next day.
 
+## Known limitations
+
+Found in the 2026-10-08 playtest.
+
+- **Every zone hop costs the same.** Stepping from the apartment into its own
+  hallway takes 10 minutes, as long as crossing the neighborhood, and a walk home
+  from the supermarket took 41. *Fix:* minutes per connection in
+  `data/world/locations.py` (apartment to building 1, building to street 2), with
+  running and sneaking scaling them as now.
+
 ## Testing
 
 - `tests/test_game_manager.py`: every band boundary, the midnight roll, and

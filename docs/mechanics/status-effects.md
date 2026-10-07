@@ -159,6 +159,20 @@ Intoxication rises by `400 × alcohol × m`, clamped to 100. Hunger is read afte
 `SCHEMA_VERSION` is 18. The player saves `food_eaten_timer`. Older saves are
 discarded.
 
+## Known limitations
+
+Found in the 2026-10-08 playtest.
+
+- **Level changes churn within a turn.** Facts are netted per span of time, not
+  per turn, so a plan of two quick actions reports every step: eating a chocolate
+  bar and drinking a soda gave "Peckish, Hungry, Bored, Peckish, Well Fed, Bit
+  Bored, no longer Well Fed". *Fix:* net the level changes over the whole turn and
+  report each status effect once, at the level it ended on.
+- **No water source but bottles.** The player asked to drink from the tap twice;
+  there is no tap, and the parser picked an unrelated item. *Fix:* a sink or tap
+  in the apartment's kitchen and bathroom as a drink source for `USE_ITEM` (or a
+  `DRINK <source>` form).
+
 ## Testing
 
 - `tests/body/test_stats.py`: every threshold just below, at and just above, the
