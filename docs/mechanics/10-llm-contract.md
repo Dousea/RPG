@@ -224,6 +224,12 @@ empty list is `NONE`.
 - **`NONE` still costs a minute.** A turn where the parser proposes nothing costs
   1 minute, so the zombies and the stats still run. A turn whose only lines were
   refused costs 0.
+- **A `NONE` turn tells the narrator nothing typed happens.** Its outcomes open
+  with "Orton only looks around and thinks. Nothing else in [SCENE] happens: no one
+  is spoken to, and nothing is used, taken, opened or locked." Without it, the
+  narrator acted out the input: the door got locked with no lock action, and an
+  absent neighbor's question went to whoever was there. The line names a prompt
+  block, so it goes to the narrator only and never into the event log.
 
 ## Talking to people
 

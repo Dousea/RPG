@@ -20,6 +20,7 @@ from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
 from data.memory import BUDGET_MARGIN_TOKENS
 from data.presets import ORTON
+from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
@@ -605,6 +606,25 @@ class MemoryFactsTests(EngineTestCase):
                 'Orton tries: "look around" About 1 minute passes.'
             )
         )
+
+    def test_a_none_turn_tells_the_narrator_nothing_typed_happens(self):
+        self.llm.actions = "ACTIONS:\nNONE"
+        self.engine.play("lock the door")
+        self.assertIn(
+            f" - {NOTHING_DONE_FACT.format(name='Orton')}\n - About 1 minute passes.",
+            self.llm.narrator_prompts[-1],
+        )
+
+    def test_the_nothing_done_fact_stays_out_of_memory(self):
+        self.llm.actions = "ACTIONS:\nNONE"
+        self.engine.play("lock the door")
+        self.assertNotIn("[SCENE]", self.engine.game.memory.full_event_log[-1])
+
+    def test_a_turn_with_an_action_or_a_refused_line_has_no_nothing_done_fact(self):
+        for actions in ("ACTIONS:\nWAIT 10m", "ACTIONS:\nFROBNICATE the widget"):
+            self.llm.actions = actions
+            self.engine.play("do it")
+            self.assertNotIn("Nothing else in [SCENE]", self.llm.narrator_prompts[-1])
 
     def test_the_narrator_failure_records_the_same_entry(self):
         self.engine.play("go out")

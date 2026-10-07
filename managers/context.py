@@ -53,6 +53,12 @@ logger = logging.getLogger(__name__)
 
 ZOMBIE_ID = re.compile(r"\bz\d+\b")
 
+# Narrator-only: it names a prompt block, so the event log never stores it.
+NOTHING_DONE_FACT = (
+    "{name} only looks around and thinks. Nothing else in [SCENE] happens: no one is "
+    "spoken to, and nothing is used, taken, opened or locked."
+)
+
 
 def zombie_ids_to_words(fact: str) -> str:
     """The fact with every zombie id read as "the zombie", for text the narrator sees."""

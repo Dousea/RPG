@@ -24,7 +24,7 @@ from managers import creation
 from managers.body import open_wounds
 from managers.climate import weather_summary
 from managers.combat import held_entity
-from managers.context import ContextBuilder
+from managers.context import NOTHING_DONE_FACT, ContextBuilder
 from managers.event_log import build_event_entry, event_stamp
 from managers.first_aid import part_word
 from managers.game import MAX_RECENT_EVENTS, GameManager
@@ -141,10 +141,14 @@ class GameEngine:
                 logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
                 outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
 
-            # 4. Ask the narrator to describe what already happened.
+            # 4. Ask the narrator to describe what already happened. A turn the
+            # parser found nothing in would otherwise be narrated as the input.
+            narrated_facts = outcome_facts
+            if not actions and not parse_failures:
+                narrated_facts = [NOTHING_DONE_FACT.format(name=looks.forename), *outcome_facts]
             context = ContextBuilder(manager)
             narrator_prompt = context.build_narrator_prompt(
-                player_input, outcome_facts, deep_memories, max_chars=self._narrator_budget()
+                player_input, narrated_facts, deep_memories, max_chars=self._narrator_budget()
             )
             try:
                 raw_response = llm.query_narrator(narrator_prompt)
@@ -162,8 +166,12 @@ class GameEngine:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
             parsed = self._reply(raw_response)
-            parsed = self._fact_checked(parsed, context, player_input, outcome_facts, deep_memories)
-            parsed = self._with_options(parsed, context, player_input, outcome_facts, deep_memories)
+            parsed = self._fact_checked(
+                parsed, context, player_input, narrated_facts, deep_memories
+            )
+            parsed = self._with_options(
+                parsed, context, player_input, narrated_facts, deep_memories
+            )
             story_text = str(parsed["story"])
             options = list(parsed["options"])
             entry = build_event_entry(manager, stamp, player_input, outcome_facts)
