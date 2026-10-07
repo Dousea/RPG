@@ -93,3 +93,14 @@
   zone: zone_home
   input: grab the shotgun from the closet
   expect: []
+
+# An item on the floor can be taken and used in one plan.
+- name: take and drink
+  zone: zone_home
+  input: take the water bottle and drink from it
+  expect: [TAKE Water Bottle, USE_ITEM Water Bottle]
+
+- name: take and eat
+  zone: zone_home
+  input: grab the beans and eat them
+  expect: [TAKE Canned Beans, USE_ITEM Canned Beans]

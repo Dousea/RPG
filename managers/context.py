@@ -388,11 +388,11 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("goals")
         if manager._ground_items():
             keys.add("items_here")
-        if player.inventory:
+        reachable = [*player.inventory, *manager._ground_items()]
+        if reachable:
             keys.add("carried")
         if held_entity(player) is not None:
             keys.add("held")
-        reachable = [*player.inventory, *manager._ground_items()]
         if any(isinstance(entity.item, ClothingItem) for entity in reachable):
             keys.add("wearable")
         if self._worn_section() != "Nothing":
@@ -406,7 +406,10 @@ Traits: {_lines(trait_lines) or "None"}
         return frozenset(keys)
 
     def scene_choices(self) -> SceneChoices:
-        """The closed sets of names the scene offers, as the validator would accept them."""
+        """The closed sets of names the scene offers, as the validator would accept them.
+
+        Carried and wearable names include the floor's, since a plan may take an item first.
+        """
         manager = self.manager
         player = manager.player
         ground = manager._ground_items()
@@ -414,7 +417,7 @@ Traits: {_lines(trait_lines) or "None"}
         held = held_entity(player)
         return SceneChoices(
             items_here=_names(ground),
-            carried=_names(player.inventory),
+            carried=tuple(dict.fromkeys(_names([*player.inventory, *ground]))),
             held=_names([held] if held is not None else []),
             wearable=_names(
                 entity

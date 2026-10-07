@@ -1177,12 +1177,17 @@ class SceneKeyTests(unittest.TestCase):
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
         self.assertEqual(listed, ALWAYS | {"ATTACK", "SHOVE"})
 
-    def test_a_ground_item_gives_items_here(self):
+    def test_a_ground_item_gives_items_here_and_carried_so_take_then_use_can_be_planned(self):
         item = ITEMS["item_apartment_key"]
         self.gm.current_location.entities.append(ItemEntity(item=item))
-        self.assertEqual(self.builder.scene_keys(), frozenset({"items_here"}))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"items_here", "carried"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"TAKE"})
+        self.assertEqual(listed, ALWAYS | {"TAKE", "DROP", "USE_ITEM", "EQUIP"})
+
+    def test_a_ground_item_is_a_carried_choice_beside_the_inventory(self):
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_water_bottle"]))
+        self.assertEqual(self.builder.scene_choices().carried, ("Apartment Key", "Water Bottle"))
 
     def test_a_carried_item_gives_carried(self):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
@@ -1206,9 +1211,11 @@ class SceneKeyTests(unittest.TestCase):
     def test_a_garment_on_the_ground_lists_wear_so_take_then_wear_can_be_planned(self):
         clothing = next(i for i in ITEMS.values() if isinstance(i, ClothingItem))
         self.gm.current_location.entities.append(ItemEntity(item=clothing))
-        self.assertEqual(self.builder.scene_keys(), frozenset({"items_here", "wearable"}))
+        self.assertEqual(
+            self.builder.scene_keys(), frozenset({"items_here", "carried", "wearable"})
+        )
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"TAKE", "WEAR"})
+        self.assertEqual(listed, ALWAYS | {"TAKE", "DROP", "USE_ITEM", "WEAR", "EQUIP"})
 
     def test_first_aid_lines_name_only_the_body_part_before_the_with_clause(self):
         self.gm.player.body[BodyPart.HAND_L].scratch_time = 4.0

@@ -172,7 +172,7 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `MOVE_TO`, `STANCE`, `WAIT`, `SLEEP`, `EXERCISE`, `SHOUT`, `ADD_GOAL`, `ADD_RELATIONSHIP_NOTE` | always | n/a |
 | `REMOVE_GOAL` | `goals` | the player has a goal |
 | `TAKE` | `items_here` | an item lies here |
-| `DROP`, `USE_ITEM` | `carried` | the player carries an item |
+| `DROP`, `USE_ITEM` | `carried` | an item is carried or lies here, so `TAKE` then `USE_ITEM` can be planned |
 | `WEAR` | `wearable` | clothing is carried or lies here, so `TAKE` then `WEAR` can be planned |
 | `TAKE_OFF` | `worn` | something is worn or in hand |
 | `TALK`, `ASK`, `GIVE` | `npcs_here` | someone is here |
@@ -189,7 +189,9 @@ empty list is `NONE`.
 
 - **One branch per listed verb.** Each branch fixes the verb and names its fields. A
   field is a closed choice wherever the scene gives a closed set: `TAKE` takes an item
-  lying here, `DROP`, `USE_ITEM`, `EQUIP` and `GIVE` a carried one, `UNEQUIP` the held
+  lying here, `DROP`, `USE_ITEM`, `EQUIP` and `GIVE` one carried or lying here (so
+  "take the water bottle and drink" plans `TAKE` then `USE_ITEM`; the validator still
+  refuses one that wasn't taken first), `UNEQUIP` the held
   item, `TAKE_OFF` a worn one, `WEAR` a garment carried or lying here (so a `TAKE` and a
   `WEAR` fit in one plan), `BANDAGE` and `DISINFECT` an injured part that has no bandage
   and optionally a carried bandage or alcohol item, `REMOVE_BANDAGE` a bandaged part,

@@ -99,6 +99,9 @@ class SchemaShapeTests(unittest.TestCase):
         gm = GameManager()
         gm.player.current_location_id = "zone_street"
         gm.player.inventory.clear()
+        gm.current_location.entities[:] = [
+            entity for entity in gm.current_location.entities if not isinstance(entity, ItemEntity)
+        ]
         names = branches(ContextBuilder(gm).build_plan_schema())
         for verb in ("DROP", "TALK", "ASK", "GIVE", "UNEQUIP", "BANDAGE", "ATTACK", "SHOVE"):
             self.assertNotIn(verb, names)
@@ -131,7 +134,11 @@ class ClosedFieldTests(unittest.TestCase):
         give(gm, "item_bandage", "item_bandage")
         names = branches(ContextBuilder(gm).build_plan_schema())
         for verb in ("DROP", "USE_ITEM", "EQUIP"):
-            self.assertEqual(enum_of(names[verb], "item"), ["Apartment Key", "Bandage"])
+            self.assertEqual(
+                enum_of(names[verb], "item"),
+                ["Apartment Key", "Bandage", "Canned Beans", "Water Bottle", "Black jacket"]
+                + ["Kitchen Knife"],
+            )
         self.assertEqual(
             enum_of(names["TAKE_OFF"], "item"),
             ["Hoodie", "Jeans", "Trainers", "Ankle socks", "T-shirt"],
@@ -186,7 +193,10 @@ class ClosedFieldTests(unittest.TestCase):
         self.assertEqual(names["TALK"]["required"], ["verb", "npc", "approach"])
         self.assertEqual(names["TALK"]["properties"]["speech"], {"type": "string"})
         self.assertEqual(enum_of(names["GIVE"], "npc"), ["Emma", "Marcus"])
-        self.assertEqual(enum_of(names["GIVE"], "item"), ["Apartment Key"])
+        self.assertEqual(
+            enum_of(names["GIVE"], "item"),
+            ["Apartment Key", "Bandage", "Adhesive Bandage", "Alcohol Wipes", "Painkillers"],
+        )
 
     def test_ask_offers_only_the_requests_the_scene_can_fill(self):
         asks = ask_branches(ContextBuilder(building_scene()).build_plan_schema())
