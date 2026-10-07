@@ -15,7 +15,7 @@ from modules.body import BodyLocation
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.stats import CharacterStat
-from tests.support import ScriptedRandom, simulate
+from tests.support import ScriptedRandom, load_pack, simulate
 from tests.test_simulation import zombie_game
 
 NAME = "Orton"
@@ -273,10 +273,10 @@ class TakeFromTests(unittest.TestCase):
 
     def test_a_full_inventory_is_refused(self):
         gm, corpse = self.searched("item_jacket_police")
-        gm.player.max_inventory_size = 0
+        load_pack(gm.player, 49.5)
         minutes, facts = minutes_of(gm, TakeAction(item_name="jacket", from_name="c1"))
         self.assertEqual(minutes, 0)
-        self.assertIn("full", facts[0])
+        self.assertIn("can't carry any more", facts[0])
         self.assertEqual(len(corpse.contents), 1)
 
     def test_a_sleeper_cannot_take(self):

@@ -17,10 +17,11 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
-from modules.body import BodyPart
+from modules.body import BodyLocation, BodyPart
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
-from modules.character.equipment import CharacterHoldableSlot
+from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
+from modules.character.skills import SkillState
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
@@ -868,14 +869,14 @@ class CorpseSceneKeyTests(CorpsesContextTests):
         builder = ContextBuilder(self.gm)
         self.assertEqual(builder.scene_keys(), frozenset({"corpses"}))
         listed = listed_in_prompt(builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"SEARCH"})
+        self.assertEqual(listed, ALWAYS | {"CARRY", "SEARCH"})
 
     def test_a_searched_body_with_contents_gives_loot_and_take(self):
         self.body(3.0, "item_jacket_police", searched=True)
         builder = ContextBuilder(self.gm)
         self.assertEqual(builder.scene_keys(), frozenset({"corpses", "loot"}))
         listed = listed_in_prompt(builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"SEARCH", "TAKE"})
+        self.assertEqual(listed, ALWAYS | {"CARRY", "SEARCH", "TAKE"})
 
 
 class CrawlerThreatsTests(unittest.TestCase):
@@ -1646,3 +1647,123 @@ class BarrierBlockTests(unittest.TestCase):
     def test_the_door_verbs_are_listed_where_there_is_a_door(self):
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
         self.assertTrue({"OPEN", "CLOSE", "BARRICADE", "UNBARRICADE", "ATTACK"} <= listed)
+
+
+def section(prompt: str, name: str) -> str:
+    """The text of one `[NAME]` block, up to the next block."""
+    return prompt.split(f"[{name}]\n", 1)[1].split("\n\n[", 1)[0]
+
+
+class CarryContextTests(unittest.TestCase):
+    """Spec 25, What the narrator and the player see: bags, the body and Heavy Load."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.worn.clear()
+        self.gm.player.inventory.clear()
+        self.gm.current_location.entities.clear()
+
+    def entity(self, item_id: str, *inside: str) -> ItemEntity:
+        made = ItemEntity(item=ITEMS[item_id])
+        made.contents = [ItemEntity(item=ITEMS[i]) for i in inside]
+        return made
+
+    def parser(self) -> str:
+        return ContextBuilder(self.gm).build_parser_prompt("look")
+
+    def test_a_bag_on_the_back_lists_its_contents(self):
+        bag = self.entity("item_schoolbag", "item_canned_beans", "item_bandage")
+        self.gm.player.equipment[CharacterArmorSlot.SHOULDERS] = bag
+        self.assertEqual(
+            section(self.parser(), "INVENTORY"),
+            " - Schoolbag (on your back): Canned Beans, Bandage",
+        )
+
+    def test_a_bag_in_a_hand_and_a_bag_in_the_pack(self):
+        self.gm.player.equipment[CharacterHoldableSlot.LEFT_HAND] = self.entity(
+            "item_toolbox", "item_hammer"
+        )
+        self.gm.player.inventory.append(self.entity("item_duffel_bag"))
+        self.gm.player.inventory.append(self.entity("item_canned_beans"))
+        lines = section(self.parser(), "INVENTORY").splitlines()
+        self.assertEqual(
+            lines,
+            [
+                " - Toolbox (in your hand): Hammer",
+                " - Duffel Bag: empty",
+                " - Canned Beans",
+            ],
+        )
+
+    def test_a_worn_bag_and_a_bag_inside_a_bag(self):
+        self.gm.player.worn[BodyLocation.SATCHEL] = self.entity("item_satchel", "item_hammer")
+        outer = self.entity("item_duffel_bag")
+        outer.contents.append(self.entity("item_toolbox", "item_plank"))
+        self.gm.player.inventory.append(outer)
+        lines = section(self.parser(), "INVENTORY").splitlines()
+        self.assertIn(" - Satchel (worn): Hammer", lines)
+        self.assertIn(" - Duffel Bag: Toolbox (Plank)", lines)
+
+    def test_a_weapon_in_hand_still_reads_in_hands(self):
+        crowbar = self.entity("item_crowbar")
+        self.gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = crowbar
+        self.gm.player.equipment[CharacterHoldableSlot.LEFT_HAND] = crowbar
+        self.assertEqual(section(self.parser(), "INVENTORY"), " - Crowbar (in hands)")
+
+    def test_the_prompts_never_give_a_weight(self):
+        self.gm.player.inventory.append(self.entity("item_barbell"))
+        builder = ContextBuilder(self.gm)
+        for prompt in (builder.build_parser_prompt("look"), builder.build_narrator_prompt("look")):
+            self.assertNotIn("kg", prompt)
+
+    def test_heavy_load_is_in_the_condition_block_by_name_and_level(self):
+        self.gm.player.skills["strength"] = SkillState(level=0)
+        self.gm.player.inventory.extend(self.entity(i) for i in ("item_barbell", "item_plank"))
+        for prompt in (
+            ContextBuilder(self.gm).build_parser_prompt("look"),
+            ContextBuilder(self.gm).build_narrator_prompt("look"),
+        ):
+            self.assertIn("Very Overloaded (3/4)", section(prompt, "CONDITION"))
+
+    def test_a_carried_body_reads_carried_in_the_corpses_block(self):
+        clear_sky(self.gm)
+        self.gm.player.current_location_id = "zone_street"
+        self.gm.world.outbreak_started_at = 0
+        self.gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_street",
+            gap=0.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+        )
+        self.gm.player.carrying_corpse = "c1"
+        parser = section(self.parser(), "CORPSES")
+        self.assertTrue(parser.startswith(" - c1, carried, "), parser)
+        narrator = ContextBuilder(self.gm).build_narrator_prompt("look")
+        self.assertIn(" - carried, ", narrator.split("[CORPSES]")[1].split("[OUTCOMES]")[0])
+
+    def test_the_scene_names_include_what_is_inside_a_carried_bag(self):
+        self.gm.player.equipment[CharacterArmorSlot.SHOULDERS] = self.entity(
+            "item_schoolbag", "item_canned_beans"
+        )
+        self.gm.player.worn[BodyLocation.SATCHEL] = self.entity("item_satchel")
+        choices = ContextBuilder(self.gm).scene_choices()
+        self.assertEqual(sorted(choices.bags), ["Satchel", "Schoolbag"])
+        self.assertEqual(choices.bag_items, ("Canned Beans",))
+        self.assertIn("Canned Beans", choices.carried)
+        self.assertIn("Schoolbag", choices.carried)
+        self.assertEqual(choices.held, ("Schoolbag",))
+        keys = ContextBuilder(self.gm).scene_keys()
+        self.assertIn("bags", keys)
+
+    def test_put_is_listed_only_with_a_bag(self):
+        self.assertNotIn("- PUT ", self.parser())
+        self.gm.player.inventory.append(self.entity("item_toolbox"))
+        self.assertIn("- PUT ", self.parser())
+        self.assertIn("- TAKE ", self.parser())
+
+    def test_a_barbell_in_a_bag_counts_for_the_exercise_block(self):
+        self.gm.player.inventory.append(self.entity("item_duffel_bag", "item_barbell"))
+        self.assertIn("Carrying: a barbell", self.parser())

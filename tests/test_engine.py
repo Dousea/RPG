@@ -24,6 +24,8 @@ from data.presets import ORTON
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
 from modules.body import BodyLocation, BodyPart
+from modules.character.equipment import CharacterArmorSlot
+from modules.character.skills import SkillState
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
@@ -226,6 +228,7 @@ class TurnTests(EngineTestCase):
             "distance_word": "close",
             "rot_word": "decaying",
             "searched": False,
+            "carried": False,
             "contents": [],
         }
         self.assertEqual(self.engine.state()["corpses"], [expected])
@@ -250,6 +253,61 @@ class TurnTests(EngineTestCase):
             crawling=True,
         )
         self.assertEqual(self.engine.state()["threats"][0]["state_word"], "crawling toward you")
+
+    def test_snapshot_carries_the_load_the_bags_and_heavy_load(self):
+        """Spec 25, What the narrator and the player see: `carry` and the Heavy Load effect."""
+        manager = self.engine.game
+        player = manager.player
+        player.worn.clear()
+        player.inventory.clear()
+        player.skills["strength"] = SkillState(level=0)
+        self.assertEqual(
+            self.engine.state()["carry"],
+            {"weight": 0.0, "max_weight": 6, "level": 0, "bags": []},
+        )
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        player.equipment[CharacterArmorSlot.SHOULDERS] = bag
+        player.inventory.append(ItemEntity(item=ITEMS["item_toolbox"]))
+        state = self.engine.state()
+        self.assertEqual(
+            state["carry"],
+            {
+                "weight": 2.5,
+                "max_weight": 6,
+                "level": 0,
+                "bags": [
+                    {"name": "Schoolbag", "place": "on your back", "contents": ["Canned Beans"]},
+                    {"name": "Toolbox", "place": "in your pack", "contents": []},
+                ],
+            },
+        )
+        player.inventory.append(ItemEntity(item=ITEMS["item_barbell"]))
+        player.inventory.append(ItemEntity(item=ITEMS["item_dumbbell"]))
+        state = self.engine.state()
+        self.assertEqual(state["carry"]["level"], 4)
+        self.assertEqual(state["carry"]["weight"], 13.5)
+        self.assertIn(
+            {"type": "heavy_load", "level": 4, "name": "Extremely Overloaded"}, state["effects"]
+        )
+
+    def test_snapshot_marks_a_carried_body(self):
+        manager = self.engine.game
+        manager.world.outbreak_started_at = 0
+        here = manager.player.current_location_id
+        manager.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id=here,
+            gap=0.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+        )
+        manager.player.carrying_corpse = "c1"
+        (corpse,) = self.engine.state()["corpses"]
+        self.assertTrue(corpse["carried"])
+        self.assertEqual(corpse["distance_word"], "carried")
 
     def test_snapshot_carries_the_barriers_of_the_zone_in_words_and_counts(self):
         """Spec 13, What the narrator and the player see."""

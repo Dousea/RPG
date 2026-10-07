@@ -14,6 +14,7 @@ from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action.parser import parse_action_line
 from modules.action.types import ExerciseAction
 from modules.body import BodyPart
+from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.resolution import ExercisePlan, TimeSpan
@@ -53,6 +54,25 @@ class TimingTests(unittest.TestCase):
         self.assertAlmostEqual(reps_per_minute(EXERCISES["push_ups"], 5, 0), 2.6223776, places=6)
         self.assertAlmostEqual(reps_per_minute(EXERCISES["squats"], 0, 0), 1.25, places=6)
         self.assertAlmostEqual(reps_per_minute(EXERCISES["dumbbell_press"], 10, 0), 3.75, places=6)
+
+
+class HeavyLoadRepTests(unittest.TestCase):
+    """Spec 25, What Heavy Load does: a rep costs x(1 + level / 3) endurance, integer division."""
+
+    def cost(self, *item_ids: str) -> float:
+        player = make_player()
+        player.skills["strength"] = SkillState(level=0)
+        player.inventory.extend(ItemEntity(item=ITEMS[item_id]) for item_id in item_ids)
+        before = player.stats.get(CharacterStat.ENDURANCE)
+        ExerciseEngine(SkillEngine()).do_rep(player, EXERCISES["squats"], 0)
+        return before - player.stats.get(CharacterStat.ENDURANCE)
+
+    def test_levels_0_to_2_cost_the_same_and_3_and_4_cost_double(self):
+        base = self.cost()
+        self.assertGreater(base, 0)
+        self.assertAlmostEqual(self.cost("item_barbell", "item_plank"), base * 2)  # level 3
+        self.assertAlmostEqual(self.cost("item_barbell", "item_dumbbell"), base * 2)  # level 4
+        self.assertAlmostEqual(self.cost("item_barbell", "item_hammer"), base)  # level 2 (7.5 / 6)
 
 
 class EachRepTests(unittest.TestCase):

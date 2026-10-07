@@ -6,8 +6,9 @@ import random
 from data import exercises as k
 from data.clock import MINUTES_PER_HOUR
 from data.skills import FITNESS, STRENGTH
+from managers import carry
 from managers.skills import SkillEngine, fitness_level, skill_levels
-from managers.stats.status_effects import status_effect_level
+from managers.stats.status_effects import player_status_effect_levels, status_effect_level
 from modules.character.exercise import ExerciseDefinition
 from modules.entity.player import PlayerEntity
 from modules.stats import CharacterStat, StatusEffect
@@ -70,8 +71,10 @@ class ExerciseEngine:
         state.last_done_minute[exercise.id] = now
 
         heavy = k.HEAVY_FACTOR if exercise.heavy else 1.0
+        load_level = player_status_effect_levels(player)[StatusEffect.HEAVY_LOAD]
         cost = (
-            k.ENDURANCE_PER_REP
+            carry.fitness_endurance_mult(load_level)
+            * k.ENDURANCE_PER_REP
             * math.log(regularity / k.ENDURANCE_REGULARITY_DIVISOR + k.ENDURANCE_REGULARITY_OFFSET)
             / math.log(k.ENDURANCE_LOG_BASE_ARG)
             * heavy

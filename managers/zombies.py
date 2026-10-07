@@ -413,11 +413,18 @@ def approach_minutes(gap: float, speed_factor: float = 1.0) -> int:
 _HUNTING = (ZombieState.CHASING, ZombieState.ATTACKING)
 
 
-def enter_zone(world: World, zone_id: str, previous_zone_id: str, rng: random.Random) -> None:
+def enter_zone(
+    world: World,
+    zone_id: str,
+    previous_zone_id: str,
+    rng: random.Random,
+    carried_corpse: str | None = None,
+) -> None:
     """The player arrives in a zone: zombies there that are not hunting get a gap and a facing.
 
     Chasers belong to the new zone while they are within its size, otherwise to the zone just left.
-    A zombie alerted in the zone just left walks to the sound and idles there.
+    A zombie alerted in the zone just left walks to the sound and idles there. Bodies lying there
+    get a gap, except the one in the player's arms.
     """
     zone = world.locations[zone_id]
     for zombie in _by_id(world.zombies.values()):
@@ -434,7 +441,7 @@ def enter_zone(world: World, zone_id: str, previous_zone_id: str, rng: random.Ra
             zombie.state = ZombieState.IDLE
             zombie.sound_gap = 0.0
     for corpse in world.corpses.values():
-        if corpse.zone_id == zone_id:
+        if corpse.zone_id == zone_id and corpse.corpse_id != carried_corpse:
             corpse.gap = float(rng.randint(1, zone.size_tiles))
 
 
@@ -789,7 +796,10 @@ class ZombieLoop:
         limp = limp_factor(player)
         rose = False
         for body in sorted(world.corpses.values(), key=lambda c: int(c.corpse_id[1:])):
-            if body.zone_id != player.current_location_id:
+            if (
+                body.zone_id != player.current_location_id
+                or body.corpse_id == player.carrying_corpse
+            ):
                 continue
             before = body.gap
             if body.corpse_id == minute.approach_target:

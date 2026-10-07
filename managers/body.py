@@ -4,11 +4,13 @@ import random
 from collections import defaultdict
 
 from data import body as k
+from data import carry as carry_k
 from data import status_effects as status_effect_k
 from data import survival as survival_k
 from data import thermal as thermal_k
 from data import traits as trait_k
 from data import zombie_lore
+from managers import carry
 from managers.stats.status_effects import player_status_effect_levels
 from managers.thermoregulator import health_cap
 from modules.body import (
@@ -285,6 +287,17 @@ class BodyEngine:
         if overall_health(player.body) <= 0:
             self.death_fact = self._death_fact(player)
         return facts
+
+    def overload(self, player: PlayerEntity, *, resting: bool) -> None:
+        """At Heavy Load 3 or 4, awake and not resting, health above 75 loses HP a minute, down to 75."""
+        if player.asleep or resting:
+            return
+        level = player_status_effect_levels(player)[StatusEffect.HEAVY_LOAD]
+        health = overall_health(player.body)
+        if level < carry_k.OVERLOAD_MIN_LEVEL or health <= carry_k.OVERLOAD_HEALTH_ABOVE:
+            return
+        loss = min(carry.overload_loss(level), health - carry_k.OVERLOAD_HEALTH_ABOVE)
+        self._lose(player, "overload", loss)
 
     @staticmethod
     def _pain(player: PlayerEntity) -> None:

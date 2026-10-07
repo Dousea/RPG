@@ -18,7 +18,7 @@ from modules.action.types import (
     WaitAction,
 )
 from modules.entity.item import ItemEntity
-from tests.support import adjust_regard, npc_of, simulate
+from tests.support import adjust_regard, load_pack, npc_of, simulate
 
 
 class FixedRandom(random.Random):
@@ -567,8 +567,7 @@ class AskGiveTests(unittest.TestCase):
 
     def test_a_full_inventory_is_refused(self):
         adjust_regard(self.gm, "npc_emma", trust=45)
-        while len(self.gm.player.inventory) < self.gm.player.max_inventory_size:
-            give_item(self.gm, "item_granola_bar")
+        load_pack(self.gm.player, 49.9)
         result = ActionValidator(self.gm).validate(
             AskAction(npc_name="Emma", request="give", argument="Water Bottle")
         )

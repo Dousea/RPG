@@ -8,6 +8,7 @@ already decided.
 from collections.abc import Callable
 
 from data.barriers import BARRICADE_MIN, UNBARRICADE_MIN
+from data.carry import CARRY_CORPSE_MIN
 from modules.action.parser import TALK_TURN_MINUTES
 from modules.action.types import (
     AddGoalAction,
@@ -17,6 +18,7 @@ from modules.action.types import (
     AttackAction,
     BandageAction,
     BarricadeAction,
+    CarryAction,
     CloseAction,
     DisinfectAction,
     DropAction,
@@ -25,6 +27,7 @@ from modules.action.types import (
     GiveAction,
     MoveAction,
     OpenAction,
+    PutAction,
     RemoveBandageAction,
     RemoveGoalAction,
     SearchAction,
@@ -55,7 +58,9 @@ from modules.resolution import (
     TargetCorpse,
     TargetZombie,
     TimeSpan,
+    Transfer,
 )
+from modules.units import minutes_from_timed_action_frames
 
 SWING_MIN = 1  # spec 11
 SEARCH_MIN = 1  # spec 14
@@ -102,6 +107,20 @@ def _search_minutes(action: AnyAction, resolved: Resolution) -> int:
     return SEARCH_MIN
 
 
+def _transfer_minutes(action: AnyAction, resolved: Resolution) -> int:
+    """A move of items: its frames by the shared rule."""
+    if isinstance(resolved, Transfer):
+        return minutes_from_timed_action_frames(resolved.frames)
+    return QUICK_ACTION_MIN
+
+
+def _carry_minutes(action: AnyAction, resolved: Resolution) -> int:
+    """The walk up to a body that is not yet in reach, plus the minute picking it up."""
+    if isinstance(resolved, TargetCorpse):
+        return resolved.approach_minutes + CARRY_CORPSE_MIN
+    return CARRY_CORPSE_MIN
+
+
 def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
     match resolved:
         case HeldItem(entity=ItemEntity(item=ConsumableItem() as item)):
@@ -144,8 +163,10 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     SearchAction: _search_minutes,
     EquipAction: EQUIP_MIN,
     UnequipAction: UNEQUIP_MIN,
-    TakeAction: QUICK_ACTION_MIN,
-    DropAction: QUICK_ACTION_MIN,
+    TakeAction: _transfer_minutes,
+    DropAction: _transfer_minutes,
+    PutAction: _transfer_minutes,
+    CarryAction: _carry_minutes,
     WearAction: WEAR_MINUTES,
     TakeOffAction: TAKE_OFF_MINUTES,
     UseItemAction: _use_item_minutes,
@@ -170,6 +191,7 @@ TIME_COSTS: dict[type, int | CostFunction] = {
 MULTIPLIED_ACTIONS: tuple[type, ...] = (
     TakeAction,
     DropAction,
+    PutAction,
     UseItemAction,
     WearAction,
     TakeOffAction,

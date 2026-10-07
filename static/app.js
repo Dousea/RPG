@@ -10,6 +10,8 @@ const goalList = document.getElementById('goal-list');
 const heldList = document.getElementById('held-list');
 const equipmentList = document.getElementById('equipment-list');
 const inventoryList = document.getElementById('inventory-list');
+const carryLoad = document.getElementById('carry-load');
+const bagList = document.getElementById('bag-list');
 const wornList = document.getElementById('worn-list');
 const bodyList = document.getElementById('body-list');
 const survivorList = document.getElementById('survivor-list');
@@ -62,7 +64,7 @@ function emptyNote(text) {
 const SCREEN_FIELDS = {
     status: ['effects', 'conditions', 'sneaking', 'goals'],
     health: ['body'],
-    inventory: ['held', 'equipment', 'inventory'],
+    inventory: ['held', 'equipment', 'inventory', 'carry'],
     clothing: ['worn'],
     character: ['character', 'skills', 'zombie_kills'],
     people: ['npcs'],
@@ -250,6 +252,30 @@ function renderInventory(data) {
     }));
 }
 
+// Carried weight against what the player can carry (numbers are allowed here), and each bag with what is in it.
+function renderCarry(data) {
+    const load = data.carry;
+    if (!load) return;
+    carryLoad.textContent = `${load.weight} kg of ${load.max_weight} kg `;
+    if (load.level > 0) {
+        const name = ['', 'Weighed Down', 'Overloaded', 'Very Overloaded', 'Extremely Overloaded'][load.level];
+        carryLoad.appendChild(tag(name, effectTone({ type: 'heavy_load', level: load.level })));
+    }
+    if (load.bags.length === 0) {
+        clearAndFill(bagList, [emptyNote('No bags.')]);
+        return;
+    }
+    clearAndFill(bagList, load.bags.map(bag => {
+        const li = el('li', 'row-item');
+        const who = el('span', 'who');
+        who.appendChild(el('span', null, bag.name));
+        who.appendChild(el('span', 'aside', bag.contents.length ? bag.contents.join(', ') : 'Empty'));
+        li.appendChild(who);
+        li.appendChild(el('span', 'value muted', bag.place));
+        return li;
+    }));
+}
+
 function renderHeld(data) {
     const held = data.held;
     if (!held) {
@@ -428,7 +454,7 @@ function renderCorpses(data) {
     clearAndFill(corpseList, corpses.map(corpse => {
         const li = el('li', 'row-item');
         const who = el('span', 'who');
-        who.appendChild(el('span', null, 'A body'));
+        who.appendChild(el('span', null, corpse.carried ? 'The body you carry' : 'A body'));
         who.appendChild(el('span', 'aside', capitalised(corpse.distance_word)));
         if (corpse.searched) {
             const held = corpse.contents.length ? corpse.contents.map(capitalised).join(', ') : 'Nothing left';
@@ -552,6 +578,7 @@ function updatePanel(data) {
     renderCondition(data);
     renderGoals(data);
     renderInventory(data);
+    renderCarry(data);
     renderHeld(data);
     renderEquipment(data);
     renderWorn(data);

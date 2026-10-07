@@ -426,8 +426,9 @@ class SceneFilteringTests(unittest.TestCase):
         expected = {
             "goals": ["REMOVE_GOAL"],
             "items_here": ["TAKE"],
-            "corpses": ["SEARCH"],
+            "corpses": ["CARRY", "SEARCH"],
             "loot": ["TAKE"],
+            "bags": ["TAKE", "PUT"],
             "carried": ["DROP", "USE_ITEM", "EQUIP"],
             "held": ["UNEQUIP"],
             "wearable": ["WEAR"],

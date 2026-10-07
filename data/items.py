@@ -4,12 +4,17 @@ from data.clothing_coverage import covered_parts
 from data.clothing_items import STARTING_CLOTHES
 from data.zombie_clothing import ZOMBIE_CLOTHING
 from modules.body import BodyLocation
-from modules.character.equipment import CharacterHoldableSlot
+from modules.character.equipment import (
+    AnyCharacterEquipmentSlot,
+    CharacterArmorSlot,
+    CharacterHoldableSlot,
+)
 from modules.entity.item import ItemEntity
 from modules.item import (
     BaseItem,
     ClothingItem,
     ConsumableItem,
+    ContainerItem,
     HoldableItem,
     MedicalItem,
     MeleeWeaponItem,
@@ -61,7 +66,9 @@ def wetness_word(wetness: float) -> str:
     return "damp"
 
 
-def _medical(item_id: str, name: str, description: str, **fields) -> tuple[str, MedicalItem]:
+def _medical(
+    item_id: str, name: str, description: str, weight: float, **fields
+) -> tuple[str, MedicalItem]:
     return item_id, MedicalItem(
         id=item_id,
         name=name,
@@ -70,6 +77,7 @@ def _medical(item_id: str, name: str, description: str, **fields) -> tuple[str, 
         tags=["medical"],
         slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
         is_two_handed=False,
+        weight=weight,
         **fields,
     )
 
@@ -87,6 +95,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             BANDAGE_ID,
             "Bandage",
             "A clean cloth bandage.",
+            0.1,
             bandage_power=4,
             dirty_version=DIRTY_BANDAGE_ID,
         ),
@@ -94,6 +103,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             DIRTY_BANDAGE_ID,
             "Dirty Bandage",
             "A used bandage, stained and stiff.",
+            0.1,
             bandage_power=0.5,
             dirty=True,
             reusable_bandage=True,
@@ -102,6 +112,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             "item_sterilized_bandage",
             "Sterilized Bandage",
             "A bandage soaked in alcohol.",
+            0.1,
             bandage_power=4,
             alcoholic=True,
             dirty_version=DIRTY_BANDAGE_ID,
@@ -110,12 +121,14 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             ADHESIVE_BANDAGE_ID,
             "Adhesive Bandage",
             "A small sticking plaster.",
+            0.05,
             bandage_power=1.5,
         ),
         _medical(
             "item_ripped_sheets",
             "Ripped Sheets",
             "Strips of torn bedsheet.",
+            0.1,
             bandage_power=2,
             dirty_version=DIRTY_RIPPED_SHEETS_ID,
         ),
@@ -123,6 +136,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             DIRTY_RIPPED_SHEETS_ID,
             "Dirty Ripped Sheets",
             "Strips of torn sheet, filthy.",
+            0.1,
             bandage_power=0.5,
             dirty=True,
             reusable_bandage=True,
@@ -131,6 +145,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             "item_sterilized_ripped_sheets",
             "Sterilized Ripped Sheets",
             "Strips of torn sheet soaked in alcohol.",
+            0.1,
             bandage_power=2,
             alcoholic=True,
             dirty_version=DIRTY_RIPPED_SHEETS_ID,
@@ -139,6 +154,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             ALCOHOL_WIPES_ID,
             "Alcohol Wipes",
             "Packets of alcohol wipes.",
+            0.3,
             alcohol_power=4,
             uses=5,
         ),
@@ -146,6 +162,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             "item_disinfectant",
             "Disinfectant",
             "A bottle of rubbing alcohol.",
+            0.7,
             alcohol_power=4,
             uses=3,
         ),
@@ -153,6 +170,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             PAINKILLERS_ID,
             "Painkillers",
             "A bottle of painkillers.",
+            0.2,
             painkiller=True,
             uses=10,
         ),
@@ -160,8 +178,132 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
             "item_antibiotics",
             "Antibiotics",
             "A course of antibiotics.",
+            0.1,
             reduce_infection_power=50,
         ),
+    ]
+)
+
+BAG_HIT_POINTS = 20  # spec 25: not in the spec's rows; any bag's wear
+BACK_AND_HAND: list[AnyCharacterEquipmentSlot] = [
+    CharacterArmorSlot.SHOULDERS,
+    CharacterHoldableSlot.LEFT_HAND,
+]
+HAND_ONLY: list[AnyCharacterEquipmentSlot] = [CharacterHoldableSlot.LEFT_HAND]
+
+
+def _bag(
+    item_id: str,
+    name: str,
+    description: str,
+    capacity: float,
+    weight_reduction: int,
+    weight: float,
+    *,
+    slots: list[AnyCharacterEquipmentSlot] | None = None,
+    body_location: BodyLocation | None = None,
+    max_item_size: float | None = None,
+) -> tuple[str, ContainerItem]:
+    return item_id, ContainerItem(
+        id=item_id,
+        name=name,
+        description=description,
+        max_hit_points=BAG_HIT_POINTS,
+        tags=["bag"],
+        weight=weight,
+        slots=slots or [],
+        capacity=capacity,
+        weight_reduction=weight_reduction,
+        max_item_size=max_item_size,
+        body_location=body_location,
+    )
+
+
+SCHOOLBAG_ID = "item_schoolbag"  # spec 25
+
+BAGS: dict[str, ContainerItem] = dict(  # spec 25
+    [
+        _bag(SCHOOLBAG_ID, "Schoolbag", "A canvas schoolbag.", 15, 70, 1.0, slots=BACK_AND_HAND),
+        _bag(
+            "item_duffel_bag",
+            "Duffel Bag",
+            "A zipped duffel bag.",
+            18,
+            65,
+            1.0,
+            slots=BACK_AND_HAND,
+        ),
+        _bag(
+            "item_hiking_bag",
+            "Hiking Bag",
+            "A hiking pack with a frame.",
+            20,
+            75,
+            1.2,
+            slots=BACK_AND_HAND,
+        ),
+        _bag(
+            "item_large_hiking_bag",
+            "Large Hiking Bag",
+            "A big hiking pack.",
+            22,
+            80,
+            1.5,
+            slots=BACK_AND_HAND,
+        ),
+        _bag(
+            "item_satchel",
+            "Satchel",
+            "A shoulder satchel.",
+            12,
+            65,
+            1.0,
+            body_location=BodyLocation.SATCHEL,
+        ),
+        _bag(
+            "item_fanny_pack",
+            "Fanny Pack",
+            "A small pack worn at the front.",
+            1,
+            85,
+            0.2,
+            body_location=BodyLocation.FANNYPACKFRONT,
+        ),
+        _bag("item_suitcase", "Suitcase", "A hard suitcase.", 16, 50, 3.0, slots=HAND_ONLY),
+        _bag("item_garbage_bag", "Garbage Bag", "A black bin liner.", 20, 50, 0.1, slots=HAND_ONLY),
+        _bag(
+            "item_toolbox",
+            "Toolbox",
+            "A metal toolbox.",
+            8,
+            50,
+            2.0,
+            slots=HAND_ONLY,
+            max_item_size=2,
+        ),
+        _bag(
+            "item_briefcase",
+            "Briefcase",
+            "A leather briefcase.",
+            8,
+            50,
+            1.5,
+            slots=HAND_ONLY,
+            max_item_size=2,
+        ),
+        _bag(
+            "item_tote_bag",
+            "Tote Bag",
+            "A cloth tote bag.",
+            6,
+            50,
+            0.5,
+            slots=HAND_ONLY,
+            max_item_size=2,
+        ),
+        _bag("item_handbag", "Handbag", "A handbag.", 6, 50, 1.0, slots=HAND_ONLY, max_item_size=2),
+        _bag("item_plastic_bag", "Plastic Bag", "A carrier bag.", 8, 50, 0.1, slots=HAND_ONLY),
+        _bag("item_paper_bag", "Paper Bag", "A paper bag.", 2, 50, 0.1, slots=HAND_ONLY),
     ]
 )
 
@@ -304,6 +446,7 @@ ITEMS: dict[str, BaseItem] = {
         name="9mm Pistol",
         description="Standard issue, reliable.",
         max_hit_points=30,
+        weight=1.5,
         tags=["weapon", "firearm"],
         type=RangedWeaponType.PISTOL,
         damage=10,
@@ -319,6 +462,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Apartment Key",
         description="A key to apartment 3B.",
         max_hit_points=10,
+        weight=0.05,
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
             CharacterHoldableSlot.LEFT_HAND,
@@ -331,6 +475,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Storage Room Key",
         description="A worn brass key labeled 'STORAGE' in faded marker.",
         max_hit_points=10,
+        weight=0.05,
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
             CharacterHoldableSlot.LEFT_HAND,
@@ -343,6 +488,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Canned Beans",
         description="A sad, but filling meal.",
         max_hit_points=5,
+        weight=0.8,
         tags=["food", "consumable"],
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -358,6 +504,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Water Bottle",
         description="A litre of tap water in a scratched plastic bottle.",
         max_hit_points=5,
+        weight=1.1,
         tags=["drink", "consumable", "water"],
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -372,6 +519,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Granola Bar",
         description="Oats and syrup, flattened into a brick. Dry going down.",
         max_hit_points=3,
+        weight=0.2,
         tags=["food", "consumable"],
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -386,6 +534,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Instant Noodles",
         description="A brick of noodles and a foil sachet of salt.",
         max_hit_points=4,
+        weight=0.2,
         tags=["food", "consumable"],
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -402,6 +551,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Barbell",
         description="A loaded steel bar for lifting.",
         max_hit_points=15,  # spec 08
+        weight=6.0,
         tags=["exercise"],
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -414,6 +564,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Dumbbell",
         description="A cast-iron hand weight.",
         max_hit_points=10,  # spec 08
+        weight=5.0,
         tags=["exercise"],
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -562,8 +713,11 @@ ITEMS: dict[str, BaseItem] = {
         slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
         is_two_handed=False,
         uses=5,
+        weight=0.25,
+        unit_weight=0.05,
     ),
     **MEDICAL_ITEMS,
+    **BAGS,
     **ZOMBIE_CLOTHING,
     **STARTING_CLOTHES,
 }

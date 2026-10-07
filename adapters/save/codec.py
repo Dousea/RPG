@@ -50,7 +50,7 @@ from modules.entity.zombie import (
     ZombieEntity,
     ZombieState,
 )
-from modules.item import ClothingItem, MedicalItem, MeleeWeaponItem, StackItem
+from modules.item import ClothingItem, ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.social import SocialLog
@@ -60,7 +60,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 21  # spec 14
+SCHEMA_VERSION = 22  # spec 25
 
 MAX_ID_LENGTH = 40
 
@@ -250,6 +250,7 @@ def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
         "holes": sorted(part.value for part in entity.holes),
         "condition": entity.condition,
         "uses": entity.uses,
+        "contents": [_item_entity_to_dict(inner) for inner in entity.contents],
     }
 
 
@@ -274,6 +275,12 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
             entity.holes.add(BodyPart(name))
         except ValueError:
             logger.warning(f"Dropping unknown body part '{name}' from a hole.")
+    if isinstance(entity.item, ContainerItem):
+        entity.contents = [
+            inner
+            for inner in (_item_entity_from_dict(_as_dict(c)) for c in data.get("contents", []))
+            if inner is not None
+        ]
     return entity
 
 
@@ -296,7 +303,10 @@ def _worn_from_dict(value: Any) -> dict[BodyLocation, ItemEntity]:
             continue
         if entity is None:
             continue
-        if not isinstance(entity.item, ClothingItem) or entity.item.body_location != location:
+        if (
+            not isinstance(entity.item, ClothingItem | ContainerItem)
+            or entity.item.body_location != location
+        ):
             logger.warning(f"Dropping '{entity.item.id}' worn at '{location_name}'.")
             continue
         worn[location] = entity
@@ -562,7 +572,6 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "name": player.name,
             "current_location_id": player.current_location_id,
             "current_place": player.current_place,
-            "max_inventory_size": player.max_inventory_size,
             "stats": player.stats.to_dict(),
             "thermal": player.thermal.to_dict(),
             "asleep": player.asleep,
@@ -603,6 +612,8 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "conditions": [condition.value for condition in player.conditions],
             "zombie_kills": player.zombie_kills,
             "at_barrier": player.at_barrier,
+            "carrying_corpse": player.carrying_corpse,
+            "carrying_skeleton": player.carrying_skeleton,
         },
         "npcs": [
             {
@@ -884,7 +895,6 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         current_location_id=location_id,
         current_place=_as_text(data.get("current_place", ""), MAX_PLACE_LENGTH),
         entity_id=data.get("entity_id", "player"),
-        max_inventory_size=data.get("max_inventory_size", 20),
         inventory=[
             entity
             for entity in (_item_entity_from_dict(i) for i in data.get("inventory", []))
@@ -916,6 +926,8 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         conditions=conditions,
         zombie_kills=max(0, int(data.get("zombie_kills", 0))),
         at_barrier=_optional_text(data.get("at_barrier")),
+        carrying_corpse=_optional_text(data.get("carrying_corpse")),
+        carrying_skeleton=_as_bool(data.get("carrying_skeleton", False)),
     )
     player.equipment = equipment
     player.worn = worn

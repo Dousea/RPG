@@ -11,6 +11,7 @@ from managers.zombie_attack import (
     WoundOdds,
     clothing_defence,
     defence_value,
+    player_defence,
     resolve_attack,
     roll_body_part,
     roll_wound_damage,
@@ -341,3 +342,18 @@ class ResolveAttackTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeavyLoadDefenceTests(unittest.TestCase):
+    """Spec 25, What Heavy Load does: defence drops 2 a level against a zombie attack."""
+
+    def test_two_levels_cost_four_points(self):
+        gm = GameManager()
+        gm.player.worn.clear()
+        gm.player.inventory.clear()
+        gm.player.skills["strength"] = SkillState(level=0)
+        base = player_defence(gm.player, 1)
+        gm.player.inventory.extend(
+            ItemEntity(item=ITEMS[item_id]) for item_id in ("item_barbell", "item_hammer")
+        )
+        self.assertEqual(player_defence(gm.player, 1), base - 4)

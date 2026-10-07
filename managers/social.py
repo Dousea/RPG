@@ -8,6 +8,7 @@ import random
 
 from data import social as k
 from data.topics import Topic
+from managers import carry
 from managers.game import GameManager
 from modules.character.state import CharacterDisposition, CharacterTrust
 from modules.entity.item import ItemEntity
@@ -129,8 +130,7 @@ class SocialManager:
         return [lead, *self._apply(npc, approach, affection, row.trust)]
 
     def give(self, entity: ItemEntity, npc: NpcEntity) -> list[str]:
-        player = self._manager.player
-        player.inventory.remove(entity)
+        carry.take_out(self._manager.player, entity)
         npc.inventory.append(entity)
         food = isinstance(entity.item, ConsumableItem)
         delta = k.GIVE_FOOD_DELTA if food else k.GIVE_OTHER_DELTA

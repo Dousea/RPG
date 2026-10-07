@@ -6,6 +6,7 @@ from data import body as k
 from data import traits as trait_k
 from data import zombie_lore
 from data.items import ALCOHOL_WIPES_ID, ITEMS
+from managers import carry
 from managers.body import clear_bandage
 from managers.skills import SkillEngine, skill_levels
 from modules.body import BodyPart
@@ -53,7 +54,7 @@ def bandage_items(player: PlayerEntity) -> list[ItemEntity]:
     """Carried bandages, best first: an alcohol bandage, then the most powerful, dirty ones last."""
     found = [
         entity
-        for entity in player.inventory
+        for entity in carry.carried_items(player)
         if isinstance(entity.item, MedicalItem) and entity.item.bandage_power > 0
     ]
     return sorted(found, key=_bandage_rank)
@@ -69,7 +70,7 @@ def disinfectant_items(player: PlayerEntity) -> list[ItemEntity]:
     """Carried alcohol items with uses left, wipes before a bottle."""
     found = [
         entity
-        for entity in player.inventory
+        for entity in carry.carried_items(player)
         if isinstance(entity.item, MedicalItem)
         and entity.item.alcohol_power > 0
         and entity.uses > 0
@@ -102,7 +103,7 @@ class FirstAid:
         state.bandage = item.id
         state.bandage_life = life
         state.bandage_alcoholic = item.alcoholic
-        player.inventory.remove(entity)
+        carry.take_out(player, entity)
         return facts
 
     def remove_bandage(self, player: PlayerEntity, part: BodyPart) -> list[str]:
@@ -146,4 +147,4 @@ class FirstAid:
     def _spend_use(player: PlayerEntity, entity: ItemEntity) -> None:
         entity.uses -= 1
         if entity.uses <= 0:
-            player.inventory.remove(entity)
+            carry.take_out(player, entity)

@@ -4,11 +4,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from data import carry as carry_k
 from data import skills as skill_k
 from data import survival as k
 from data import traits as trait_k
 from data import zombie_lore as zombie_k
 from data.thermal import Metabolic
+from managers import carry
 from managers.skills import fitness_level
 from managers.stats.status_effects import status_effect_level
 from modules.entity.player import PlayerEntity
@@ -51,7 +53,9 @@ class StatContext:
     floor: int = 0
     power_on: bool = True
     metabolic: Metabolic = Metabolic.DEFAULT
-    carry_ratio: float = 0.0
+    carry_ratio: float = 0.0  # spec 25: carried weight over capacity
+    heavy_load: int = 0  # spec 25: the Heavy Load level
+    carrying_corpse: bool = False  # spec 25
     wearer: PlayerEntity | None = None
 
 
@@ -144,7 +148,10 @@ class EnduranceDriver:
         if ctx.asleep:
             delta = k.SLEEPING_ENDURANCE_REGEN_per_hour * recovery
         elif ctx.exercising:
-            delta = -k.EXERCISE_ENDURANCE_DRAIN_per_hour
+            drain = k.EXERCISE_ENDURANCE_DRAIN_per_hour
+            if ctx.carrying_corpse and ctx.walking:
+                drain = carry_k.CORPSE_CARRY_ENDURANCE_DRAIN_per_hour
+            delta = -drain * carry_k.HEAVY_ENDURANCE_MULT[ctx.heavy_load]
         elif ctx.resting:
             delta = (
                 k.IMOBILE_ENDURANCE_INCREASE_per_hour
@@ -154,7 +161,13 @@ class EnduranceDriver:
             )
         elif ctx.walking:
             level = status_effect_level(StatusEffect.ENDURANCE, stats.get(CharacterStat.ENDURANCE))
-            if level >= k.WALKING_DRAIN_ENDURANCE_LEVEL:
+            if ctx.heavy_load >= carry_k.OVERLOAD_MIN_LEVEL:
+                sneak = k.SNEAK_ENDURANCE_FACTOR if ctx.sneaking else 1.0
+                drain = carry.walk_drain_per_hour(ctx.heavy_load, ctx.traits)
+                delta = -drain * sneak
+            elif ctx.heavy_load > carry_k.REGENERATES_UP_TO_LEVEL:
+                delta = 0.0
+            elif level >= k.WALKING_DRAIN_ENDURANCE_LEVEL:
                 sneak = k.SNEAK_ENDURANCE_FACTOR if ctx.sneaking else 1.0
                 delta = -k.WALKING_ENDURANCE_DRAIN_per_hour * sneak
             else:
@@ -164,6 +177,8 @@ class EnduranceDriver:
                     * (1 - fatigue)
                     * recovery
                 )
+        elif ctx.heavy_load > carry_k.REGENERATES_UP_TO_LEVEL:
+            delta = 0.0
         else:
             delta = (
                 k.IMOBILE_ENDURANCE_INCREASE_per_hour

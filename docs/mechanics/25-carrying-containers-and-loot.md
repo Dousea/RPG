@@ -1,0 +1,368 @@
+# Carrying, Containers and Loot
+
+> **Status: Stage 1 implemented** (carrying). Stages 2 and 3 (loot containers, new places and items) are not built yet.
+
+Everything the player has now weighs something. A Strength-based capacity sets
+when the load starts to hurt, bags hold things and ease the weight while they
+are worn or held, and a body can be picked up and carried. The Heavy Load
+status effect, which earlier mechanics read as 0, is live.
+
+The mechanic ships in three stages. This document describes the first.
+
+1. **Carrying**: weight, capacity, Heavy Load and what it switches on, bags,
+   `PUT`, and carrying a corpse.
+2. **Loot containers**: rooms, containers, `SEARCH` on them, the loot roll.
+3. **Places and items**: six new zones and the items the loot tables can drop.
+
+Three facts shape the rest:
+
+- **Two limits, not one.** The Strength-based capacity only sets Heavy Load.
+  The hard limit on what the player carries is 50 kg. A character can carry
+  past their capacity, slowly hurting themselves, up to that limit.
+- **Worn and held weigh less; only a worn or held bag reduces.** Anything worn
+  or in a hand weighs 0.3 of its weight. A bag's reduction applies to its
+  contents only while the bag is worn or held.
+- **A body has weight here.** A carried body weighs 6 kg (bones 2.1 kg), fills
+  both hands and counts toward Heavy Load.
+
+Ids and names stay generic: `schoolbag`, `toolbox`, `satchel`.
+
+## What we port
+
+| Piece | File |
+| --- | --- |
+| Every number below: capacity, weight, Heavy Load, transfer time, Strength XP, corpse carrying | `data/carry.py` |
+| Weight, capacity, Heavy Load level, transfer frames, bag room, Strength XP rolls, walking drain, overload loss | `managers/carry.py` |
+| The bag type and each item's weight | `modules/item.py`, `data/items.py` |
+| What a bag holds | `modules/entity/item.py` |
+| Heavy Load in the endurance driver and the status effect row | `managers/stats/drivers.py`, `managers/stats/status_effects.py`, `data/status_effects.py` |
+| The overload loss | `managers/body.py` |
+| The verbs `PUT` and `CARRY`, `TAKE all` | `modules/action/types.py`, `modules/action/parser.py`, `managers/validator.py`, `managers/simulation.py` |
+
+## Converting rates to game hours
+
+- **Timed-action frames** are 180 per game minute. A transfer's frames divide by
+  180 and round by the shared rule: under a minute and a half is 1 minute,
+  otherwise the nearest minute.
+- **Frame rate** (10 800 an hour, 180 a minute): the walking drain and the
+  overload loss.
+- **Real seconds:** Strength XP checks run at most once per real second, and a
+  game minute is 3.75 real seconds, so a minute of walking gives 3.75 checks.
+
+All of them go through `modules/units.py`.
+
+## Carrying
+
+### Weight
+
+What the player weighs is everything they have, summed:
+
+```
+weight(item)             = own weight + what is inside        # loose in the pack
+weight(worn or held)     = (own weight + what is inside) x 0.3
+weight(worn or held bag) = own weight x 0.3 + contents x (1 - reduction / 100)
+carried = the pack + what is worn + what is in the hands or on the shoulders + a carried body
+```
+
+A bag's contents are the sum of what is in it, so a bag inside a bag counts in
+full; the reduction applies once, at the bag that is worn or held. A drink's
+litres count as kilograms, so a full 1 L water bottle weighs 1.1 kg. A stack of
+nails weighs 0.05 kg a nail left in it. A drained drink is no lighter. Weights
+compare rounded to a hundredth of a kilo.
+
+The slot count is gone. The pack refuses an item that would take the total past
+50 kg: "<name> can't carry any more." A bag refuses what would take its
+contents past its capacity, and a bag holds at most 50 kg less its own weight.
+
+| Item | kg |
+| --- | --- |
+| Adhesive bandage | 0.05 |
+| Bandage, dirty and sterilized bandage, ripped sheets (clean, dirty, sterilized), antibiotics | 0.1 |
+| Alcohol wipes | 0.3 |
+| Painkillers | 0.2 |
+| Disinfectant | 0.7 (0.2 bottle, 0.5 litre) |
+| Canned beans | 0.8 |
+| Water bottle | 1.1 (0.1 bottle, 1.0 litre) |
+| Granola bar, instant noodles | 0.2 |
+| Nails | 0.05 each |
+| Plank | 3.0 |
+| Hammer, pistol | 1.5 |
+| Barbell | 6.0 |
+| Dumbbell | 5.0 |
+| The two keys | 0.05 |
+
+Clothing and melee weapons keep the weights they already had.
+
+### Capacity
+
+```
+base       = int(8 x modifier[Strength level])
+reducers   = the Hungry, Thirst, Sick, Bleeding and Injured losses
+capacity   = max(0, base - reducers)
+capacity   = int(capacity x trait multiplier)
+```
+
+| Strength | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Capacity (kg) | 6 | 7 | 8 | 9 | 11 | 12 | 14 | 15 | 16 | 18 | 20 |
+
+Kilograms lost by status effect level:
+
+| Status effect | L1 | L2 | L3 | L4 |
+| --- | --- | --- | --- | --- |
+| Hungry, Thirst | 0 | 1 | 2 | 2 |
+| Sick, Injured | 0 | 1 | 2 | 3 |
+| Bleeding | 0 | 1 | 1 | 1 |
+
+Trait multipliers: Strong 1.5, Stout 1.25, Feeble 0.9, Weak 0.75. They exclude
+each other. The Strength trait also moves the Strength level, so Strong at
+Strength 9 has `int(18 x 1.5)` = 27 kg. A hungry character carries less: Hungry
+level 3 at Strength 5 gives 10 kg.
+
+### Heavy Load
+
+A status effect driven by `carried / capacity`:
+
+| Status effect | L1 | L2 | L3 | L4 | Names |
+| --- | --- | --- | --- | --- | --- |
+| Heavy Load | above 1.0 | 1.25 or more | 1.5 or more | 1.75 or more | Weighed Down, Overloaded, Very Overloaded, Extremely Overloaded |
+
+It is 0 at 0 health. With capacity 0 and anything carried it is level 4; with
+nothing carried it is 0. It is worked out on demand, so it changes the moment
+an item moves, a status effect level changes or Strength does. When an action's
+own item move changes the level, the turn's facts say so ("is now Very
+Overloaded.").
+
+### What Heavy Load does
+
+| Effect | Rule |
+| --- | --- |
+| Crit chance | -5 per level (melee) |
+| Defence | -2 per level against a zombie attack |
+| Fitness exercise endurance | x(1 + level / 3), integer division: x1 at levels 0 to 2, x2 at 3 and 4 |
+| Endurance regeneration | standing still and walking regenerate only at level 0 or 1 |
+| Exercising drain | x1, 1.5, 1.9, 2.3, 2.8 for levels 0 to 4 |
+| Walking drain | levels 3 and 4 while moving |
+| Overload loss | levels 3 and 4 |
+| Body heat | the thermoregulator reads `carried / capacity`, held between 0 and 1 |
+
+- **Walking drain**, per minute: 0.01307 endurance at level 3 and 0.01582 at
+  level 4 for the default build, x1.5 while sneaking. Overweight raises the
+  factor to 2.9 (from 1.4), Athletic lowers it to 0.8, Asthmatic raises the
+  second factor to 1.0 (from 0.7).
+- **Overload loss.** At level 3 or 4, awake, not resting (`WAIT` and `SLEEP`
+  are resting) and with health above 75, the body loses 1.485 HP a minute at
+  level 3 and 2.97 HP at level 4, never past 75 HP. It runs after the body
+  minute. It stops at 75 HP, so it cannot kill by itself.
+
+### Bags
+
+A bag has a capacity in kilograms, a weight reduction in percent and, for some,
+a largest item it takes.
+
+| Item | Carried | Capacity | Reduction | Weight | Largest item |
+| --- | --- | --- | --- | --- | --- |
+| Schoolbag | back or hand | 15 | 70 | 1.0 | |
+| Duffel bag | back or hand | 18 | 65 | 1.0 | |
+| Hiking bag | back or hand | 20 | 75 | 1.2 | |
+| Large hiking bag | back or hand | 22 | 80 | 1.5 | |
+| Satchel | worn (`satchel`) | 12 | 65 | 1.0 | |
+| Fanny pack | worn (`fannypackfront`) | 1 | 85 | 0.2 | |
+| Suitcase | hand | 16 | 50 | 3.0 | |
+| Garbage bag | hand | 20 | 50 | 0.1 | |
+| Toolbox | hand | 8 | 50 | 2.0 | 2 |
+| Briefcase | hand | 8 | 50 | 1.5 | 2 |
+| Tote bag | hand | 6 | 50 | 0.5 | 2 |
+| Handbag | hand | 6 | 50 | 1.0 | 2 |
+| Plastic bag | hand | 8 | 50 | 0.1 | |
+| Paper bag | hand | 2 | 50 | 0.1 | |
+
+A schoolbag lies on the floor of the apartment.
+
+| Where | Verb | Rule |
+| --- | --- | --- |
+| On the back (the shoulders) | `EQUIP` | one at a time; back bags only |
+| Held in the left hand | `EQUIP` | blocks a two-handed weapon; hand bags, and back bags when the shoulders are taken |
+| Worn at the body | `WEAR` | like any garment; satchel and fanny pack |
+
+`EQUIP <bag>` puts a back bag on the shoulders if they are free, else in the
+left hand ("<name>'s hands and back are full."; a hand-only bag says "<name>'s
+hand is full."). A held bag always takes the left hand, so a one-handed weapon
+in the right stays usable. A body bag is refused for `EQUIP` and a back bag for
+`WEAR`. Dropping a bag, from the back, a hand or the pack, leaves its contents
+inside it.
+
+Items inside a bag the player has with them (in the pack, worn or held) can be
+named by every verb that names a carried item: eat from a bag, wear a jacket
+out of a bag, bandage with a bandage from a bag. A bag lying in the world is
+opened only by taking it.
+
+### Moving things
+
+Frames per item (`w` is the item's own weight, at most 3 kg):
+
+| From to | Frames |
+| --- | --- |
+| pack to a carried bag | `120 x w x fill`, `fill` = the bag's contents / its capacity, at least 0.4 |
+| pack to the floor (`DROP`) | `50 x w x 0.1` |
+| the floor or a corpse to the pack | `50 x w` |
+| a carried bag to anywhere | `120 x w` |
+
+Dextrous halves the frames and All Thumbs doubles them. Then the pain, mood and
+cold slowdown applies, and the total of one action converts to minutes by the
+shared rule. A single small item is 1 minute. `TAKE all` is one action, so its
+frames add up before the one conversion: twelve 0.8 kg cans from a corpse are
+480 frames, 3 minutes. A 3 kg plank into a bag at 90% full is 324 frames, 2
+minutes. Moving a worn garment is `WEAR` or `TAKE_OFF` (1 minute), not a
+transfer.
+
+### Strength XP
+
+For every minute of `MOVE_TO`, at any pace, with `carried` above half the
+capacity, there are 3.75 checks (3, plus a fourth with probability 0.75). Each
+check is 1 in 20 for 2 Strength XP: 0.375 XP a minute in expectation. At or
+below half, nothing. Strength skips the XP boost.
+
+### Carrying a corpse
+
+`CARRY <corpse>` picks a body up in 1 minute and `DROP corpse` puts it down in
+1 minute.
+
+- **Refused** (0 minutes): asleep; no such corpse; already carrying one; a
+  hand holding a weapon or bag ("<name>'s hands are full."). A bag on the back
+  does not refuse. If the body is further than a tile, the player first walks
+  up to it, as for `SEARCH`; a body that rose or rotted away meanwhile is gone.
+- **While carrying**, `EQUIP`, `UNEQUIP`, `ATTACK`, `SHOVE`, `USE_ITEM`, `TAKE`,
+  `PUT`, `SEARCH`, `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT`, `BARRICADE`,
+  `UNBARRICADE`, `EXERCISE` and `SLEEP` are refused ("<name> is carrying a
+  body."). `MOVE_TO`, `WAIT`, `STANCE`, `SHOUT`, `TALK`, `WEAR`, `TAKE_OFF`,
+  `OPEN`, `CLOSE` and `DROP` stay.
+- **Endurance:** moving with a body counts as exercising for the survival
+  stats, at 8.75 times the usual exercising drain: 2.457 an hour.
+- **Weight:** 6 kg, 2.1 kg for bones. It feeds Heavy Load and the Strength XP
+  check like anything else.
+- **The body follows the player.** Its zone becomes the zone the player enters,
+  and its distance stays 0, never re-rolled. The corpse count falls in the zone
+  it left and rises in the one it enters, so carrying bodies out of a building
+  lowers its corpse sickness. A fake-dead body in the arms does not get up.
+  `DROP corpse` leaves it 1 tile away. A body that rots away leaves the arms.
+
+## Rooms and containers
+
+Not built yet.
+
+## Places and items
+
+Not built yet.
+
+## Verbs
+
+All of them refuse while the player is asleep (0 minutes). A move of items takes
+its transfer time.
+
+- **`TAKE <item> from <corpse or bag>`, `TAKE all`, `TAKE all from <corpse or
+  bag>`:** the plain `TAKE <item>` (the ground) and `from <corpse>` stay; the
+  source may now be a carried bag. `TAKE all` with no source takes everything
+  on the ground; with a source, everything in it, as one action. Refused: no
+  such bag ("<name> has no 'x' to take from."); the bag holds no such item;
+  nothing to take; the pack would pass 50 kg ("<name> can't carry any more.");
+  carrying a body. A bag lying on the ground is taken as one item, with its
+  contents.
+- **`PUT <item> in <bag>`:** moves a carried item into a bag the player has with
+  them. Refused: no such item or bag; it would pass the bag's capacity or its
+  largest item ("The toolbox is full."); a bag into itself or into a bag it
+  holds; carrying a body.
+- **`DROP <item>`:** takes the item from anywhere the player has it, a bag or
+  the back included, and leaves it on the ground. **`DROP corpse`** puts a body
+  down.
+- **`EQUIP`, `UNEQUIP`, `WEAR`, `TAKE_OFF`** work on bags as on any item, 1
+  minute each. `UNEQUIP` and `TAKE_OFF` refuse if the pack would pass 50 kg.
+- **`CARRY <corpse>`:** see Carrying a corpse.
+
+## Interruptions
+
+No new cause. Heavy Load rising uses the status effect level-change facts and
+does not interrupt.
+
+## Traits
+
+| Trait | Effect |
+| --- | --- |
+| Strong, Stout, Feeble, Weak | capacity x 1.5, 1.25, 0.9, 0.75 |
+| Dextrous, All Thumbs | transfer frames x 0.5, x 2 |
+| Overweight, Athletic, Asthmatic | the walking drain at levels 3 and 4 |
+
+## Skills and XP
+
+Strength gains XP from walking loaded and sets capacity. Fitness exercise
+costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
+
+## Hooks into earlier specs
+
+- **Survival stats:** the exercising drain, walking and standing regeneration,
+  and the walking drain read the Heavy Load level; the body minute carries the
+  overload loss.
+- **Status effects:** Heavy Load joins the table; the crit penalty reads the
+  live level.
+- **Body temperature:** the thermoregulator's carry term reads
+  `carried / capacity`.
+- **Skills:** a Fitness rep costs more endurance at levels 3 and 4.
+- **Zombies and melee:** defence and crit chance read the live level.
+- **Clothing:** the slot count is gone; a bag worn at the body shares the worn
+  items with garments.
+- **Corpses:** a carried body follows the player and keeps its distance.
+- **Barricades:** the hammer, planks and nails can be in a bag, and a plank
+  pried off goes to the floor when the pack is at its limit.
+
+## What the narrator and the player see
+
+- **Narrator.** Facts say what happened in words and never give weights:
+  "<name> puts the hammer in the toolbox.", "<name> takes the canned beans out
+  of the schoolbag.", "<name> sets the schoolbag on his back.", "<name> hauls
+  the body up and carries it.", "<name> lets the body fall." Heavy Load reaches
+  the narrator in `[CONDITION]` ("Very Overloaded (3/4)") and in the level
+  change facts. A carried body reads "carried" in `[CORPSES]`.
+- **Parser.** `[INVENTORY]` shows where each bag is and what is in it:
+
+  ```
+  [INVENTORY]
+   - Schoolbag (on your back): Canned Beans, Bandage
+   - Toolbox (in your hand): Hammer
+   - Duffel Bag: Toolbox (Plank)
+   - Canned Beans
+  ```
+
+  A bag with nothing in it says "empty". `PUT` is listed when the player has a
+  bag, `TAKE` when a bag or the ground gives something to take, and `CARRY`
+  when a body is in view. The plan schema offers the bags, what is in them and
+  "all" as `TAKE` sources and items.
+- **Player (UI).** The inventory screen shows the weight against the capacity
+  in kilograms and each bag with its place and contents; Heavy Load shows in the
+  status strip. `/play` gains `carry` (`weight`, `max_weight`, `level`, `bags`)
+  and a `carried` flag on a body.
+
+## Saves
+
+Schema 22. Stage 1 adds nested `contents` on every item, `carrying_corpse` and
+`carrying_skeleton` on the player, and bags in the shoulder slot and worn at the
+body. Incompatible saves are discarded.
+
+## Edge cases
+
+- **Capacity 0:** at Strength 0 with Hungry 4 and Injured 4, anything carried is
+  Heavy Load 4.
+- **Past 50 kg** the pack refuses, and a bag refuses past its capacity; level 4
+  (1.75 x capacity) is reachable only while capacity is at most 28.
+- **A bag in a bag** counts in full; the reduction applies at the worn or held
+  bag once. A bag can't go into itself or into a bag it holds.
+- **Dropping a bag** from the back or a hand drops it with its contents inside;
+  eating from a bag is a normal `USE_ITEM`.
+- **A body that becomes bones** while carried weighs 2.1 kg from the next action.
+
+## Testing
+
+`tests/test_carry.py` (capacity, weight, Heavy Load, drains, overload loss,
+transfers, bag verbs, Strength XP), `tests/test_corpse_carry.py`,
+`tests/test_validator.py` (the refusals), `tests/test_items.py` (weights, bag
+rows), `tests/test_persistence.py` (nested contents, the carried body),
+`tests/test_context.py` and `tests/test_engine.py` (the blocks and `/play`).

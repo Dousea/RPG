@@ -244,7 +244,7 @@ Richer than the document's `position / condition / inventory`:
 name, entity_id, current_location_id
 body (17 parts; hit_points is derived, see mechanics/12-health-and-infection.md),
 stats (survival stats), asleep
-inventory: list[ItemEntity]          max_inventory_size = 20
+inventory: list[ItemEntity]          loose items; bags hold more, see mechanics/25-carrying-containers-and-loot.md
 appearance, occupation_id, job_title see mechanics/07-character-creation.md
 skills: {skill: SkillState}          level and XP, see mechanics/08-skills.md
 skill_boosts: {skill: int}           starting boosts

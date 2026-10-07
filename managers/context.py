@@ -34,6 +34,7 @@ from data.social import TALK_APPROACHES
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from data.time_costs import MAX_PLAN_ACTIONS
 from data.traits import TRAITS
+from managers import carry
 from managers.barriers import barriers_of, state_word
 from managers.body import open_wounds
 from managers.climate import describe_weather
@@ -49,7 +50,7 @@ from modules.action.parser import SceneKey, available_verbs
 from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
 from modules.entity.barrier import BarrierEntity
 from modules.entity.item import ItemEntity
-from modules.item import ClothingItem, MedicalItem, StackItem
+from modules.item import ClothingItem, ContainerItem, MedicalItem, StackItem
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
@@ -406,7 +407,7 @@ Traits: {_lines(trait_lines) or "None"}
 
     def _exercise_section(self) -> str:
         """The exercises the parser may propose, and which gym items are carried."""
-        carried = {entity.item.id for entity in self.manager.player.inventory}
+        carried = {entity.item.id for entity in carry.carried_items(self.manager.player)}
         items = [
             f"a {noun}"
             for item_id, noun in ((BARBELL_ID, "barbell"), (DUMBBELL_ID, "dumbbell"))
@@ -418,6 +419,29 @@ Traits: {_lines(trait_lines) or "None"}
         )
         return f"{names}\nCarrying: {' and '.join(items) or 'nothing to lift'}"
 
+    def _inventory_lines(self) -> list[str]:
+        """What the player holds, wears as a bag and has in the pack; each bag with what is inside."""
+        player = self.manager.player
+        held = carry.held_things(self.manager.player)
+        lines: list[str] = []
+        for entity in held:
+            bag = isinstance(entity.item, ContainerItem)
+            lines.append(
+                _inventory_line(entity, carry.bag_place(player, entity) if bag else "in hands")
+            )
+        for entity in carry.on_body(player):
+            worn_bag = isinstance(entity.item, ContainerItem) and not any(entity is h for h in held)
+            if worn_bag:
+                lines.append(_inventory_line(entity, carry.bag_place(player, entity)))
+        lines.extend(_inventory_line(entity, "") for entity in player.inventory)
+        return lines
+
+    def _carried_things(self) -> list[ItemEntity]:
+        """What a verb can name as carried: the pack and its bags, and the bags worn or held."""
+        player = self.manager.player
+        bags = [e for e in carry.on_body(player) if isinstance(e.item, ContainerItem)]
+        return [*carry.carried_items(player), *bags]
+
     def scene_keys(self) -> frozenset[SceneKey]:
         """The kinds of thing the scene holds, from the same state the blocks render."""
         manager = self.manager
@@ -428,11 +452,13 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("goals")
         if manager._ground_items():
             keys.add("items_here")
-        reachable = [*player.inventory, *manager._ground_items()]
+        reachable = [*self._carried_things(), *manager._ground_items()]
         if reachable:
             keys.add("carried")
-        if held_entity(player) is not None:
+        if carry.held_things(self.manager.player):
             keys.add("held")
+        if carry.carried_bags(player):
+            keys.add("bags")
         if any(isinstance(entity.item, ClothingItem) for entity in reachable):
             keys.add("wearable")
         if self._worn_section() != "Nothing":
@@ -461,16 +487,17 @@ Traits: {_lines(trait_lines) or "None"}
         player = manager.player
         ground = manager._ground_items()
         npcs = manager.npcs_in_location(player.current_location_id)
-        held = held_entity(player)
         bodies = perceived_corpses(manager)
+        bags = carry.carried_bags(player)
         return SceneChoices(
             items_here=_names(ground),
-            carried=tuple(dict.fromkeys(_names([*player.inventory, *ground]))),
-            held=_names([held] if held is not None else []),
+            carried=tuple(dict.fromkeys(_names([*self._carried_things(), *ground]))),
+            held=_names(carry.held_things(self.manager.player)),
             wearable=_names(
                 entity
-                for entity in [*player.inventory, *ground]
+                for entity in [*carry.carried_items(player), *ground]
                 if isinstance(entity.item, ClothingItem)
+                or (isinstance(entity.item, ContainerItem) and entity.item.body_location)
             ),
             worn=_names(entity for _, entity in player.worn_outer_to_inner()),
             npcs=tuple(npc.name for npc in npcs),
@@ -481,6 +508,8 @@ Traits: {_lines(trait_lines) or "None"}
             corpse_items=tuple(
                 entity.item.name for body in bodies if body.searched for entity in body.contents
             ),
+            bags=tuple(dict.fromkeys(_names(bags))),
+            bag_items=tuple(dict.fromkeys(_names(e for bag in bags for e in bag.contents))),
             hurt_parts=tuple(
                 part_word(part)
                 for part, state in player.body.items()
@@ -610,11 +639,7 @@ reach {looks.object}, though {looks.subject} can still hear them.)
         """
         manager = self.manager
         player = manager.player
-        held = held_entity(player)
-        carried = [f" - {entity.item.name}{_marks(entity)}" for entity in player.inventory]
-        if held is not None:
-            carried.insert(0, f" - {held.item.name} (in hands)")
-        inventory_str = "\n".join(carried) or "Empty"
+        inventory_str = "\n".join(self._inventory_lines()) or "Empty"
         looks = player.appearance
         return f"""[CHARACTER]
 {player.name} ({looks.subject}/{looks.object}). Say "{looks.subject}" and "{looks.object}", never "they", for this character.
@@ -827,6 +852,25 @@ engine could not decide at all -- treat it the same as [OUTCOMES].)
 
 [SCENE]
 {player_input}"""
+
+
+def _inventory_line(entity: ItemEntity, place: str) -> str:
+    """One inventory line: the name, where it is if not loose, and a bag's contents."""
+    line = f" - {entity.item.name}{_marks(entity)}"
+    if place:
+        line += f" ({place})"
+    if isinstance(entity.item, ContainerItem):
+        line += f": {_contents_words(entity) or 'empty'}"
+    return line
+
+
+def _contents_words(bag: ItemEntity) -> str:
+    """What is inside a bag by name; a bag inside it shows its own contents in brackets."""
+    parts = []
+    for inner in bag.contents:
+        nested = _contents_words(inner)
+        parts.append(f"{inner.item.name} ({nested})" if nested else inner.item.name)
+    return ", ".join(parts)
 
 
 def _names(entities: Iterable[ItemEntity]) -> tuple[str, ...]:

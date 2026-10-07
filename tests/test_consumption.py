@@ -24,6 +24,7 @@ def _food(name="Apple", tags=None, **fields) -> ConsumableItem:
         slots=[CharacterHoldableSlot.RIGHT_HAND],
         is_two_handed=False,
         modifiers=[],
+        weight=0.1,
         **fields,
     )
 

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from .body import BodyPart
 from .character.exercise import ExerciseDefinition
 from .entity.barrier import BarrierEntity
+from .entity.corpse import CorpseEntity
 from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
 from .location import Location
@@ -85,11 +86,17 @@ class TargetCorpse:
 
 
 @dataclass(frozen=True)
-class CorpseItem:
-    """An item on a searched corpse that the player takes (spec 14)."""
+class Transfer:
+    """Items that move from one place to another, and the timed-action frames the move takes (spec 25).
 
-    corpse_id: str
-    entity: ItemEntity
+    `source` is the bag or corpse they leave (None for the ground or the pack); `target` is the
+    bag they go into (None for the pack or the floor).
+    """
+
+    entities: tuple[ItemEntity, ...]
+    frames: float
+    source: ItemEntity | CorpseEntity | None = None
+    target: ItemEntity | None = None
 
 
 @dataclass(frozen=True)
@@ -173,7 +180,7 @@ Resolution = (
     | NpcTopic
     | TargetZombie
     | TargetCorpse
-    | CorpseItem
+    | Transfer
     | TargetBarrier
     | BarricadeKit
     | PryTarget

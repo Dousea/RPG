@@ -7,7 +7,7 @@ from data import melee as melee_k
 from data import skills as skill_k
 from data import traits as trait_k
 from data.items import ITEMS
-from managers import thumping
+from managers import carry, thumping
 from managers.barriers import BARRIER, door_damage, plank_condition, plank_health, weapon_hit
 from managers.combat import equipped_weapon
 from managers.game import GameManager
@@ -123,7 +123,7 @@ class BarrierActions:
         assert isinstance(plank_item, MeleeWeaponItem)
         plank = ItemEntity(item=plank_item)
         plank.condition = plank_condition(health, plank_item.condition_max)
-        if len(player.inventory) < player.max_inventory_size:
+        if not carry.over_the_limit(player, extra=[plank]):
             player.inventory.append(plank)
         else:
             manager.current_location.entities.append(plank)
@@ -183,12 +183,7 @@ class BarrierActions:
 
     def _discard(self, entity: ItemEntity) -> None:
         """Take an item out of the hands or the pack."""
-        player = self._manager.player
-        for slot, held in player.equipment.items():
-            if held is entity:
-                player.equipment[slot] = None
-        if entity in player.inventory:
-            player.inventory.remove(entity)
+        carry.take_out(self._manager.player, entity)
 
     def _spend_nail(self, nails: ItemEntity) -> None:
         nails.uses -= 1

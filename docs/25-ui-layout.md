@@ -101,7 +101,7 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 | --- | --- | --- | --- |
 | Status | status effects, conditions, goals | `effects`, `conditions`, `sneaking` (spec 09), `goals` | yes |
 | Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (spec 12, 17) | yes, without spec 17's flags |
-| Inventory | held item, equipped slots, carried items | `held` (spec 11, 15), `equipment`, `inventory` | yes, without `held` |
+| Inventory | held item, equipped slots, carried items, load and bags | `held` (spec 11, 15), `equipment`, `inventory`, `carry` (spec 25) | yes, without `held` |
 | Clothing | worn items, outer to inner, by body location | `worn` | yes |
 | Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | yes |
 | People | NPCs here: disposition, trust, following | `npcs` | yes |
@@ -130,7 +130,9 @@ level, no healing progress.
 The held item first, with its condition, sharpness and head words when it has
 them. Then the equipped slots, empty ones marked empty, then carried items by
 name. Item condition moves from the `hits/max` text it shows today to the
-condition word when spec 11 sends one.
+condition word when spec 11 sends one. The carried weight shows against what the
+character can carry, in kilograms, and each bag shows its place and contents
+(`carry`, see `mechanics/25-carrying-containers-and-loot.md`).
 
 ### Clothing
 

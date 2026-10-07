@@ -6,6 +6,7 @@ gives that level. Endurance is inverted: a value at or below a column.
 
 from dataclasses import dataclass
 
+from data.carry import HEAVY_LOAD_THRESHOLDS
 from modules.stats import CharacterStat, StatusEffect
 from modules.units import per_hour_from_frame
 
@@ -117,6 +118,11 @@ STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
         CharacterStat.WINDCHILL,
         (5, 10, 15, 20),
         ("Breezy", "Wind Chill", "Biting Wind", "Freezing Wind"),
+    ),
+    StatusEffect.HEAVY_LOAD: StatusEffectspec(  # spec 25: carried weight / capacity
+        None,
+        HEAVY_LOAD_THRESHOLDS,
+        ("Weighed Down", "Overloaded", "Very Overloaded", "Extremely Overloaded"),
     ),
 }
 

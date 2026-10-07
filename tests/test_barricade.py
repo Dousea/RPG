@@ -20,6 +20,7 @@ from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.stats import CharacterStat
+from tests.support import load_pack
 
 HOME = "zone_home"
 BUILDING = "zone_building"
@@ -289,7 +290,7 @@ class UnbarricadeTests(unittest.TestCase):
 
     def test_a_full_pack_drops_the_plank_on_the_floor(self):
         gm = self.planked(1000)
-        gm.player.max_inventory_size = len(gm.player.inventory)
+        load_pack(gm.player, 49.9)
         run(gm, UnbarricadeAction(barrier_name="apartment door"))
         floor = [e for e in gm.current_location.entities if isinstance(e, ItemEntity)]
         self.assertTrue(any(e.item.id == "item_plank" for e in floor))

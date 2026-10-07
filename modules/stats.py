@@ -128,3 +128,4 @@ class StatusEffect(Enum):
     HYPOTHERMIA = "hypothermia"
     HYPERTHERMIA = "hyperthermia"
     WINDCHILL = "windchill"
+    HEAVY_LOAD = "heavy_load"

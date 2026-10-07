@@ -24,6 +24,7 @@ from modules.action.types import AnyAction
 JsonObject = dict[str, Any]
 
 STANCE_LABELS = ("sneak", "stand")
+ALL_WORD = "all"
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,8 @@ class SceneChoices:
     zombie_ids: tuple[str, ...] = ()
     corpse_ids: tuple[str, ...] = ()
     corpse_items: tuple[str, ...] = ()
+    bags: tuple[str, ...] = ()
+    bag_items: tuple[str, ...] = ()
     hurt_parts: tuple[str, ...] = ()
     bandaged_parts: tuple[str, ...] = ()
     bandages: tuple[str, ...] = ()
@@ -95,9 +98,13 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             return _branch(name, {}, {"duration": pattern})
         case "TAKE":
             return _take_branch(name, choices)
-        case "SEARCH":
+        case "SEARCH" | "CARRY":
             nearest = ("corpse",) if choices.corpse_ids else ()
             return _target_branch(name, (*choices.corpse_ids, *nearest))
+        case "PUT":
+            if not choices.carried or not choices.bags:
+                return None
+            return _branch(name, {"item": _one_of(choices.carried), "bag": _one_of(choices.bags)})
         case "DROP" | "USE_ITEM" | "EQUIP":
             return _item_branch(name, choices.carried)
         case "WEAR":
@@ -156,12 +163,13 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
 
 
 def _take_branch(name: str, choices: SceneChoices) -> JsonObject | None:
-    """TAKE an item off the ground, or from a searched corpse when one is named."""
-    names = (*choices.items_here, *choices.corpse_items)
+    """TAKE an item off the ground, from a searched corpse or out of a carried bag when one is named; or all."""
+    names = (*choices.items_here, *choices.corpse_items, *choices.bag_items)
     if not names:
         return None
-    optional = {"from": _one_of(choices.corpse_ids)} if choices.corpse_items else None
-    return _branch(name, {"item": _one_of(names)}, optional)
+    sources = (*(choices.corpse_ids if choices.corpse_items else ()), *choices.bags)
+    optional = {"from": _one_of(sources)} if sources else None
+    return _branch(name, {"item": _one_of((*names, ALL_WORD))}, optional)
 
 
 def _item_branch(name: str, names: tuple[str, ...]) -> JsonObject | None:
@@ -287,6 +295,8 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "SLEEP": lambda fields: _line("SLEEP", _text(fields, "duration")),
     "TAKE": _take_line,
     "SEARCH": _target_line("SEARCH"),
+    "CARRY": _target_line("CARRY"),
+    "PUT": lambda fields: _line("PUT", _text(fields, "item"), "in", _text(fields, "bag")),
     "DROP": _item_line("DROP"),
     "USE_ITEM": _item_line("USE_ITEM"),
     "EQUIP": _item_line("EQUIP"),

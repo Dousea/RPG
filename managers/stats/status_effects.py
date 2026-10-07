@@ -15,6 +15,7 @@ from data.status_effects import (
     STATUS_EFFECT_THRESHOLDS,
     STRESS_MELEE_PENALTY_PER_LEVEL,
 )
+from managers import carry
 from modules.body import BodyPart, general_wound_infection
 from modules.entity.player import PlayerEntity
 from modules.item import ConsumableItem
@@ -88,6 +89,8 @@ def status_effect_levels(
             )
         elif status_effect is StatusEffect.BLEEDING:
             levels[status_effect] = bleeding
+        elif status_effect is StatusEffect.HEAVY_LOAD:
+            levels[status_effect] = 0
         else:
             assert spec.stat is not None
             levels[status_effect] = status_effect_level(status_effect, stats.get(spec.stat))
@@ -147,13 +150,19 @@ def player_bleeding_level(player: PlayerEntity) -> int:
 
 
 def player_status_effect_levels(player: PlayerEntity) -> dict[StatusEffect, int]:
-    return status_effect_levels(
+    levels = status_effect_levels(
         player.stats,
         player.food_eaten_timer,
         player.health,
         player_bleeding_level(player),
         general_wound_infection(player.body),
     )
+    if player.health > 0:
+        capacity = carry.player_max_weight(player, levels)
+        levels[StatusEffect.HEAVY_LOAD] = carry.heavy_load_level(
+            carry.carried_weight(player), capacity
+        )
+    return levels
 
 
 def food_eaten_level(player: PlayerEntity) -> int:

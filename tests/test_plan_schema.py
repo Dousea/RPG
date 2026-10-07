@@ -120,7 +120,8 @@ class ClosedFieldTests(unittest.TestCase):
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(
             enum_of(names["TAKE"], "item"),
-            ["Canned Beans", "Water Bottle", "Black jacket", "Kitchen Knife", "Frying Pan"],
+            ["Canned Beans", "Water Bottle", "Black jacket", "Kitchen Knife", "Frying Pan"]
+            + ["Schoolbag", "all"],
         )
         self.assertEqual(enum_of(names["WEAR"], "item"), ["Black jacket"])
 
@@ -138,7 +139,7 @@ class ClosedFieldTests(unittest.TestCase):
             self.assertEqual(
                 enum_of(names[verb], "item"),
                 ["Apartment Key", "Bandage", "Canned Beans", "Water Bottle", "Black jacket"]
-                + ["Kitchen Knife", "Frying Pan"],
+                + ["Kitchen Knife", "Frying Pan", "Schoolbag"],
             )
         self.assertEqual(
             enum_of(names["TAKE_OFF"], "item"),
@@ -312,6 +313,10 @@ EQUIVALENTS = [
     ),
     ({"verb": "GIVE", "item": "Bandage", "npc": "Emma"}, "GIVE Bandage to Emma"),
     ({"verb": "SEARCH", "target": "c3"}, "SEARCH c3"),
+    ({"verb": "CARRY", "target": "c3"}, "CARRY c3"),
+    ({"verb": "PUT", "item": "Bandage", "bag": "Schoolbag"}, "PUT Bandage in Schoolbag"),
+    ({"verb": "TAKE", "item": "all", "from": "Schoolbag"}, "TAKE all from Schoolbag"),
+    ({"verb": "TAKE", "item": "Hammer", "from": "Schoolbag"}, "TAKE Hammer from Schoolbag"),
     (
         {"verb": "TAKE", "item": "Police Jacket", "from": "c3"},
         "TAKE Police Jacket from c3",
@@ -390,6 +395,8 @@ class PlanReadingTests(unittest.TestCase):
             zombie_ids=("z3",),
             corpse_ids=("c3",),
             corpse_items=("Police Jacket",),
+            bags=("Schoolbag",),
+            bag_items=("Hammer",),
             hurt_parts=("left hand", "right hand"),
             bandaged_parts=("left hand",),
             bandages=("Adhesive Bandage",),

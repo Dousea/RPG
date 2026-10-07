@@ -66,8 +66,9 @@ class TimeCostTests(unittest.TestCase):
 
         gm = GameManager()
         gm.player.current_location_id = "zone_street"
-        self.assertEqual(spent_with_double(gm, TakeAction(item_name="Crowbar")), 2)
-        self.assertEqual(spent_with_double(gm, DropAction(item_name="Crowbar")), 2)
+        gm.current_location.entities.append(ItemEntity(item=ITEMS["item_plank"]))
+        self.assertEqual(spent_with_double(gm, TakeAction(item_name="Plank")), 2)
+        self.assertEqual(spent_with_double(gm, DropAction(item_name="Plank")), 2)
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         self.assertEqual(spent_with_double(gm, UseItemAction(item_name="Canned Beans")), 10)
         self.assertEqual(spent_with_double(gm, WaitAction(duration=Duration(minutes=7))), 7)

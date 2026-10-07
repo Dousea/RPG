@@ -334,7 +334,7 @@ class MeleeEngine:
             weapon,
             skills=levels,
             endurance=status_effects[StatusEffect.ENDURANCE],
-            heavy_load=k.HEAVY_LOAD_LEVEL,
+            heavy_load=status_effects[StatusEffect.HEAVY_LOAD],
             panic=status_effects[StatusEffect.PANIC],
             shove=kind in (SwingKind.SHOVE, SwingKind.STOMP),
             behind=behind,

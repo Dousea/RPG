@@ -25,11 +25,32 @@ class StanceAction:
 
 @dataclass
 class TakeAction:
-    """Pick an item up off the ground, or take it from a searched corpse (spec 14)."""
+    """Pick an item up off the ground, or take it from a searched corpse (spec 14) or a carried bag.
+
+    `all_items` takes everything the source holds as one action (spec 25).
+    """
 
     verb: ClassVar[str] = "TAKE"
     item_name: str
     from_name: str | None = None
+    all_items: bool = False
+
+
+@dataclass
+class PutAction:
+    """Move a carried item into a carried bag (spec 25)."""
+
+    verb: ClassVar[str] = "PUT"
+    item_name: str
+    target_name: str
+
+
+@dataclass
+class CarryAction:
+    """Pick up a body and carry it (spec 25)."""
+
+    verb: ClassVar[str] = "CARRY"
+    corpse_name: str
 
 
 @dataclass
@@ -42,8 +63,11 @@ class SearchAction:
 
 @dataclass
 class DropAction:
+    """Put a carried item on the ground, or the body in the player's arms when `corpse` (spec 25)."""
+
     verb: ClassVar[str] = "DROP"
     item_name: str
+    corpse: bool = False
 
 
 @dataclass
@@ -240,6 +264,8 @@ AnyAction = (
     MoveAction
     | StanceAction
     | TakeAction
+    | PutAction
+    | CarryAction
     | SearchAction
     | DropAction
     | WearAction

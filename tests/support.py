@@ -8,13 +8,17 @@ from pathlib import Path
 
 from adapters.llm import DeltaCallback, ParserReply
 from adapters.save import files
+from managers.carry import carried_weight
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.story_check import StateQuestion
 from modules.action.types import AnyAction
 from modules.body import PART_WEIGHT, BodyPart
+from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
+from modules.item import HoldableItem
 from modules.modifier import AffinityModifier
 
 
@@ -205,3 +209,19 @@ class ScriptedRandom(random.Random):
 
     def randrange(self, start: int, stop: int | None = None, step: int = 1) -> int:
         return self._ints.pop(0) if self._ints else 0
+
+
+def load_pack(player: PlayerEntity, kg: float) -> None:
+    """Add dead weight loose in the pack so the player carries `kg` in all."""
+    ballast = HoldableItem(
+        id="item_test_ballast",
+        name="Ballast",
+        description="Dead weight.",
+        max_hit_points=1,
+        tags=[],
+        slots=[CharacterHoldableSlot.RIGHT_HAND],
+        is_two_handed=False,
+        weight=kg - carried_weight(player),
+    )
+    assert ballast.weight > 0
+    player.inventory.append(ItemEntity(item=ballast))

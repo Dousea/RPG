@@ -5,8 +5,10 @@ import unittest
 from data.items import ITEMS
 from data.locations import build_starting_locations
 from data.melee import BARE_HANDS
+from modules.body import BodyLocation
+from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.entity.item import ItemEntity
-from modules.item import MedicalItem, MeleeWeaponItem, StackItem
+from modules.item import ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
 
 
 def weapon(item_id: str) -> MeleeWeaponItem:
@@ -271,3 +273,102 @@ class BarrierItemTests(unittest.TestCase):
         street = names("zone_street")
         self.assertEqual(street.count("Plank"), 2)
         self.assertIn("Crowbar", street)
+
+
+class CarryWeightTests(unittest.TestCase):
+    """Spec 25, Weight: every item has its script weight."""
+
+    def test_the_existing_items_weigh_what_the_spec_lists(self):
+        expected = {
+            "item_adhesive_bandage": 0.05,
+            "item_alcohol_wipes": 0.3,
+            "item_antibiotics": 0.1,
+            "item_bandage": 0.1,
+            "item_dirty_bandage": 0.1,
+            "item_sterilized_bandage": 0.1,
+            "item_ripped_sheets": 0.1,
+            "item_disinfectant": 0.7,
+            "item_painkillers": 0.2,
+            "item_canned_beans": 0.8,
+            "item_water_bottle": 1.1,
+            "item_granola_bar": 0.2,
+            "item_instant_noodles": 0.2,
+            "item_plank": 3.0,
+            "item_hammer": 1.5,
+            "item_barbell": 6.0,
+            "item_dumbbell": 5.0,
+            "item_pistol": 1.5,
+            "item_apartment_key": 0.05,
+            "item_storage_key": 0.05,
+        }
+        for item_id, weight in expected.items():
+            self.assertEqual(ITEMS[item_id].weight, weight, item_id)
+
+    def test_a_stack_of_nails_weighs_by_the_nail(self):
+        nails = ITEMS["item_nails"]
+        assert isinstance(nails, StackItem)
+        self.assertEqual(nails.unit_weight, 0.05)
+        self.assertAlmostEqual(ItemEntity(item=nails).weight, 0.25)
+        entity = ItemEntity(item=nails, uses=2)
+        self.assertAlmostEqual(entity.weight, 0.10)
+
+    def test_a_bag_weighs_with_what_is_in_it(self):
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        bag.contents.append(ItemEntity(item=ITEMS["item_plank"]))
+        self.assertAlmostEqual(bag.weight, 1.0 + 0.8 + 3.0)
+
+    def test_a_bag_inside_a_bag_counts_in_full(self):
+        outer = ItemEntity(item=ITEMS["item_duffel_bag"])
+        inner = ItemEntity(item=ITEMS["item_schoolbag"])
+        inner.contents.append(ItemEntity(item=ITEMS["item_hammer"]))
+        outer.contents.append(inner)
+        self.assertAlmostEqual(outer.weight, 1.0 + 1.0 + 1.5)
+
+
+class BagCatalogueTests(unittest.TestCase):
+    """Spec 25, Bags: the bag rows."""
+
+    ROWS = {
+        "item_schoolbag": (15, 70, 1.0, None),
+        "item_duffel_bag": (18, 65, 1.0, None),
+        "item_hiking_bag": (20, 75, 1.2, None),
+        "item_large_hiking_bag": (22, 80, 1.5, None),
+        "item_satchel": (12, 65, 1.0, None),
+        "item_fanny_pack": (1, 85, 0.2, None),
+        "item_suitcase": (16, 50, 3.0, None),
+        "item_garbage_bag": (20, 50, 0.1, None),
+        "item_toolbox": (8, 50, 2.0, 2),
+        "item_briefcase": (8, 50, 1.5, 2),
+        "item_tote_bag": (6, 50, 0.5, 2),
+        "item_handbag": (6, 50, 1.0, 2),
+        "item_plastic_bag": (8, 50, 0.1, None),
+        "item_paper_bag": (2, 50, 0.1, None),
+    }
+
+    def test_every_bag_has_its_capacity_reduction_weight_and_limit(self):
+        for item_id, (capacity, reduction, weight, max_size) in self.ROWS.items():
+            bag = ITEMS[item_id]
+            assert isinstance(bag, ContainerItem), item_id
+            self.assertEqual(bag.capacity, capacity, item_id)
+            self.assertEqual(bag.weight_reduction, reduction, item_id)
+            self.assertEqual(bag.weight, weight, item_id)
+            self.assertEqual(bag.max_item_size, max_size, item_id)
+
+    def test_where_each_bag_goes(self):
+        schoolbag = ITEMS["item_schoolbag"]
+        assert isinstance(schoolbag, ContainerItem)
+        self.assertEqual(
+            schoolbag.slots, [CharacterArmorSlot.SHOULDERS, CharacterHoldableSlot.LEFT_HAND]
+        )
+        toolbox = ITEMS["item_toolbox"]
+        assert isinstance(toolbox, ContainerItem)
+        self.assertEqual(toolbox.slots, [CharacterHoldableSlot.LEFT_HAND])
+        satchel = ITEMS["item_satchel"]
+        fanny = ITEMS["item_fanny_pack"]
+        assert isinstance(satchel, ContainerItem) and isinstance(fanny, ContainerItem)
+        self.assertEqual(satchel.body_location, BodyLocation.SATCHEL)
+        self.assertEqual(fanny.body_location, BodyLocation.FANNYPACKFRONT)
+
+    def test_a_schoolbag_lies_on_the_floor_at_home(self):
+        self.assertIn("item_schoolbag", ground_ids("zone_home"))

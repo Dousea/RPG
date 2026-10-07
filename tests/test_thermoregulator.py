@@ -848,7 +848,7 @@ class WiringTests(unittest.TestCase):
 
         def ranged(kind):
             slots: list[AnyCharacterEquipmentSlot] = [CharacterHoldableSlot.RIGHT_HAND]
-            return RangedWeaponItem("g", "g", "", 1, [], slots, False, kind, 3, 5)
+            return RangedWeaponItem("g", "g", "", 1, [], slots, False, kind, 3, 5, weight=1.5)
 
         crowbar = ITEMS["item_crowbar"]
         knife = ITEMS["item_kitchen_knife"]

@@ -1,8 +1,10 @@
 """Corpses in the player's view, going through them and taking from them (spec 14)."""
 
 import random
+from collections.abc import Iterable
 from dataclasses import dataclass
 
+from data import carry as carry_k
 from data import zombie_lore as k
 from data.items import ITEMS
 from data.zombie_loot import (
@@ -64,10 +66,14 @@ def with_article(name: str) -> str:
     return f"{'an' if name[0].lower() in 'aeiou' else 'a'} {name}"
 
 
+def names_in_words(entities: Iterable[ItemEntity]) -> str:
+    """Items by name with their articles, joined with commas; empty for none."""
+    return ", ".join(with_article(entity.item.name.lower()) for entity in entities)
+
+
 def contents_in_words(corpse: CorpseEntity) -> str:
     """What a body holds, by name, for a fact."""
-    names = [with_article(entity.item.name.lower()) for entity in corpse.contents]
-    return ", ".join(names) or k.SEARCH_NOTHING
+    return names_in_words(corpse.contents) or k.SEARCH_NOTHING
 
 
 def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | None:
@@ -111,7 +117,7 @@ class CorpseView:
     """A perceived body in words."""
 
     corpse_id: str
-    distance_word: str
+    distance_word: str  # "carried" for a body in the arms
     rot_word: str
     searched: bool
     skeleton: bool
@@ -155,7 +161,9 @@ def corpse_views(manager: GameManager) -> list[CorpseView]:
     return [
         CorpseView(
             corpse_id=c.corpse_id,
-            distance_word=distance_word(c.gap),
+            distance_word=carry_k.CARRIED_WORD
+            if c.corpse_id == manager.player.carrying_corpse
+            else distance_word(c.gap),
             rot_word=k.SKELETON_WORD if c.skeleton else k.ROT_WORDS[rot_stage(c, now)],
             searched=c.searched,
             skeleton=c.skeleton,

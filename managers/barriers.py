@@ -4,6 +4,7 @@ import random
 from dataclasses import dataclass
 
 from data import barriers as k
+from managers import carry
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
@@ -172,6 +173,6 @@ def d_b(world: World, player: PlayerEntity, barrier: BarrierEntity) -> float:
 
 
 def carried_entities(player: PlayerEntity) -> list[ItemEntity]:
-    """Everything the player has on them: the pack, then what is in their hands."""
+    """Everything the player has on them: the pack and its bags, then what is in their hands."""
     held = [e for e in player.equipment.values() if e is not None]
-    return [*player.inventory, *[e for i, e in enumerate(held) if e not in held[:i]]]
+    return [*carry.carried_items(player), *[e for i, e in enumerate(held) if e not in held[:i]]]

@@ -11,6 +11,7 @@ from managers.melee import MeleeEngine, crit_chance, hit_split, hits_taken_facto
 from managers.skills import SkillEngine
 from modules.body import BodyLocation
 from modules.character.equipment import CharacterHoldableSlot
+from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import MeleeWeaponItem
@@ -849,3 +850,23 @@ class HitNoiseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeavyLoadCritTests(unittest.TestCase):
+    """Spec 25, What Heavy Load does: the crit chance reads the live level."""
+
+    def test_two_levels_of_load_take_a_crowbar_crit_from_20_to_10(self):
+        light = street_game(weapon="item_crowbar")
+        zombie = add(light, make_zombie())
+        swing(light, rng=FixedRng(script=[15]), now=10)
+        self.assertTrue(zombie.is_down(10))
+
+        heavy = street_game(weapon="item_crowbar")
+        heavy.player.skills["strength"] = SkillState(level=0)
+        heavy.player.inventory.extend(
+            ItemEntity(item=ITEMS[item_id]) for item_id in ("item_barbell", "item_hammer")
+        )
+        zombie = add(heavy, make_zombie())
+        swing(heavy, rng=FixedRng(script=[15]), now=10)
+        self.assertFalse(zombie.is_down(10))
+        self.assertTrue(zombie.staggered)

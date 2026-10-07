@@ -101,7 +101,7 @@ def player_defence(player: PlayerEntity, attackers: int) -> int:
         levels[skill_k.STRENGTH],
         attackers,
         endurance=status_effects[StatusEffect.ENDURANCE],
-        heavy_load=0,
+        heavy_load=status_effects[StatusEffect.HEAVY_LOAD],
         tired=status_effects[StatusEffect.TIRED],
         drunk=status_effects[StatusEffect.DRUNK],
     )

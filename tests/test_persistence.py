@@ -18,6 +18,7 @@ from modules.action.types import (
     WaitAction,
 )
 from modules.body import BodyLocation, BodyPart
+from modules.character.equipment import CharacterArmorSlot
 from modules.character.state import CharacterCondition
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
@@ -270,8 +271,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_21(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 21)
+    def test_schema_version_is_22(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 22)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -1146,3 +1147,47 @@ class BarrierSaveTests(IsolatedSaveTestCase):
         saved = [e for e in loaded.player.inventory if e.item.id == "item_nails"]
         self.assertEqual([e.uses for e in saved], [3])
         self.assertEqual(loaded.world.locations["zone_building"].building, "apartment_block")
+
+
+class CarrySaveTests(IsolatedSaveTestCase):
+    """Spec 25, Saves: nested contents, the held and worn bags and a carried body."""
+
+    def test_a_bag_with_a_bag_in_it_round_trips(self):
+        gm = GameManager()
+        outer = ItemEntity(item=ITEMS["item_duffel_bag"])
+        inner = ItemEntity(item=ITEMS["item_toolbox"])
+        inner.contents.append(ItemEntity(item=ITEMS["item_hammer"]))
+        outer.contents.append(inner)
+        outer.contents.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        gm.player.inventory.append(outer)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        bag = loaded.player.inventory[-1]
+        self.assertEqual(bag.item.id, "item_duffel_bag")
+        self.assertEqual([e.item.id for e in bag.contents], ["item_toolbox", "item_canned_beans"])
+        self.assertEqual([e.item.id for e in bag.contents[0].contents], ["item_hammer"])
+
+    def test_the_shoulder_bag_and_a_worn_bag_round_trip(self):
+        gm = GameManager()
+        back = ItemEntity(item=ITEMS["item_schoolbag"])
+        back.contents.append(ItemEntity(item=ITEMS["item_bandage"]))
+        gm.player.equipment[CharacterArmorSlot.SHOULDERS] = back
+        gm.player.worn[BodyLocation.SATCHEL] = ItemEntity(item=ITEMS["item_satchel"])
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        shoulders = loaded.player.equipment[CharacterArmorSlot.SHOULDERS]
+        assert shoulders is not None
+        self.assertEqual([e.item.id for e in shoulders.contents], ["item_bandage"])
+        self.assertEqual(loaded.player.worn[BodyLocation.SATCHEL].item.id, "item_satchel")
+
+    def test_a_carried_body_round_trips(self):
+        gm = GameManager()
+        gm.player.carrying_corpse = "c4"
+        gm.player.carrying_skeleton = True
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.player.carrying_corpse, "c4")
+        self.assertTrue(loaded.player.carrying_skeleton)

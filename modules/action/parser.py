@@ -19,6 +19,7 @@ from modules.action.types import (
     AttackAction,
     BandageAction,
     BarricadeAction,
+    CarryAction,
     CloseAction,
     DisinfectAction,
     DropAction,
@@ -28,6 +29,7 @@ from modules.action.types import (
     GiveAction,
     MoveAction,
     OpenAction,
+    PutAction,
     RemoveBandageAction,
     RemoveGoalAction,
     SearchAction,
@@ -104,13 +106,30 @@ def _parse_stance(args: str) -> StanceAction:
 _TAKE_FROM_PATTERN = re.compile(r"(.+?)\s+from\s+(\S.*)", re.IGNORECASE)
 
 
+_ALL_WORDS = frozenset({"all", "everything"})
+_PUT_PATTERN = re.compile(r"(.+?)\s+(?:in|into)\s+(\S.*)", re.IGNORECASE)
+CORPSE_WORDS = frozenset({"corpse", "the corpse", "a corpse", "body", "the body", "a body"})
+
+
 def _parse_take(args: str) -> TakeAction:
     if not args or args.casefold().startswith("from "):
         raise _ActionParseError("TAKE needs an item name.")
     source = _TAKE_FROM_PATTERN.fullmatch(args)
-    if source:
-        return TakeAction(item_name=source.group(1).strip(), from_name=source.group(2).strip())
-    return TakeAction(item_name=args)
+    item, from_name = (source.group(1).strip(), source.group(2).strip()) if source else (args, None)
+    return TakeAction(item_name=item, from_name=from_name, all_items=item.casefold() in _ALL_WORDS)
+
+
+def _parse_put(args: str) -> PutAction:
+    parts = _PUT_PATTERN.fullmatch(args)
+    if not parts:
+        raise _ActionParseError("PUT needs an item and a bag: PUT <item> in <bag>.")
+    return PutAction(item_name=parts.group(1).strip(), target_name=parts.group(2).strip())
+
+
+def _parse_carry(args: str) -> CarryAction:
+    if not args:
+        raise _ActionParseError("CARRY needs a corpse.")
+    return CarryAction(corpse_name=args)
 
 
 def _parse_search(args: str) -> SearchAction:
@@ -122,7 +141,7 @@ def _parse_search(args: str) -> SearchAction:
 def _parse_drop(args: str) -> DropAction:
     if not args:
         raise _ActionParseError("DROP needs an item name.")
-    return DropAction(item_name=args)
+    return DropAction(item_name=args, corpse=args.casefold() in CORPSE_WORDS)
 
 
 def _parse_wear(args: str) -> WearAction:
@@ -423,6 +442,7 @@ SceneKey = Literal[
     "loot",
     "hurt",
     "barriers",
+    "bags",
 ]
 
 
@@ -474,9 +494,26 @@ VERBS: dict[str, Verb] = dict(
             "TAKE",
             ("item",),
             _parse_take,
-            "an item listed in [ITEMS HERE], or '<item> from <corpse>' for a searched corpse in [CORPSES]",
+            "an item listed in [ITEMS HERE], '<item> from <corpse>' for a searched corpse in [CORPSES], "
+            "'<item> from <bag>' for a carried bag, or 'all from <source>'",
             1,
-            ("items_here", "loot"),
+            ("items_here", "loot", "bags"),
+        ),
+        _verb(
+            "PUT",
+            ("item", "item"),
+            _parse_put,
+            "'<item> in <bag>': a carried item into a bag in [INVENTORY]",
+            1,
+            ("bags",),
+        ),
+        _verb(
+            "CARRY",
+            ("corpse",),
+            _parse_carry,
+            "a corpse id from [CORPSES], or 'corpse' for the nearest; picks the body up in both arms",
+            1,
+            ("corpses",),
         ),
         _verb(
             "SEARCH",
@@ -486,7 +523,14 @@ VERBS: dict[str, Verb] = dict(
             1,
             ("corpses",),
         ),
-        _verb("DROP", ("item",), _parse_drop, "a carried item", 1, ("carried",)),
+        _verb(
+            "DROP",
+            ("item",),
+            _parse_drop,
+            "a carried item, or 'corpse' for the body in your arms",
+            1,
+            ("carried",),
+        ),
         _verb(
             "USE_ITEM",
             ("item",),

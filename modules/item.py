@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .body import BodyLocation, BodyPart
 from .character.equipment import AnyCharacterEquipmentSlot, CharacterHoldableSlot
@@ -21,6 +21,7 @@ class BaseItem:
     description: str
     max_hit_points: int
     tags: list[str]
+    weight: float = field(kw_only=True)  # kg, spec 25
 
 
 @dataclass
@@ -33,6 +34,24 @@ class EquippableItem(BaseItem):
 
 
 @dataclass
+class ContainerItem(EquippableItem):
+    """A bag (spec 25): `capacity` kg of contents, shaved by `weight_reduction` percent while worn or held.
+
+    `slots` are the places it can be carried (the shoulders, the left hand); a bag worn at the
+    body has a `body_location` instead.
+    """
+
+    capacity: float
+    weight_reduction: int
+    max_item_size: float | None = None
+    body_location: BodyLocation | None = None
+
+    def __post_init__(self):
+        if not self.slots and self.body_location is None:
+            raise ValueError("A bag needs a slot or a body location.")
+
+
+@dataclass
 class ClothingItem(BaseItem):
     """A wearable item; the damage-side stats are stored, not yet read."""
 
@@ -41,7 +60,6 @@ class ClothingItem(BaseItem):
     insulation: float
     wind_resistance: float
     water_resistance: float
-    weight: float
     scratch_defense: int = SCRATCH_DEFENSE_DEFAULT
     bite_defense: int = BITE_DEFENSE_DEFAULT
     neck_protection: float = NECK_PROTECTION_DEFAULT
@@ -108,6 +126,7 @@ class StackItem(HoldableItem):
     """A stack of small things such as nails; `uses` is how many a full stack holds (spec 13)."""
 
     uses: int = 1
+    unit_weight: float = 0.0  # kg of one use (spec 25)
 
 
 @dataclass
@@ -125,7 +144,6 @@ class MeleeWeaponItem(HoldableItem):
     knockback_on_no_death: bool = False
     condition_max: int = 1
     condition_lower_chance: int = 1
-    weight: float = 1.0
     endurance_mod: float = 1.0
     base_speed: float = 1.0
     is_stab: bool = False

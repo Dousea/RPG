@@ -12,15 +12,18 @@ from modules.action.types import (
     Duration,
     MoveAction,
     OpenAction,
+    PutAction,
     ShoveAction,
     SleepAction,
     TakeAction,
     TakeOffAction,
+    UnequipAction,
     UseItemAction,
     WaitAction,
     WearAction,
 )
 from modules.body import BodyLocation
+from modules.character.equipment import CharacterArmorSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
@@ -33,8 +36,10 @@ from modules.resolution import (
     TargetBarrier,
     TargetNpc,
     TimeSpan,
+    Transfer,
 )
 from modules.stats import CharacterStat
+from tests.support import load_pack
 
 
 def _accepted(result: ValidationResult) -> Accepted:
@@ -168,13 +173,19 @@ class ItemValidationTests(unittest.TestCase):
     def test_take_present_item_is_accepted(self):
         self.gm.player.current_location_id = "zone_street"
         result = _accepted(self.validator.validate(TakeAction(item_name="Crowbar")))
-        self.assertEqual(result.expect(HeldItem).entity.item.name, "Crowbar")
+        self.assertEqual(result.expect(Transfer).entities[0].item.name, "Crowbar")
 
-    def test_take_rejected_when_inventory_full(self):
+    def test_take_rejected_past_fifty_kilos(self):
         self.gm.player.current_location_id = "zone_street"
-        self.gm.player.max_inventory_size = 0
+        load_pack(self.gm.player, 49)
         result = self.validator.validate(TakeAction(item_name="Crowbar"))
-        self.assertIsInstance(result, Rejected)
+        assert isinstance(result, Rejected)
+        self.assertEqual(result.reason, "Orton can't carry any more.")
+
+    def test_take_accepted_up_to_fifty_kilos(self):
+        self.gm.player.current_location_id = "zone_street"
+        load_pack(self.gm.player, 47.99)
+        _accepted(self.validator.validate(TakeAction(item_name="Crowbar")))
 
     def test_drop_missing_item_is_rejected(self):
         result = self.validator.validate(DropAction(item_name="Crowbar"))
@@ -367,13 +378,144 @@ class WearValidationTests(unittest.TestCase):
         result = self.validator.validate(TakeOffAction(item_name="Jeans"))
         self.assertIsInstance(result, Rejected)
 
-    def test_take_off_refuses_with_a_full_inventory(self):
+    def test_take_off_refuses_past_fifty_kilos(self):
         self._wear("item_jeans")
-        self.gm.player.max_inventory_size = 1
-        self._carry("item_crowbar")
+        load_pack(self.gm.player, 49.5)
         result = self.validator.validate(TakeOffAction(item_name="Jeans"))
         assert isinstance(result, Rejected)
-        self.assertEqual(result.reason, "Inventory is full.")
+        self.assertEqual(result.reason, "Orton can't carry any more.")
+
+
+class CarryRefusalTests(unittest.TestCase):
+    """Spec 25, Verbs: the refusals of TAKE, PUT, DROP and EQUIP."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def give(self, *item_ids: str) -> list[ItemEntity]:
+        made = [ItemEntity(item=ITEMS[item_id]) for item_id in item_ids]
+        self.gm.player.inventory.extend(made)
+        return made
+
+    def reason(self, action) -> str:
+        result = self.validator.validate(action)
+        assert isinstance(result, Rejected), result
+        return result.reason
+
+    def test_take_from_a_bag_that_is_not_carried(self):
+        self.assertIn(
+            "schoolbag", self.reason(TakeAction(item_name="Hammer", from_name="schoolbag"))
+        )
+
+    def test_take_an_item_the_bag_does_not_hold(self):
+        self.give("item_schoolbag")
+        self.assertEqual(
+            self.reason(TakeAction(item_name="Hammer", from_name="Schoolbag")),
+            "The Schoolbag holds no 'Hammer'.",
+        )
+
+    def test_take_from_a_bag_past_fifty_kilos(self):
+        (bag,) = self.give("item_duffel_bag")
+        self.gm.player.inventory.remove(bag)
+        self.gm.player.equipment[CharacterArmorSlot.SHOULDERS] = bag
+        bag.contents.append(ItemEntity(item=ITEMS["item_plank"]))
+        load_pack(self.gm.player, 48.5)
+        self.assertEqual(
+            self.reason(TakeAction(item_name="Plank", from_name="Duffel Bag")),
+            "Orton can't carry any more.",
+        )
+
+    def test_the_fifty_kilo_limit_allows_exactly_fifty(self):
+        load_pack(self.gm.player, 47.0)
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_plank"]))
+        result = self.validator.validate(TakeAction(item_name="Plank"))
+        self.assertIsInstance(result, Accepted)
+
+    def test_a_hundredth_of_a_kilo_over_fifty_is_refused(self):
+        load_pack(self.gm.player, 47.01)
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_plank"]))
+        self.assertEqual(self.reason(TakeAction(item_name="Plank")), "Orton can't carry any more.")
+
+    def test_take_all_from_an_empty_bag(self):
+        self.give("item_schoolbag")
+        self.assertEqual(
+            self.reason(TakeAction(item_name="all", from_name="Schoolbag", all_items=True)),
+            "There is nothing in the Schoolbag to take.",
+        )
+
+    def test_take_all_past_fifty_kilos_refuses_the_lot(self):
+        load_pack(self.gm.player, 45)
+        self.assertEqual(
+            self.reason(TakeAction(item_name="all", all_items=True)), "Orton can't carry any more."
+        )
+
+    def test_a_sleeper_cannot_take_put_or_drop(self):
+        self.give("item_schoolbag", "item_canned_beans")
+        self.gm.player.asleep = True
+        for action in (
+            TakeAction(item_name="Canned Beans", from_name="Schoolbag"),
+            PutAction(item_name="Canned Beans", target_name="Schoolbag"),
+            DropAction(item_name="Canned Beans"),
+        ):
+            self.assertEqual(self.reason(action), "Orton is asleep.")
+
+    def test_put_an_item_not_carried(self):
+        self.give("item_schoolbag")
+        self.assertIn("Hammer", self.reason(PutAction(item_name="Hammer", target_name="Schoolbag")))
+
+    def test_put_into_a_bag_not_carried(self):
+        self.give("item_hammer")
+        self.assertIn("Toolbox", self.reason(PutAction(item_name="Hammer", target_name="Toolbox")))
+
+    def test_put_past_the_bags_capacity(self):
+        bag, _ = self.give("item_paper_bag", "item_plank")
+        self.assertEqual(
+            self.reason(PutAction(item_name="Plank", target_name="Paper Bag")),
+            "The Paper Bag is full.",
+        )
+        self.assertEqual(bag.contents, [])
+
+    def test_put_an_item_over_the_max_size(self):
+        self.give("item_toolbox", "item_plank")
+        self.assertEqual(
+            self.reason(PutAction(item_name="Plank", target_name="Toolbox")), "The Toolbox is full."
+        )
+
+    def test_put_a_bag_into_itself(self):
+        self.give("item_schoolbag")
+        self.assertEqual(
+            self.reason(PutAction(item_name="Schoolbag", target_name="Schoolbag")),
+            "A bag can't go into itself.",
+        )
+
+    def test_put_a_bag_into_a_bag_it_holds(self):
+        outer, inner = self.give("item_duffel_bag", "item_schoolbag")
+        outer.contents.append(inner)
+        self.gm.player.inventory.remove(inner)
+        self.assertEqual(
+            self.reason(PutAction(item_name="Duffel Bag", target_name="Schoolbag")),
+            "A bag can't go into itself.",
+        )
+
+    def test_put_a_bag_into_a_bag_counts_the_whole_weight(self):
+        small, big = self.give("item_paper_bag", "item_duffel_bag")
+        big.contents.append(ItemEntity(item=ITEMS["item_dumbbell"]))
+        self.assertEqual(
+            self.reason(PutAction(item_name="Duffel Bag", target_name="Paper Bag")),
+            "The Paper Bag is full.",
+        )
+        self.assertEqual(small.contents, [])
+
+    def test_unequip_past_fifty_kilos(self):
+        (bag,) = self.give("item_schoolbag")
+        self.gm.player.inventory.remove(bag)
+        self.gm.player.equipment[CharacterArmorSlot.SHOULDERS] = bag
+        bag.contents.append(ItemEntity(item=ITEMS["item_dumbbell"]))
+        load_pack(self.gm.player, 46)
+        self.assertEqual(
+            self.reason(UnequipAction(item_name="Schoolbag")), "Orton can't carry any more."
+        )
 
 
 if __name__ == "__main__":

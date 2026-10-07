@@ -8,6 +8,7 @@ from modules.action.types import (
     AttackAction,
     BandageAction,
     BarricadeAction,
+    CarryAction,
     CloseAction,
     DisinfectAction,
     DropAction,
@@ -15,6 +16,7 @@ from modules.action.types import (
     ExerciseAction,
     MoveAction,
     OpenAction,
+    PutAction,
     RemoveBandageAction,
     RemoveGoalAction,
     SearchAction,
@@ -47,14 +49,24 @@ def describe_action(action: AnyAction) -> str:
             return "start sneaking"
         case StanceAction():
             return "stop sneaking"
+        case TakeAction(all_items=True, from_name=source) if source:
+            return f"take everything from {source}"
+        case TakeAction(all_items=True):
+            return "take everything here"
         case TakeAction(item_name=name, from_name=source) if source:
             return f"take the {name} from {source}"
         case TakeAction(item_name=name):
             return f"take the {name}"
         case SearchAction(target_name=name):
             return f"search {name}"
+        case DropAction(corpse=True):
+            return "put the body down"
         case DropAction(item_name=name):
             return f"drop the {name}"
+        case PutAction(item_name=name, target_name=bag):
+            return f"put the {name} in the {bag}"
+        case CarryAction(corpse_name=name):
+            return f"pick up {name}"
         case WearAction(item_name=name):
             return f"put on the {name}"
         case TakeOffAction(item_name=name):

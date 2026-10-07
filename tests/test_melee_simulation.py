@@ -19,7 +19,7 @@ from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.stats import CharacterStat
-from tests.support import simulate
+from tests.support import load_pack, simulate
 from tests.test_melee import FixedRng
 from tests.test_simulation import add_zombie, put_on_armour, zombie_game
 
@@ -109,11 +109,11 @@ class EquipTests(unittest.TestCase):
     def test_unequip_refuses_a_full_inventory_and_an_item_not_held(self):
         gm = game_with("item_crowbar")
         self.minutes(gm, EquipAction(item_name="crowbar"))
-        gm.player.max_inventory_size = 0
+        load_pack(gm.player, 49.5)
         minutes, facts = self.minutes(gm, UnequipAction(item_name="crowbar"))
         self.assertEqual(minutes, 0)
-        self.assertIn("full", facts[0])
-        gm.player.max_inventory_size = 20
+        self.assertIn("can't carry any more", facts[0])
+        gm.player.inventory.pop()
         _, facts = self.minutes(gm, UnequipAction(item_name="kitchen knife"))
         self.assertTrue(facts[0].startswith("Refused"))
 

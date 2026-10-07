@@ -21,7 +21,7 @@ from data.memory import BUDGET_MARGIN_TOKENS
 from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
 from data.traits import TRAITS
-from managers import creation
+from managers import carry, creation
 from managers.barriers import barriers_of, state_word
 from managers.body import open_wounds
 from managers.climate import weather_summary
@@ -33,7 +33,7 @@ from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.loot import corpse_views
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
-from managers.stats.status_effects import active_status_effects
+from managers.stats.status_effects import active_status_effects, player_status_effect_levels
 from managers.story_check import build_questions
 from managers.zombies import threat_views
 from modules.action.words import refusal_in_words
@@ -44,6 +44,7 @@ from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.item import MedicalItem, MeleeWeaponItem, StackItem
 from modules.quest import QuestStatus
+from modules.stats import StatusEffect
 
 logger = logging.getLogger(__name__)
 
@@ -428,6 +429,7 @@ class GameEngine:
                 {"name": entity.item.name, "condition": _condition(entity)}
                 for entity in player.inventory
             ],
+            "carry": _carry(player),
             "held": _held(player),
             "equipment": _equipment(player),
             "worn": _worn(player),
@@ -455,6 +457,24 @@ class GameEngine:
         }
 
 
+def _carry(player: PlayerEntity) -> dict[str, Any]:
+    """The load against what the player can carry (numbers are allowed here), and each bag with its contents."""
+    levels = player_status_effect_levels(player)
+    return {
+        "weight": round(carry.carried_weight(player), 1),
+        "max_weight": carry.player_max_weight(player, levels),
+        "level": levels[StatusEffect.HEAVY_LOAD],
+        "bags": [
+            {
+                "name": bag.item.name,
+                "place": carry.bag_place(player, bag),
+                "contents": [inner.item.name for inner in bag.contents],
+            }
+            for bag in carry.carried_bags(player)
+        ],
+    }
+
+
 def _corpses(manager: GameManager) -> list[dict[str, Any]]:
     """The bodies the player can see, in words; what a body holds shows only once it is searched."""
     return [
@@ -463,6 +483,7 @@ def _corpses(manager: GameManager) -> list[dict[str, Any]]:
             "distance_word": view.distance_word,
             "rot_word": view.rot_word,
             "searched": view.searched,
+            "carried": view.corpse_id == manager.player.carrying_corpse,
             "contents": list(view.contents) if view.searched else [],
         }
         for view in corpse_views(manager)

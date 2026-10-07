@@ -240,6 +240,7 @@ def build_starting_locations() -> dict[str, Location]:
             "item_black_jacket",
             "item_kitchen_knife",
             "item_frying_pan",  # spec 11
+            "item_schoolbag",  # spec 25
         ],
         "zone_neighborhood": ["item_baseball_bat"],  # spec 11
         "zone_building": [*FIRST_AID_KIT_CONTENTS, *BASEMENT_STORAGE_CONTENTS],

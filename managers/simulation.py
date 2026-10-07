@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from data import barriers as barrier_k
 from data import body as body_k
+from data import carry as carry_k
 from data import exercises as ex_k
 from data import melee as melee_k
 from data import skills as skill_k
@@ -34,7 +35,6 @@ from data.time_costs import (
     MAX_PLAN_ACTIONS,
     MULTIPLIED_ACTIONS,
     NONE_TURN_MINUTES,
-    QUICK_ACTION_MIN,
     SEARCH_MIN,
     SWING_MIN,
     WALK_TO_BARRIER_MIN,
@@ -43,6 +43,7 @@ from data.time_costs import (
     zone_hop_minutes,
 )
 from data.topics import TOPICS
+from managers import carry
 from managers.barrier_actions import BarrierActions, unbarricade_minutes
 from managers.barriers import barriers_between
 from managers.body import BodyEngine, action_time_multiplier, limp_factor
@@ -54,7 +55,7 @@ from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.first_aid import FirstAid
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
-from managers.loot import contents_in_words, strip_unhappiness
+from managers.loot import contents_in_words, names_in_words, strip_unhappiness
 from managers.loot import search as loot_search
 from managers.melee import MeleeEngine
 from managers.noise import Sound, cough_sound
@@ -81,6 +82,7 @@ from modules.action.types import (
     AskAction,
     AttackAction,
     BarricadeAction,
+    DropAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
@@ -88,13 +90,15 @@ from modules.action.types import (
     ShoveAction,
     SleepAction,
     StanceAction,
+    TakeAction,
     TalkAction,
     UnbarricadeAction,
     WaitAction,
 )
 from modules.action.words import describe_action
-from modules.character.equipment import CharacterHoldableSlot
+from modules.character.equipment import CharacterArmorSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
+from modules.entity.corpse import CorpseEntity
 from modules.entity.player import PlayerEntity
 from modules.event import (
     ApplyItemEvent,
@@ -104,6 +108,7 @@ from modules.item import (
     AppliableItem,
     ClothingItem,
     ConsumableItem,
+    ContainerItem,
     HoldableItem,
     MedicalItem,
     MeleeWeaponItem,
@@ -117,7 +122,6 @@ from modules.pace import Pace
 from modules.quest import QuestStatus
 from modules.resolution import (
     BarricadeKit,
-    CorpseItem,
     ExercisePlan,
     FirstAidTarget,
     HeldItem,
@@ -133,6 +137,7 @@ from modules.resolution import (
     TargetNpc,
     TargetZombie,
     TimeSpan,
+    Transfer,
 )
 from modules.stats import CharacterStat, StatusEffect
 from modules.story import (
@@ -144,6 +149,7 @@ from modules.story import (
     SetFlag,
     StartOutbreak,
 )
+from modules.units import minutes_from_timed_action_frames
 from modules.weather import WeatherSample
 
 
@@ -266,6 +272,7 @@ class SimulationCore:
         if len(actions) > MAX_PLAN_ACTIONS:
             facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
         for index, action in enumerate(actions[:MAX_PLAN_ACTIONS]):
+            self._release_vanished_body()
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
                 facts.append(
@@ -413,13 +420,17 @@ class SimulationCore:
         manager = self.manager
         player = manager.player
         location = manager.current_location
+        levels = player_status_effect_levels(player)
+        capacity = carry.player_max_weight(player, levels)
+        moving_body = isinstance(action, MoveAction) and player.carrying_corpse is not None
         return StatContext(
             asleep=asleep,
             talking=isinstance(action, SOCIAL_ACTIONS),
             resting=isinstance(action, WaitAction),
             exercising=isinstance(action, AttackAction | ShoveAction)
             or exerting
-            or pace == Pace.RUN,
+            or pace == Pace.RUN
+            or moving_body,
             walking=isinstance(action, MoveAction),
             sneaking=player.sneaking,
             indoors=location.indoors,
@@ -435,6 +446,9 @@ class SimulationCore:
             skills=skill_levels(player),
             corpse_count=corpse_count(manager.world, player.current_location_id),
             corpse_defence=corpse_defence(player),
+            carry_ratio=carry.load_ratio(carry.carried_weight(player), capacity),
+            heavy_load=levels[StatusEffect.HEAVY_LOAD],
+            carrying_corpse=player.carrying_corpse is not None,
         )
 
     def _metabolic_target(self, action: AnyAction | None) -> Metabolic:
@@ -493,6 +507,7 @@ class SimulationCore:
         span_levels = player_status_effect_levels(manager.player)
         self._zombies_seen_this_chunk = 0
         weakens = isinstance(action, WaitAction | SleepAction | ExerciseAction)
+        resting = isinstance(action, WaitAction | SleepAction)
         while spent < minutes and not self._interruption:
             block = min(survival.MAX_CHUNK_MINUTES, minutes - spent)
             beat_in = self._next_clock_beat_in()
@@ -500,8 +515,12 @@ class SimulationCore:
                 block = min(block, beat_in)
             before = player_status_effect_levels(manager.player)
             self._chunk_sound_stress = 0.0
-            ran, seen, exerting, loop_facts = self._zombie_minutes(block, asleep, motion, weakens)
+            ran, seen, exerting, loop_facts = self._zombie_minutes(
+                block, asleep, motion, weakens, resting
+            )
             facts.extend(loop_facts)
+            if isinstance(action, MoveAction):
+                facts.extend(self._carry_strength_xp(ran))
             self._zombies_seen_this_chunk += seen
             if manager.narrative.game_over:
                 manager.climate.advance_to(manager.narrative.minutes + ran)
@@ -542,6 +561,17 @@ class SimulationCore:
             facts.extend(self._run_ticks(started, spent, walking=isinstance(action, MoveAction)))
         return spent, self._net_level_facts(facts, span_levels)
 
+    def _carry_strength_xp(self, minutes: int) -> list[str]:
+        """Strength XP for minutes of walking loaded past half the capacity."""
+        player = self.manager.player
+        capacity = carry.player_max_weight(player, player_status_effect_levels(player))
+        if not carry.loaded_for_xp(carry.carried_weight(player), capacity):
+            return []
+        hits = carry.strength_xp_rolls(self._rng, minutes)
+        if not hits:
+            return []
+        return self.skill_engine.add_xp(player, skill_k.STRENGTH, hits * carry_k.CARRY_XP_AMOUNT)
+
     def _net_level_facts(self, facts: list[str], before: dict[StatusEffect, int]) -> list[str]:
         """The span's facts with its status-effect changes reported once each, at their final level."""
         level_facts = level_change_fact_texts(self._name)
@@ -557,7 +587,7 @@ class SimulationCore:
         return [cough_sound() for fact in stat_facts if fact in words]
 
     def _zombie_minutes(
-        self, block: int, asleep: bool, motion: Motion, weakens: bool
+        self, block: int, asleep: bool, motion: Motion, weakens: bool, resting: bool
     ) -> tuple[int, int, bool, list[str]]:
         """Run up to `block` minutes of the zombie loop and the body; stops at an interruption or a death.
 
@@ -595,6 +625,7 @@ class SimulationCore:
             if self._body.death_fact:
                 facts.append(self._check_player_death(self._body.death_fact))
                 break
+            self._body.overload(player, resting=resting)
             if weakens and not report.interrupted and _got_worse(_hurt_levels(player), worse):
                 self._interruption = INTERRUPTED_BY_WEAKENING
                 facts.append(body_k.WEAKER_FACT.format(name=self._name))
@@ -641,12 +672,24 @@ class SimulationCore:
             if isinstance(accepted.action, MULTIPLIED_ACTIONS)
             else 1.0
         )
+        load_before = player_status_effect_levels(self.manager.player)[StatusEffect.HEAVY_LOAD]
         result = handler(self, accepted)
         if isinstance(result, tuple):
             return result
         lines = [result] if isinstance(result, str) else result
+        load_after = player_status_effect_levels(self.manager.player)[StatusEffect.HEAVY_LOAD]
+        lines = [
+            *lines,
+            *level_change_facts(
+                self._name,
+                {StatusEffect.HEAVY_LOAD: load_before},
+                {StatusEffect.HEAVY_LOAD: load_after},
+            ),
+        ]
         minutes = action_minutes(accepted.action, accepted.resolved)
-        if isinstance(accepted.action, MULTIPLIED_ACTIONS):
+        if isinstance(accepted.resolved, Transfer):
+            minutes = minutes_from_timed_action_frames(accepted.resolved.frames * slowdown)
+        elif isinstance(accepted.action, MULTIPLIED_ACTIONS):
             minutes = max(1, round(minutes * slowdown))
         if isinstance(accepted.action, SOCIAL_ACTIONS):
             minutes = 0 if self._spoke else minutes
@@ -685,8 +728,7 @@ class SimulationCore:
         player, world = manager.player, manager.world
         now = manager.narrative.minutes
         zone = manager.current_location
-        for slot in CharacterHoldableSlot:
-            held = player.equipment[slot]
+        for slot, held in player.equipment.items():
             if held is not None:
                 player.equipment[slot] = None
                 if held not in zone.entities:
@@ -768,6 +810,10 @@ class SimulationCore:
         ]
         player.current_location_id = zone_id
         player.current_place = ""
+        body = manager.world.corpses.get(player.carrying_corpse or "")
+        if body is not None:
+            body.zone_id = zone_id
+            body.gap = 0.0
         for npc in followers:
             manager.move_npc(npc, manager.world.locations[zone_id])
 
@@ -797,7 +843,7 @@ class SimulationCore:
                 barrier.open = False
         self._enter_zone(zone_id)
         if active:
-            enter_zone(manager.world, zone_id, previous_id, self._rng)
+            enter_zone(manager.world, zone_id, previous_id, self._rng, player.carrying_corpse)
         player.at_barrier = crossing[-1].barrier_id if crossing else None
         last, last_facts = self._spend(1 if active else hop, action, motion=motion)
         return spent + last, [*facts, *last_facts]
@@ -867,19 +913,57 @@ class SimulationCore:
         """`minutes` of a quick action, stretched by pain, mood and cold."""
         return max(1, round(minutes * self._action_time_multiplier()))
 
+    def _transfer_minutes(self, transfer: Transfer) -> int:
+        return minutes_from_timed_action_frames(transfer.frames * self._action_time_multiplier())
+
     def _resolve_take_from_corpse(self, accepted: Accepted) -> str:
-        taken = accepted.expect(CorpseItem)
+        transfer = accepted.expect(Transfer)
+        corpse = transfer.source
+        assert isinstance(corpse, CorpseEntity), "a single corpse take names its corpse"
+        entity = transfer.entities[0]
         manager = self.manager
-        corpse = manager.world.corpses[taken.corpse_id]
-        corpse.contents.remove(taken.entity)
-        manager.player.inventory.append(taken.entity)
+        corpse.contents.remove(entity)
+        manager.player.inventory.append(entity)
         manager.player.stats.add(
             CharacterStat.UNHAPPINESS,
-            strip_unhappiness(manager.player.traits, self._multiplied_minutes(QUICK_ACTION_MIN)),
+            strip_unhappiness(manager.player.traits, self._transfer_minutes(transfer)),
         )
         sex = lore_k.DEAD_WOMAN if corpse.female else lore_k.DEAD_MAN
         return lore_k.TAKE_CORPSE_FACT.format(
-            name=self._name, sex=sex, item=taken.entity.item.name.lower()
+            name=self._name, sex=sex, item=entity.item.name.lower()
+        )
+
+    def _resolve_take_transfer(self, accepted: Accepted) -> str:
+        """TAKE of everything a source holds, or of one thing out of a carried bag."""
+        transfer = accepted.expect(Transfer)
+        action = accepted.action
+        assert isinstance(action, TakeAction), "only TAKE is routed here"
+        manager = self.manager
+        source = transfer.source
+        for entity in transfer.entities:
+            if source is not None:
+                source.contents.remove(entity)
+            else:
+                manager.current_location.entities.remove(entity)
+            manager.player.inventory.append(entity)
+        items = names_in_words(transfer.entities)
+        if isinstance(source, CorpseEntity):
+            manager.player.stats.add(
+                CharacterStat.UNHAPPINESS,
+                strip_unhappiness(manager.player.traits, self._transfer_minutes(transfer)),
+            )
+            sex = lore_k.DEAD_WOMAN if source.female else lore_k.DEAD_MAN
+            return carry_k.TAKE_ALL_CORPSE_FACT.format(name=self._name, items=items, sex=sex)
+        if source is None:
+            fact = carry_k.TAKE_ALL_GROUND_FACT.format(name=self._name, items=items)
+            for entity in transfer.entities:
+                fact = self._with_quest_note(fact, f"take:{entity.item.id}")
+            return fact
+        bag = source.item.name.lower()
+        if action.all_items:
+            return carry_k.TAKE_ALL_FACT.format(name=self._name, items=items, source=f"the {bag}")
+        return carry_k.TAKE_FROM_BAG_FACT.format(
+            name=self._name, item=transfer.entities[0].item.name.lower(), bag=bag
         )
 
     def _resolve_search(self, accepted: Accepted) -> tuple[list[str], int]:
@@ -911,9 +995,16 @@ class SimulationCore:
         return [*facts, *search_facts], spent
 
     def _resolve_take(self, accepted: Accepted) -> str:
-        if isinstance(accepted.resolved, CorpseItem):
+        transfer = accepted.expect(Transfer)
+        action = accepted.action
+        assert isinstance(action, TakeAction), "only TAKE is routed here"
+        if action.all_items or (
+            transfer.source is not None and not isinstance(transfer.source, CorpseEntity)
+        ):
+            return self._resolve_take_transfer(accepted)
+        if isinstance(transfer.source, CorpseEntity):
             return self._resolve_take_from_corpse(accepted)
-        entity = accepted.expect(HeldItem).entity
+        entity = transfer.entities[0]
         manager = self.manager
         manager.current_location.entities.remove(entity)
         manager.player.inventory.append(entity)
@@ -923,27 +1014,64 @@ class SimulationCore:
         return self._with_quest_note(fact, f"take:{entity.item.id}")
 
     def _resolve_drop(self, accepted: Accepted) -> str:
-        entity = accepted.expect(HeldItem).entity
-        manager = self.manager
-        manager.player.inventory.remove(entity)
-        manager.current_location.entities.append(entity)
+        action = accepted.action
+        if isinstance(action, DropAction) and action.corpse:
+            return self._put_the_body_down()
+        resolved = accepted.resolved
+        entity = (
+            resolved.entities[0]
+            if isinstance(resolved, Transfer)
+            else accepted.expect(HeldItem).entity
+        )
+        carry.take_out(self.manager.player, entity)
+        self.manager.current_location.entities.append(entity)
         return f"Drop {entity.item.name}: succeeded."
+
+    def _put_the_body_down(self) -> str:
+        player = self.manager.player
+        body = self.manager.world.corpses.get(player.carrying_corpse or "")
+        if body is not None:
+            body.gap = carry_k.DROPPED_BODY_GAP
+        player.carrying_corpse = None
+        player.carrying_skeleton = False
+        return carry_k.DROP_BODY_FACT.format(name=self._name)
+
+    def _release_vanished_body(self) -> None:
+        """A body that rotted away leaves the arms; one that turned to bones weighs less."""
+        player = self.manager.player
+        if player.carrying_corpse is None:
+            return
+        body = self.manager.world.corpses.get(player.carrying_corpse)
+        if body is None:
+            player.carrying_corpse = None
+            player.carrying_skeleton = False
+        else:
+            player.carrying_skeleton = body.skeleton
+
+    def _resolve_put(self, accepted: Accepted) -> str:
+        transfer = accepted.expect(Transfer)
+        entity, bag = transfer.entities[0], transfer.target
+        assert bag is not None, "_validate_put sets the target"
+        carry.take_out(self.manager.player, entity)
+        bag.contents.append(entity)
+        return carry_k.PUT_FACT.format(
+            name=self._name, item=entity.item.name.lower(), bag=bag.item.name.lower()
+        )
 
     def _resolve_wear(self, accepted: Accepted) -> str:
         entity = accepted.expect(HeldItem).entity
         item = entity.item
-        assert isinstance(item, ClothingItem), "_validate_wear checks this"
-        self.manager.player.inventory.remove(entity)
+        assert isinstance(item, ClothingItem | ContainerItem), "_validate_wear checks this"
+        assert item.body_location is not None, "_validate_wear checks this"
+        carry.take_out(self.manager.player, entity)
         self.manager.player.worn[item.body_location] = entity
         return f"Wear {item.name}: succeeded."
 
     def _resolve_take_off(self, accepted: Accepted) -> str:
         entity = accepted.expect(HeldItem).entity
-        item = entity.item
-        assert isinstance(item, ClothingItem), "only clothing is ever worn"
-        del self.manager.player.worn[item.body_location]
+        carry.take_out(self.manager.player, entity)
         self.manager.player.inventory.append(entity)
-        return f"Take off {item.name}: succeeded."
+        return f"Take off {entity.item.name}: succeeded."
 
     def _resolve_use_item(self, accepted: Accepted) -> str | list[str]:
         manager = self.manager
@@ -964,7 +1092,7 @@ class SimulationCore:
 
         if isinstance(item, ConsumableItem):
             event = ConsumeItemEvent(source=player, item=item)
-            manager.player.inventory.remove(entity)
+            carry.take_out(manager.player, entity)
             consume_facts = self._consume(item)
         else:
             consume_facts = []
@@ -1121,18 +1249,55 @@ class SimulationCore:
         player = self.manager.player
         entity = accepted.expect(HeldItem).entity
         item = entity.item
+        if isinstance(item, ContainerItem):
+            slot = carry.bag_slot(player, entity)
+            assert slot is not None, "_validate_equip_bag checks this"
+            carry.take_out(player, entity)
+            player.equipment[slot] = entity
+            if slot == CharacterArmorSlot.SHOULDERS:
+                return carry_k.SHOULDER_BAG_FACT.format(
+                    name=self._name,
+                    item=item.name.lower(),
+                    possessive=player.appearance.possessive,
+                )
+            return melee_k.EQUIP_FACT.format(name=self._name, item=item.name.lower())
         assert isinstance(item, HoldableItem), "_validate_equip checks this"
-        player.inventory.remove(entity)
+        carry.take_out(player, entity)
         for slot in held_slots(item):
             player.equipment[slot] = entity
         return melee_k.EQUIP_FACT.format(name=self._name, item=item.name.lower())
 
+    def _resolve_carry(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Walk up to the body, then pick it up: the approach minutes come before the one carrying."""
+        target = accepted.expect(TargetCorpse)
+        manager = self.manager
+        player = manager.player
+        facts: list[str] = []
+        spent = 0
+        if target.approach_minutes:
+            motion = Motion(Pace.WALK, approach_target=target.corpse_id)
+            spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
+        if manager.narrative.game_over:
+            return facts, spent
+        if self._interruption:
+            return [*facts, f"{self._name} never gets to pick the body up."], spent
+        corpse = manager.world.corpses.get(target.corpse_id)
+        if corpse is None:
+            gone = carry_k.BODY_GONE_FACT.format(name=self._name, corpse=target.corpse_id)
+            return [*facts, gone], spent
+        lift_spent, lift_facts = self._spend(carry_k.CARRY_CORPSE_MIN, accepted.action)
+        spent += lift_spent
+        if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
+            player.carrying_corpse = corpse.corpse_id
+            player.carrying_skeleton = corpse.skeleton
+            corpse.gap = 0.0
+            facts.append(carry_k.CARRY_BODY_FACT.format(name=self._name))
+        return [*facts, *lift_facts], spent
+
     def _resolve_unequip(self, accepted: Accepted) -> str:
         player = self.manager.player
         entity = accepted.expect(HeldItem).entity
-        for slot in CharacterHoldableSlot:
-            if player.equipment[slot] is entity:
-                player.equipment[slot] = None
+        carry.take_out(player, entity)
         player.inventory.append(entity)
         return melee_k.UNEQUIP_FACT.format(name=self._name, item=entity.item.name.lower())
 
@@ -1401,6 +1566,8 @@ class SimulationCore:
         "MOVE_TO": _resolve_move,
         "STANCE": _resolve_stance,
         "TAKE": _resolve_take,
+        "PUT": _resolve_put,
+        "CARRY": _resolve_carry,
         "SEARCH": _resolve_search,
         "DROP": _resolve_drop,
         "WEAR": _resolve_wear,
