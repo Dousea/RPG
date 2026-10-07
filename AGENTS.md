@@ -28,6 +28,25 @@ only). A layer imports only from layers to its left. `modules/`, `data/` and
 and `data/` never read `config`. `mise run lint` enforces this; fix the design,
 not the contract.
 
+## Mechanics and domains
+
+A rule's tracked definition is `docs/mechanics/NN-*.md`; "spec NN" in code and
+tests means that file, and its numbers win over code comments.
+
+| Domain | Mechanics | Logic |
+| --- | --- | --- |
+| world | 01 clock, 04 weather, 13 doors, 25 rooms | `managers/world/` |
+| body | 02 stats, 03 status effects, 06 temperature, 12 health | `managers/body/` |
+| clothing | 05 | `data/clothing/`, `managers/simulation.py` |
+| character | 07 creation, 08 skills | `managers/character/` |
+| zombies, corpses | 09 zombies, 14 lifecycle | `managers/zombies/`, `managers/corpses/` |
+| combat | 11 melee | `managers/combat/` |
+| loot, carry | 25 | `managers/world/containers.py`, `managers/carry.py` |
+| story | 10 LLM contract | `managers/story/`, `adapters/llm.py` |
+
+`data/zombies/{clothing,outfits,loot}.py` and `data/loot/tables.py` are
+generated: change the generator's output, not the file by hand.
+
 ## Engine authority
 
 The turn is parse → validate → resolve → narrate (`adapters/engine.py`). The
@@ -86,12 +105,15 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
 - **Logging, not print:** each module uses `logger = logging.getLogger(__name__)`.
   `debug` for per-turn traces, `info` for lifecycle, `warning` for dropped or
   repaired data. Ruff bans `print`.
-- **Saves:** while the game is not playable (until spec 12 lands), there is
-  no save migration: bump the schema version and discard incompatible saves.
+- **Saves:** no save migration: a change to saved state bumps
+  `SCHEMA_VERSION` (`adapters/save/codec.py`) and old saves are discarded.
 - **Tests:** a test for a spec'd mechanic names the spec and section in its
   class docstring (`"""Spec 16, The arm pain divisor."""`) and asserts the
   spec's numbers. Tests stay offline: the LLM and the embedding model
-  are stubbed (`tests/support.py`).
+  are stubbed (`tests/support.py`). Tests ignore `config.yml`
+  (`tests/__init__.py` points `RPG_CONFIG` at `/dev/null`) and fix the world
+  seed to 1. `mise run test` runs each test module in its own process, so no
+  test may rely on another module's state.
 - **Types:** new code type-checks cleanly. Don't add to
   `.basedpyright/baseline.json`; after fixing old errors, shrink it with
   `basedpyright --writebaseline`.

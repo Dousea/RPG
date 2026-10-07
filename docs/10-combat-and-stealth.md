@@ -1,6 +1,6 @@
 # Combat and Stealth Resolution
 
-> **Status: Planned.** The damage events and modifiers exist (see [document 23](23-traits-perks-modifiers.md)); nothing constructs them, so combat is defined and unreachable. See [Implementation Status](00-status.md).
+> **Status: Partial.** Melee combat is built: against zombies as [mechanics 11](mechanics/11-melee-combat.md) describes (crits, the damage chain, knockdowns, shoves, weapon condition), with clothing armour from [mechanics 14](mechanics/14-zombie-lifecycle.md); against NPCs through the event and modifier chain of [document 23](23-traits-perks-modifiers.md). Stealth and ranged combat are not built. See [Implementation Status](00-status.md).
 
 ## Combat
 

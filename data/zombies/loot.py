@@ -1,4 +1,7 @@
-"""What a zombie carries and what its pockets hold (spec 14)."""
+"""What a zombie carries and what its pockets hold (spec 14).
+
+Generated; don't edit by hand.
+"""
 
 from typing import NamedTuple
 

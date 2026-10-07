@@ -1,4 +1,7 @@
-"""Loot tables for the containers of the starting places (spec 25)."""
+"""Loot tables for the containers of the starting places (spec 25).
+
+Generated; don't edit by hand.
+"""
 
 from typing import NamedTuple
 

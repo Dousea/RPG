@@ -1,4 +1,7 @@
-"""The outfits a zombie wears (spec 14): the pool and each outfit's item references."""
+"""The outfits a zombie wears (spec 14): the pool and each outfit's item references.
+
+Generated; don't edit by hand.
+"""
 
 # name, chance, sex the outfit is for
 ZOMBIE_OUTFIT_POOL: tuple[tuple[str, float, str], ...] = (  # spec 14

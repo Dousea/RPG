@@ -23,10 +23,10 @@ The central principle is **Engine Authority**:
 
 The architecture is designed to support a world with 50,000+ addressable locations without requiring 50,000 simultaneously simulated rooms or a huge LLM context window.
 
-The running game inverts this: the LLM decides what happens and the engine
-rejects the deltas it can prove impossible. See
-[00 — Implementation Status](00-status.md) for why that matters and what it
-costs.
+The running game follows this at its current scale: the parser proposes
+actions, the engine validates and resolves them, and the narrator describes
+the outcome. The scale targets (world size, simulation level of detail) are
+still design intent; see [00 — Implementation Status](00-status.md).
 
 ## Contents
 
@@ -36,17 +36,17 @@ costs.
 
 ### Design target (01–21)
 
-1. **[Engine Authority](01-engine-authority.md)** — *Partial*
+1. **[Engine Authority](01-engine-authority.md)** — *Implemented, at the game's current scale*
 2. **[System Boundaries](02-system-boundaries.md)** — simulation core, event bus — *Planned*
-3. **[Intent Parsing and Action Planning](03-intent-parsing.md)** — natural language is not game state, sequential action execution, action vocabulary — *Planned*
+3. **[Intent Parsing and Action Planning](03-intent-parsing.md)** — natural language is not game state, sequential action execution, action vocabulary — *Partial*
 4. **[Entity Resolution](04-entity-resolution.md)** — *Partial*
 5. **[World Generation, Topology and Travel](05-world-generation.md)** — location hierarchy, rooms are graph nodes, deterministic world generation, tiered content, separate topology from content, on-demand materialization, travel nodes — *Planned*
 6. **[Simulation Level of Detail](06-simulation-lod.md)** — *Planned*
-7. **[Story and Narrative Architecture](07-story-architecture.md)** — story state is engine state, three types of story content, story director — *Planned*
+7. **[Story and Narrative Architecture](07-story-architecture.md)** — story state is engine state, three types of story content, story director — *Partial*
 8. **[Time and Scheduling](08-time-and-scheduling.md)** — *Planned*
-9. **[Zombie Survival Simulation](09-zombie-survival.md)** — spatial threat and noise, light and visibility, time-decay scavenging, direct action validation — *Planned*
-10. **[Combat and Stealth Resolution](10-combat-and-stealth.md)** — combat, stealth — *Planned*
-11. **[Knowledge, Visibility, and Information Security](11-knowledge-firewall.md)** — *Planned, and actively violated*
+9. **[Zombie Survival Simulation](09-zombie-survival.md)** — spatial threat and noise, light and visibility, time-decay scavenging, direct action validation — *Partial*
+10. **[Combat and Stealth Resolution](10-combat-and-stealth.md)** — combat, stealth — *Partial*
+11. **[Knowledge, Visibility, and Information Security](11-knowledge-firewall.md)** — *Partial*
 12. **[Data Model and Persistence](12-data-model.md)** — data model, event-oriented persistence, exits are structured data, npc architecture, factions and world systems — *Partial, with an* As Implemented *section*
 13. **[Context Construction and Memory Layers](13-context-and-memory.md)** — context construction, memory layers — *Partial, with an* As Implemented *section*
 14. **[Local LLM Roles and Narrator Constraints](14-llm-roles.md)** — local llm roles, narrator constraints — *Partial*
@@ -61,7 +61,7 @@ costs.
 ### As built (22–25)
 
 22. **[Relationships, Trust, and Disposition](22-relationships.md)** — directional affinity and trust, derived disposition, faction reputation — *Implemented*
-23. **[Traits, Perks, Effects, and Modifiers](23-traits-perks-modifiers.md)** — the event → effect → modifier chain — *Implemented, unreachable*
+23. **[Traits, Perks, Effects, and Modifiers](23-traits-perks-modifiers.md)** — the event → effect → modifier chain — *Implemented, live*
 24. **[Runtime, Configuration, and Persistence](24-runtime-and-persistence.md)** — turn serialization, config loading, save compatibility policy — *Implemented*
 25. **[UI Layout](25-ui-layout.md)** — read-only responsive screens, where each snapshot field is shown, words not numbers — *Partial*
 

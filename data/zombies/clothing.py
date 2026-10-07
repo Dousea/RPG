@@ -1,4 +1,7 @@
-"""Clothing the zombie outfits can produce (spec 14), one row per item."""
+"""Clothing the zombie outfits can produce (spec 14), one row per item.
+
+Generated; don't edit by hand.
+"""
 
 from data.clothing.coverage import covered_parts
 from modules.body.parts import BodyLocation
