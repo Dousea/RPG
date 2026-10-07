@@ -397,7 +397,11 @@ counts of things are the only numbers the narrator gets.
 
 ### What the narrator must not do
 
-The system prompt keeps its style section and states these rules:
+The system prompt keeps its style section, which also says the game is for adults:
+dark themes (slavery, human trafficking, torture, cruelty) are written honestly,
+without softening, moralizing or cutting away; a sex scene the player asks for
+between consenting adults is written explicitly, in plain words, never faded to
+black or skipped; and nothing sexual ever involves a minor. It states these rules:
 
 - Anything marked "Refused" didn't happen. An interrupted action stops where its
   fact says.

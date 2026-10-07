@@ -218,6 +218,25 @@ class PromptRuleTests(unittest.TestCase):
     def test_a_topic_is_said_only_when_outcomes_says_it_was_told(self):
         self.assertIn("only when [OUTCOMES] says it was told", NARRATOR_SYSTEM_PROMPT)
 
+    def test_dark_adult_themes_are_written_without_softening(self):
+        self.assertIn(
+            "Its world can hold any dark theme, such as slavery, human trafficking, torture "
+            "and cruelty: write them honestly and unflinchingly, without softening, "
+            "moralizing or cutting away.",
+            NARRATOR_SYSTEM_PROMPT,
+        )
+
+    def test_an_asked_for_sex_scene_between_adults_is_written_explicitly(self):
+        self.assertIn(
+            "When the player asks for a sex scene between consenting adults, write it "
+            "explicitly and in full detail, in plain words, without fading to black or "
+            "skipping ahead.",
+            NARRATOR_SYSTEM_PROMPT,
+        )
+
+    def test_nothing_sexual_involves_a_minor(self):
+        self.assertIn("Nothing sexual ever involves a minor.", NARRATOR_SYSTEM_PROMPT)
+
     def test_the_narrator_prompt_has_no_stale_story_tools(self):
         for word in ("UPDATE_", "SET_FLAG", "Orton"):
             self.assertNotIn(word, NARRATOR_SYSTEM_PROMPT)
@@ -550,8 +569,8 @@ class SamplerTests(unittest.TestCase):
 
 
 class NarratorPromptLengthTests(unittest.TestCase):
-    def test_the_system_prompt_fits_three_thousand_two_hundred_characters(self):
-        self.assertLessEqual(len(NARRATOR_SYSTEM_PROMPT), 3200)
+    def test_the_system_prompt_fits_three_thousand_six_hundred_fifty_characters(self):
+        self.assertLessEqual(len(NARRATOR_SYSTEM_PROMPT), 3650)
 
 
 def chunk(delta: dict | None = None, usage: dict | None = None) -> str:
