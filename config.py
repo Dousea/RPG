@@ -18,6 +18,8 @@ _DEFAULTS: dict[str, Any] = {
     "llm": {
         "base_url": "http://localhost:1234/v1/chat/completions",
         "model_name": "local-model",
+        # Empty: the parser asks the narrator's model.
+        "parser_model_name": "",
         "request_timeout": 300,
         # Low temperature: the parser proposes actions, not prose, so it
         # should be as consistent/predictable as the local model allows.

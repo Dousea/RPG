@@ -374,6 +374,30 @@ class ReasoningTests(unittest.TestCase):
             self.assertEqual(self.sent(call)["reasoning_effort"], "none")
 
 
+class ModelPerRoleTests(unittest.TestCase):
+    """Spec 10, The rule."""
+
+    def model(self, call) -> str:
+        with (
+            mock.patch.object(llm, "MODEL_NAME", "narrator-model"),
+            mock.patch.object(llm, "PARSER_MODEL_NAME", "parser-model"),
+            mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post,
+        ):
+            call()
+        return post.call_args.kwargs["json"]["model"]
+
+    def test_the_parser_asks_its_own_model_in_both_formats(self):
+        self.assertEqual(self.model(lambda: llm.query_parser("p", SCHEMA)), "parser-model")
+        self.assertEqual(self.model(lambda: llm.query_parser("p")), "parser-model")
+
+    def test_the_narrator_and_summary_ask_the_narrator_model(self):
+        self.assertEqual(self.model(lambda: llm.query_narrator("p")), "narrator-model")
+        self.assertEqual(self.model(lambda: llm.query_summary("p")), "narrator-model")
+
+    def test_by_default_the_parser_shares_the_narrator_model(self):
+        self.assertEqual(config._DEFAULTS["llm"]["parser_model_name"], "")
+
+
 class CharsPerTokenTests(unittest.TestCase):
     """Spec 10, Token budget: characters per token."""
 

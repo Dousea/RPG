@@ -228,6 +228,13 @@ narrator, under the key in `factcheck.model_name`. Set `factcheck.enabled: false
 `config.yml` to skip the check; if the model is not loaded the check logs a warning
 and the game plays on.
 
+The parser and the narrator can be different models: `llm.model_name` names the
+narrator's (needed once more than one model is loaded) and `llm.parser_model_name` the
+parser's; left empty, the narrator's model parses too. LM Studio loads the parser's
+model on its first request without unloading the others, so load the narrator and the
+decision model first: they keep the GPU, and the parser runs partly from system memory,
+which slows only the parse.
+
 `.venv` is gitignored.
 
 ### Without mise

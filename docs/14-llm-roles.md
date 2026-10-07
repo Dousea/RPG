@@ -44,7 +44,9 @@ permitted context
 prose / dialogue
 ```
 
-The Parser and Narrator can use different local models.
+The Parser and Narrator can use different local models: `llm.parser_model_name` names
+the parser's, and empty means it shares the narrator's `llm.model_name`. The summarizer
+writes prose, so it asks the narrator's model.
 
 A larger model is not required for every task.
 

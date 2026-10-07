@@ -8,6 +8,9 @@ llm:
   # ignores it; with several (the narrator and the factcheck model) it must
   # name the narrator's loaded model.
   model_name: "local-model"
+  # The parser's model key in LM Studio, when it differs from the narrator's;
+  # empty means the narrator's model parses too. LM Studio loads it on first use.
+  parser_model_name: ""
   # Seconds to wait for a response before giving up.
   request_timeout: 300
   # Sampling temperature for the intent parser (proposes actions, not prose).

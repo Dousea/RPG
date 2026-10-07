@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 LM_STUDIO_URL = config.llm.base_url
 
 MODEL_NAME = config.llm.model_name
+PARSER_MODEL_NAME = config.llm.parser_model_name or MODEL_NAME
 
 
 EMPTY_STORY = "The world is silent."
@@ -198,6 +199,7 @@ class LLMRequestRejected(LLMError):
 
 
 def _chat(
+    model: str,
     system_prompt: str,
     user_content: str,
     temperature: float,
@@ -205,7 +207,7 @@ def _chat(
     response_format: dict[str, Any] | None = None,
 ) -> str:
     payload: dict[str, Any] = {
-        "model": MODEL_NAME,
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -266,14 +268,19 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
         }
         try:
             raw = _chat(
-                PARSER_JSON_SYSTEM_PROMPT, prompt_text, temperature, max_tokens, response_format
+                PARSER_MODEL_NAME,
+                PARSER_JSON_SYSTEM_PROMPT,
+                prompt_text,
+                temperature,
+                max_tokens,
+                response_format,
             )
         except LLMRequestRejected as exc:
             logger.warning("Structured parser output refused, using the text prompt: %s", exc)
         else:
             logger.debug("Parser raw response:\n%s", raw)
             return ParserReply(raw, structured=True)
-    raw = _chat(PARSER_SYSTEM_PROMPT, prompt_text, temperature, max_tokens)
+    raw = _chat(PARSER_MODEL_NAME, PARSER_SYSTEM_PROMPT, prompt_text, temperature, max_tokens)
     logger.debug("Parser raw response:\n%s", raw)
     return ParserReply(raw, structured=False)
 
@@ -297,6 +304,7 @@ def read_parser_reply(reply: ParserReply) -> tuple[list[AnyAction], list[ParseFa
 def query_narrator(prompt_text: str) -> str:
     """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure."""
     raw = _chat(
+        MODEL_NAME,
         NARRATOR_SYSTEM_PROMPT,
         prompt_text,
         temperature=config.llm.narrator_temperature,
@@ -309,6 +317,7 @@ def query_narrator(prompt_text: str) -> str:
 def query_summary(text_to_summarize: str) -> str:
     """Condense events into a narrative paragraph. Raises LLMError on failure."""
     return _chat(
+        MODEL_NAME,
         SUMMARIZER_SYSTEM_PROMPT,
         text_to_summarize,
         temperature=config.llm.summarizer_temperature,
