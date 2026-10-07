@@ -344,6 +344,20 @@ class PartLinesTests(unittest.TestCase):
         narrator = self.builder.build_narrator_prompt("look")
         self.assertIn("Painkillers (7 left)", narrator)
 
+    def test_equal_items_show_once_with_a_count(self):
+        """carrying-and-loot: Equal items group in [INVENTORY]; state keeps them apart."""
+        for uses in (5, 5, 5, 7):
+            self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_painkillers"]))
+            self.gm.player.inventory[-1].uses = uses
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents = [ItemEntity(item=ITEMS["item_canned_beans"]) for _ in range(2)]
+        self.gm.player.inventory.append(bag)
+        parser = self.builder.build_parser_prompt("look")
+        inventory = parser.split("[INVENTORY]")[1].split("[WORN]")[0]
+        self.assertIn(" - Painkillers (5 left) x3\n", inventory)
+        self.assertIn(" - Painkillers (7 left)\n", inventory)
+        self.assertIn("Schoolbag: Canned Beans x2", inventory)
+
     def test_a_single_use_item_shows_no_count(self):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_dirty_bandage"]))
         parser = self.builder.build_parser_prompt("look")

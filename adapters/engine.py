@@ -453,10 +453,7 @@ class GameEngine:
             "skills": _skills(player),
             "character": _character(player),
             "conditions": [condition.value for condition in player.conditions],
-            "inventory": [
-                {"name": entity.item.name, "condition": _condition(entity)}
-                for entity in player.inventory
-            ],
+            "inventory": _inventory(player),
             "carry": _carry(player),
             "held": _held(player),
             "equipment": _equipment(player),
@@ -486,6 +483,18 @@ class GameEngine:
         }
 
 
+def _inventory(player: PlayerEntity) -> list[dict[str, Any]]:
+    """The pack's items, equal name and condition grouped with a count (carrying-and-loot)."""
+    counts: dict[tuple[str, str], int] = {}
+    for entity in player.inventory:
+        key = (entity.item.name, _condition(entity))
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"name": name, "condition": condition, "count": count}
+        for (name, condition), count in counts.items()
+    ]
+
+
 def _carry(player: PlayerEntity) -> dict[str, Any]:
     """The load against what the player can carry (numbers are allowed here), and each bag with its contents."""
     levels = player_status_effect_levels(player)
@@ -497,7 +506,7 @@ def _carry(player: PlayerEntity) -> dict[str, Any]:
             {
                 "name": bag.item.name,
                 "place": carry.bag_place(player, bag),
-                "contents": [inner.item.name for inner in bag.contents],
+                "contents": carry.grouped(inner.item.name for inner in bag.contents),
             }
             for bag in carry.carried_bags(player)
         ],

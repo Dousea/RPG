@@ -290,6 +290,20 @@ class TurnTests(EngineTestCase):
         self.engine.game.player.current_location_id = "zone_street"
         self.assertEqual(self.engine.state()["rooms"], [])
 
+    def test_snapshot_groups_equal_items(self):
+        """carrying-and-loot: Equal items group on the inventory screen."""
+        player = self.engine.game.player
+        player.inventory.clear()
+        player.inventory.extend(ItemEntity(item=ITEMS["item_bandage"]) for _ in range(3))
+        player.inventory.append(ItemEntity(item=ITEMS["item_hammer"]))
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents = [ItemEntity(item=ITEMS["item_canned_beans"]) for _ in range(2)]
+        player.inventory.append(bag)
+        state = self.engine.state()
+        names = [(item["name"], item["count"]) for item in state["inventory"]]
+        self.assertEqual(names, [("Bandage", 3), ("Hammer", 1), ("Schoolbag", 1)])
+        self.assertEqual(state["carry"]["bags"][0]["contents"], ["Canned Beans x2"])
+
     def test_snapshot_carries_the_load_the_bags_and_heavy_load(self):
         """carrying-and-loot: What the narrator and the player see: `carry` and the Heavy Load effect."""
         manager = self.engine.game

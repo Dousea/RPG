@@ -345,3 +345,11 @@ def strength_xp_rolls(rng: random.Random, minutes: int) -> int:
 def loaded_for_xp(weight: float, capacity: float) -> bool:
     """Whether the load is above the share of capacity that trains Strength."""
     return weight > carry_k.CARRY_XP_WEIGHT_FRACTION * capacity
+
+
+def grouped(labels: Iterable[str]) -> list[str]:
+    """Equal labels once each, in order of first appearance, with " xN" when there are several (carrying-and-loot)."""
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label] = counts.get(label, 0) + 1
+    return [f"{label} x{count}" if count > 1 else label for label, count in counts.items()]

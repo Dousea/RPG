@@ -597,13 +597,14 @@ costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
 
   ```
   [INVENTORY]
-   - Schoolbag (on your back): Canned Beans, Bandage
+   - Schoolbag (on your back): Canned Beans x2, Bandage
    - Toolbox (in your hand): Hammer
    - Duffel Bag: Toolbox (Plank)
-   - Canned Beans
+   - Alcohol Wipes (5 left) x3
   ```
 
-  A bag with nothing in it says "empty". `PUT` is listed when the player has a
+  A bag with nothing in it says "empty". Equal items, with the same uses left,
+  show once with a count; each stays its own item in state. `PUT` is listed when the player has a
   bag, `TAKE` when a bag or the ground gives something to take, and `CARRY`
   when a body is in view. The plan schema offers the bags, what is in them and
   "all" as `TAKE` sources and items.
@@ -625,7 +626,9 @@ costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
   and `PUT`, so a plan can move to a room and take from it.
 - **Player (UI).** The inventory screen shows the weight against the capacity
   in kilograms and each bag with its place and contents; Heavy Load shows in the
-  status strip. `/play` gains `carry` (`weight`, `max_weight`, `level`, `bags`)
+  status strip. Each `/play` `inventory` entry has a `count` of the equal items
+  (same name and condition) it stands for, and the screen shows "Bandage x3".
+  `/play` gains `carry` (`weight`, `max_weight`, `level`, `bags`)
   and a `carried` flag on a body, and `rooms`: each room of the zone with whether
   the player is in it and its containers (`name`, `opened`, and `contents` only
   once opened). The Nearby screen lists them under "Rooms".
@@ -655,15 +658,6 @@ Incompatible saves are discarded.
 - **A container is never refilled,** even when the player empties it.
 - **A full container during a fill** stops only the list that overflowed.
 - **A saved room that no longer exists** counts as no room.
-
-## Known limitations
-
-Found in the 2026-10-08 playtest.
-
-- **Equal items don't group.** After three finds the inventory lists "Alcohol
-  Wipes (5 left)" three times. *Fix:* group equal names with equal condition words
-  in `[INVENTORY]` and on the inventory screen ("Alcohol Wipes (5 left) x3"); the
-  items stay separate in state.
 
 ## Testing
 

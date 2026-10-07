@@ -449,7 +449,7 @@ Traits: {_lines(trait_lines) or "None"}
             worn_bag = isinstance(entity.item, ContainerItem) and not any(entity is h for h in held)
             if worn_bag:
                 lines.append(_inventory_line(entity, carry.bag_place(player, entity)))
-        lines.extend(_inventory_line(entity, "") for entity in player.inventory)
+        lines.extend(carry.grouped(_inventory_line(entity, "") for entity in player.inventory))
         return lines
 
     def _carried_things(self) -> list[ItemEntity]:
@@ -925,7 +925,7 @@ def _contents_words(bag: ItemEntity) -> str:
     for inner in bag.contents:
         nested = _contents_words(inner)
         parts.append(f"{inner.item.name} ({nested})" if nested else inner.item.name)
-    return ", ".join(parts)
+    return ", ".join(carry.grouped(parts))
 
 
 def _names(entities: Iterable[ItemEntity]) -> tuple[str, ...]:

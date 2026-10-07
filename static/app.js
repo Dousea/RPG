@@ -247,7 +247,7 @@ function renderInventory(data) {
     }
     clearAndFill(inventoryList, items.map(item => {
         const li = el('li', 'row-item');
-        li.appendChild(el('span', null, item.name));
+        li.appendChild(el('span', null, item.count > 1 ? `${item.name} x${item.count}` : item.name));
         li.appendChild(el('span', 'value muted', item.condition));
         return li;
     }));
