@@ -183,7 +183,7 @@ class SearchTests(unittest.TestCase):
         minutes, facts = minutes_of(gm, SearchAction(target_name="c1"))
         self.assertEqual(minutes, 1)
         self.assertTrue(corpse.searched)
-        self.assertIn(f"{NAME} goes through c1: a police jacket, a kitchen knife.", facts)
+        self.assertIn(f"{NAME} goes through c1: a police jacket and a kitchen knife.", facts)
 
     def test_the_pockets_are_rolled_once_and_land_in_the_contents(self):
         gm, corpse = with_body("item_tshirt")

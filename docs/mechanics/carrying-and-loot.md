@@ -525,7 +525,8 @@ its transfer time.
   is in ("The kitchen counter hasn't been gone through."; "The kitchen counter is
   in the kitchen, not here."; "The kitchen counter holds no 'x'."). `TAKE all` with no source takes everything
   on the ground and everything in each opened container of the player's room, in
-  layout order, with one fact per place; with a source, everything in it. Either
+  layout order, with one fact per place ("Orton takes two bandages and a hammer
+  from the kitchen cupboards."); with a source, everything in it. Either
   way it is one action. Refused: no
   such bag ("<name> has no 'x' to take from."); the bag holds no such item;
   nothing to take; the pack would pass 50 kg ("<name> can't carry any more.");
@@ -659,10 +660,6 @@ Incompatible saves are discarded.
 
 Found in the 2026-10-08 playtest.
 
-- **Take-all facts list without counts.** "Orton takes a bandage, painkillers,
-  alcohol wipes, painkillers from the supply crates." repeats a name and has no
-  "and". *Fix:* build it with the counted listing the `SEARCH` fact already uses
-  ("a bandage, two painkillers and alcohol wipes").
 - **Equal items don't group.** After three finds the inventory lists "Alcohol
   Wipes (5 left)" three times. *Fix:* group equal names with equal condition words
   in `[INVENTORY]` and on the inventory screen ("Alcohol Wipes (5 left) x3"); the

@@ -71,11 +71,6 @@ def with_article(name: str) -> str:
     return f"{'an' if name[0].lower() in 'aeiou' else 'a'} {name}"
 
 
-def names_in_words(entities: Iterable[ItemEntity]) -> str:
-    """Items by name with their articles, joined with commas; empty for none."""
-    return ", ".join(with_article(entity.item.name.lower()) for entity in entities)
-
-
 def _plural(name: str) -> str:
     if name.endswith("s"):
         return name
@@ -111,7 +106,7 @@ def items_in_words(entities: Iterable[ItemEntity]) -> str:
 
 def contents_in_words(corpse: CorpseEntity) -> str:
     """What a body holds, by name, for a fact."""
-    return names_in_words(corpse.contents) or zombie_lore.SEARCH_NOTHING
+    return items_in_words(corpse.contents) or zombie_lore.SEARCH_NOTHING
 
 
 def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | None:

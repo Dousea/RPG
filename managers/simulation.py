@@ -69,7 +69,6 @@ from managers.corpses.bodies import dress_as_player
 from managers.corpses.search import (
     contents_in_words,
     items_in_words,
-    names_in_words,
     strip_unhappiness,
 )
 from managers.corpses.search import search as loot_search
@@ -981,7 +980,7 @@ class SimulationCore:
             else:
                 manager.current_location.entities.remove(entity)
             manager.player.inventory.append(entity)
-        items = names_in_words(transfer.entities)
+        items = items_in_words(transfer.entities)
         if isinstance(source, ContainerEntity):
             if action.all_items:
                 return carry_k.TAKE_ALL_FACT.format(

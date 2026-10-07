@@ -293,7 +293,7 @@ is a corpse id from `[CORPSES]`, or `corpse` for the nearest.
   ("Orton has already been through c3."). A body that rose during the walk is gone:
   "Orton gets to where c3 lay, but the body is gone."
 - The pockets are rolled once and the corpse becomes `searched`. The fact lists
-  what it holds: "Orton goes through c2: a hi-vis vest, jeans, a kitchen knife."
+  what it holds: "Orton goes through c2: a hi-vis vest, jeans and a kitchen knife."
   An empty body gives "nothing".
 
 ### `TAKE <item> from <corpse>`
@@ -426,7 +426,7 @@ weapon XP as any hit does.
   - "z3 drops to the ground and starts to crawl."
   - "A body on the ground lurches to its feet."
   - "A body on the ground twitches and starts to drag itself across the floor."
-  - "Orton goes through c2: a hi-vis vest, jeans, a kitchen knife."
+  - "Orton goes through c2: a hi-vis vest, jeans and a kitchen knife."
   - "Orton takes the dead man's jacket."
   - "The smell of the dead hangs thick here."
 - **`[CORPSES]`:** one line per corpse the player can see (within 20 tiles

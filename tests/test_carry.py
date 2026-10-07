@@ -656,6 +656,15 @@ class PutAndTakeTests(unittest.TestCase):
         self.assertEqual(sum(e.item.id == "item_canned_beans" for e in gm.player.inventory), 12)
         self.assertEqual(minutes, 6)  # 12 x 96 frames = 1152, a little over 6 minutes
 
+    def test_a_take_all_fact_counts_equal_items(self):
+        gm = home()
+        (bag,) = give(gm, "item_schoolbag")
+        bag.contents = [entity("item_bandage"), entity("item_hammer"), entity("item_bandage")]
+        _, facts = minutes_of(
+            gm, TakeAction(item_name="all", from_name="Schoolbag", all_items=True)
+        )
+        self.assertEqual(facts[0], "Orton takes two bandages and a hammer from the schoolbag.")
+
     def test_take_all_from_the_ground_is_one_action(self):
         gm = home_with_things_on_the_floor()
         minutes, _ = minutes_of(gm, TakeAction(item_name="all", all_items=True))
