@@ -1,10 +1,9 @@
 """Wording of the state questions that check the narrator's story."""
 
-ZOMBIE_STATE_QUESTION = "At the end of the story, what state is the zombie in?"
-ZOMBIE_STATE_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("standing", "Alive and still on its feet."),
-    ("down", "Alive but knocked to the ground."),
-    ("dead", "Dead or destroyed."),
+ZOMBIE_DEATH_QUESTION = "By the end of the story, has the zombie been killed or put down for good?"
+ZOMBIE_DEATH_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("yes", "The story says or implies the zombie is dead or will not get up again."),
+    ("no", "The zombie is still alive, even if hurt or knocked down."),
     ("unclear", "The story does not say."),
 )
 ZOMBIE_DEAD_FACT = "The zombie is dead at the end of this turn."

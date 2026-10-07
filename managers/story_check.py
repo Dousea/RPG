@@ -34,11 +34,11 @@ def build_questions(manager: GameManager, outcome_facts: list[str]) -> list[Stat
         return []
     (zombie_id,) = ids
     if zombie_id in manager.world.zombies:
-        allowed = frozenset({"standing", "down", "unclear"})
+        allowed = frozenset({"no", "unclear"})
         correction = words.ZOMBIE_ALIVE_FACT
     else:
-        allowed = frozenset({"dead", "unclear"})
+        allowed = frozenset({"yes", "unclear"})
         correction = words.ZOMBIE_DEAD_FACT
     return [
-        StateQuestion(words.ZOMBIE_STATE_QUESTION, words.ZOMBIE_STATE_OPTIONS, allowed, correction)
+        StateQuestion(words.ZOMBIE_DEATH_QUESTION, words.ZOMBIE_DEATH_OPTIONS, allowed, correction)
     ]

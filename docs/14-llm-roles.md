@@ -65,8 +65,7 @@ characters. What is cut, and in what order, is in
 
 After the narrator replies, a small decision model (`adapters/factcheck.py`), served by
 LM Studio next to the narrator, answers one state question about the end of the story:
-what state is the zombie the turn's facts are about in (standing, down, dead or
-unclear). For now only a turn whose facts name exactly one zombie is checked. An
+has the zombie the turn's facts are about been killed (yes, no or unclear). For now only a turn whose facts name exactly one zombie is checked. An
 answer the engine's state does not allow, given with probability 0.9 or more
 (`factcheck.conflict_threshold`), makes the engine ask the narrator once more with a
 `[CORRECTION]` block stating the true state; "unclear" never conflicts. The retry is kept

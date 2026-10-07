@@ -35,23 +35,25 @@ class BuildQuestionsTests(unittest.TestCase):
 
     def test_a_zombie_missing_from_the_world_was_killed(self):
         (question,) = build_questions(self.manager, ["You shoot z7 and it falls."])
-        self.assertEqual(question.allowed, frozenset({"dead", "unclear"}))
+        self.assertEqual(question.allowed, frozenset({"yes", "unclear"}))
         self.assertEqual(question.correction, "The zombie is dead at the end of this turn.")
 
     def test_a_zombie_in_the_world_is_alive(self):
         (question,) = build_questions(self.manager, ["z12 staggers back.", "You are winded."])
-        self.assertEqual(question.allowed, frozenset({"standing", "down", "unclear"}))
+        self.assertEqual(question.allowed, frozenset({"no", "unclear"}))
         self.assertEqual(question.correction, "The zombie is still alive at the end of this turn.")
 
     def test_the_question_and_options_are_fixed_and_in_order(self):
         (question,) = build_questions(self.manager, ["z12 staggers back."])
-        self.assertEqual(question.text, "At the end of the story, what state is the zombie in?")
+        self.assertEqual(
+            question.text,
+            "By the end of the story, has the zombie been killed or put down for good?",
+        )
         self.assertEqual(
             question.options,
             (
-                ("standing", "Alive and still on its feet."),
-                ("down", "Alive but knocked to the ground."),
-                ("dead", "Dead or destroyed."),
+                ("yes", "The story says or implies the zombie is dead or will not get up again."),
+                ("no", "The zombie is still alive, even if hurt or knocked down."),
                 ("unclear", "The story does not say."),
             ),
         )
@@ -68,7 +70,7 @@ class BuildQuestionsTests(unittest.TestCase):
             self.assertEqual(build_questions(self.manager, ["z12 lunges.", "z7 falls."]), [])
 
     def test_no_text_carries_a_digit(self):
-        self.assertFalse(any(c.isdigit() for c in words.ZOMBIE_STATE_QUESTION))
+        self.assertFalse(any(c.isdigit() for c in words.ZOMBIE_DEATH_QUESTION))
         self.assertFalse(any(c.isdigit() for c in words.ZOMBIE_DEAD_FACT + words.ZOMBIE_ALIVE_FACT))
 
     def test_a_question_is_frozen(self):
