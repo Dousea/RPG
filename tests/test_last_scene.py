@@ -52,6 +52,16 @@ class LastSceneBlockTests(unittest.TestCase):
         self.assertLessEqual(len(shown), LAST_SCENE_MAX_CHARS)
         self.assertTrue(shown.endswith("word"))
 
+    def test_only_the_last_paragraph_is_shown(self):
+        story = "The zombie falls and lies still.\n\nYou look up.\n\nSirens wail far off."
+        self.assertEqual(self._block(story), "Sirens wail far off.")
+
+    def test_the_block_says_it_is_where_the_scene_left_off(self):
+        builder = _builder()
+        builder.manager.memory.last_story = STORY
+        prompt = builder.build_narrator_prompt("look")
+        self.assertIn("(Where the story the player last read left off.", prompt)
+
     def test_a_short_story_is_not_cut(self):
         self.assertEqual(self._block("Short. Story."), "Short. Story.")
 

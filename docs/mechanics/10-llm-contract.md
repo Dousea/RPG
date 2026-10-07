@@ -357,7 +357,7 @@ In this order. Memory comes first, so current state and this turn's outcomes win
 | --- | --- |
 | `[CHARACTER]` | name, pronouns, occupation, appearance, backstory, skills in words, goals, inventory, equipment, the outfit line, traits |
 | `[DEEP MEMORY]` / `[SUMMARY OF PAST EVENTS]` / `[RECENT EVENTS]` | memory |
-| `[LAST SCENE]` | the story the player last read, verbatim, with a note that the facts and current blocks win; omitted when there is none |
+| `[LAST SCENE]` | the last paragraph of the story the player last read, with a note that the facts and current blocks win; omitted when there is none |
 | `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
 | `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, discovered flags |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
@@ -412,11 +412,14 @@ option that reads `NONE`, bulleted or not, is no option.
 After the narrator replies, the engine builds state questions from the turn's raw
 outcome facts and asks a small decision model (`adapters/factcheck.py`, the `factcheck:`
 config section; it must be loaded in LM Studio beside the narrator) one per question.
-For now a turn whose facts name exactly one zombie gets one question, "At the end of the
-story, what state is the zombie in?", with the options standing, down, dead and unclear;
-none or several zombies mean no question. The engine's truth decides which answers are
-allowed: a zombie no longer in the world was killed this turn, so only dead and unclear
-are allowed; otherwise it is alive, so standing, down and unclear are. The model answers
+For now a turn whose facts name exactly one zombie gets one question, "By the end of the
+story, has the zombie been killed or put down for good?", with the options yes, no
+(alive, even if hurt or knocked down) and unclear; none or several zombies mean no
+question. The engine's truth decides which answers are allowed: a zombie no longer in
+the world was killed this turn, so only yes and unclear are allowed; otherwise it is
+alive, so no and unclear are. Asked about death alone, the model answers a story that
+kills the zombie confidently; offered standing, down and dead, it split its answer
+between them and fell under the threshold. The model answers
 with one option letter, and the probability of each option is read from its token
 probabilities. The story conflicts when the most probable answer is not allowed and its
 probability is at or above `factcheck.conflict_threshold` (0.9). "Unclear" never
@@ -444,8 +447,10 @@ conflict; the checker stays on. `factcheck.enabled: false` turns it off.
   looks wider than the recall count, drops the recent entries and keeps the first 2.
 - The save keeps the last story: the prose shown after a narrated turn, replacing the
   previous one. A turn whose narrator call failed clears it, and a new game has none.
-- `[LAST SCENE]` renders it between memory and state, cut to 1600 characters on a line
-  or sentence boundary.
+- `[LAST SCENE]` renders its last paragraph between memory and state, cut to 1600
+  characters on a line or sentence boundary. Only the last paragraph: given the whole
+  story, a narrator copied it, a wrongly killed zombie included, instead of narrating
+  the new turn.
 - The parser gets the latest event-log entry as `[LAST TURN]`, never any narrator prose;
   memory proper (`[DEEP MEMORY]`, summaries, recent events) goes to the narrator only.
 - In the narrator's prompt, memory blocks come before state blocks, and the system

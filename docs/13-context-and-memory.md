@@ -141,8 +141,10 @@ SUMMARIES         every 10 events, folded by the LLM into one narrative
 `MemoryState.full_event_log` holds every event ever recorded and is never
 truncated — it is the corpus the vector index is built from, not prompt
 material. Beyond the three tiers, two more pieces reach a model:
-`[LAST SCENE]`, the previous turn's story verbatim, goes to the narrator (cut on
-a sentence or line boundary to `LAST_SCENE_MAX_CHARS` in `data/memory.py`, and
+`[LAST SCENE]`, the last paragraph of the previous turn's story, goes to the
+narrator (only the last paragraph, because a narrator handed the whole story copied it,
+contradictions included, instead of narrating the new turn; cut on a sentence or line
+boundary to `LAST_SCENE_MAX_CHARS` in `data/memory.py`, and
 left out when there is none), and `[LAST TURN]`, the newest entry of the event
 log, goes to the parser. The parser never sees story text.
 

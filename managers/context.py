@@ -175,8 +175,12 @@ class ContextBuilder:
         return "\n".join(f" - {event}" for event in reversed(events_newest_first))
 
     def _last_scene_section(self) -> str:
-        """The stored story, cut to the limit on a line or sentence boundary; empty without one."""
-        story = self.manager.memory.last_story.strip()
+        """The stored story's last paragraph, cut to the limit on a line or sentence boundary.
+
+        Empty without a story. Only the last paragraph, because a narrator handed the
+        whole story copies it, contradictions included, instead of narrating this turn.
+        """
+        story = self.manager.memory.last_story.strip().split("\n\n")[-1].strip()
         if len(story) > LAST_SCENE_MAX_CHARS:
             window = story[: LAST_SCENE_MAX_CHARS + 1]
             ends = [m.end() for m in re.finditer(r"[.!?][\"')]*(?=\s)", window)]
@@ -186,8 +190,8 @@ class ContextBuilder:
             return ""
         return (
             "[LAST SCENE]\n"
-            "(What the player last read, verbatim. The outcomes and the current blocks "
-            "win where it disagrees.)\n\n"
+            "(Where the story the player last read left off. The outcomes and the current "
+            "blocks win where it disagrees.)\n\n"
             f"{story}\n\n"
         )
 
