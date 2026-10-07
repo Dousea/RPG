@@ -135,6 +135,68 @@ class PlayerDeathResolutionTests(unittest.TestCase):
         self.assertNotIn("Orton has died", facts[0])
 
 
+class FactCheckRecordTests(unittest.TestCase):
+    """llm-contract: The fact check: what a turn records for its questions."""
+
+    def test_a_refused_action_is_recorded_in_words(self):
+        core = SimulationCore(GameManager())
+        core.resolve([BandageAction(part_name="left hand")])
+        ((action, reason),) = core.refused_actions
+        self.assertEqual(action, "bandage the left hand")
+        self.assertTrue(reason.endswith("."), reason)
+        self.assertIn(
+            f"Refused: Orton can't {action}: {reason}", core.resolve([BandageAction("left hand")])
+        )
+
+    def test_an_action_done_later_in_the_turn_is_not_recorded_as_refused(self):
+        gm = GameManager()
+        core = SimulationCore(gm, rng=random.Random(1))
+        core.resolve(
+            [
+                TakeAction(item_name="Kitchen Knife"),
+                SearchAction(target_name="kitchen counter"),
+                TakeAction(item_name="Kitchen Knife"),
+            ]
+        )
+        self.assertIn("Kitchen Knife", [e.item.name for e in gm.player.inventory])
+        self.assertEqual(core.refused_actions, [])
+
+    def test_each_turn_starts_with_nothing_recorded(self):
+        core = SimulationCore(GameManager(), rng=random.Random(1))
+        core.resolve([BandageAction(part_name="left hand")])
+        core.resolve([SearchAction(target_name="kitchen counter")])
+        self.assertEqual(core.refused_actions, [])
+        core.resolve([BandageAction(part_name="left hand")])
+        self.assertFalse(core.found_items)
+
+    def test_a_search_that_turns_things_up_is_recorded(self):
+        core = SimulationCore(GameManager(), rng=random.Random(1))
+        core.resolve([SearchAction(target_name="kitchen counter")])
+        self.assertTrue(core.found_items)
+
+    def test_a_search_that_finds_nothing_is_not(self):
+        core = SimulationCore(GameManager(), rng=random.Random(1))
+        facts = core.resolve([SearchAction(target_name="fridge")])
+        self.assertIn("Orton goes through the fridge and finds nothing.", facts)
+        self.assertFalse(core.found_items)
+
+    def test_searching_a_body_with_things_on_it_is_recorded(self):
+        gm = zombie_game()
+        gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_street",
+            gap=1.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+            contents=[ItemEntity(item=ITEMS["item_jacket_police"])],
+        )
+        core = SimulationCore(gm, rng=random.Random(1))
+        core.resolve([SearchAction(target_name="c1")])
+        self.assertTrue(core.found_items)
+
+
 class RefusalWordingTests(unittest.TestCase):
     """llm-contract: Failures: a refusal reads as a sentence, never a class name."""
 

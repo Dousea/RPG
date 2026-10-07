@@ -31,8 +31,8 @@ from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
 from tests.support import (
     THOUGHT,
+    FakeFactChecker,
     FakeMemory,
-    FakeStoryChecker,
     IsolatedSaveTestCase,
     ScriptedLLM,
     make_dying,
@@ -58,8 +58,8 @@ class EngineTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_summary = self.llm.query_summary
         self._original_memory = engine_module.SemanticMemory
         engine_module.SemanticMemory = FakeMemory
-        self._original_storychecker = engine_module.StoryChecker
-        engine_module.StoryChecker = FakeStoryChecker
+        self._original_factchecker = engine_module.FactChecker
+        engine_module.FactChecker = FakeFactChecker
 
         self.engine = GameEngine()
         self.engine.create_character(ORTON)
@@ -69,7 +69,7 @@ class EngineTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
         engine_module.SemanticMemory = self._original_memory
-        engine_module.StoryChecker = self._original_storychecker
+        engine_module.FactChecker = self._original_factchecker
         super().tearDown()
 
 
@@ -1003,11 +1003,11 @@ class FactCheckRetryTests(EngineTestCase):
     FACTS = ["z1 staggers back but stays on its feet.", "You are winded."]
     CORRECTION = "The zombie is still alive at the end of this turn."
 
-    def script(self, replies: list[str | LLMError], *results: list[str]) -> FakeStoryChecker:
+    def script(self, replies: list[str | LLMError], *results: list[str]) -> FakeFactChecker:
         self.llm = SequencedNarrator(replies, actions=MOVE_OUT_ACTIONS)
         engine_module.llm.query_parser = self.llm.query_parser
         engine_module.llm.query_narrator = self.llm.query_narrator
-        checker = cast(FakeStoryChecker, self.engine.factcheck)
+        checker = cast(FakeFactChecker, self.engine.factcheck)
         checker.results = [list(result) for result in results]
         return checker
 
@@ -1133,13 +1133,16 @@ class FactCheckRetryTests(EngineTestCase):
     def test_a_checked_story_reports_the_check(self):
         self.script([self.FIRST], [])
         _, events = self.events_of_play()
-        self.assertEqual(steps(events), ["parsing", "narrating", "fact_checking", "saving"])
+        self.assertEqual(
+            steps(events), ["parsing", "checking_plan", "narrating", "fact_checking", "saving"]
+        )
 
     def test_a_rewrite_reports_its_step_and_streams_the_new_story(self):
         self.script([self.FIRST, self.SECOND], [self.CORRECTION], [])
         result, events = self.events_of_play()
         self.assertEqual(
-            steps(events), ["parsing", "narrating", "fact_checking", "rewriting", "saving"]
+            steps(events),
+            ["parsing", "checking_plan", "narrating", "fact_checking", "rewriting", "saving"],
         )
         after = events[events.index({"type": "step", "step": "rewriting"}) :]
         self.assertEqual(stories(after)[-1], "Second story.")
@@ -1147,9 +1150,83 @@ class FactCheckRetryTests(EngineTestCase):
 
     def test_a_disabled_checker_reports_no_check(self):
         self.script([self.FIRST])
-        cast(FakeStoryChecker, self.engine.factcheck).enabled = False
+        cast(FakeFactChecker, self.engine.factcheck).enabled = False
         _, events = self.events_of_play()
         self.assertNotIn("fact_checking", steps(events))
+
+
+class FactCheckQuestionTests(EngineTestCase):
+    """llm-contract: The fact check: the turn's refusals and finds become questions."""
+
+    STORY = "STORY:\nA story.\n\nOPTIONS:\n1. Go on\n2. Wait"
+
+    def questions_for(self, actions: str) -> list[str]:
+        self.llm = ScriptedLLM(actions=actions, story=self.STORY)
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
+        self.engine.play("do it")
+        checker = cast(FakeFactChecker, self.engine.factcheck)
+        ((_, questions),) = checker.calls
+        return [q.text for q in questions]
+
+    def test_a_refused_action_is_asked_about(self):
+        self.assertEqual(
+            self.questions_for("ACTIONS:\nTAKE Crowbar"),
+            ["Does the story say that Orton managed to take the Crowbar?"],
+        )
+
+    def test_a_search_with_finds_is_asked_about(self):
+        self.assertEqual(
+            self.questions_for("ACTIONS:\nSEARCH kitchen counter"),
+            ["Does the story say that Orton's search found nothing at all?"],
+        )
+
+    def test_the_checker_is_told_who_you_is(self):
+        self.questions_for("ACTIONS:\nTAKE Crowbar")
+        checker = cast(FakeFactChecker, self.engine.factcheck)
+        self.assertEqual(checker.player_names, ["Orton"])
+
+
+class PlanCheckTests(EngineTestCase):
+    """llm-contract: The plan check: an action the player didn't ask for becomes a refusal."""
+
+    def checker(self) -> FakeFactChecker:
+        return cast(FakeFactChecker, self.engine.factcheck)
+
+    def test_the_checker_gets_the_input_and_one_question_per_action(self):
+        self.engine.play("go out")
+        ((player_input, questions),) = self.checker().plan_calls
+        self.assertEqual(player_input, "go out")
+        self.assertEqual(len(questions), 2)
+        self.assertIn('"go to out"', questions[0].text)
+
+    def test_a_flagged_action_is_not_resolved_and_becomes_a_refusal(self):
+        home = self.engine.game.player.current_location_id
+        self.checker().plan_results = [[0]]
+        self.engine.play("go out")
+        self.assertEqual(self.engine.game.player.current_location_id, home)
+        self.assertIn("Find a weapon", self.engine.game.narrative.goals["short_term"])
+        self.assertIn(
+            "Refused: Orton can't do that here, and does not go to out.",
+            self.llm.narrator_prompts[0],
+        )
+
+    def test_a_plan_all_flagged_is_not_a_turn_of_nothing(self):
+        self.checker().plan_results = [[0, 1]]
+        self.engine.play("go out")
+        self.assertNotIn("only looks around and thinks", self.llm.narrator_prompts[0])
+        self.assertNotIn("Find a weapon", self.engine.game.narrative.goals["short_term"])
+
+    def test_the_check_reports_its_step(self):
+        events: list[dict] = []
+        self.engine.play("go out", on_event=events.append)
+        self.assertEqual(steps(events)[:3], ["parsing", "checking_plan", "narrating"])
+
+    def test_a_disabled_checker_skips_the_step(self):
+        self.checker().enabled = False
+        events: list[dict] = []
+        self.engine.play("go out", on_event=events.append)
+        self.assertNotIn("checking_plan", steps(events))
 
 
 class MissingOptionsTests(EngineTestCase):
@@ -1225,7 +1302,9 @@ class MissingOptionsTests(EngineTestCase):
         self.script([self.NO_OPTIONS, self.OPTIONS_ONLY])
         events: list[dict] = []
         self.engine.play("go out", on_event=events.append)
-        self.assertEqual(steps(events), ["parsing", "narrating", "options", "saving"])
+        self.assertEqual(
+            steps(events), ["parsing", "checking_plan", "narrating", "options", "saving"]
+        )
         self.assertEqual(stories(events)[-1], "You walk out.")
 
 
@@ -1247,7 +1326,7 @@ class TurnEventTests(EngineTestCase):
 
     def test_a_turn_reports_its_steps_in_order(self):
         _, events = self.play()
-        self.assertEqual(steps(events), ["parsing", "narrating", "saving"])
+        self.assertEqual(steps(events), ["parsing", "checking_plan", "narrating", "saving"])
 
     def test_the_narrators_thinking_reaches_the_listener(self):
         _, events = self.play()

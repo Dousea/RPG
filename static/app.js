@@ -635,6 +635,7 @@ function showSystemError(message) {
 // What the status line says for each step /play/stream reports.
 const STEP_LABELS = {
     parsing: 'Parsing…',
+    checking_plan: 'Checking the plan…',
     thinking: 'Thinking…',
     narrating: 'Narrating…',
     fact_checking: 'Fact checking…',

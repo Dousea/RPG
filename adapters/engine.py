@@ -13,7 +13,7 @@ from typing import Any
 
 import config
 from adapters import llm
-from adapters.factcheck import StoryChecker
+from adapters.factcheck import FactChecker
 from adapters.memory import DEFAULT_RECALL, SemanticMemory
 from adapters.save import codec, files
 from data.character.occupations import OCCUPATIONS
@@ -33,11 +33,12 @@ from managers.corpses.search import corpse_views
 from managers.events.log import build_event_entry, event_stamp
 from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.simulation import SimulationCore
-from managers.story.check import build_questions
+from managers.story.check import StateQuestion, build_questions, plan_questions
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import weather_summary
 from managers.world.rooms import current_room
 from managers.zombies.population import threat_views
+from modules.action.types import AnyAction
 from modules.action.words import refusal_in_words
 from modules.body.stats import StatusEffect
 from modules.character.build import CharacterBuild
@@ -99,7 +100,7 @@ class GameEngine:
     def __init__(self):
         self._lock = threading.Lock()
         self.memory = SemanticMemory()
-        self.factcheck = StoryChecker()
+        self.factcheck = FactChecker()
         self.manager: GameManager | None = files.load()
         self.memory.rebuild(self.manager.memory.full_event_log if self.manager else [])
 
@@ -172,15 +173,18 @@ class GameEngine:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
             actions, parse_failures = llm.read_parser_reply(reply)
+            kept, off_request = self._checked_plan(manager, player_input, actions, emit)
 
             # 3. Validate and simulate, one action at a time in order. This is
             # where the engine decides what happens -- before the narrator
             # writes a single word about it.
-            outcome_facts = SimulationCore(manager).resolve(actions, refused=len(parse_failures))
+            core = SimulationCore(manager)
+            outcome_facts = core.resolve(kept, refused=len(parse_failures) + len(off_request))
             looks = manager.player.appearance
             for failure in parse_failures:
                 logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
                 outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
+            outcome_facts.extend(off_request)
 
             # 4. Ask the narrator to describe what already happened. A turn the
             # parser found nothing in would otherwise be narrated as the input.
@@ -208,8 +212,11 @@ class GameEngine:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
             parsed = self._reply(raw_response)
+            questions = build_questions(
+                manager, narrated_facts, core.refused_actions, core.found_items
+            )
             parsed = self._fact_checked(
-                parsed, context, player_input, narrated_facts, deep_memories, emit
+                parsed, context, player_input, narrated_facts, deep_memories, questions, emit
             )
             parsed = self._with_options(
                 parsed, context, player_input, narrated_facts, deep_memories, emit
@@ -230,6 +237,24 @@ class GameEngine:
             files.save(manager)
             return self._snapshot(story_text=story_text, options=options)
 
+    def _checked_plan(
+        self,
+        manager: GameManager,
+        player_input: str,
+        actions: list[AnyAction],
+        emit: TurnListener,
+    ) -> tuple[list[AnyAction], list[str]]:
+        """The actions the decision model doesn't rule out, and a refusal fact for each it does."""
+        if not actions or not self.factcheck.enabled:
+            return actions, []
+        emit({"type": "step", "step": "checking_plan"})
+        questions = plan_questions(manager, actions)
+        flagged = set(self.factcheck.plan_conflicts(player_input, questions))
+        for index in sorted(flagged):
+            logger.warning(f"Dropped {actions[index]!r}: not what the player asked for.")
+        kept = [action for index, action in enumerate(actions) if index not in flagged]
+        return kept, [questions[index].correction for index in sorted(flagged)]
+
     def _fact_checked(
         self,
         parsed: dict[str, Any],
@@ -237,6 +262,7 @@ class GameEngine:
         player_input: str,
         outcome_facts: list[str],
         deep_memories: list[str],
+        questions: list[StateQuestion],
         emit: TurnListener,
     ) -> dict[str, Any]:
         """The narrator's reply, or its one retry when the story conflicts with the engine's state.
@@ -244,12 +270,12 @@ class GameEngine:
         The retry replaces the first reply only if it conflicts on no more
         questions; the facts themselves never change.
         """
-        questions = build_questions(context.manager, outcome_facts)
         if not questions:
             return parsed
         if self.factcheck.enabled:
             emit({"type": "step", "step": "fact_checking"})
-        conflicts = self.factcheck.conflicts(str(parsed["story"]), questions)
+        name = context.manager.player.appearance.forename
+        conflicts = self.factcheck.conflicts(str(parsed["story"]), questions, name)
         if not conflicts:
             return parsed
         logger.warning(f"Story conflicts with the engine: {conflicts}")
@@ -272,7 +298,7 @@ class GameEngine:
         if retry["story"] == llm.EMPTY_STORY:
             logger.warning("Narrator retry has no story, keeping the first story.")
             return parsed
-        retry_conflicts = self.factcheck.conflicts(str(retry["story"]), questions)
+        retry_conflicts = self.factcheck.conflicts(str(retry["story"]), questions, name)
         return retry if len(retry_conflicts) <= len(conflicts) else parsed
 
     def _with_options(

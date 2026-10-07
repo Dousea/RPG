@@ -94,20 +94,30 @@ class FakeMemory:
         return list(self.next_hits)
 
 
-class FakeStoryChecker:
-    """Stands in for StoryChecker, which asks a decision model over HTTP.
+class FakeFactChecker:
+    """Stands in for FactChecker, which asks a decision model over HTTP.
 
-    `results` scripts what each call returns, in order; once spent, nothing
-    conflicts. Every call is recorded as (story, questions).
+    `results` scripts what each story check returns, in order, and
+    `plan_results` each plan check; once spent, nothing conflicts. Every story
+    check is recorded as (story, questions), with the name the story's "you"
+    stands for in `player_names`, and every plan check as (input, questions).
     """
 
     def __init__(self):
         self.enabled = True
         self.results: list[list[str]] = []
         self.calls: list[tuple[str, list[StateQuestion]]] = []
+        self.player_names: list[str] = []
+        self.plan_results: list[list[int]] = []
+        self.plan_calls: list[tuple[str, list[StateQuestion]]] = []
 
-    def conflicts(self, story: str, questions: list[StateQuestion]) -> list[str]:
+    def plan_conflicts(self, player_input: str, questions: list[StateQuestion]) -> list[int]:
+        self.plan_calls.append((player_input, list(questions)))
+        return self.plan_results.pop(0) if self.plan_results else []
+
+    def conflicts(self, story: str, questions: list[StateQuestion], player_name: str) -> list[str]:
         self.calls.append((story, list(questions)))
+        self.player_names.append(player_name)
         return self.results.pop(0) if self.results else []
 
 

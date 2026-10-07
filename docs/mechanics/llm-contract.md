@@ -437,27 +437,61 @@ the narrator echoes back (`[OUTCOMES]` and the lines under it) is dropped up to 
 next header. A header written in brackets (`[OPTIONS]`) counts as the header, and an
 option that reads `NONE`, bulleted or not, is no option.
 
+### The plan check
+
+After the parser replies and before anything resolves, the engine asks the
+[decision model](#the-fact-check) one question per parsed action, with the player's
+input as the state: "Is "use the Frying Pan" something the player asked for, or a step
+needed to do what they asked?" The options are yes (what was asked, part of it, or a
+step needed for it), no (something else, which does not lead there) and unclear; yes
+and unclear are allowed. Each action is put in words the way refusal facts word it
+("chat with Emma", "ask Marcus to come along", "ask Jen about the outbreak news"), so
+the model sees what the action does and to whom.
+
+An action answered no, at or above `factcheck.conflict_threshold`, is never validated
+or resolved. It becomes a refusal fact after the turn's other facts: "Refused: Orton
+can't do that here, and does not use the Frying Pan." The other actions resolve as
+usual, so the narrator tells the player honestly that what they asked for didn't
+happen instead of narrating an unrelated action. A plan whose every action is ruled
+out is a turn of refusals, not a turn of nothing. A failed request keeps the action.
+The check only takes actions away; it never adds or changes one. It runs whenever the
+fact check is enabled and the plan has an action, and reports the `checking_plan` step.
+
 ### The fact check
 
-After the narrator replies, the engine builds state questions from the turn's raw
-outcome facts and asks a small decision model (`adapters/factcheck.py`, the `factcheck:`
-config section; it must be loaded in LM Studio beside the narrator) one per question.
-For now a turn whose facts name exactly one zombie gets one question, "By the end of the
-story, has the zombie been killed or put down for good?", with the options yes, no
-(alive, even if hurt or knocked down) and unclear; none or several zombies mean no
-question. The engine's truth decides which answers are allowed: a zombie no longer in
-the world was killed this turn, so only yes and unclear are allowed; otherwise it is
-alive, so no and unclear are. Asked about death alone, the model answers a story that
-kills the zombie confidently; offered standing, down and dead, it split its answer
-between them and fell under the threshold. The model answers
-with one option letter, and the probability of each option is read from its token
-probabilities. The story conflicts when the most probable answer is not allowed and its
-probability is at or above `factcheck.conflict_threshold` (0.9). "Unclear" never
-conflicts. On a conflict the engine asks the narrator once more with the same prompt
-and a `[CORRECTION]` block stating the true state of the zombie in words, and keeps the
-retry unless it conflicts on more questions than the first story. There is never a
-second retry, and a failed retry keeps the first story. The check only picks which
-prose is shown; it never changes a fact. A turn with no question is not checked.
+After the narrator replies, the engine builds state questions from the turn and asks a
+decision model (`adapters/factcheck.py`, the `factcheck:` config section) one per
+question. The model is either a small one loaded in LM Studio beside the narrator or,
+when there is no room for a second model, the narrator's own model with its thinking
+off. A turn gets, in this order:
+
+- **The zombie.** A turn whose raw facts name exactly one zombie asks "By the end of
+  the story, has the zombie been killed or put down for good?", with the options yes,
+  no (alive, even if hurt or knocked down) and unclear; none or several zombies mean no
+  question. A zombie no longer in the world was killed this turn, so only yes and
+  unclear are allowed; otherwise it is alive, so no and unclear are. Asked about death
+  alone, the model answers a story that kills the zombie confidently; offered standing,
+  down and dead, it split its answer between them and fell under the threshold.
+- **Each refused action.** "Does the story say that Orton managed to take the Kitchen
+  Knife?", with yes, no and unclear; no and unclear are allowed. An action refused and
+  then done later in the same turn is not asked about. A line the parser couldn't read,
+  and an action the plan check ruled out, get no question.
+- **Finds.** A turn whose search turned anything up asks "Does the story say that
+  Orton's search found nothing at all?"; no and unclear are allowed.
+
+The story is in the second person, so the request tells the model that "you" is the
+player character, by forename. Told nothing, the model answers that a story which never
+names the character never says they did anything. The model answers with one option
+letter, and the probability of each option is read from its token probabilities. The
+story conflicts when the most probable answer is not allowed and its probability is at
+or above `factcheck.conflict_threshold` (0.9). "Unclear" never conflicts. On a conflict
+the engine asks the narrator once more with the same prompt and a `[CORRECTION]` block
+stating each conflicting question's truth in words, a refused action with the
+validator's reason ("Orton does not put the Water Bottle in the Schoolbag: The Water
+Bottle is already in the Schoolbag."), and keeps the retry unless it conflicts on more
+questions than the first story. There is never a second retry, and a failed retry
+keeps the first story. The check only picks which prose is shown; it never changes a
+fact. A turn with no question is not checked.
 A request that fails or returns no usable answer logs a warning and counts as no
 conflict; the checker stays on. `factcheck.enabled: false` turns it off.
 
@@ -466,14 +500,15 @@ conflict; the checker stays on. `factcheck.enabled: false` turns it off.
 `POST /play/stream` runs the same turn as `/play` and sends its events as JSON lines
 while it runs, ending with `{"type": "done", "turn": <the /play payload>}`, or
 `{"type": "error", "message": ...}` if the turn crashed. A turn reports each step as
-it starts, `{"type": "step", "step": ...}`: `parsing`, `narrating`, `fact_checking`
+it starts, `{"type": "step", "step": ...}`: `parsing`, `checking_plan` (only when the
+plan has an action and the checker is on), `narrating`, `fact_checking`
 (only when a question is asked and the checker is on), `rewriting` (the fact check's
 retry), `options` (the follow-up for a reply with no OPTIONS section) and `saving`.
 The narrator's reply streams from LM Studio: each piece of its thinking arrives as
 `{"type": "thinking", "text": ...}`, and its story as `{"type": "story", "text": ...}`,
 the story so far with the section headers and options left out. A last line that may
 be a header still being written ("OPT") is held back, so it never shows as prose.
-Only the narrator streams; the parser, the fact check, the options follow-up and the
+Only the narrator streams; the parser, both checks, the options follow-up and the
 summary don't. The finished turn is what counts: the page replaces the streamed text
 with the payload's story, so a retry that is rejected never stays on screen. A turn
 whose request is invalid or that has no game gets the same 400 or 409 as `/play`,
@@ -621,17 +656,22 @@ entry says what goes wrong and how to fix it.
   `until` it, so the schema's pattern no longer has to hold.
 - **Questions to an NPC become requests.** "Ask Marcus what he's reading" and
   "ask Marcus if he has a hammer" parsed as `ASK follow`; "ask Emma if she's okay"
-  as `ASK stay`. *Fix:* a parser rule with an example sending a question to `TALK`
-  `chat` with its `speech` (a rule plus example fixed the absent-NPC misparse), and
-  eval cases in `evals/parser_cases.yaml`.
+  as `ASK stay`. The [plan check](#the-plan-check) now rules these out, so the
+  question goes unasked instead of becoming a request. *Fix:* a parser rule with an
+  example sending a question to `TALK` `chat` with its `speech` (a rule plus example
+  fixed the absent-NPC misparse), and eval cases in `evals/parser_cases.yaml`.
 - **When no verb fits, the schema forces a wrong one.** The schema has no way to
   say "the player asked for something the engine can't do", so the model picks the
   nearest branch: "lock the door" became `BARRICADE`, "drink from the tap" became
   `USE_ITEM` on the frying pan, "put on the jacket" with nothing wearable became
   `EQUIP` on the key, "put on the schoolbag" became `PUT` the bag into itself, "pocket
-  the key" became `PUT` the knife in the bag. *Fix:* an `UNSUPPORTED <text>` branch
-  that the engine refuses in words ("Orton can't lock the door: there is no way to
-  yet."), so the narrator gets an honest refusal. The missing verbs themselves are in
+  the key" became `PUT` the knife in the bag. The [plan check](#the-plan-check) rules
+  out most such actions (the frying pan, the knife, an attack on a door when the
+  player meant a zombie), but it accepted `CLOSE` and `OPEN` for "close and lock the
+  door" and holding the schoolbag for "put on the schoolbag", and a refusal it makes
+  can't say what was asked. *Fix:* an `UNSUPPORTED <text>` branch that the engine
+  refuses in words ("Orton can't lock the door: there is no way to yet."), so the
+  narrator gets an honest refusal that names it. The missing verbs themselves are in
   [doors](doors.md#known-limitations) (locking) and
   [status effects](status-effects.md#known-limitations) (tap water).
 
@@ -645,12 +685,12 @@ entry says what goes wrong and how to fix it.
   prompt with what must not be shown, the way `[IN VIEW]` ends it with what must:
   a `[DID NOT HAPPEN]` list naming each refused action and its non-event ("Orton
   does not get the knife out; he still holds the key"). A fact naming the non-event
-  beat a system-prompt rule in an earlier A/B. Then add a fact-check question per
-  refused action ("Does the story say Orton took the kitchen knife?"); the yes/no
-  form separated well for kills.
+  beat a system-prompt rule in an earlier A/B. The [fact check](#the-fact-check) now
+  asks about each refused action and catches the story's claim; the list is still to do,
+  so the first story is right more often.
 - **Found items are denied.** Twice a `SEARCH` that listed finds was narrated as
-  bare ("the floor is bare except for the debris"). *Fix:* list the turn's finds in
-  `[IN VIEW]`, and a fact-check question "does the story say nothing was found?".
+  bare ("the floor is bare except for the debris"). The [fact check](#the-fact-check)
+  now asks about it. *Fix:* list the turn's finds in `[IN VIEW]` as well.
 - **Small state slips.** The crowbar held while it is in the pack, the schoolbag
   set down on a table, a zombie that is a woman one turn and a man two turns later,
   "a Sunday morning" every day, morning light at 02:00 after a wake. *Fix:* put the

@@ -250,7 +250,8 @@ class TalkValidationTests(unittest.TestCase):
             TalkAction(npc_name="Emma", approach="compliment"),
         )
         self.assertIn(
-            "Refused: Orton can't talk: Orton has already spoken to Emma this turn.", facts
+            "Refused: Orton can't compliment Emma: Orton has already spoken to Emma this turn.",
+            facts,
         )
 
     def test_two_different_npcs_in_one_turn_share_one_five_minutes(self):
@@ -361,7 +362,10 @@ class GiveTests(unittest.TestCase):
     def test_a_door_key_is_refused(self):
         gm = building_game()
         facts = simulate(gm, GiveAction(item_name="Apartment Key", npc_name="Emma"))
-        self.assertIn("Refused: Orton can't give: Orton keeps his keys on him.", facts)
+        self.assertIn(
+            "Refused: Orton can't give the Apartment Key to Emma: Orton keeps his keys on him.",
+            facts,
+        )
         self.assertEqual([e.item.name for e in gm.player.inventory], ["Apartment Key"])
 
     def test_an_item_not_carried_is_refused(self):

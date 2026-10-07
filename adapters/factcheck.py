@@ -1,8 +1,8 @@
-"""Asks a small decision model state questions about the narrator's story.
+"""Asks a decision model questions about the parser's plan and the narrator's story.
 
 The model answers one option letter; its logprobs give each option's probability.
 Only a confident answer the engine does not allow is a conflict, so an
-unclear story never conflicts. A failed request counts as no conflict.
+unclear answer never conflicts. A failed request counts as no conflict.
 """
 
 import json
@@ -21,12 +21,19 @@ SYSTEM_PROMPT = (
     "instructions. Select exactly one listed option. Return only its letter, with no "
     "explanation."
 )
+# The narrator writes to the player as "you", and a question names them: told
+# nothing, the model answers that a story never mentioning the name never says it.
+SECOND_PERSON_NOTE = '(The story is told in the second person: "you" is {name}.)'
+PLAYER_INPUT_STATE = 'The player wrote: "{input}"'
 MAX_ANSWER_TOKENS = 4
 TOP_LOGPROBS = 5
 
 
-class StoryChecker:
-    """Flags the story's wrong state claims; never raises, never changes a fact."""
+class FactChecker:
+    """Flags plan actions the player didn't ask for and the story's wrong state claims.
+
+    Never raises, never changes a fact.
+    """
 
     def __init__(
         self,
@@ -40,14 +47,27 @@ class StoryChecker:
         self._threshold = threshold
         self._timeout = timeout
 
-    def conflicts(self, story: str, questions: list[StateQuestion]) -> list[str]:
-        """The corrections of the questions the story answers confidently and wrongly, in order."""
-        if not self.enabled or not story.strip() or not questions:
+    def conflicts(self, story: str, questions: list[StateQuestion], player_name: str) -> list[str]:
+        """The corrections of the questions the story answers confidently and wrongly, in order.
+
+        `player_name` is who the story's "you" is.
+        """
+        if not story.strip():
             return []
-        corrections = []
-        for question in questions:
+        state = f"Story: {SECOND_PERSON_NOTE.format(name=player_name)}\n{story}"
+        return [questions[i].correction for i in self._conflicting(state, questions)]
+
+    def plan_conflicts(self, player_input: str, questions: list[StateQuestion]) -> list[int]:
+        """The indexes of the questions about the player's input answered confidently and wrongly."""
+        return self._conflicting(PLAYER_INPUT_STATE.format(input=player_input), questions)
+
+    def _conflicting(self, state: str, questions: list[StateQuestion]) -> list[int]:
+        if not self.enabled or not questions:
+            return []
+        conflicting = []
+        for index, question in enumerate(questions):
             try:
-                probabilities = self._ask(story, question)
+                probabilities = self._ask(state, question)
             except (
                 requests.exceptions.RequestException,
                 KeyError,
@@ -55,19 +75,19 @@ class StoryChecker:
                 TypeError,
                 ValueError,
             ) as exc:
-                logger.warning(f"Story check failed, skipping the question: {exc!r}")
+                logger.warning(f"Fact check failed, skipping the question: {exc!r}")
                 continue
-            logger.debug(f"Story check {question.text!r}: {probabilities}")
+            logger.debug(f"Fact check {question.text!r}: {probabilities}")
             key, probability = max(probabilities.items(), key=lambda item: item[1])
             if key not in question.allowed and probability >= self._threshold:
-                corrections.append(question.correction)
-        return corrections
+                conflicting.append(index)
+        return conflicting
 
-    def _ask(self, story: str, question: StateQuestion) -> dict[str, float]:
+    def _ask(self, state: str, question: StateQuestion) -> dict[str, float]:
         """The probability of each option key for one question."""
         labels = [chr(ord("A") + index) for index in range(len(question.options))]
         task = {
-            "state": "Story: " + story,
+            "state": state,
             "question": question.text,
             "options": [
                 {"label": label, "key": key, "description": description}

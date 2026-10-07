@@ -11,7 +11,7 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from data.character.presets import ORTON
 from modules.body.stats import CharacterStat
-from tests.support import FakeMemory, FakeStoryChecker, IsolatedSaveTestCase, ScriptedLLM
+from tests.support import FakeFactChecker, FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
 ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
 STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
@@ -29,8 +29,8 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_summary = self.llm.query_summary
         self._original_memory = engine_module.SemanticMemory
         engine_module.SemanticMemory = FakeMemory
-        self._original_storychecker = engine_module.StoryChecker
-        engine_module.StoryChecker = FakeStoryChecker
+        self._original_factchecker = engine_module.FactChecker
+        engine_module.FactChecker = FakeFactChecker
 
         engine = GameEngine()
         engine.create_character(ORTON)
@@ -47,7 +47,7 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
         engine_module.SemanticMemory = self._original_memory
-        engine_module.StoryChecker = self._original_storychecker
+        engine_module.FactChecker = self._original_factchecker
         super().tearDown()
 
 
@@ -190,7 +190,7 @@ class PlayStreamTests(RouteTestCase):
         events = self.events()
         steps = [event["step"] for event in events if event["type"] == "step"]
         # The scripted story has no OPTIONS section, so the follow-up asks for them.
-        self.assertEqual(steps, ["parsing", "narrating", "options", "saving"])
+        self.assertEqual(steps, ["parsing", "checking_plan", "narrating", "options", "saving"])
         self.assertEqual(events[-1]["type"], "done")
 
     def test_the_finished_turn_is_the_play_payload(self):

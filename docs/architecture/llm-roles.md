@@ -61,14 +61,19 @@ arrives), and the engine cuts the narrator's user prompt to
 characters. What is cut, and in what order, is in
 [the context-and-memory doc](context-and-memory.md).
 
-### The fact check
+### The plan check and the fact check
 
-After the narrator replies, a small decision model (`adapters/factcheck.py`)
-answers state questions about the end of the story. An answer the engine's
-state rules out makes the engine ask the narrator once more; the check only
-chooses which prose is shown and never changes a fact. The questions, the
-threshold and the retry rule are in
-[the LLM contract](../mechanics/llm-contract.md#the-fact-check).
+A decision model (`adapters/factcheck.py`), a small one beside the narrator
+or the narrator's own, answers yes/no questions twice a turn. After the parser
+replies, it is asked whether each action is something the player asked for;
+one it rules out is never resolved and reaches the narrator as a refusal. After
+the narrator replies, it answers state questions about the story; an answer
+the engine's state rules out makes the engine ask the narrator once more. The
+plan check can only take actions away, never add or change one, and the story
+check only chooses which prose is shown. The questions, the
+threshold and the retry rule are in the LLM contract's
+[plan check](../mechanics/llm-contract.md#the-plan-check) and
+[fact check](../mechanics/llm-contract.md#the-fact-check).
 
 ---
 

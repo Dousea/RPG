@@ -33,6 +33,7 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
+from modules.action.words import describe_action
 
 
 class ClockActionTests(unittest.TestCase):
@@ -454,3 +455,38 @@ class SceneFilteringTests(unittest.TestCase):
         gm = GameManager()
         facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")])
         self.assertTrue(facts[0].startswith("Refused:"))
+
+
+class SocialActionWordsTests(unittest.TestCase):
+    """llm-contract: Failures: a social action reads as what it does to whom."""
+
+    def test_each_talk_approach_names_the_npc(self):
+        words = {
+            "chat": "chat with Emma",
+            "compliment": "compliment Emma",
+            "flirt": "flirt with Emma",
+            "confide": "confide in Emma",
+            "comfort": "comfort Emma",
+            "argue": "argue with Emma",
+            "insult": "insult Emma",
+            "threaten": "threaten Emma",
+        }
+        for approach, expected in words.items():
+            with self.subTest(approach):
+                self.assertEqual(describe_action(TalkAction("Emma", approach)), expected)
+
+    def test_each_ask_request_says_what_is_asked(self):
+        self.assertEqual(describe_action(AskAction("Marcus", "follow")), "ask Marcus to come along")
+        self.assertEqual(describe_action(AskAction("Marcus", "stay")), "ask Marcus to stay put")
+        self.assertEqual(
+            describe_action(AskAction("Marcus", "give", "Hammer")), "ask Marcus for the Hammer"
+        )
+        self.assertEqual(
+            describe_action(AskAction("Jen", "about", "outbreak_news")),
+            "ask Jen about the outbreak news",
+        )
+
+    def test_give_names_the_item_and_the_npc(self):
+        self.assertEqual(
+            describe_action(GiveAction("Water Bottle", "Jen")), "give the Water Bottle to Jen"
+        )

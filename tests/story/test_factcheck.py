@@ -9,7 +9,7 @@ import requests
 
 import config
 from adapters import factcheck
-from adapters.factcheck import StoryChecker
+from adapters.factcheck import FactChecker
 from managers.story.check import StateQuestion
 
 OPTIONS = (
@@ -46,8 +46,8 @@ def reply(probabilities: dict[str, float]) -> mock.Mock:
     return response
 
 
-def checker(**kwargs) -> StoryChecker:
-    return StoryChecker(**kwargs)
+def checker(**kwargs) -> FactChecker:
+    return FactChecker(**kwargs)
 
 
 class RequestTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class RequestTests(unittest.TestCase):
         with mock.patch.object(
             factcheck.requests, "post", return_value=reply(probabilities)
         ) as post:
-            checker().conflicts(story, list(questions))
+            checker().conflicts(story, list(questions), "Orton")
         return post
 
     def test_the_request_goes_to_the_llm_url_with_the_timeout(self):
@@ -85,6 +85,15 @@ class RequestTests(unittest.TestCase):
             "explanation.",
         )
 
+    def test_the_state_says_who_you_is(self):
+        with mock.patch.object(factcheck.requests, "post", return_value=reply({"A": 0.97})) as post:
+            checker().conflicts("You fall.", [DEAD], "Dana")
+        task = json.loads(post.call_args.kwargs["json"]["messages"][1]["content"])
+        self.assertEqual(
+            task["state"],
+            'Story: (The story is told in the second person: "you" is Dana.)\nYou fall.',
+        )
+
     def test_the_user_message_is_the_json_task_with_lettered_options(self):
         user = self.post(story="It falls.").call_args.kwargs["json"]["messages"][1]
         self.assertEqual(user["role"], "user")
@@ -92,7 +101,8 @@ class RequestTests(unittest.TestCase):
             user["content"],
             json.dumps(
                 {
-                    "state": "Story: It falls.",
+                    "state": 'Story: (The story is told in the second person: "you" is '
+                    "Orton.)\nIt falls.",
                     "question": "Where is it?",
                     "options": [
                         {"label": label, "key": key, "description": description}
@@ -108,7 +118,7 @@ class ConflictTests(unittest.TestCase):
 
     def conflicts(self, probabilities, question=DEAD, **kwargs):
         with mock.patch.object(factcheck.requests, "post", return_value=reply(probabilities)):
-            return checker(**kwargs).conflicts("A story.", [question])
+            return checker(**kwargs).conflicts("A story.", [question], "Orton")
 
     def test_a_confident_disallowed_answer_conflicts(self):
         self.assertEqual(self.conflicts({"A": 0.97}), ["It is dead."])
@@ -136,7 +146,7 @@ class ConflictTests(unittest.TestCase):
     def test_corrections_keep_question_order(self):
         responses = [reply({"C": 0.95}), reply({"C": 0.95})]
         with mock.patch.object(factcheck.requests, "post", side_effect=responses):
-            result = checker().conflicts("A story.", [ALIVE, DEAD])
+            result = checker().conflicts("A story.", [ALIVE, DEAD], "Orton")
         self.assertEqual(result, ["It is alive."])
 
     def test_each_probability_is_logged_at_debug(self):
@@ -144,7 +154,7 @@ class ConflictTests(unittest.TestCase):
             mock.patch.object(factcheck.requests, "post", return_value=reply({"A": 0.97})),
             self.assertLogs("adapters.factcheck", "DEBUG"),
         ):
-            checker().conflicts("A story.", [DEAD])
+            checker().conflicts("A story.", [DEAD], "Orton")
 
 
 class QuietTests(unittest.TestCase):
@@ -152,9 +162,9 @@ class QuietTests(unittest.TestCase):
 
     def test_disabled_empty_story_or_no_questions_send_nothing(self):
         with mock.patch.object(factcheck.requests, "post") as post:
-            self.assertEqual(checker(enabled=False).conflicts("A story.", [DEAD]), [])
-            self.assertEqual(checker().conflicts("  ", [DEAD]), [])
-            self.assertEqual(checker().conflicts("A story.", []), [])
+            self.assertEqual(checker(enabled=False).conflicts("A story.", [DEAD], "Orton"), [])
+            self.assertEqual(checker().conflicts("  ", [DEAD], "Orton"), [])
+            self.assertEqual(checker().conflicts("A story.", [], "Orton"), [])
         post.assert_not_called()
 
     def test_a_request_error_warns_and_is_no_conflict(self):
@@ -163,7 +173,7 @@ class QuietTests(unittest.TestCase):
             mock.patch.object(factcheck.requests, "post", side_effect=requests.Timeout("slow")),
             self.assertLogs("adapters.factcheck", "WARNING"),
         ):
-            self.assertEqual(instance.conflicts("A story.", [DEAD]), [])
+            self.assertEqual(instance.conflicts("A story.", [DEAD], "Orton"), [])
         self.assertTrue(instance.enabled)
 
     def test_an_http_error_warns(self):
@@ -173,7 +183,7 @@ class QuietTests(unittest.TestCase):
             mock.patch.object(factcheck.requests, "post", return_value=response),
             self.assertLogs("adapters.factcheck", "WARNING"),
         ):
-            self.assertEqual(checker().conflicts("A story.", [DEAD]), [])
+            self.assertEqual(checker().conflicts("A story.", [DEAD], "Orton"), [])
 
     def test_missing_logprobs_warns(self):
         response = mock.Mock()
@@ -182,14 +192,14 @@ class QuietTests(unittest.TestCase):
             mock.patch.object(factcheck.requests, "post", return_value=response),
             self.assertLogs("adapters.factcheck", "WARNING"),
         ):
-            self.assertEqual(checker().conflicts("A story.", [DEAD]), [])
+            self.assertEqual(checker().conflicts("A story.", [DEAD], "Orton"), [])
 
     def test_no_option_letter_among_the_tokens_warns(self):
         with (
             mock.patch.object(factcheck.requests, "post", return_value=reply({"Z": 0.9})),
             self.assertLogs("adapters.factcheck", "WARNING"),
         ):
-            self.assertEqual(checker().conflicts("A story.", [DEAD]), [])
+            self.assertEqual(checker().conflicts("A story.", [DEAD], "Orton"), [])
 
     def test_a_failed_question_does_not_stop_the_next(self):
         responses = [requests.Timeout("slow"), reply({"A": 0.97})]
@@ -197,9 +207,41 @@ class QuietTests(unittest.TestCase):
             mock.patch.object(factcheck.requests, "post", side_effect=responses),
             self.assertLogs("adapters.factcheck", "WARNING"),
         ):
-            result = checker().conflicts("A story.", [DEAD, DEAD])
+            result = checker().conflicts("A story.", [DEAD, DEAD], "Orton")
         self.assertEqual(result, ["It is dead."])
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ASKED = StateQuestion("Asked for?", OPTIONS[:2], frozenset({"standing"}), "Refused: no.")
+
+
+class PlanConflictTests(unittest.TestCase):
+    """llm-contract: The plan check."""
+
+    def test_the_state_is_the_players_input(self):
+        with mock.patch.object(factcheck.requests, "post", return_value=reply({"A": 0.97})) as post:
+            checker().plan_conflicts("drink from the tap", [ASKED])
+        task = json.loads(post.call_args.kwargs["json"]["messages"][1]["content"])
+        self.assertEqual(task["state"], 'The player wrote: "drink from the tap"')
+        self.assertEqual(task["question"], "Asked for?")
+
+    def test_the_conflicting_questions_come_back_by_index(self):
+        responses = [reply({"A": 0.97}), reply({"B": 0.95}), reply({"B": 0.6, "A": 0.3})]
+        with mock.patch.object(factcheck.requests, "post", side_effect=responses):
+            self.assertEqual(checker().plan_conflicts("x", [ASKED, ASKED, ASKED]), [1])
+
+    def test_disabled_or_empty_sends_nothing(self):
+        with mock.patch.object(factcheck.requests, "post") as post:
+            self.assertEqual(checker(enabled=False).plan_conflicts("x", [ASKED]), [])
+            self.assertEqual(checker().plan_conflicts("x", []), [])
+        post.assert_not_called()
+
+    def test_a_failed_request_warns_and_keeps_the_action(self):
+        with (
+            mock.patch.object(factcheck.requests, "post", side_effect=requests.Timeout("slow")),
+            self.assertLogs("adapters.factcheck", "WARNING"),
+        ):
+            self.assertEqual(checker().plan_conflicts("x", [ASKED]), [])

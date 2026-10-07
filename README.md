@@ -57,6 +57,7 @@ GameEngine.play()                             [adapters/engine.py]
     +-- llm.query_parser()                    ask LM Studio what Orton is trying to do
     +-- llm.parse_action_response()           extract ACTIONS lines
     +-- modules.action.parser.parse_action_plan()    turn lines into typed AnyAction
+    +-- FactChecker.plan_conflicts()          drop actions the player didn't ask for, as refusals
     +-- ActionValidator(manager).validate     is each action legal? (no mutation)
     +-- SimulationCore(manager).resolve       decide outcomes, mutate state, one at
     |                                         a time so an earlier action (move) can
@@ -64,7 +65,7 @@ GameEngine.play()                             [adapters/engine.py]
     +-- ContextBuilder.build_narrator_prompt() full context + [OUTCOMES] facts
     +-- llm.query_narrator()                  ask LM Studio to describe what happened
     +-- llm.parse_narrator_response()         split into STORY / OPTIONS
-    +-- StoryChecker.conflicts()              story vs the engine's zombie state; one narrator retry
+    +-- FactChecker.conflicts()               story vs the engine's state; one narrator retry
     +-- build_event_entry() + record_event()  engine-written entry to short-term + full log
     +-- SemanticMemory.rebuild()              reindex
     +-- llm.query_summary()                   fold old events into a summary
@@ -227,11 +228,11 @@ uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 mise run install
 ```
 
-A second, small decision model checks the narrator's story against the engine's
-state: load the Tev1-4B GGUF (about 2.8 GB at Q4_K_M) in LM Studio beside the
-narrator, under the key in `factcheck.model_name`. Set `factcheck.enabled: false` in
-`config.yml` to skip the check; if the model is not loaded the check logs a warning
-and the game plays on.
+A decision model checks the parser's plan against the player's words and the
+narrator's story against the engine's state, under the key in `factcheck.model_name`: load the Tev1-4B GGUF (about 2.8 GB at Q4_K_M) in LM
+Studio beside the narrator, or, when the GPU has no room for it, set the key to the
+narrator's own `llm.model_name`. Set `factcheck.enabled: false` in `config.yml` to skip
+the check; if the model is not loaded the check logs a warning and the game plays on.
 
 The parser and the narrator can be different models: `llm.model_name` names the
 narrator's (needed once more than one model is loaded) and `llm.parser_model_name` the
