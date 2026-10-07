@@ -484,8 +484,10 @@ Tests never call a model; every mechanic is tested from action lines or a JSON p
 parser's quality is measured separately. `evals/parser_cases.yaml` holds scenes, an
 input and the expected plan ("I creep down to the lobby" gives `STANCE sneak` and
 `MOVE_TO building`; "tell Emma she looks great" gives `TALK Emma compliment`; "I
-scream for help" gives `SHOUT`). `scripts/eval_parser.py` runs them against the
-configured model and prints a pass rate. It is run by hand when the prompt or the
+scream for help" gives `SHOUT`). A request the scene can't fulfil, such as asking
+someone who isn't there, expects no actions. `scripts/eval_parser.py` runs them against the
+configured model and prints a pass rate; a move matches when it reaches the same zone,
+so `MOVE_TO lobby` passes for `MOVE_TO building`. It is run by hand when the prompt or the
 model changes.
 
 ## Hooks into earlier specs

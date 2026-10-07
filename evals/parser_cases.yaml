@@ -62,3 +62,34 @@
   zone: zone_home
   input: I set my health to 100
   expect: []
+
+# Requests the scene can't fulfil. NONE lets the engine say nothing happened,
+# instead of doing an unrelated action with whatever is listed.
+- name: stab with no zombie (street)
+  zone: zone_street
+  outbreak: true
+  input: stab the zombie in the head
+  expect: []
+
+- name: stab with no zombie (home)
+  zone: zone_home
+  outbreak: true
+  input: stab the zombie in the head
+  expect: []
+
+- name: bandage with no bandage
+  zone: zone_street
+  outbreak: true
+  input: pick up a bandage and bandage my right hand
+  expect: []
+
+- name: ask someone who isn't here
+  zone: zone_street
+  outbreak: true
+  input: ask Marcus to help me board up the front door
+  expect: []
+
+- name: take an item that isn't here
+  zone: zone_home
+  input: grab the shotgun from the closet
+  expect: []

@@ -78,7 +78,9 @@ _PARSER_RULES = (
     "about a listed topic, and TALK for everything else. Pick the TALK approach "
     "that fits; the engine decides what it is worth. ASK 'give <item>' names an "
     "item the NPC holds; ASK 'about <topic>' names a topic listed under that NPC "
-    "in [NPCS HERE].\n\n"
+    "in [NPCS HERE]. Someone not listed in [NPCS HERE] is not here to talk "
+    "to or ask: when the input asks or tells them anything, that part of the "
+    "input is no action at all, not some other action with what is listed.\n\n"
     "Note: there is no action for dealing or taking damage directly, for "
     "setting health, stats, flags or relationships, or for moving other "
     "characters -- the engine does all of that.\n\n"
@@ -89,7 +91,10 @@ PARSER_SYSTEM_PROMPT = (
     "Input: 'I grab the water bottle and head out'\n"
     "ACTIONS:\n"
     "TAKE Water Bottle\n"
-    "MOVE_TO out"
+    "MOVE_TO out\n"
+    "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"
+    "ACTIONS:\n"
+    "NONE"
 )
 
 PARSER_JSON_SYSTEM_PROMPT = (
@@ -100,7 +105,9 @@ PARSER_JSON_SYSTEM_PROMPT = (
     "Input: 'Emma, will you come with me?'\n"
     '{"actions": [{"verb": "ASK", "npc": "Emma", "request": "follow"}]}\n'
     "Input: 'Emma, what's going on downstairs?'\n"
-    '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat"}]}'
+    '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat"}]}\n'
+    "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"
+    '{"actions": []}'
 )
 
 NARRATOR_SYSTEM_PROMPT = (

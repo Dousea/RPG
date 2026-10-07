@@ -14,7 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from adapters import llm  # noqa: E402
 from managers.context import ContextBuilder  # noqa: E402
 from managers.game import GameManager  # noqa: E402
+from managers.locations import connection_target  # noqa: E402
 from modules.action.parser import parse_action_plan  # noqa: E402
+from modules.action.types import AnyAction, MoveAction  # noqa: E402
 
 CASES_FILE = Path(__file__).resolve().parent.parent / "evals" / "parser_cases.yaml"
 
@@ -28,6 +30,22 @@ def scene(case: dict) -> GameManager:
     return manager
 
 
+def _reached(manager: GameManager, action: AnyAction) -> object:
+    """A move as the zone it reaches, so "In" and an alias match; other actions as they are."""
+    if not isinstance(action, MoveAction):
+        return action
+    folded = action.destination.casefold()
+    current = manager.current_location
+    target = connection_target(folded, current, manager.world.locations)
+    target = target or manager.resolve_location(action.destination)
+    return (MoveAction.verb, target.id if target else folded, action.run)
+
+
+def same_plan(manager: GameManager, got: list[AnyAction], want: list[AnyAction]) -> bool:
+    """Whether the engine would make the same plan of both."""
+    return [_reached(manager, a) for a in got] == [_reached(manager, a) for a in want]
+
+
 def run_case(case: dict) -> tuple[bool, list[str]]:
     manager = scene(case)
     context = ContextBuilder(manager)
@@ -36,7 +54,7 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
     )
     got, _ = llm.read_parser_reply(reply)
     want, _ = parse_action_plan(list(case["expect"]))
-    return got == want, [repr(action) for action in got]
+    return same_plan(manager, got, want), [repr(action) for action in got]
 
 
 def main() -> int:

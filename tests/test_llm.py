@@ -216,6 +216,11 @@ class PromptRuleTests(unittest.TestCase):
         for word in ("UPDATE_", "SET_FLAG", "Orton"):
             self.assertNotIn(word, NARRATOR_SYSTEM_PROMPT)
 
+    def test_the_parser_is_told_a_request_for_someone_absent_is_no_action(self):
+        for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
+            self.assertIn("not listed in [NPCS HERE]", prompt)
+            self.assertIn("Input: 'ask Dana to open the gate'", prompt)
+
     def test_the_summarizer_is_told_an_attempt_is_not_an_outcome(self):
         self.assertIn("only an attempt", SUMMARIZER_SYSTEM_PROMPT)
         self.assertIn("what actually happened", SUMMARIZER_SYSTEM_PROMPT)
@@ -317,7 +322,7 @@ class ParserRequestTests(unittest.TestCase):
             actions, failures = parse_plan_response(example)
             self.assertEqual(failures, [])
             verbs.append([a.verb for a in actions])
-        self.assertEqual(verbs, [["TAKE", "MOVE_TO"], ["ASK"], ["TALK"]])
+        self.assertEqual(verbs, [["TAKE", "MOVE_TO"], ["ASK"], ["TALK"], []])
 
     def test_a_question_with_no_listed_topic_is_shown_as_talk(self):
         self.assertIn("Input: 'Emma, what's going on downstairs?'", PARSER_JSON_SYSTEM_PROMPT)
