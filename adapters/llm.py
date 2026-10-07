@@ -11,6 +11,7 @@ the LLM interprets intent and writes prose; it never decides state.
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -248,6 +249,35 @@ class LLMRequestRejected(LLMError):
     """The server refused the request itself (an HTTP 4xx), e.g. a `response_format` it lacks."""
 
 
+# Called with ("thinking" or "story", the text just written) while a reply streams in.
+DeltaCallback = Callable[[str, str], None]
+
+
+def _read_stream(response: requests.Response, on_delta: DeltaCallback) -> dict[str, Any]:
+    """The reply body a streamed completion adds up to, passing each piece to `on_delta`."""
+    content: list[str] = []
+    body: dict[str, Any] = {}
+    for raw_line in response.iter_lines():
+        line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+        if not line.startswith("data: "):
+            continue
+        data = line[len("data: ") :]
+        if data == "[DONE]":
+            break
+        chunk = json.loads(data)
+        if "usage" in chunk:
+            body["usage"] = chunk["usage"]
+        for choice in chunk.get("choices") or []:
+            delta = choice.get("delta") or {}
+            if thought := delta.get("reasoning_content"):
+                on_delta("thinking", thought)
+            if text := delta.get("content"):
+                content.append(text)
+                on_delta("story", text)
+    body["choices"] = [{"message": {"content": "".join(content)}}]
+    return body
+
+
 def _chat(
     model: str,
     system_prompt: str,
@@ -256,6 +286,7 @@ def _chat(
     sampler: dict[str, float],
     reasoning_effort: str,
     response_format: dict[str, Any] | None = None,
+    on_delta: DeltaCallback | None = None,
 ) -> str:
     payload: dict[str, Any] = {
         **sampler,
@@ -270,6 +301,9 @@ def _chat(
     }
     if response_format is not None:
         payload["response_format"] = response_format
+    if on_delta is not None:
+        payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}
 
     try:
         response = requests.post(
@@ -277,13 +311,20 @@ def _chat(
             headers={"Content-Type": "application/json"},
             json=payload,
             timeout=config.llm.request_timeout,
+            stream=on_delta is not None,
         )
         if response_format is not None and 400 <= response.status_code < 500:
             raise LLMRequestRejected(
                 f"LM Studio refused the request with HTTP {response.status_code}."
             )
         response.raise_for_status()
-        body = response.json()
+        if on_delta is None:
+            body = response.json()
+        else:
+            try:
+                body = _read_stream(response, on_delta)
+            finally:
+                response.close()
         content = body["choices"][0]["message"]["content"]
         _record_usage(body, len(system_prompt) + len(user_content))
         return content
@@ -358,8 +399,12 @@ def read_parser_reply(reply: ParserReply) -> tuple[list[AnyAction], list[ParseFa
     return parse_action_plan(parse_action_response(reply.text))
 
 
-def query_narrator(prompt_text: str) -> str:
-    """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure."""
+def query_narrator(prompt_text: str, on_delta: DeltaCallback | None = None) -> str:
+    """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure.
+
+    With `on_delta` the reply streams in, and each piece of its thinking and its
+    text reaches `on_delta` as it is written; the return value is the same.
+    """
     raw = _chat(
         MODEL_NAME,
         NARRATOR_SYSTEM_PROMPT,
@@ -367,6 +412,7 @@ def query_narrator(prompt_text: str) -> str:
         max_tokens=config.llm.narrator_max_tokens,
         sampler=NARRATOR_SAMPLER,
         reasoning_effort=NARRATOR_REASONING_EFFORT,
+        on_delta=on_delta,
     )
     logger.debug("Narrator raw response:\n%s", raw)
     return raw
@@ -466,6 +512,23 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
         "story": story or EMPTY_STORY,
         "options": options,
     }
+
+
+_HEADER_WORDS = tuple(_SECTIONS)
+
+
+def story_preview(raw_so_far: str) -> str:
+    """The story part of a narrator reply still being written; "" until it has any.
+
+    A last line that may be a section header still being written ("OPT") is
+    left out, so a header never flashes up as prose.
+    """
+    lines = raw_so_far.split("\n")
+    last = lines[-1].strip().lstrip("[").upper()
+    if last and any(word.startswith(last) for word in _HEADER_WORDS):
+        lines = lines[:-1]
+    story = parse_narrator_response("\n".join(lines))["story"]
+    return "" if story == EMPTY_STORY else str(story)
 
 
 def has_options_section(llm_response_text: str) -> bool:

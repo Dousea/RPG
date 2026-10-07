@@ -7,6 +7,10 @@ index and persistence. Game rules live in `managers/` and `modules/`.
 
 import json
 import logging
+import queue
+import threading
+from collections.abc import Iterator
+from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
 
@@ -43,18 +47,57 @@ def state():
     return jsonify(get_engine().state())
 
 
-@app.route("/play", methods=["POST"])
-def play():
-    """Receives player input, runs a game turn, and returns the result."""
+def _turn_input() -> tuple[str, Any]:
+    """The player's input, or "" and the error response a turn request gets instead."""
     payload = request.get_json(silent=True) or {}
     player_input = (payload.get("input") or "").strip()
     if not player_input:
-        return jsonify({"error": "No input provided"}), 400
+        return "", (jsonify({"error": "No input provided"}), 400)
+    if not get_engine().has_game:
+        return "", (jsonify({"error": "Create a character first.", "needs_creation": True}), 409)
+    return player_input, None
 
+
+@app.route("/play", methods=["POST"])
+def play():
+    """Receives player input, runs a game turn, and returns the result."""
+    player_input, error = _turn_input()
+    if error:
+        return error
+    return jsonify(get_engine().play(player_input))
+
+
+@app.route("/play/stream", methods=["POST"])
+def play_stream():
+    """Runs a turn and sends its events as JSON lines as they happen, then {"type": "done", "turn": ...}.
+
+    The turn runs on its own thread, so a player who closes the page mid-turn
+    still gets the turn decided, recorded and saved.
+    """
+    player_input, error = _turn_input()
+    if error:
+        return error
     engine = get_engine()
-    if not engine.has_game:
-        return jsonify({"error": "Create a character first.", "needs_creation": True}), 409
-    return jsonify(engine.play(player_input))
+    events: queue.Queue[dict[str, Any] | None] = queue.Queue()
+
+    def run() -> None:
+        try:
+            events.put({"type": "done", "turn": engine.play(player_input, on_event=events.put)})
+        except Exception as exc:
+            logger.exception("Streamed turn failed")
+            events.put({"type": "error", "message": str(exc)})
+        events.put(None)
+
+    def lines() -> Iterator[str]:
+        while (event := events.get()) is not None:
+            yield json.dumps(event) + "\n"
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response(
+        lines(),
+        mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/reset", methods=["POST"])

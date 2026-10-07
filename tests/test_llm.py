@@ -554,5 +554,115 @@ class NarratorPromptLengthTests(unittest.TestCase):
         self.assertLessEqual(len(NARRATOR_SYSTEM_PROMPT), 3200)
 
 
+def chunk(delta: dict | None = None, usage: dict | None = None) -> str:
+    """One server-sent line of a streamed chat completion."""
+    body: dict = {"choices": [{"index": 0, "delta": delta}] if delta is not None else []}
+    if usage is not None:
+        body["usage"] = usage
+    return "data: " + json.dumps(body)
+
+
+class FakeStreamResponse:
+    def __init__(self, lines: list[str], error: Exception | None = None):
+        self.status_code = 200
+        self._lines = lines
+        self._error = error
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def iter_lines(self):
+        yield from (line.encode() for line in self._lines)
+        if self._error is not None:
+            raise self._error
+
+    def close(self) -> None:
+        pass
+
+
+THOUGHT_AND_STORY = [
+    chunk({"role": "assistant", "reasoning_content": "Hm"}),
+    "",
+    chunk({"reasoning_content": "m."}),
+    ": keep-alive",
+    chunk({"content": "STORY:\n"}),
+    chunk({"content": "You wait."}),
+    chunk({}),
+    chunk(usage={"prompt_tokens": 50, "completion_tokens": 9}),
+    "data: [DONE]",
+]
+
+
+class NarratorStreamTests(unittest.TestCase):
+    """Spec 10, Streaming: the narrator's thinking and story arrive as they are written."""
+
+    def setUp(self):
+        llm.reset_chars_per_token()
+        self.addCleanup(llm.reset_chars_per_token)
+        self.deltas: list[tuple[str, str]] = []
+
+    def stream(self, response: FakeStreamResponse):
+        with mock.patch.object(llm.requests, "post", return_value=response) as post:
+            raw = llm.query_narrator("u" * 100, on_delta=lambda *d: self.deltas.append(d))
+        return raw, post
+
+    def test_a_callback_asks_for_a_stream_with_usage(self):
+        _, post = self.stream(FakeStreamResponse(THOUGHT_AND_STORY))
+        self.assertTrue(post.call_args.kwargs["stream"])
+        body = post.call_args.kwargs["json"]
+        self.assertTrue(body["stream"])
+        self.assertEqual(body["stream_options"], {"include_usage": True})
+
+    def test_thinking_and_story_reach_the_callback_in_order(self):
+        self.stream(FakeStreamResponse(THOUGHT_AND_STORY))
+        self.assertEqual(
+            self.deltas,
+            [("thinking", "Hm"), ("thinking", "m."), ("story", "STORY:\n"), ("story", "You wait.")],
+        )
+
+    def test_the_reply_is_the_whole_story_text_without_the_thinking(self):
+        raw, _ = self.stream(FakeStreamResponse(THOUGHT_AND_STORY))
+        self.assertEqual(raw, "STORY:\nYou wait.")
+
+    def test_the_usage_chunk_sets_chars_per_token(self):
+        self.stream(FakeStreamResponse(THOUGHT_AND_STORY))
+        self.assertAlmostEqual(llm.chars_per_token(), (len(NARRATOR_SYSTEM_PROMPT) + 100) / 50)
+
+    def test_a_chunk_that_is_not_json_is_an_llm_error(self):
+        with self.assertRaises(LLMError):
+            self.stream(FakeStreamResponse([chunk({"content": "STORY:"}), "data: {oops"]))
+
+    def test_a_dropped_stream_is_an_llm_error(self):
+        dropped = requests.exceptions.ChunkedEncodingError("connection reset")
+        with self.assertRaises(LLMError):
+            self.stream(FakeStreamResponse([chunk({"content": "STORY:"})], error=dropped))
+
+    def test_without_a_callback_the_reply_is_not_streamed(self):
+        with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
+            llm.query_narrator("p")
+        self.assertNotIn("stream", post.call_args.kwargs["json"])
+
+
+class StoryPreviewTests(unittest.TestCase):
+    """Spec 10, Streaming: the story so far, as the player may see it while it is written."""
+
+    def test_the_story_header_is_left_out(self):
+        self.assertEqual(llm.story_preview("STORY:\nYou wait."), "You wait.")
+
+    def test_options_are_left_out(self):
+        self.assertEqual(llm.story_preview("STORY:\nYou wait.\n\nOPTIONS:\n- Run"), "You wait.")
+
+    def test_a_header_still_being_written_is_left_out(self):
+        for partial in ("OPT", "[OPTI", "options", "OPTIONS"):
+            self.assertEqual(llm.story_preview("STORY:\nYou wait.\n\n" + partial), "You wait.")
+
+    def test_a_last_line_that_is_prose_stays(self):
+        self.assertEqual(llm.story_preview("STORY:\nYou wait.\nOpen"), "You wait.\nOpen")
+
+    def test_nothing_written_yet_is_empty(self):
+        for raw in ("", "STO", "STORY:"):
+            self.assertEqual(llm.story_preview(raw), "")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -221,6 +221,49 @@ main {
     white-space: normal;
 }
 
+.turn-status {
+    flex: none;
+    max-width: 66ch;
+    padding: 0.35rem 0 0.6rem;
+    font-family: var(--sans);
+    font-size: 0.875rem;
+    color: var(--ash);
+}
+
+.turn-step-row { display: flex; align-items: center; gap: 0.5rem; }
+
+.turn-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--yellow);
+    animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    50% { opacity: 0.25; transform: scale(0.7); }
+}
+
+.turn-timer { font-variant-numeric: tabular-nums; }
+
+.thoughts { margin-top: 0.35rem; }
+.thoughts summary { cursor: pointer; width: fit-content; }
+.thoughts summary:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+#thoughts-text {
+    max-height: 9rem;
+    overflow-y: auto;
+    margin-top: 0.35rem;
+    padding-left: 0.7rem;
+    border-left: 2px solid var(--rule);
+    font-style: italic;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule) transparent;
+}
+
 #story-display .system-error {
     margin-top: 1.75rem;
     padding-left: 0.7rem;

@@ -12,7 +12,9 @@ player; this document says *where*.
 
 **The screens are read-only.** The player acts only by typing. No panel has a
 button, toggle or drag that changes game state, and there is no action
-endpoint besides `POST /play`. The narrator's suggested options are not an
+endpoint besides `POST /play` and `POST /play/stream`, which runs the same
+turn and streams its steps (see `docs/mechanics/10-llm-contract.md`,
+Streaming). The narrator's suggested options are not an
 exception: a click fills the input and submits it through `/play`, so the
 parser can't tell it from typed text. Three kinds of control are allowed:
 
@@ -36,7 +38,7 @@ panels can't disagree. A field that two screens need lives in the header.
 
 **The snapshot is the whole contract.** `/play`, `GET /state`, `POST /reset`,
 `POST /save/import` and a successful `POST /creation` all return the same
-snapshot from `GameEngine._snapshot`. The page keeps no game state of its own
+snapshot from `GameEngine._snapshot`, and `/play/stream` ends with it. The page keeps no game state of its own
 except the character's name for the death banner. Before a game exists the
 snapshot is `{needs_creation: true}` and the page opens the creation screen.
 

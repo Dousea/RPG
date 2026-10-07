@@ -451,6 +451,25 @@ prose is shown; it never changes a fact. A turn with no question is not checked.
 A request that fails or returns no usable answer logs a warning and counts as no
 conflict; the checker stays on. `factcheck.enabled: false` turns it off.
 
+### Streaming
+
+`POST /play/stream` runs the same turn as `/play` and sends its events as JSON lines
+while it runs, ending with `{"type": "done", "turn": <the /play payload>}`, or
+`{"type": "error", "message": ...}` if the turn crashed. A turn reports each step as
+it starts, `{"type": "step", "step": ...}`: `parsing`, `narrating`, `fact_checking`
+(only when a question is asked and the checker is on), `rewriting` (the fact check's
+retry), `options` (the follow-up for a reply with no OPTIONS section) and `saving`.
+The narrator's reply streams from LM Studio: each piece of its thinking arrives as
+`{"type": "thinking", "text": ...}`, and its story as `{"type": "story", "text": ...}`,
+the story so far with the section headers and options left out. A last line that may
+be a header still being written ("OPT") is held back, so it never shows as prose.
+Only the narrator streams; the parser, the fact check, the options follow-up and the
+summary don't. The finished turn is what counts: the page replaces the streamed text
+with the payload's story, so a retry that is rejected never stays on screen. A turn
+whose request is invalid or that has no game gets the same 400 or 409 as `/play`,
+before anything streams. The turn runs on its own thread, so a closed page still gets
+it decided and saved.
+
 ## Memory
 
 - The engine writes each event-log entry from the turn, never from narrator text:
@@ -529,6 +548,11 @@ model changes.
   People list shows "following you" beside a follower. Bands are shown as before;
   scores never are.
 - **Options:** unchanged. They are suggestions, always alongside free text.
+- **Turn status:** while a turn runs, a line under the story names its step (Parsing…,
+  Thinking…, Narrating…, Fact checking…, Rewriting…, Writing options…, Saving…) with
+  the seconds spent on it, the story appears as it is written, and a collapsed
+  Thoughts panel holds the narrator's thinking. Neither the thinking nor the status is
+  saved.
 
 ## Saves
 

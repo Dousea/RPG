@@ -3,7 +3,7 @@
 import unittest
 
 from adapters import engine as engine_module
-from adapters.llm import LLMError
+from adapters.llm import DeltaCallback, LLMError
 from adapters.save import codec
 from data.memory import LAST_SCENE_MAX_CHARS
 from managers.context import ContextBuilder
@@ -111,7 +111,7 @@ class LastStoryEngineTests(EngineTestCase):
     def test_a_failed_narrator_call_clears_it(self):
         self.engine.play("go out")
 
-        def failing(prompt: str) -> str:
+        def failing(prompt: str, on_delta: DeltaCallback | None = None) -> str:
             raise LLMError("narrator offline")
 
         engine_module.llm.query_narrator = failing

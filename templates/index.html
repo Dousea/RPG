@@ -37,6 +37,18 @@
 
             <div id="story-display" aria-live="polite"></div>
 
+            <div id="turn-status" class="turn-status" role="status" hidden>
+                <div class="turn-step-row">
+                    <span class="turn-dot" aria-hidden="true"></span>
+                    <span id="turn-step"></span>
+                    <span id="turn-timer" class="turn-timer"></span>
+                </div>
+                <details id="thoughts" class="thoughts" hidden>
+                    <summary>Thoughts</summary>
+                    <div id="thoughts-text"></div>
+                </details>
+            </div>
+
             <footer class="scene-input">
                 <div id="choice-options"></div>
                 <form id="input-form">

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from adapters.llm import ParserReply
+from adapters.llm import DeltaCallback, ParserReply
 from adapters.save import files
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -98,12 +98,23 @@ class FakeStoryChecker:
     """
 
     def __init__(self):
+        self.enabled = True
         self.results: list[list[str]] = []
         self.calls: list[tuple[str, list[StateQuestion]]] = []
 
     def conflicts(self, story: str, questions: list[StateQuestion]) -> list[str]:
         self.calls.append((story, list(questions)))
         return self.results.pop(0) if self.results else []
+
+
+THOUGHT = "Thinking it over."
+
+
+def stream(reply: str, on_delta: DeltaCallback) -> None:
+    """Hand a scripted reply to a streaming listener the way LM Studio does: a thought, then small pieces."""
+    on_delta("thinking", THOUGHT)
+    for start in range(0, len(reply), 8):
+        on_delta("story", reply[start : start + 8])
 
 
 class ScriptedLLM:
@@ -138,10 +149,12 @@ class ScriptedLLM:
             raise self.error
         return ParserReply(self.actions, structured=self.structured)
 
-    def query_narrator(self, prompt: str) -> str:
+    def query_narrator(self, prompt: str, on_delta: DeltaCallback | None = None) -> str:
         self.narrator_prompts.append(prompt)
         if self.error is not None:
             raise self.error
+        if on_delta is not None:
+            stream(self.story, on_delta)
         return self.story
 
     def query_summary(self, text: str) -> str:

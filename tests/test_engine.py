@@ -15,7 +15,7 @@ import adapters.engine as engine_module
 import config
 from adapters import llm
 from adapters.engine import GameEngine
-from adapters.llm import NARRATOR_SYSTEM_PROMPT, LLMError
+from adapters.llm import NARRATOR_SYSTEM_PROMPT, DeltaCallback, LLMError
 from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
 from data.memory import BUDGET_MARGIN_TOKENS
@@ -26,12 +26,14 @@ from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
 from tests.support import (
+    THOUGHT,
     FakeMemory,
     FakeStoryChecker,
     IsolatedSaveTestCase,
     ScriptedLLM,
     make_dying,
     npc_of,
+    stream,
 )
 
 MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
@@ -420,7 +422,7 @@ class FailureTests(EngineTestCase):
         # Movement was already decided by the engine before the narrator was
         # asked to describe it -- a rendering failure must not discard that.
         class FailingNarrator(ScriptedLLM):
-            def query_narrator(self, prompt: str) -> str:
+            def query_narrator(self, prompt: str, on_delta: DeltaCallback | None = None) -> str:
                 self.narrator_prompts.append(prompt)
                 raise LLMError("LM Studio dropped the connection")
 
@@ -632,7 +634,7 @@ class MemoryFactsTests(EngineTestCase):
         self.engine.reset()
         self.engine.create_character(ORTON)
 
-        def failing(prompt: str) -> str:
+        def failing(prompt: str, on_delta: DeltaCallback | None = None) -> str:
             raise LLMError("narrator offline")
 
         engine_module.llm.query_narrator = failing
@@ -649,7 +651,7 @@ class MemoryFactsTests(EngineTestCase):
     def test_the_narrator_failure_entry_names_no_zombie_id(self):
         self.llm.actions = "ACTIONS:\nATTACK z7"
 
-        def failing(prompt: str) -> str:
+        def failing(prompt: str, on_delta: DeltaCallback | None = None) -> str:
             raise LLMError("narrator offline")
 
         engine_module.llm.query_narrator = failing
@@ -791,11 +793,13 @@ class SequencedNarrator(ScriptedLLM):
         super().__init__(**kwargs)
         self.replies = replies
 
-    def query_narrator(self, prompt: str) -> str:
+    def query_narrator(self, prompt: str, on_delta: DeltaCallback | None = None) -> str:
         self.narrator_prompts.append(prompt)
         reply = self.replies.pop(0)
         if isinstance(reply, LLMError):
             raise reply
+        if on_delta is not None:
+            stream(reply, on_delta)
         return reply
 
 
@@ -929,6 +933,32 @@ class FactCheckRetryTests(EngineTestCase):
             self.engine.play("go out")
         self.assertEqual(checker.calls, [])
 
+    def events_of_play(self) -> tuple[dict, list[dict]]:
+        events: list[dict] = []
+        result = self.engine.play("go out", on_event=events.append)
+        return result, events
+
+    def test_a_checked_story_reports_the_check(self):
+        self.script([self.FIRST], [])
+        _, events = self.events_of_play()
+        self.assertEqual(steps(events), ["parsing", "narrating", "fact_checking", "saving"])
+
+    def test_a_rewrite_reports_its_step_and_streams_the_new_story(self):
+        self.script([self.FIRST, self.SECOND], [self.CORRECTION], [])
+        result, events = self.events_of_play()
+        self.assertEqual(
+            steps(events), ["parsing", "narrating", "fact_checking", "rewriting", "saving"]
+        )
+        after = events[events.index({"type": "step", "step": "rewriting"}) :]
+        self.assertEqual(stories(after)[-1], "Second story.")
+        self.assertEqual(result["story_text"], "Second story.")
+
+    def test_a_disabled_checker_reports_no_check(self):
+        self.script([self.FIRST])
+        cast(FakeStoryChecker, self.engine.factcheck).enabled = False
+        _, events = self.events_of_play()
+        self.assertNotIn("fact_checking", steps(events))
+
 
 class MissingOptionsTests(EngineTestCase):
     """A reply with no OPTIONS section gets one follow-up call asking for the options alone."""
@@ -998,3 +1028,59 @@ class MissingOptionsTests(EngineTestCase):
         first, follow_up = build.call_args_list
         block = self.llm.narrator_prompts[1][len("prompt") :]
         self.assertEqual(follow_up.kwargs["max_chars"], first.kwargs["max_chars"] - len(block))
+
+    def test_the_options_follow_up_is_reported(self):
+        self.script([self.NO_OPTIONS, self.OPTIONS_ONLY])
+        events: list[dict] = []
+        self.engine.play("go out", on_event=events.append)
+        self.assertEqual(steps(events), ["parsing", "narrating", "options", "saving"])
+        self.assertEqual(stories(events)[-1], "You walk out.")
+
+
+def steps(events: list[dict]) -> list[str]:
+    return [event["step"] for event in events if event["type"] == "step"]
+
+
+def stories(events: list[dict]) -> list[str]:
+    return [event["text"] for event in events if event["type"] == "story"]
+
+
+class TurnEventTests(EngineTestCase):
+    """Spec 10, Streaming: a turn reports each step, the thinking and the story as it goes."""
+
+    def play(self, player_input: str = "go out") -> tuple[dict, list[dict]]:
+        events: list[dict] = []
+        result = self.engine.play(player_input, on_event=events.append)
+        return result, events
+
+    def test_a_turn_reports_its_steps_in_order(self):
+        _, events = self.play()
+        self.assertEqual(steps(events), ["parsing", "narrating", "saving"])
+
+    def test_the_narrators_thinking_reaches_the_listener(self):
+        _, events = self.play()
+        self.assertIn({"type": "thinking", "text": THOUGHT}, events)
+
+    def test_the_story_arrives_as_the_story_so_far_and_ends_as_the_turns_story(self):
+        result, events = self.play()
+        texts = stories(events)
+        self.assertGreater(len(texts), 1)
+        self.assertEqual(texts[-1], result["story_text"])
+        for text in texts:
+            self.assertTrue(result["story_text"].startswith(text))
+
+    def test_the_turn_is_the_same_as_without_a_listener(self):
+        result, _ = self.play()
+        self.assertEqual(result["story_text"], "You walk out into the building.")
+        self.assertEqual(self.engine.game.memory.last_story, result["story_text"])
+
+    def test_a_parser_failure_stops_after_parsing(self):
+        self.llm.error = LLMError("parser offline")
+        result, events = self.play()
+        self.assertEqual(steps(events), ["parsing"])
+        self.assertIn("SYSTEM ERROR", result["story_text"])
+
+    def test_a_dead_character_reports_nothing(self):
+        self.engine.game.narrative.game_over = True
+        _, events = self.play()
+        self.assertEqual(events, [])

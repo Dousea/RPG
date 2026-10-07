@@ -328,6 +328,7 @@ $env:RPG_TEST_EMBEDDINGS="1"; mise run test
 | `/` | GET | The game interface |
 | `/state` | GET | Current state, so a reloaded page shows the real world |
 | `/play` | POST | `{"input": "..."}` -> runs a turn |
+| `/play/stream` | POST | The same turn, streamed as JSON lines: each step, the narrator's thinking and story as written, then the turn |
 | `/reset` | POST | Deletes the save, starts a new game |
 
 ## Configuration

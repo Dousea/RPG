@@ -26,6 +26,11 @@ const resetButton = document.getElementById('reset-button');
 const saveButton = document.getElementById('save-button');
 const loadButton = document.getElementById('load-button');
 const loadInput = document.getElementById('load-input');
+const turnStatus = document.getElementById('turn-status');
+const turnStep = document.getElementById('turn-step');
+const turnTimer = document.getElementById('turn-timer');
+const thoughts = document.getElementById('thoughts');
+const thoughtsText = document.getElementById('thoughts-text');
 
 // Tracked outside applyGameOverState so handleTurn's `finally` block
 // (which otherwise unconditionally re-enables input after every turn)
@@ -520,6 +525,113 @@ function showSystemError(message) {
     storyDisplay.scrollTop = storyDisplay.scrollHeight;
 }
 
+// What the status line says for each step /play/stream reports.
+const STEP_LABELS = {
+    parsing: 'Parsing…',
+    thinking: 'Thinking…',
+    narrating: 'Narrating…',
+    fact_checking: 'Fact checking…',
+    rewriting: 'Rewriting…',
+    options: 'Writing options…',
+    saving: 'Saving…',
+};
+
+// The turn in progress: its status line, timer and the story beat being written.
+const liveTurn = { step: null, stepStartedAt: 0, timerId: null, beat: null, storyNode: null, playerText: '' };
+
+function setStep(step) {
+    liveTurn.step = step;
+    liveTurn.stepStartedAt = Date.now();
+    turnStep.textContent = STEP_LABELS[step] || '';
+    turnTimer.textContent = '';
+}
+
+function startTurnStatus(playerText) {
+    liveTurn.playerText = playerText;
+    thoughtsText.textContent = '';
+    thoughts.open = false;
+    thoughts.hidden = true;
+    turnStatus.hidden = false;
+    setStep('parsing');
+    liveTurn.timerId = setInterval(() => {
+        const seconds = Math.floor((Date.now() - liveTurn.stepStartedAt) / 1000);
+        turnTimer.textContent = seconds >= 1 ? `${seconds} s` : '';
+    }, 250);
+}
+
+function clearLiveBeat() {
+    if (liveTurn.beat) liveTurn.beat.remove();
+    liveTurn.beat = null;
+    liveTurn.storyNode = null;
+}
+
+function stopTurnStatus() {
+    clearInterval(liveTurn.timerId);
+    liveTurn.timerId = null;
+    clearLiveBeat();
+    turnStatus.hidden = true;
+}
+
+// The story so far replaces the live beat's text; the finished turn replaces the beat.
+function showStorySoFar(text) {
+    if (!liveTurn.beat) {
+        liveTurn.beat = el('p', 'beat');
+        liveTurn.beat.appendChild(el('span', 'echo', liveTurn.playerText));
+        liveTurn.storyNode = document.createTextNode('');
+        liveTurn.beat.appendChild(liveTurn.storyNode);
+        storyDisplay.appendChild(liveTurn.beat);
+    }
+    // LLM-authored text -- a text node, never HTML.
+    liveTurn.storyNode.nodeValue = text;
+    storyDisplay.scrollTop = storyDisplay.scrollHeight;
+}
+
+// Handles one event from /play/stream; returns the finished turn's payload on "done".
+function handleTurnEvent(event) {
+    if (event.type === 'step') {
+        if (event.step === 'rewriting') {
+            clearLiveBeat();
+            thoughtsText.textContent = '';
+        }
+        setStep(event.step);
+    } else if (event.type === 'thinking') {
+        // A rewrite keeps its own label while it thinks and writes.
+        if (liveTurn.step === 'narrating' && !liveTurn.beat) setStep('thinking');
+        thoughts.hidden = false;
+        thoughtsText.textContent += event.text;
+        if (thoughts.open) thoughtsText.scrollTop = thoughtsText.scrollHeight;
+    } else if (event.type === 'story') {
+        if (liveTurn.step === 'thinking') setStep('narrating');
+        showStorySoFar(event.text);
+    } else if (event.type === 'done') {
+        return event.turn;
+    } else if (event.type === 'error') {
+        throw new Error(event.message || 'the turn failed');
+    }
+    return null;
+}
+
+// Reads /play/stream's JSON lines as they arrive; resolves with the finished turn.
+async function readTurnStream(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newline;
+        while ((newline = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, newline).trim();
+            buffer = buffer.slice(newline + 1);
+            if (!line) continue;
+            const turn = handleTurnEvent(JSON.parse(line));
+            if (turn) return turn;
+        }
+    }
+    throw new Error('the turn stopped before it finished');
+}
+
 // Function to handle form submission
 async function handleTurn(event) {
     event.preventDefault();
@@ -528,11 +640,12 @@ async function handleTurn(event) {
 
     playerInput.disabled = true;
     submitButton.disabled = true;
-    submitButton.textContent = 'Thinking…';
+    submitButton.textContent = 'Wait…';
     choiceOptions.querySelectorAll('button').forEach(button => { button.disabled = true; });
+    startTurnStatus(inputText);
 
     try {
-        const response = await fetch('/play', {
+        const response = await fetch('/play/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ input: inputText })
@@ -542,11 +655,13 @@ async function handleTurn(event) {
             throw new Error(`Server responded with status: ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = await readTurnStream(response);
+        stopTurnStatus();
         updateUI(data, inputText);
 
     } catch (error) {
         console.error('Error during game turn:', error);
+        stopTurnStatus();
         showSystemError(error.message);
     } finally {
         playerInput.value = '';

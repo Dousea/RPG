@@ -61,6 +61,11 @@ class IndexTests(RouteTestCase):
         response = self.client.get("/")
         for element_id in (
             b'id="story-display"',
+            b'id="turn-status"',
+            b'id="turn-step"',
+            b'id="turn-timer"',
+            b'id="thoughts"',
+            b'id="thoughts-text"',
             b'id="location-status"',
             b'id="inventory-list"',
             b'id="equipment-list"',
@@ -170,6 +175,55 @@ class PlayTests(RouteTestCase):
         payload = response.get_json()
         self.assertIn("LM Studio is not running", payload["story_text"])
         self.assertEqual(payload["current_location"], "Your Apartment")
+
+
+class PlayStreamTests(RouteTestCase):
+    """Spec 10, Streaming: /play/stream sends a turn's events as JSON lines, then the turn."""
+
+    def events(self, player_input: str = "go out") -> list[dict]:
+        response = self.client.post("/play/stream", json={"input": player_input})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/x-ndjson")
+        return [json.loads(line) for line in response.get_data(as_text=True).splitlines()]
+
+    def test_the_steps_come_before_the_finished_turn(self):
+        events = self.events()
+        steps = [event["step"] for event in events if event["type"] == "step"]
+        # The scripted story has no OPTIONS section, so the follow-up asks for them.
+        self.assertEqual(steps, ["parsing", "narrating", "options", "saving"])
+        self.assertEqual(events[-1]["type"], "done")
+
+    def test_the_finished_turn_is_the_play_payload(self):
+        turn = self.events()[-1]["turn"]
+        self.assertEqual(turn["story_text"], "You walk out into the building.")
+        self.assertEqual(turn["current_location"], "Your Building")
+
+    def test_the_story_streams_before_the_turn_is_done(self):
+        events = self.events()
+        stories = [event["text"] for event in events if event["type"] == "story"]
+        self.assertEqual(stories[-1], "You walk out into the building.")
+        self.assertLess(
+            max(i for i, event in enumerate(events) if event["type"] == "story"), len(events) - 1
+        )
+
+    def test_missing_input_is_rejected_before_streaming(self):
+        response = self.client.post("/play/stream", json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.get_json())
+
+    def test_no_game_is_rejected_before_streaming(self):
+        self.engine.reset()
+        response = self.client.post("/play/stream", json={"input": "look"})
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(response.get_json()["needs_creation"])
+
+    def test_a_crashed_turn_ends_the_stream_with_an_error(self):
+        def crash(player_input, on_event=None):
+            raise RuntimeError("boom")
+
+        self.engine.play = crash
+        events = self.events()
+        self.assertEqual(events[-1]["type"], "error")
 
 
 class SaveLoadRouteTests(RouteTestCase):

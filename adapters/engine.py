@@ -8,6 +8,7 @@ docs/01-engine-authority.md.
 
 import logging
 import threading
+from collections.abc import Callable
 from typing import Any
 
 import config
@@ -54,6 +55,34 @@ OPTIONS_BLOCK = (
 )
 
 
+# Called with each event of a turn as it happens: {"type": "step", "step": ...}
+# for each stage, {"type": "thinking", "text": ...} for each piece of the
+# narrator's thinking, {"type": "story", "text": ...} with the story so far.
+TurnListener = Callable[[dict[str, Any]], None]
+
+
+def _ignore(_event: dict[str, Any]) -> None:
+    pass
+
+
+def _story_listener(emit: TurnListener) -> llm.DeltaCallback:
+    """Turns the narrator's streamed pieces into thinking events and story-so-far events."""
+    written: list[str] = []
+    shown = [""]
+
+    def on_delta(kind: str, text: str) -> None:
+        if kind == "thinking":
+            emit({"type": "thinking", "text": text})
+            return
+        written.append(text)
+        preview = llm.story_preview("".join(written))
+        if preview != shown[0]:
+            shown[0] = preview
+            emit({"type": "story", "text": preview})
+
+    return on_delta
+
+
 class GameEngine:
     """Owns the live GameManager and everything around it.
 
@@ -90,8 +119,14 @@ class GameEngine:
 
     # === Turn execution ===
 
-    def play(self, player_input: str) -> dict[str, Any]:
-        """Run a full turn and return the payload the frontend renders."""
+    def play(self, player_input: str, on_event: TurnListener | None = None) -> dict[str, Any]:
+        """Run a full turn and return the payload the frontend renders.
+
+        `on_event` hears each step of the turn as it starts, and the narrator's
+        thinking and story as they are written; the returned payload is the
+        same either way.
+        """
+        emit = on_event or _ignore
         with self._lock:
             manager = self.manager
             if manager is None:
@@ -125,6 +160,7 @@ class GameEngine:
             # 2. Ask the parser what the player is trying to do. No prose exists yet.
             context = ContextBuilder(manager)
             parser_prompt = context.build_parser_prompt(player_input)
+            emit({"type": "step", "step": "parsing"})
             try:
                 reply = llm.query_parser(parser_prompt, context.build_plan_schema())
             except llm.LLMError as exc:
@@ -150,8 +186,9 @@ class GameEngine:
             narrator_prompt = context.build_narrator_prompt(
                 player_input, narrated_facts, deep_memories, max_chars=self._narrator_budget()
             )
+            emit({"type": "step", "step": "narrating"})
             try:
-                raw_response = llm.query_narrator(narrator_prompt)
+                raw_response = llm.query_narrator(narrator_prompt, on_delta=_story_listener(emit))
             except llm.LLMError as exc:
                 # Unlike a parser failure, real state changes may already
                 # exist here -- the engine decided them before asking for
@@ -167,16 +204,17 @@ class GameEngine:
 
             parsed = self._reply(raw_response)
             parsed = self._fact_checked(
-                parsed, context, player_input, narrated_facts, deep_memories
+                parsed, context, player_input, narrated_facts, deep_memories, emit
             )
             parsed = self._with_options(
-                parsed, context, player_input, narrated_facts, deep_memories
+                parsed, context, player_input, narrated_facts, deep_memories, emit
             )
             story_text = str(parsed["story"])
             options = list(parsed["options"])
             entry = build_event_entry(manager, stamp, player_input, outcome_facts)
 
             # 5. Record the event in both memory tiers and reindex.
+            emit({"type": "step", "step": "saving"})
             manager.record_event(entry)
             manager.memory.last_story = story_text
             self.memory.rebuild(manager.memory.full_event_log)
@@ -194,6 +232,7 @@ class GameEngine:
         player_input: str,
         outcome_facts: list[str],
         deep_memories: list[str],
+        emit: TurnListener,
     ) -> dict[str, Any]:
         """The narrator's reply, or its one retry when the story conflicts with the engine's state.
 
@@ -203,6 +242,8 @@ class GameEngine:
         questions = build_questions(context.manager, outcome_facts)
         if not questions:
             return parsed
+        if self.factcheck.enabled:
+            emit({"type": "step", "step": "fact_checking"})
         conflicts = self.factcheck.conflicts(str(parsed["story"]), questions)
         if not conflicts:
             return parsed
@@ -217,8 +258,9 @@ class GameEngine:
             )
             + block
         )
+        emit({"type": "step", "step": "rewriting"})
         try:
-            retry = self._reply(llm.query_narrator(retry_prompt))
+            retry = self._reply(llm.query_narrator(retry_prompt, on_delta=_story_listener(emit)))
         except llm.LLMError as exc:
             logger.warning(f"Narrator retry failed, keeping the first story: {exc}")
             return parsed
@@ -235,6 +277,7 @@ class GameEngine:
         player_input: str,
         outcome_facts: list[str],
         deep_memories: list[str],
+        emit: TurnListener,
     ) -> dict[str, Any]:
         """The reply, with options from one follow-up call when it had no OPTIONS section.
 
@@ -243,6 +286,7 @@ class GameEngine:
         if parsed["has_options"] or context.manager.narrative.game_over:
             return parsed
         logger.warning("Narrator reply has no OPTIONS section; asking for the options alone.")
+        emit({"type": "step", "step": "options"})
         block = OPTIONS_BLOCK.format(story=parsed["story"])
         prompt = (
             context.build_narrator_prompt(
