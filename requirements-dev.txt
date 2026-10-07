@@ -2,3 +2,4 @@
 ruff>=0.16
 basedpyright>=1.40
 import-linter>=2.15
+unittest-parallel>=1.8

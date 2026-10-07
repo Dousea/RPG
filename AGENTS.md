@@ -8,7 +8,8 @@ architecture docs are real code and which are design intent.
 ## Commands
 
 ```bash
-mise run test       # python -m unittest discover -s tests -t . -b  (unittest, not pytest)
+mise run test       # unittest-parallel -s tests -t . -b  (unittest, not pytest; one module per core)
+mise run test-serial  # the same tests in one process
 mise run fmt        # ruff format + autofix
 mise run lint       # ruff, format check, import-linter layer contracts
 mise run typecheck  # basedpyright against .basedpyright/baseline.json
