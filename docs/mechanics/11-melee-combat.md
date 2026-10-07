@@ -77,7 +77,7 @@ pan is a light club that tires the player faster. The axe hits hard, crits for
 x5 and opens doors fast. The axe also stores a sharpness of 1.0, a head
 condition of 10 (max 10), a head multiplier of 1.5 and its repair and sharpen
 tags; nothing reads them yet, so sharpness counts as 1 and no head roll happens.
-Placement stands in for loot until carrying and containers land.
+Loot comes from placement and from containers.
 
 ## Holding a weapon
 

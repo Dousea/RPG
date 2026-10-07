@@ -24,6 +24,7 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.quest import QuestState, QuestStatus
+from modules.room import ContainerEntity, RoomEntity
 from modules.stats import CharacterStat
 from tests.support import (
     IsolatedSaveTestCase,
@@ -105,9 +106,11 @@ class RoundTripTests(IsolatedSaveTestCase):
         street = self.loaded.world.locations["zone_street"]
         home = self.loaded.world.locations["zone_home"]
         # The crowbar was picked up, so it is no longer on the street.
-        self.assertNotIn("Crowbar", [e.item.name for e in street.entities])
-        # The canned beans were never touched.
-        self.assertIn("Canned Beans", [e.item.name for e in home.entities])
+        street_names = [e.item.name for e in street.entities if isinstance(e, ItemEntity)]
+        self.assertNotIn("Crowbar", street_names)
+        # The alley planks were never touched.
+        self.assertIn("Plank", street_names)
+        self.assertEqual(home.entities, [])
 
     def test_character_fields_round_trip(self):
         """Spec 07, Saves."""
@@ -268,11 +271,64 @@ class WellFedSaveTests(IsolatedSaveTestCase):
         self.assertIsNone(files.load(self.save_path))
 
 
+class RoomSaveTests(IsolatedSaveTestCase):
+    """Spec 25, Saves: each container's opened flag and contents, each room's proc_spawned, current_room."""
+
+    def test_rooms_containers_and_the_current_room_round_trip(self):
+        gm = GameManager()
+        counter = ContainerEntity(
+            container_id="test_counter",
+            name="test counter",
+            kind="counter",
+            capacity=50,
+            aliases=["worktop"],
+            source=("kitchen", "counter"),
+            opened=True,
+        )
+        counter.contents.append(ItemEntity(item=ITEMS["item_canned_beans"]))
+        shelf = ContainerEntity(
+            container_id="test_shelf",
+            name="test shelf",
+            kind="shelves",
+            capacity=15,
+            fixed=True,
+        )
+        room = RoomEntity(
+            room_id="test_room",
+            name="test room",
+            kind="kitchen",
+            aliases=["galley"],
+            containers=[counter, shelf],
+            proc_spawned={"kitchen_dishes": 1},
+        )
+        zone = gm.world.locations["zone_home"]
+        zone.rooms = {"test_room": room}
+        zone.entry_room = "test_room"
+        gm.player.current_room = "test_room"
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        got = loaded.world.locations["zone_home"]
+        self.assertEqual(got.entry_room, "test_room")
+        self.assertEqual(loaded.player.current_room, "test_room")
+        back = got.rooms["test_room"]
+        self.assertEqual((back.name, back.kind, back.aliases), ("test room", "kitchen", ["galley"]))
+        self.assertEqual(back.proc_spawned, {"kitchen_dishes": 1})
+        first, second = back.containers
+        self.assertEqual(
+            (first.container_id, first.capacity, first.source),
+            ("test_counter", 50, ("kitchen", "counter")),
+        )
+        self.assertTrue(first.opened)
+        self.assertEqual([e.item.id for e in first.contents], ["item_canned_beans"])
+        self.assertEqual((second.opened, second.fixed, second.source), (False, True, None))
+
+
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_22(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 22)
+    def test_schema_version_is_23(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 23)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -676,14 +732,14 @@ class V3FieldsRoundTripTests(IsolatedSaveTestCase):
 
     def test_current_place_round_trips(self):
         gm = GameManager()
-        # zone_home is the starting zone, so "the kitchen" (one of its
-        # aliases) resolves as a spot inside it, not a zone change.
-        resolve_actions(gm, MoveAction(destination="the kitchen"))
-        self.assertEqual(gm.player.current_place, "the kitchen")
+        # zone_home is the starting zone and "the window" is no room of it, so it
+        # stays a spot inside the zone.
+        resolve_actions(gm, MoveAction(destination="the window"))
+        self.assertEqual(gm.player.current_place, "the window")
 
         files.save(gm, self.save_path)
         loaded = files.load(self.save_path)
-        self.assertEqual(loaded.player.current_place, "the kitchen")
+        self.assertEqual(loaded.player.current_place, "the window")
 
     def test_death_state_round_trips(self):
         gm = GameManager()

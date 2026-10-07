@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from data import barriers as barrier_k
 from data import body as body_k
 from data import carry as carry_k
+from data import containers as container_k
 from data import exercises as ex_k
 from data import melee as melee_k
 from data import skills as skill_k
@@ -33,8 +34,10 @@ from data.story_beats import STORY_BEATS, Beat
 from data.thermal import Metabolic
 from data.time_costs import (
     MAX_PLAN_ACTIONS,
+    MOVE_ROOM_MIN,
     MULTIPLIED_ACTIONS,
     NONE_TURN_MINUTES,
+    OPEN_CONTAINER_MIN,
     SEARCH_MIN,
     SWING_MIN,
     WALK_TO_BARRIER_MIN,
@@ -49,16 +52,18 @@ from managers.barriers import barriers_between
 from managers.body import BodyEngine, action_time_multiplier, limp_factor
 from managers.climate import weather_change_facts
 from managers.combat import equipped_weapon, held_slots, roll_damage
+from managers.containers import open_container
 from managers.corpse_sickness import corpse_count, corpse_defence, smell_fact
 from managers.corpses import dress_as_player
 from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.first_aid import FirstAid
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
-from managers.loot import contents_in_words, names_in_words, strip_unhappiness
+from managers.loot import contents_in_words, items_in_words, names_in_words, strip_unhappiness
 from managers.loot import search as loot_search
 from managers.melee import MeleeEngine
 from managers.noise import Sound, cough_sound
+from managers.rooms import move_to_room
 from managers.skills import SkillEngine, skill_levels
 from managers.social import SocialManager
 from managers.stats.drivers import StatContext
@@ -126,6 +131,7 @@ from modules.resolution import (
     FirstAidTarget,
     HeldItem,
     MoveBlocked,
+    MoveToRoom,
     MoveToSpot,
     MoveToZone,
     NpcItem,
@@ -133,12 +139,15 @@ from modules.resolution import (
     PryTarget,
     ShuffleInZone,
     TargetBarrier,
+    TargetContainer,
     TargetCorpse,
     TargetNpc,
+    TargetRoom,
     TargetZombie,
     TimeSpan,
     Transfer,
 )
+from modules.room import ContainerEntity
 from modules.stats import CharacterStat, StatusEffect
 from modules.story import (
     AddNpcStatus,
@@ -762,6 +771,9 @@ class SimulationCore:
         player = self.manager.player
         player.at_barrier = None
         match accepted.resolved:
+            case MoveToRoom(location=zone, room=room):
+                move_to_room(player, room)
+                return container_k.MOVE_ROOM_FACT.format(zone=zone.name, room=room.name)
             case MoveToSpot(location=zone, place=place):
                 player.current_place = place
                 if place:
@@ -810,6 +822,7 @@ class SimulationCore:
         ]
         player.current_location_id = zone_id
         player.current_place = ""
+        player.current_room = manager.world.locations[zone_id].entry_room
         body = manager.world.corpses.get(player.carrying_corpse or "")
         if body is not None:
             body.zone_id = zone_id
@@ -947,6 +960,16 @@ class SimulationCore:
                 manager.current_location.entities.remove(entity)
             manager.player.inventory.append(entity)
         items = names_in_words(transfer.entities)
+        if isinstance(source, ContainerEntity):
+            if action.all_items:
+                return carry_k.TAKE_ALL_FACT.format(
+                    name=self._name, items=items, source=f"the {source.name}"
+                )
+            return container_k.TAKE_FROM_CONTAINER_FACT.format(
+                name=self._name,
+                item=transfer.entities[0].item.name.lower(),
+                container=source.name,
+            )
         if isinstance(source, CorpseEntity):
             manager.player.stats.add(
                 CharacterStat.UNHAPPINESS,
@@ -966,8 +989,52 @@ class SimulationCore:
             name=self._name, item=transfer.entities[0].item.name.lower(), bag=bag
         )
 
+    def _resolve_search_place(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Go to the room if elsewhere, then open each container in turn, a minute each.
+
+        A container's minute completes before an interruption ends the search, so that container opens.
+        """
+        resolved = accepted.resolved
+        assert isinstance(resolved, TargetRoom | TargetContainer)
+        manager = self.manager
+        room = resolved.room
+        containers = (
+            resolved.containers if isinstance(resolved, TargetRoom) else (resolved.container,)
+        )
+        facts: list[str] = []
+        spent = 0
+        if resolved.walk:
+            spent, facts = self._spend(MOVE_ROOM_MIN, accepted.action)
+            if manager.narrative.game_over:
+                return facts, spent
+            move_to_room(manager.player, room)
+            if self._interruption:
+                return [*facts, container_k.NEVER_SEARCHES.format(name=self._name)], spent
+        for container in containers:
+            minutes, minute_facts = self._spend(OPEN_CONTAINER_MIN, accepted.action)
+            spent += minutes
+            if manager.narrative.game_over:
+                facts.extend(minute_facts)
+                break
+            open_container(self._rng, room, container)
+            facts.append(self._opened_fact(container))
+            facts.extend(minute_facts)
+            if self._interruption:
+                break
+        return facts, spent
+
+    def _opened_fact(self, container: ContainerEntity) -> str:
+        items = items_in_words(container.contents)
+        if not items:
+            return container_k.SEARCH_EMPTY_FACT.format(name=self._name, container=container.name)
+        return container_k.SEARCH_CONTAINER_FACT.format(
+            name=self._name, container=container.name, items=items
+        )
+
     def _resolve_search(self, accepted: Accepted) -> tuple[list[str], int]:
         """Walk up to the body, then go through it: the approach minutes come before the one search."""
+        if isinstance(accepted.resolved, TargetRoom | TargetContainer):
+            return self._resolve_search_place(accepted)
         target = accepted.expect(TargetCorpse)
         manager = self.manager
         facts: list[str] = []
@@ -1054,6 +1121,10 @@ class SimulationCore:
         assert bag is not None, "_validate_put sets the target"
         carry.take_out(self.manager.player, entity)
         bag.contents.append(entity)
+        if isinstance(bag, ContainerEntity):
+            return container_k.PUT_IN_CONTAINER_FACT.format(
+                name=self._name, item=entity.item.name.lower(), container=bag.name
+            )
         return carry_k.PUT_FACT.format(
             name=self._name, item=entity.item.name.lower(), bag=bag.item.name.lower()
         )

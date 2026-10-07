@@ -5,14 +5,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from data import carry as carry_k
+from data import containers as container_k
 from data import zombie_lore as k
-from data.items import ITEMS
-from data.zombie_loot import (
-    CORPSE_LOOT_MODIFIERS,
-    DEFAULT_LOOT_TABLES,
-    LOOT_CATALOGUE,
-    OUTFIT_LOOT_TABLES,
-)
+from data.loot_catalogue import LOOT_KIND_MODIFIERS
+from data.loot_tables import LootTable
+from data.zombie_loot import DEFAULT_LOOT_TABLES, OUTFIT_LOOT_TABLES
+from managers.containers import roll_table
 from managers.corpses import rot_stage
 from managers.game import GameManager
 from managers.zombies import distance_word, light_level
@@ -24,26 +22,30 @@ from modules.item import ClothingItem
 
 def drop_chance(chance: float, kind: str) -> float:
     """The chance a pocket entry drops: its table chance times the multiplier for its kind of item."""
-    return chance * CORPSE_LOOT_MODIFIERS[kind] / 100
+    return chance * LOOT_KIND_MODIFIERS[kind] / 100
 
 
 def roll_pockets(corpse: CorpseEntity, rng: random.Random) -> list[ItemEntity]:
     """The pocket items of a body: its outfit's table first, then the default table for its sex.
 
-    Entries with no catalogue item are skipped without a roll, and bones hold nothing.
+    Entries with no catalogue item are skipped without a roll, a list ends when an item does not
+    fit the body's 12 kg container, and bones hold nothing.
     """
     if corpse.skeleton:
         return []
     tables = [OUTFIT_LOOT_TABLES.get(corpse.outfit, ()), DEFAULT_LOOT_TABLES[_sex(corpse)]]
     found: list[ItemEntity] = []
-    for table in tables:
-        for name, chance in table:
-            entry = LOOT_CATALOGUE.get(name)
-            item = ITEMS.get(entry[0]) if entry is not None else None
-            if entry is None or item is None:
-                continue
-            if rng.randrange(k.LOOT_ROLL_STEPS) < drop_chance(chance, entry[1]) * k.LOOT_ROLL_STEPS:
-                found.append(ItemEntity(item=item))
+    for entries in tables:
+        held = sum(entity.weight for entity in [*corpse.contents, *found])
+        found.extend(
+            roll_table(
+                rng,
+                LootTable(1, tuple(entries), 1, (), False),
+                capacity=container_k.CORPSE_CAPACITY,
+                held=held,
+                randomise=False,
+            )
+        )
     return found
 
 
@@ -69,6 +71,39 @@ def with_article(name: str) -> str:
 def names_in_words(entities: Iterable[ItemEntity]) -> str:
     """Items by name with their articles, joined with commas; empty for none."""
     return ", ".join(with_article(entity.item.name.lower()) for entity in entities)
+
+
+def _plural(name: str) -> str:
+    if name.endswith("s"):
+        return name
+    if name.endswith(("sh", "ch", "x")):
+        return f"{name}es"
+    if name.endswith("fe"):
+        return f"{name[:-2]}ves"
+    if name.endswith("y") and name[-2:-1] not in "aeiou":
+        return f"{name[:-1]}ies"
+    return f"{name}s"
+
+
+def _count_phrase(name: str, count: int) -> str:
+    if count == 1:
+        return with_article(name)
+    number = (
+        container_k.NUMBER_WORDS[count] if count < len(container_k.NUMBER_WORDS) else str(count)
+    )
+    return f"{number} {_plural(name)}"
+
+
+def items_in_words(entities: Iterable[ItemEntity]) -> str:
+    """Items by name with counts, in order of first appearance: "a hammer, nails and two planks"; empty for none."""
+    counts: dict[str, int] = {}
+    for entity in entities:
+        name = entity.item.name.lower()
+        counts[name] = counts.get(name, 0) + 1
+    phrases = [_count_phrase(name, count) for name, count in counts.items()]
+    if len(phrases) <= 1:
+        return "".join(phrases)
+    return f"{', '.join(phrases[:-1])} and {phrases[-1]}"
 
 
 def contents_in_words(corpse: CorpseEntity) -> str:

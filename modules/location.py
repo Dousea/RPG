@@ -4,6 +4,7 @@ from .entity import BaseEntity
 from .entity.barrier import BarrierEntity
 from .entity.corpse import CorpseEntity
 from .entity.zombie import ZombieEntity
+from .room import RoomEntity
 
 
 @dataclass
@@ -33,6 +34,9 @@ class Location:
     zombie_intensity: int = 0
     # The building the zone is part of, if any; a barrier of the building wakes everyone in it (spec 13).
     building: str | None = None
+    # The rooms of the zone, by id, and the one the player enters into (spec 25).
+    rooms: dict[str, RoomEntity] = field(default_factory=dict[str, RoomEntity])
+    entry_room: str | None = None
 
     def bed_type_at(self, place: str) -> str:
         """The bed type at a free-text spot inside this zone."""

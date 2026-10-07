@@ -22,6 +22,7 @@ const questList = document.getElementById('quest-list');
 const threatList = document.getElementById('threat-list');
 const barrierList = document.getElementById('barrier-list');
 const corpseList = document.getElementById('corpse-list');
+const roomList = document.getElementById('room-list');
 const choiceOptions = document.getElementById('choice-options');
 const inputForm = document.getElementById('input-form');
 const playerInput = document.getElementById('player-input');
@@ -68,7 +69,7 @@ const SCREEN_FIELDS = {
     clothing: ['worn'],
     character: ['character', 'skills', 'zombie_kills'],
     people: ['npcs'],
-    nearby: ['threats', 'corpses', 'barriers'],
+    nearby: ['threats', 'corpses', 'barriers', 'rooms'],
     quests: ['quests'],
 };
 const GEAR = ['Gear', ['inventory', 'clothing']];
@@ -469,6 +470,28 @@ function renderCorpses(data) {
     }));
 }
 
+// Each room of the zone with its furniture: a container shows what is in it only once it has been gone through.
+function renderRooms(data) {
+    const rooms = data.rooms || [];
+    if (rooms.length === 0) {
+        clearAndFill(roomList, [emptyNote('No rooms to search here.')]);
+        return;
+    }
+    clearAndFill(roomList, rooms.map(room => {
+        const li = el('li', 'row-item');
+        const who = el('span', 'who');
+        who.appendChild(el('span', null, capitalised(room.name)));
+        room.containers.forEach(container => {
+            const held = container.contents.length ? container.contents.map(capitalised).join(', ') : 'Empty';
+            const note = container.opened ? `${capitalised(container.name)}: ${held}` : `${capitalised(container.name)}: not searched`;
+            who.appendChild(el('span', 'aside', note));
+        });
+        li.appendChild(who);
+        if (room.here) li.appendChild(tag('You are here', 'good'));
+        return li;
+    }));
+}
+
 function plankWords(count, where) {
     return `${count} plank${count === 1 ? '' : 's'} ${where}`;
 }
@@ -589,6 +612,7 @@ function updatePanel(data) {
     renderNpcs(data);
     renderThreats(data);
     renderCorpses(data);
+    renderRooms(data);
     renderBarriers(data);
     renderQuests(data);
     renderChoiceOptions(data);

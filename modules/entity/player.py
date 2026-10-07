@@ -37,6 +37,7 @@ class PlayerEntity(BaseEntity):
     # specific without needing a room for every corner. LLM-authored, so it is
     # capped and rendered as text, never markup.
     current_place: str = ""
+    current_room: str | None = None  # spec 25: the id of the room they are in
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     stats: Stats = field(default_factory=Stats)
     thermal: ThermalState = field(default_factory=ThermalState)

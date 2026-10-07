@@ -14,6 +14,7 @@ from modules.action.types import (
     DropAction,
     Duration,
     MoveAction,
+    SearchAction,
     WaitAction,
     WearAction,
 )
@@ -107,11 +108,11 @@ class ZoneContextTests(unittest.TestCase):
             self.assertIn(location.aliases[0], prompt)
 
     def test_prompts_carry_the_specific_spot(self):
-        resolve_actions(self.gm, MoveAction(destination="the kitchen"))
+        resolve_actions(self.gm, MoveAction(destination="the window"))
         parser_prompt = self.builder.build_parser_prompt("look")
         narrator_prompt = self.builder.build_narrator_prompt("look")
-        self.assertIn("Specific spot: the kitchen", parser_prompt)
-        self.assertIn("Specific spot: the kitchen", narrator_prompt)
+        self.assertIn("Specific spot: the window", parser_prompt)
+        self.assertIn("Specific spot: the window", narrator_prompt)
 
 
 class NpcGoalVisibilityTests(unittest.TestCase):
@@ -1308,9 +1309,9 @@ class SceneKeyTests(unittest.TestCase):
     def test_an_npc_here_gives_npcs_here(self):
         self.gm.player.current_location_id = "zone_building"
         self.gm.current_location.entities.clear()
-        self.assertEqual(self.builder.scene_keys(), frozenset({"npcs_here"}))
+        self.assertEqual(self.builder.scene_keys(), frozenset({"npcs_here", "rooms"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"TALK", "ASK", "GIVE", "ATTACK"})
+        self.assertEqual(listed, ALWAYS | {"TALK", "ASK", "GIVE", "ATTACK", "SEARCH"})
 
     def test_a_perceived_zombie_gives_threats(self):
         self.gm.world.outbreak_started_at = 0
@@ -1436,7 +1437,7 @@ class ParserSystemPromptTests(unittest.TestCase):
     def test_the_block_prints_argument_kinds_and_gloss(self):
         gm = GameManager()
         actions = ContextBuilder(gm).build_parser_prompt("look").split("[AVAILABLE ACTIONS]")[1]
-        self.assertIn("- MOVE_TO <zone> -- ", actions)
+        self.assertIn("- MOVE_TO <zone> <room> -- ", actions)
 
 
 def ask_line(prompt: str) -> str:
@@ -1767,3 +1768,86 @@ class CarryContextTests(unittest.TestCase):
     def test_a_barbell_in_a_bag_counts_for_the_exercise_block(self):
         self.gm.player.inventory.append(self.entity("item_duffel_bag", "item_barbell"))
         self.assertIn("Carrying: a barbell", self.parser())
+
+
+class RoomsContextTests(unittest.TestCase):
+    """Spec 25, What the narrator and the player see: the [ROOMS] block."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def block(self, prompt: str) -> str:
+        start = prompt.index("[ROOMS]")
+        return prompt[start : prompt.index("\n\n[", start)]
+
+    def test_the_block_lists_each_room_and_its_containers_unopened(self):
+        lines = self.block(self.builder.build_parser_prompt("look")).splitlines()
+        self.assertEqual(
+            lines[1:],
+            [
+                "kitchen: kitchen counter (not opened), kitchen cupboards (not opened), "
+                "fridge (not opened), freezer (not opened)",
+                "bedroom: wardrobe (not opened), dresser (not opened), bedside table (not opened)",
+                "bathroom: medicine cabinet (not opened), bathroom counter (not opened)",
+                "living room (you are here): side table (not opened), "
+                "living room shelves (not opened)",
+            ],
+        )
+
+    def test_an_opened_container_lists_what_is_left_in_it(self):
+        resolve_actions(self.gm, SearchAction(target_name="bedroom"))
+        resolve_actions(self.gm, MoveAction(destination="kitchen"))
+        resolve_actions(self.gm, SearchAction(target_name="kitchen counter"))
+        lines = self.block(self.builder.build_narrator_prompt("look")).splitlines()
+        self.assertIn(
+            "kitchen (you are here): kitchen counter (opened: canned beans, water bottle, "
+            "kitchen knife, frying pan), kitchen cupboards (not opened), fridge (not opened), "
+            "freezer (not opened)",
+            lines,
+        )
+        self.assertTrue(
+            any(
+                line.startswith("bedroom: wardrobe (opened: black jacket, schoolbag)")
+                for line in lines
+            )
+        )
+
+    def test_an_unopened_container_never_lists_its_contents(self):
+        prompt = self.builder.build_parser_prompt("look")
+        self.assertNotIn("schoolbag", self.block(prompt))
+        self.assertNotIn("canned beans", self.block(prompt))
+
+    def test_an_emptied_container_says_empty(self):
+        resolve_actions(self.gm, SearchAction(target_name="wardrobe"))
+        self.gm.world.locations["zone_home"].rooms["bedroom"].containers[0].contents.clear()
+        self.assertIn(
+            "wardrobe (opened: empty)", self.block(self.builder.build_parser_prompt("look"))
+        )
+
+    def test_the_block_comes_after_the_zones_and_before_the_doors_in_both_prompts(self):
+        parser = self.builder.build_parser_prompt("look")
+        self.assertLess(parser.index("[ZONES]"), parser.index("[ROOMS]"))
+        self.assertLess(parser.index("[ROOMS]"), parser.index("[DOORS AND WINDOWS]"))
+        narrator = self.builder.build_narrator_prompt("look")
+        self.assertLess(narrator.index("[ROOMS]"), narrator.index("[DOORS AND WINDOWS]"))
+
+    def test_a_zone_without_rooms_says_none(self):
+        self.gm.player.current_location_id = "zone_street"
+        self.assertEqual(self.block(self.builder.build_parser_prompt("look")), "[ROOMS]\nNone")
+
+    def test_the_other_zones_rooms_are_not_listed(self):
+        self.assertNotIn("hallway", self.block(self.builder.build_parser_prompt("look")))
+
+    def test_search_is_listed_when_the_zone_has_rooms(self):
+        self.assertIn("- SEARCH", self.builder.build_parser_prompt("look"))
+        self.gm.player.current_location_id = "zone_street"
+        self.assertNotIn("- SEARCH", self.builder.build_parser_prompt("look"))
+
+    def test_take_and_put_are_listed_once_a_container_in_the_room_has_been_opened(self):
+        self.gm.player.current_room = "kitchen"
+        self.assertNotIn("- TAKE <", self.builder.build_parser_prompt("look"))
+        resolve_actions(self.gm, SearchAction(target_name="kitchen counter"))
+        prompt = self.builder.build_parser_prompt("look")
+        self.assertIn("- TAKE <", prompt)
+        self.assertIn("- PUT <", prompt)

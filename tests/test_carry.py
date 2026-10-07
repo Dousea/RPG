@@ -461,6 +461,21 @@ def home() -> GameManager:
     return gm
 
 
+def home_with_things_on_the_floor() -> GameManager:
+    """The apartment with the old floor stock: beans, a bottle, a jacket, a knife, a pan, a schoolbag."""
+    gm = home()
+    for item_id in (
+        "item_canned_beans",
+        "item_water_bottle",
+        "item_black_jacket",
+        "item_kitchen_knife",
+        "item_frying_pan",
+        "item_schoolbag",
+    ):
+        gm.current_location.entities.append(ItemEntity(item=ITEMS[item_id]))
+    return gm
+
+
 def give(gm: GameManager, *item_ids: str) -> list[ItemEntity]:
     made = [entity(item_id) for item_id in item_ids]
     gm.player.inventory.extend(made)
@@ -627,13 +642,13 @@ class PutAndTakeTests(unittest.TestCase):
         self.assertEqual(minutes, 6)  # 12 x 96 frames = 1152, a little over 6 minutes
 
     def test_take_all_from_the_ground_is_one_action(self):
-        gm = home()
+        gm = home_with_things_on_the_floor()
         minutes, _ = minutes_of(gm, TakeAction(item_name="all", all_items=True))
         self.assertEqual(gm.current_location.entities, [])
         self.assertEqual(minutes, 2)  # 355 frames
 
     def test_dextrous_halves_a_take_all(self):
-        gm = home()
+        gm = home_with_things_on_the_floor()
         gm.player.traits.append("dextrous")
         minutes, _ = minutes_of(gm, TakeAction(item_name="all", all_items=True))
         self.assertEqual(minutes, 1)

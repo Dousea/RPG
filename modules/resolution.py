@@ -14,6 +14,7 @@ from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
 from .location import Location
 from .pace import Pace
+from .room import ContainerEntity, RoomEntity
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,15 @@ class MoveBlocked:
     barrier: BarrierEntity | None = None
 
 
-MoveOutcome = StayPut | ShuffleInZone | MoveToSpot | MoveToZone | MoveBlocked
+@dataclass(frozen=True)
+class MoveToRoom:
+    """A room of the current zone (spec 25)."""
+
+    location: Location
+    room: RoomEntity
+
+
+MoveOutcome = StayPut | ShuffleInZone | MoveToSpot | MoveToRoom | MoveToZone | MoveBlocked
 
 
 @dataclass(frozen=True)
@@ -86,17 +95,35 @@ class TargetCorpse:
 
 
 @dataclass(frozen=True)
+class TargetRoom:
+    """A room to go through: the unopened containers in layout order; `walk` when the player is elsewhere (spec 25)."""
+
+    room: RoomEntity
+    containers: tuple[ContainerEntity, ...]
+    walk: bool
+
+
+@dataclass(frozen=True)
+class TargetContainer:
+    """A container to open, in its room; `walk` when the player is elsewhere (spec 25)."""
+
+    room: RoomEntity
+    container: ContainerEntity
+    walk: bool
+
+
+@dataclass(frozen=True)
 class Transfer:
     """Items that move from one place to another, and the timed-action frames the move takes (spec 25).
 
-    `source` is the bag or corpse they leave (None for the ground or the pack); `target` is the
-    bag they go into (None for the pack or the floor).
+    `source` is the bag, corpse or container they leave (None for the ground or the pack); `target` is
+    the bag or container they go into (None for the pack or the floor).
     """
 
     entities: tuple[ItemEntity, ...]
     frames: float
-    source: ItemEntity | CorpseEntity | None = None
-    target: ItemEntity | None = None
+    source: ItemEntity | CorpseEntity | ContainerEntity | None = None
+    target: ItemEntity | ContainerEntity | None = None
 
 
 @dataclass(frozen=True)
@@ -180,6 +207,8 @@ Resolution = (
     | NpcTopic
     | TargetZombie
     | TargetCorpse
+    | TargetRoom
+    | TargetContainer
     | Transfer
     | TargetBarrier
     | BarricadeKit

@@ -51,6 +51,7 @@ from modules.resolution import (
     ExercisePlan,
     HeldItem,
     MoveBlocked,
+    MoveToRoom,
     MoveToSpot,
     MoveToZone,
     Resolution,
@@ -64,6 +65,8 @@ from modules.units import minutes_from_timed_action_frames
 
 SWING_MIN = 1  # spec 11
 SEARCH_MIN = 1  # spec 14
+OPEN_CONTAINER_MIN = 1  # spec 25
+MOVE_ROOM_MIN = 1  # spec 25
 EQUIP_MIN = 1  # spec 01
 UNEQUIP_MIN = 1  # spec 01
 QUICK_ACTION_MIN = 1  # spec 01
@@ -101,9 +104,12 @@ def _attack_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 
 def _search_minutes(action: AnyAction, resolved: Resolution) -> int:
-    """The walk up to a corpse that is not yet in reach, plus the minute going through it."""
-    if isinstance(resolved, TargetCorpse):
-        return resolved.approach_minutes + SEARCH_MIN
+    """The walk up to a corpse that is not yet in reach, plus the minute going through it.
+
+    A room or container search is charged per container as it is opened."""
+    match resolved:
+        case TargetCorpse(approach_minutes=approach):
+            return approach + SEARCH_MIN
     return SEARCH_MIN
 
 
@@ -134,6 +140,8 @@ def _move_minutes(action: AnyAction, resolved: Resolution) -> int:
             return hops * zone_hop_minutes(pace)
         case MoveBlocked(hops=hops, pace=pace):
             return max(hops * zone_hop_minutes(pace), WALK_TO_BARRIER_MIN)
+        case MoveToRoom():
+            return MOVE_ROOM_MIN
         case MoveToSpot(place=place):
             return QUICK_ACTION_MIN if place else 0
         case ShuffleInZone():

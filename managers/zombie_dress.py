@@ -4,12 +4,8 @@ import random
 
 from data import zombie_lore as k
 from data.items import ITEMS
-from data.zombie_loot import (
-    ATTACHED_WEAPONS,
-    CUSTOM_OUTFIT_WEAPONS,
-    LOOT_CATALOGUE,
-    StuckWeaponEntry,
-)
+from data.loot_catalogue import LOOT_CATALOGUE
+from data.zombie_loot import ATTACHED_WEAPONS, CUSTOM_OUTFIT_WEAPONS, StuckWeaponEntry
 from data.zombie_outfits import ZOMBIE_OUTFIT_POOL, ZOMBIE_OUTFIT_REFERENCES
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity

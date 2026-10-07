@@ -41,6 +41,10 @@ class SceneChoices:
     corpse_ids: tuple[str, ...] = ()
     corpse_items: tuple[str, ...] = ()
     bags: tuple[str, ...] = ()
+    rooms: tuple[str, ...] = ()
+    containers: tuple[str, ...] = ()
+    open_containers: tuple[str, ...] = ()
+    container_items: tuple[str, ...] = ()
     bag_items: tuple[str, ...] = ()
     hurt_parts: tuple[str, ...] = ()
     bandaged_parts: tuple[str, ...] = ()
@@ -100,11 +104,13 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             return _take_branch(name, choices)
         case "SEARCH" | "CARRY":
             nearest = ("corpse",) if choices.corpse_ids else ()
-            return _target_branch(name, (*choices.corpse_ids, *nearest))
+            places = (*choices.rooms, *choices.containers) if name == "SEARCH" else ()
+            return _target_branch(name, (*choices.corpse_ids, *nearest, *places))
         case "PUT":
-            if not choices.carried or not choices.bags:
+            targets = (*choices.bags, *choices.open_containers)
+            if not choices.carried or not targets:
                 return None
-            return _branch(name, {"item": _one_of(choices.carried), "bag": _one_of(choices.bags)})
+            return _branch(name, {"item": _one_of(choices.carried), "bag": _one_of(targets)})
         case "DROP" | "USE_ITEM" | "EQUIP":
             return _item_branch(name, choices.carried)
         case "WEAR":
@@ -164,10 +170,19 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
 
 def _take_branch(name: str, choices: SceneChoices) -> JsonObject | None:
     """TAKE an item off the ground, from a searched corpse or out of a carried bag when one is named; or all."""
-    names = (*choices.items_here, *choices.corpse_items, *choices.bag_items)
+    names = (
+        *choices.items_here,
+        *choices.corpse_items,
+        *choices.bag_items,
+        *choices.container_items,
+    )
     if not names:
         return None
-    sources = (*(choices.corpse_ids if choices.corpse_items else ()), *choices.bags)
+    sources = (
+        *(choices.corpse_ids if choices.corpse_items else ()),
+        *choices.bags,
+        *(choices.open_containers if choices.container_items else ()),
+    )
     optional = {"from": _one_of(sources)} if sources else None
     return _branch(name, {"item": _one_of((*names, ALL_WORD))}, optional)
 

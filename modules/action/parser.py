@@ -134,7 +134,7 @@ def _parse_carry(args: str) -> CarryAction:
 
 def _parse_search(args: str) -> SearchAction:
     if not args:
-        raise _ActionParseError("SEARCH needs a corpse.")
+        raise _ActionParseError("SEARCH needs a corpse, a room or a container.")
     return SearchAction(target_name=args)
 
 
@@ -418,6 +418,8 @@ TargetKind = Literal[
     "npc",
     "zombie",
     "corpse",
+    "room",
+    "container",
     "item",
     "zone",
     "barrier",
@@ -443,6 +445,9 @@ SceneKey = Literal[
     "hurt",
     "barriers",
     "bags",
+    "rooms",
+    "opened",
+    "stocked",
 ]
 
 
@@ -480,9 +485,9 @@ VERBS: dict[str, Verb] = dict(
     [
         _verb(
             "MOVE_TO",
-            ("zone",),
+            ("zone", "room"),
             _parse_move_to,
-            "a zone, in/out, or a specific spot (e.g. 'the kitchen'); add 'run' at the end to run",
+            "a zone, a room of this building (e.g. 'the kitchen'), in/out, or a specific spot; add 'run' at the end to run",
             None,
         ),
         _verb(
@@ -495,17 +500,18 @@ VERBS: dict[str, Verb] = dict(
             ("item",),
             _parse_take,
             "an item listed in [ITEMS HERE], '<item> from <corpse>' for a searched corpse in [CORPSES], "
-            "'<item> from <bag>' for a carried bag, or 'all from <source>'",
+            "'<item> from <bag>' for a carried bag, '<item> from <container>' for an opened one in [ROOMS], "
+            "or 'all from <source>'",
             1,
-            ("items_here", "loot", "bags"),
+            ("items_here", "loot", "bags", "stocked"),
         ),
         _verb(
             "PUT",
             ("item", "item"),
             _parse_put,
-            "'<item> in <bag>': a carried item into a bag in [INVENTORY]",
+            "'<item> in <bag>': a carried item into a bag in [INVENTORY] or an opened container in [ROOMS]",
             1,
-            ("bags",),
+            ("bags", "opened"),
         ),
         _verb(
             "CARRY",
@@ -517,11 +523,12 @@ VERBS: dict[str, Verb] = dict(
         ),
         _verb(
             "SEARCH",
-            ("corpse",),
+            ("corpse", "room", "container"),
             _parse_search,
-            "a corpse id from [CORPSES], or 'corpse' for the nearest; goes through its pockets and clothes once",
-            1,
-            ("corpses",),
+            "a corpse id from [CORPSES], or 'corpse' for the nearest; goes through its pockets and clothes once. "
+            "Or a room or container from [ROOMS]: opens it, a minute for each container",
+            None,
+            ("corpses", "rooms"),
         ),
         _verb(
             "DROP",

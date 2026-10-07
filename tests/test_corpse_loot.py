@@ -7,6 +7,7 @@ from unittest import mock
 from data import traits as trait_k
 from data import zombie_loot
 from data.items import ITEMS
+from data.loot_catalogue import LOOT_CATALOGUE, LOOT_KIND_MODIFIERS
 from managers import loot
 from managers.game import GameManager
 from modules.action.parser import parse_action_line
@@ -19,6 +20,10 @@ from tests.support import ScriptedRandom, load_pack, simulate
 from tests.test_simulation import zombie_game
 
 NAME = "Orton"
+
+
+def ids(entities) -> list[str]:
+    return [e.item.id for e in entities]
 
 
 def body(**fields) -> CorpseEntity:
@@ -72,7 +77,7 @@ class ParsingTests(unittest.TestCase):
 
 
 class PocketChanceTests(unittest.TestCase):
-    """Spec 14, Zombie loot: `p = chance x modifier / 100`."""
+    """Spec 14, Zombie loot (p = chance x modifier / 100); spec 25, Rooms (a corpse container holds 12 kg)."""
 
     def test_the_chance_is_the_table_chance_times_the_modifier_over_a_hundred(self):
         cases = {
@@ -89,34 +94,47 @@ class PocketChanceTests(unittest.TestCase):
                 self.assertAlmostEqual(loot.drop_chance(chance, kind), expected)
 
     def test_the_modifiers_are_the_apocalypse_values(self):
-        self.assertEqual(
-            zombie_loot.CORPSE_LOOT_MODIFIERS,
-            {
-                "other": 0.8,
-                "food": 0.8,
-                "key": 0.4,
-                "medical": 0.6,
-                "literature": 0.6,
-                "container": 0.6,
-                "weapon": 0.6,
-                "media": 0.6,
-                "clothing": 0.6,
-            },
-        )
+        for kind, expected in {
+            "other": 0.8,
+            "food": 0.8,
+            "key": 0.4,
+            "medical": 0.6,
+            "literature": 0.6,
+            "container": 0.6,
+            "weapon": 0.6,
+            "media": 0.6,
+            "clothing": 0.6,
+        }.items():
+            with self.subTest(kind=kind):
+                self.assertEqual(LOOT_KIND_MODIFIERS[kind], expected)
 
     def test_the_roll_is_below_chance_x_100_x_modifier_out_of_ten_thousand(self):
-        pills = ("item_painkillers",)
-        found = [
-            [e.item.id for e in loot.roll_pockets(body(), ScriptedRandom(randrange=[roll]))]
-            for roll in (0, 5, 6, 9999)
-        ]
-        self.assertEqual(found, [list(pills), list(pills), [], []])
+        with mock.patch.dict(zombie_loot.DEFAULT_LOOT_TABLES, {"male": (("pills", 0.1),)}):
+            found = [
+                "item_painkillers"
+                in ids(loot.roll_pockets(body(), ScriptedRandom(randrange=[roll])))
+                for roll in (0, 5, 6, 9999)
+            ]
+        self.assertEqual(found, [True, True, False, False])
 
     def test_today_only_painkillers_drop_from_the_default_table_at_six_in_ten_thousand(self):
         rng = random.Random(15)
         draws = 200000
-        hits = sum(1 for _ in range(draws) if loot.roll_pockets(body(), rng))
+        hits = sum(
+            1 for _ in range(draws) if "item_painkillers" in ids(loot.roll_pockets(body(), rng))
+        )
         self.assertAlmostEqual(hits / draws, 0.0006, delta=0.0003)
+
+    def test_a_body_holding_12_kg_has_no_room_for_pocket_items(self):
+        full = body()
+        full.contents = [ItemEntity(item=ITEMS["item_plank"]) for _ in range(4)]
+        self.assertEqual(loot.roll_pockets(full, ScriptedRandom(randrange=[0])), [])
+
+    def test_a_body_holding_9_kg_still_has_room_in_its_12_kg_container(self):
+        loaded = body()
+        loaded.contents = [ItemEntity(item=ITEMS["item_plank"]) for _ in range(3)]
+        found = loot.roll_pockets(loaded, ScriptedRandom(randrange=[0]))
+        self.assertIn("item_painkillers", [e.item.id for e in found])
 
     def test_a_female_body_rolls_the_female_table(self):
         with mock.patch.dict(
@@ -135,10 +153,12 @@ class PocketChanceTests(unittest.TestCase):
         order = loot.roll_pockets(
             body(outfit="construction_worker"), ScriptedRandom(randrange=[0, 0])
         )
-        self.assertEqual([e.item.id for e in order], ["item_nails", "item_painkillers"])
+        self.assertEqual(ids(order)[0], "item_nails")
+        self.assertEqual(ids(order)[-1], "item_painkillers")
 
-    def test_nails_come_at_sixteen_percent_for_a_construction_worker(self):
-        self.assertAlmostEqual(loot.drop_chance(20, "other"), 0.16)
+    def test_nails_come_at_twelve_percent_for_a_construction_worker(self):
+        kind = LOOT_CATALOGUE["nails"][1]
+        self.assertAlmostEqual(loot.drop_chance(20, kind), 0.12)
 
     def test_a_skeleton_gets_no_pocket_roll(self):
         class Boom(random.Random):
@@ -168,7 +188,8 @@ class SearchTests(unittest.TestCase):
     def test_the_pockets_are_rolled_once_and_land_in_the_contents(self):
         gm, corpse = with_body("item_tshirt")
         minutes_of(gm, SearchAction(target_name="c1"), rng=ScriptedRandom(randrange=[0]))
-        self.assertEqual([e.item.id for e in corpse.contents], ["item_tshirt", "item_painkillers"])
+        self.assertEqual(ids(corpse.contents)[0], "item_tshirt")
+        self.assertEqual(ids(corpse.contents)[-1], "item_painkillers")
 
     def test_a_second_search_is_refused(self):
         gm, corpse = with_body("item_tshirt")

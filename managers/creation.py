@@ -11,6 +11,7 @@ from data.clothing_selection import (
     TRAIT_CLOTHING,
     ClothingList,
 )
+from data.containers import ENTRY_ROOMS
 from data.items import ITEMS
 from data.locations import STARTING_ZONE_ID
 from data.names import (
@@ -308,6 +309,7 @@ def new_player(build: CharacterBuild, seed: int = 0) -> PlayerEntity:
     player = PlayerEntity(
         name=build.appearance.full_name,
         current_location_id=STARTING_ZONE_ID,
+        current_room=ENTRY_ROOMS[STARTING_ZONE_ID],
         inventory=[ItemEntity(item=ITEMS["item_apartment_key"])],
         worn=worn,
         appearance=build.appearance,

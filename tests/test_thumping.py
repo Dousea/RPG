@@ -368,7 +368,7 @@ class EachThumpTests(unittest.TestCase):
                 for e in gm.world.locations[BUILDING].entities
                 if getattr(getattr(e, "item", None), "id", "") == "item_plank"
             ]
-            counts.add(len(planks) - 2)
+            counts.add(len(planks))
         self.assertEqual(counts, {1, 2})
 
 

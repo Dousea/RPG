@@ -17,9 +17,15 @@ def weapon(item_id: str) -> MeleeWeaponItem:
     return item
 
 
-def ground_ids(zone_id: str) -> list[str]:
+def stock_entities(zone_id: str) -> list[ItemEntity]:
+    """A zone's starting stock: what lies on its ground and what its containers hold."""
     zone = build_starting_locations()[zone_id]
-    return [e.item.id for e in zone.entities if isinstance(e, ItemEntity)]
+    held = [e for room in zone.rooms.values() for c in room.containers for e in c.contents]
+    return [*(e for e in zone.entities if isinstance(e, ItemEntity)), *held]
+
+
+def ground_ids(zone_id: str) -> list[str]:
+    return [e.item.id for e in stock_entities(zone_id)]
 
 
 class WeaponCatalogueTests(unittest.TestCase):
@@ -137,11 +143,7 @@ class WeaponCatalogueTests(unittest.TestCase):
         self.assertTrue(BARE_HANDS.no_maintenance_xp)
 
     def test_the_kitchen_knife_starts_in_the_apartment(self):
-        from data.locations import build_starting_locations
-
-        zone = build_starting_locations()["zone_home"]
-        names = [e.item.id for e in zone.entities if isinstance(e, ItemEntity)]
-        self.assertIn("item_kitchen_knife", names)
+        self.assertIn("item_kitchen_knife", ground_ids("zone_home"))
 
 
 if __name__ == "__main__":
@@ -206,10 +208,7 @@ class MedicalCatalogueTests(unittest.TestCase):
         self.assertNotIn("item_first_aid_kit", ITEMS)
 
     def test_zone_building_holds_the_kits_fixed_contents(self):
-        building = build_starting_locations()["zone_building"]
-        names = sorted(
-            entity.item.name for entity in building.entities if isinstance(entity, ItemEntity)
-        )
+        names = sorted(entity.item.name for entity in stock_entities("zone_building"))
         kit = [name for name in names if name not in {"Hammer", "Nails", "Plank", "Hand Axe"}]
         self.assertEqual(
             kit,
@@ -260,10 +259,8 @@ class BarrierItemTests(unittest.TestCase):
         self.assertEqual(ItemEntity(item=ITEMS["item_plank"]).condition, 10)
 
     def test_the_basement_storage_and_the_alley_hold_the_materials(self):
-        zones = build_starting_locations()
-
         def names(zone_id: str) -> list[str]:
-            return sorted(e.item.name for e in zones[zone_id].entities if isinstance(e, ItemEntity))
+            return sorted(e.item.name for e in stock_entities(zone_id))
 
         building = names("zone_building")
         self.assertEqual(
@@ -370,5 +367,5 @@ class BagCatalogueTests(unittest.TestCase):
         self.assertEqual(satchel.body_location, BodyLocation.SATCHEL)
         self.assertEqual(fanny.body_location, BodyLocation.FANNYPACKFRONT)
 
-    def test_a_schoolbag_lies_on_the_floor_at_home(self):
+    def test_a_schoolbag_is_in_the_home_wardrobe(self):
         self.assertIn("item_schoolbag", ground_ids("zone_home"))

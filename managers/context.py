@@ -16,6 +16,7 @@ import re
 from collections.abc import Iterable
 from datetime import date
 
+from data import containers as container_k
 from data.clock import TIMES_OF_DAY
 from data.exercises import (
     BARBELL_ID,
@@ -42,6 +43,7 @@ from managers.combat import held_entity
 from managers.first_aid import bandage_items, disinfectant_items, part_word
 from managers.game import GameManager
 from managers.loot import corpse_views, perceived_corpses
+from managers.rooms import current_room
 from managers.skills import level_word
 from managers.stats.status_effects import active_status_effects
 from managers.story import visible_topics
@@ -52,6 +54,7 @@ from modules.entity.barrier import BarrierEntity
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, ContainerItem, MedicalItem, StackItem
 from modules.quest import QuestStatus
+from modules.room import ContainerEntity
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +296,19 @@ class ContextBuilder:
         }
         return "\n".join(self._barrier_line(barrier, pounding) for barrier in barriers)
 
+    def _rooms_section(self) -> str:
+        """[ROOMS]: the rooms of the player's zone and their containers; only an opened container shows what is in it."""
+        zone = self.manager.current_location
+        if not zone.rooms:
+            return container_k.NO_ROOMS
+        here = current_room(zone, self.manager.player)
+        lines: list[str] = []
+        for room in zone.rooms.values():
+            mark = container_k.ROOM_HERE_MARK if room is here else ""
+            parts = ", ".join(_container_phrase(c) for c in room.containers)
+            lines.append(f"{room.name}{mark}: {parts}")
+        return "\n".join(lines)
+
     def _in_view_section(self) -> str:
         """[IN VIEW] after the outcomes: every perceived zombie, then everyone present.
 
@@ -476,7 +492,20 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("hurt")
         if barriers_of(manager.world, player.current_location_id):
             keys.add("barriers")
+        if manager.current_location.rooms:
+            keys.add("rooms")
+        opened = self._opened_here()
+        if opened:
+            keys.add("opened")
+        if any(container.contents for container in opened):
+            keys.add("stocked")
         return frozenset(keys)
+
+    def _opened_here(self) -> list[ContainerEntity]:
+        """The opened containers of the room the player is in, in layout order."""
+        zone = self.manager.current_location
+        room = current_room(zone, self.manager.player)
+        return [c for c in room.containers if c.opened] if room is not None else []
 
     def scene_choices(self) -> SceneChoices:
         """The closed sets of names the scene offers, as the validator would accept them.
@@ -507,6 +536,16 @@ Traits: {_lines(trait_lines) or "None"}
             corpse_ids=tuple(body.corpse_id for body in bodies),
             corpse_items=tuple(
                 entity.item.name for body in bodies if body.searched for entity in body.contents
+            ),
+            rooms=tuple(room.name for room in manager.current_location.rooms.values()),
+            containers=tuple(
+                c.name for room in manager.current_location.rooms.values() for c in room.containers
+            ),
+            open_containers=tuple(c.name for c in self._opened_here()),
+            container_items=tuple(
+                dict.fromkeys(
+                    entity.item.name for c in self._opened_here() for entity in c.contents
+                )
             ),
             bags=tuple(dict.fromkeys(_names(bags))),
             bag_items=tuple(dict.fromkeys(_names(e for bag in bags for e in bag.contents))),
@@ -673,6 +712,9 @@ door rather than refusing the move.)
 [CORPSES]
 {self._corpses_section(with_id=True)}
 
+[ROOMS]
+{self._rooms_section()}
+
 [DOORS AND WINDOWS]
 {self._barriers_section()}
 
@@ -806,6 +848,10 @@ door rather than refusing the move.)
 
 {self._nearby_locations_section().rstrip()}
 
+[ROOMS]
+(The rooms here and their furniture. Only an opened container's contents are known; describe nothing else in them.)
+{self._rooms_section()}
+
 [DOORS AND WINDOWS]
 (The doors and windows here and what is happening at them. Describe only what is listed.)
 {self._barriers_section()}
@@ -852,6 +898,15 @@ engine could not decide at all -- treat it the same as [OUTCOMES].)
 
 [SCENE]
 {player_input}"""
+
+
+def _container_phrase(container: ContainerEntity) -> str:
+    if not container.opened:
+        return container_k.CONTAINER_NOT_OPENED.format(name=container.name)
+    items = ", ".join(entity.item.name.lower() for entity in container.contents)
+    return container_k.CONTAINER_OPENED.format(
+        name=container.name, items=items or container_k.EMPTY_WORD
+    )
 
 
 def _inventory_line(entity: ItemEntity, place: str) -> str:

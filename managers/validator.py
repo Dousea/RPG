@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from data import barriers as barrier_k
 from data import body as body_k
 from data import carry as carry_k
+from data import containers as container_k
 from data import exercises as ex
 from data import survival
 from data import zombie_lore as zombie_k
@@ -35,6 +36,7 @@ from managers import carry
 from managers.barriers import barriers_between, carried_entities, thumpable_for
 from managers.body import limp_factor
 from managers.combat import held_slots
+from managers.containers import has_room_for, unopened
 from managers.exercise import endurance_level
 from managers.first_aid import (
     bandage_items,
@@ -46,6 +48,13 @@ from managers.first_aid import (
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.locations import BARE_DIRECTIONS, connection_target
 from managers.loot import find_content, perceived_corpses, with_article
+from managers.rooms import (
+    container_by_name,
+    current_room,
+    resolve_container,
+    resolve_room,
+    room_holding,
+)
 from managers.social import locked_out
 from managers.stats.status_effects import status_effect_level
 from managers.story import visible_topics
@@ -107,6 +116,7 @@ from modules.resolution import (
     FirstAidTarget,
     HeldItem,
     MoveBlocked,
+    MoveToRoom,
     MoveToSpot,
     MoveToZone,
     NpcItem,
@@ -116,12 +126,15 @@ from modules.resolution import (
     ShuffleInZone,
     StayPut,
     TargetBarrier,
+    TargetContainer,
     TargetCorpse,
     TargetNpc,
+    TargetRoom,
     TargetZombie,
     TimeSpan,
     Transfer,
 )
+from modules.room import ContainerEntity
 from modules.stats import CharacterStat, StatusEffect
 
 GOAL_HORIZONS = GOAL_HORIZON_LABELS
@@ -202,7 +215,7 @@ class ActionValidator:
         return Accepted(action)
 
     def _validate_move(self, action: MoveAction) -> ValidationResult:
-        """Decide what a MOVE_TO *means*. This never rejects.
+        """Decide what a MOVE_TO *means*. It rejects only a move to the room the player is in.
 
         A named zone is reachable from anywhere by walking the connection
         graph (`GameManager.zone_path`); adjacency is not required. A locked
@@ -220,6 +233,14 @@ class ActionValidator:
         raw = action.destination.strip().strip("\"'.,;:")
         if not raw:
             return Accepted(action, StayPut(current))
+
+        room = resolve_room(current, raw)
+        if room is not None:
+            if current_room(current, manager.player) is room:
+                return Rejected(
+                    action, container_k.ALREADY_IN_ROOM.format(name=self._name, room=room.name)
+                )
+            return Accepted(action, MoveToRoom(current, room))
 
         folded = raw.casefold()
 
@@ -356,9 +377,60 @@ class ActionValidator:
         if carry.clean_name(source) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(source.strip()):
             return self._take_from_corpse(action, source)
         bag = carry.find_named(carry.carried_bags(self.manager.player), source)
-        if bag is None:
+        if bag is not None:
+            return self._take_from_bag(action, bag)
+        found = self._container_named(source)
+        if found is None:
             return Rejected(action, carry_k.NO_BAG_SOURCE.format(name=self._name, source=source))
-        return self._take_from_bag(action, bag)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        return self._take_from_container(action, found)
+
+    def _container_named(self, name: str) -> ContainerEntity | str | None:
+        """The container `name` points at in this zone; the question to ask when several match, None when none do."""
+        manager = self.manager
+        found = resolve_container(manager.current_location, manager.player.current_room, name)
+        if isinstance(found, list):
+            return container_k.WHICH_ONE.format(choices=" or ".join(c.name for c in found))
+        return found
+
+    def _container_reach(self, action: AnyAction, container: ContainerEntity) -> Rejected | None:
+        """A refusal when the player can't use an opened container from where they stand."""
+        zone = self.manager.current_location
+        room = room_holding(zone, container)
+        here = current_room(zone, self.manager.player)
+        if room is not None and room is not here:
+            return Rejected(
+                action,
+                container_k.NOT_IN_THIS_ROOM.format(container=container.name, room=room.name),
+            )
+        if not container.opened:
+            return Rejected(action, container_k.NOT_OPENED.format(container=container.name))
+        return None
+
+    def _take_from_container(
+        self, action: TakeAction, container: ContainerEntity
+    ) -> ValidationResult:
+        if refusal := self._container_reach(action, container):
+            return refusal
+        if action.all_items:
+            entities = tuple(container.contents)
+            if not entities:
+                return Rejected(action, carry_k.BAG_EMPTY.format(source=container.name))
+        else:
+            found = carry.find_named(container.contents, action.item_name)
+            if found is None:
+                return Rejected(
+                    action,
+                    container_k.NO_SUCH_IN_CONTAINER.format(
+                        container=container.name, item=action.item_name
+                    ),
+                )
+            entities = (found,)
+        if carry.over_the_limit(self.manager.player, extra=entities):
+            return Rejected(action, self._cant_carry())
+        frames = self._frames(entities, carry.Place.WORLD, carry.Place.PACK)
+        return Accepted(action, Transfer(entities, frames, source=container))
 
     def _take_from_bag(self, action: TakeAction, bag: ItemEntity) -> ValidationResult:
         player = self.manager.player
@@ -414,9 +486,7 @@ class ActionValidator:
             return Rejected(action, carry_k.NOT_CARRIED_TO_PUT.format(item=action.item_name))
         bag = carry.find_named(carry.carried_bags(player), action.target_name)
         if bag is None:
-            return Rejected(
-                action, carry_k.BAG_NOT_CARRIED.format(name=self._name, bag=action.target_name)
-            )
+            return self._put_in_container(action, entity, action.target_name)
         if carry.inside(entity, bag):
             return Rejected(action, carry_k.BAG_IN_ITSELF)
         if carry.holder_bag(player, entity) is bag:
@@ -429,6 +499,25 @@ class ActionValidator:
         place = carry.Place.BAG if source_bag is not None else carry.Place.PACK
         frames = self._frames((entity,), place, carry.Place.BAG, bag)
         return Accepted(action, Transfer((entity,), frames, source=source_bag, target=bag))
+
+    def _put_in_container(
+        self, action: PutAction, entity: ItemEntity, target: str
+    ) -> ValidationResult:
+        found = self._container_named(target)
+        if found is None:
+            return Rejected(
+                action, carry_k.BAG_NOT_CARRIED.format(name=self._name, bag=action.target_name)
+            )
+        if isinstance(found, str):
+            return Rejected(action, found)
+        if refusal := self._container_reach(action, found):
+            return refusal
+        if not has_room_for(found, entity):
+            return Rejected(action, container_k.CONTAINER_FULL.format(container=found.name))
+        source_bag = carry.holder_bag(self.manager.player, entity)
+        place = carry.Place.BAG if source_bag is not None else carry.Place.PACK
+        frames = self._frames((entity,), place, carry.Place.WORLD)
+        return Accepted(action, Transfer((entity,), frames, source=source_bag, target=found))
 
     def _validate_carry(self, action: CarryAction) -> ValidationResult:
         manager = self.manager
@@ -449,6 +538,11 @@ class ActionValidator:
         manager = self.manager
         if manager.player.asleep:
             return Rejected(action, zombie_k.ASLEEP_REFUSAL.format(name=self._name))
+        name = action.target_name
+        if not (
+            carry.clean_name(name) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(name.strip())
+        ):
+            return self._search_place(action)
         corpse = self._corpse_target(action.target_name)
         if corpse is None:
             return Rejected(action, zombie_k.NO_SUCH_CORPSE.format(target=action.target_name))
@@ -458,6 +552,32 @@ class ActionValidator:
             )
         minutes = approach_minutes(corpse.gap, limp_factor(manager.player))
         return Accepted(action, TargetCorpse(corpse.corpse_id, minutes))
+
+    def _search_place(self, action: SearchAction) -> ValidationResult:
+        """SEARCH of a room or a container of this zone: what to open, and whether to walk to it first."""
+        manager = self.manager
+        zone = manager.current_location
+        here = current_room(zone, manager.player)
+        name = action.target_name
+        exact = container_by_name(zone, name)
+        room = None if exact is not None else resolve_room(zone, name)
+        if room is not None:
+            closed = unopened(room)
+            if not closed:
+                label = container_k.GONE_THROUGH.format(name=self._name, target=room.name)
+                return Rejected(action, label)
+            return Accepted(action, TargetRoom(room, closed, walk=room is not here))
+        container = exact if exact is not None else self._container_named(name)
+        if isinstance(container, str):
+            return Rejected(action, container)
+        if container is None:
+            return Rejected(action, container_k.NO_SUCH_SEARCH_TARGET.format(target=name))
+        owner = room_holding(zone, container)
+        assert owner is not None, "a resolved container belongs to a room"
+        if container.opened:
+            label = container_k.GONE_THROUGH.format(name=self._name, target=container.name)
+            return Rejected(action, label)
+        return Accepted(action, TargetContainer(owner, container, walk=owner is not here))
 
     def _corpse_target(self, name: str) -> CorpseEntity | None:
         """The perceived body `name` points at: its id, or the nearest for "corpse"."""

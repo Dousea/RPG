@@ -1,13 +1,13 @@
 # Carrying, Containers and Loot
 
-> **Status: Stage 1 implemented** (carrying). Stages 2 and 3 (loot containers, new places and items) are not built yet.
+> **Status: Stages 1–2 implemented** (carrying, loot containers). Stage 3 (new places and items) is not built yet.
 
 Everything the player has now weighs something. A Strength-based capacity sets
 when the load starts to hurt, bags hold things and ease the weight while they
 are worn or held, and a body can be picked up and carried. The Heavy Load
 status effect, which earlier mechanics read as 0, is live.
 
-The mechanic ships in three stages. This document describes the first.
+The mechanic ships in three stages. This document describes the first two.
 
 1. **Carrying**: weight, capacity, Heavy Load and what it switches on, bags,
    `PUT`, and carrying a corpse.
@@ -249,7 +249,106 @@ below half, nothing. Strength skips the XP boost.
 
 ## Rooms and containers
 
-Not built yet.
+### Rooms
+
+A zone keeps being the unit of movement, and now holds typed rooms. A room has
+containers; a container has a name, a capacity in kilograms, and either a fixed
+list of items or a loot table.
+
+| Part | What it holds |
+| --- | --- |
+| Room | an id, a name ("kitchen"), aliases, its containers in layout order, and a count of the procedural tables its containers have used |
+| Container | an id, a name, aliases, a capacity, the loot table it rolls (or none), its contents, whether it has been gone through, and whether its contents are fixed |
+| Zone | its rooms and the room the player enters it into |
+| Player | the room they are in |
+
+Shipped layouts:
+
+| Zone | Rooms and containers |
+| --- | --- |
+| Your Apartment | kitchen: kitchen counter, kitchen cupboards, fridge, freezer. Bedroom: wardrobe, dresser, bedside table. Bathroom: medicine cabinet, bathroom counter. Living room (where the player starts): side table, living room shelves |
+| Your Building | hallway (entry): first-aid cabinet. Laundry room: laundry counter. Basement: storage shelves, tool cabinet |
+| The Corner Store | shop floor (entry): till counter, store fridge, snack shelves, drinks shelves. Storeroom: stock crates |
+
+The street and the neighbourhood have no rooms.
+
+- **Names.** A container's name is unique in its zone. A full name finds its
+  container from any room of the zone. A bare kind word ("counter", "shelves")
+  finds a container only in the room the player is in, and only when exactly one
+  there has it; with several, the action is refused and the choices are listed
+  ("Which one: snack shelves or drinks shelves?"). Generic words such as "box"
+  or "room" are never names. A name only ever resolves inside the current zone.
+- **Capacity.** A container holds 50 kg, the freezer 15 kg, and a body 12 kg.
+- **Fixed contents.** A container with a fixed list holds those items and is
+  never rolled. Items the player puts in it stay.
+
+### Filling a container
+
+A container fills the first time it is opened with `SEARCH`. It never refills.
+
+**The source table.** Each container names the table its furniture type uses.
+A table is either one list of items with a number of rolls, or a procedural pick
+between several such tables.
+
+**The procedural pick.** Each choice has a weight, a minimum and a maximum use
+per room. A choice with minimum 1 that the room has not used yet is forced: the
+pick is among the forced choices only. Otherwise the pick is among the choices
+the room has used fewer times than their maximum. A draw below the total weight
+walks the choices in data order, adding weights, and takes the first whose
+running sum reaches the draw. Reaching it, not passing it, makes the first
+choice a little likelier: weights 40 and 100 pick the first 41 times in 140. The
+room counts the pick, so a choice with maximum 1 is never picked twice in a room.
+A container whose table has no choices rolls its own list.
+
+**The roll.** The junk list rolls first, then the main list. Each list makes its
+passes (at least one) over its entries in order. An entry spawns when a whole
+number drawn below 10000 is under `chance x 100 x modifier`, with the chance a
+percent. Junk entries multiply the chance by 1.4 and use modifier 1.
+
+| Kind of item | Modifier |
+| --- | --- |
+| Perishable food, other | 0.8 |
+| Key | 0.4 |
+| Ranged weapon | 1.2 |
+| Every other kind (canned food, medical, weapon, container, clothing, literature, tool, cookware, material and the rest) | 0.6 |
+
+So a chance 20 medical entry drops 0.12 of the time, a chance 4 perishable food
+entry 0.032, and a chance 0.1 weapon entry 0.06 percent. An entry with no
+catalogue item is skipped without a roll.
+
+**The capacity cutoff.** When a spawned item would pass the container's capacity,
+the rest of that list stops. A full junk list does not stop the main list.
+
+**After a spawn,** outside a shop table:
+
+- a weapon has a 40 percent chance of spawning worn, with a condition between 1
+  and its maximum;
+- a stack or medical item with more than one use has a 40 percent chance of
+  spawning part used;
+- a bag spawns filled from its own table, up to its own capacity. In a shop table
+  a bag is empty.
+
+A body's pockets use the same roll with the body's 12 kg as the capacity. The
+tables are generated data: `data/loot_tables.py` holds 35 item lists, the
+container sources and 14 bag tables; `data/loot_catalogue.py` maps each table
+item name to a catalogue item and its kind. Only items that exist in the game are
+rolled, so the tables grow with the catalogue.
+
+### The starting kit
+
+Today's fixed items sit in named containers that are never rolled. Every other
+container rolls.
+
+| Container | Holds |
+| --- | --- |
+| first-aid cabinet (hallway) | two bandages, an adhesive bandage, alcohol wipes, painkillers |
+| storage shelves (basement) | a hammer, nails, two planks, a hand axe |
+| kitchen counter (apartment) | canned beans, a water bottle, a kitchen knife, a frying pan |
+| wardrobe (apartment) | a black jacket, a schoolbag |
+
+Nothing lies on the floor of the apartment, the building or the corner store
+any more; the corner store's shelves roll shop tables. The street's crowbar and
+alley planks and the neighbourhood's baseball bat stay on the ground.
 
 ## Places and items
 
@@ -260,18 +359,37 @@ Not built yet.
 All of them refuse while the player is asleep (0 minutes). A move of items takes
 its transfer time.
 
-- **`TAKE <item> from <corpse or bag>`, `TAKE all`, `TAKE all from <corpse or
-  bag>`:** the plain `TAKE <item>` (the ground) and `from <corpse>` stay; the
-  source may now be a carried bag. `TAKE all` with no source takes everything
+- **`MOVE_TO <room>`:** a name that is a room of the current zone moves the
+  player there in 1 minute and sets their room and spot to its name; rooms are
+  tried before zones. Refused for the room they are in ("<name> is already in the
+  living room."). A name that is no room falls to the usual zone and spot rules.
+  Leaving for another zone puts the player in that zone's entry room.
+- **`SEARCH <room or container>`:** opening a container takes 1 minute. A
+  container in another room costs 1 minute more to get to its room. `SEARCH
+  <room>` opens each unopened container of the room in layout order, a minute
+  each. An interruption between containers ends it after the container it was in;
+  the rest stay closed. Refused: carrying a body; no such room or container ("There
+  is no 'x' to search here."); an ambiguous bare word; one already gone through
+  ("<name> has already been through the kitchen."). The fact names what the
+  container held, with counts: "<name> goes through the kitchen cupboards: two
+  canned beans and a bandage." or "... and finds nothing." The items stay in
+  the container.
+
+- **`TAKE <item> from <corpse, bag or container>`, `TAKE all`, `TAKE all from
+  <source>`:** the plain `TAKE <item>` (the ground) and `from <corpse>` stay; the
+  source may now be a carried bag or an opened container in the room the player
+  is in ("The kitchen counter hasn't been gone through."; "The kitchen counter is
+  in the kitchen, not here."; "The kitchen counter holds no 'x'."). `TAKE all` with no source takes everything
   on the ground; with a source, everything in it, as one action. Refused: no
   such bag ("<name> has no 'x' to take from."); the bag holds no such item;
   nothing to take; the pack would pass 50 kg ("<name> can't carry any more.");
   carrying a body. A bag lying on the ground is taken as one item, with its
   contents.
-- **`PUT <item> in <bag>`:** moves a carried item into a bag the player has with
-  them. Refused: no such item or bag; it would pass the bag's capacity or its
-  largest item ("The toolbox is full."); a bag into itself or into a bag it
-  holds; carrying a body.
+- **`PUT <item> in <bag or container>`:** moves a carried item into a bag the
+  player has with them, or into an opened container of their room. Refused: no
+  such item or target; the container hasn't been gone through; it would pass the
+  target's capacity or a bag's largest item ("The toolbox is full.", "The freezer
+  is full."); a bag into itself or into a bag it holds; carrying a body.
 - **`DROP <item>`:** takes the item from anywhere the player has it, a bag or
   the back included, and leaves it on the ground. **`DROP corpse`** puts a body
   down.
@@ -282,7 +400,9 @@ its transfer time.
 ## Interruptions
 
 No new cause. Heavy Load rising uses the status effect level-change facts and
-does not interrupt.
+does not interrupt. A room `SEARCH` is the one multi-minute action of this
+mechanic: the minute loop can interrupt it between containers, and a container's
+minute completes before the check.
 
 ## Traits
 
@@ -313,6 +433,10 @@ costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
 - **Corpses:** a carried body follows the player and keeps its distance.
 - **Barricades:** the hammer, planks and nails can be in a bag, and a plank
   pried off goes to the floor when the pack is at its limit.
+- **Zombie loot:** the kind multipliers and the item map moved to the shared
+  loot data; a body's pockets stop at its 12 kg.
+- **Zones:** the apartment, the building and the corner store gain rooms.
+- **Clock:** a room move takes 1 minute; opening a container takes 1.
 
 ## What the narrator and the player see
 
@@ -336,16 +460,35 @@ costs twice the endurance at Heavy Load 3 and 4. No other skill is touched.
   bag, `TAKE` when a bag or the ground gives something to take, and `CARRY`
   when a body is in view. The plan schema offers the bags, what is in them and
   "all" as `TAKE` sources and items.
+- **Rooms.** `[ROOMS]` comes after `[ZONES]` and before `[DOORS AND WINDOWS]`, in
+  both prompts. It lists the rooms of the player's zone with their containers; an
+  opened container lists what is left in it, and an unopened one never lists
+  contents, so nothing can be invented:
+
+  ```
+  [ROOMS]
+  kitchen (you are here): kitchen counter (opened: canned beans, water bottle), kitchen cupboards (not opened)
+  bedroom: wardrobe (opened: black jacket, schoolbag), dresser (not opened)
+  ```
+
+  A zone without rooms says "None". `SEARCH` is listed when the zone has rooms,
+  `TAKE` when an opened container in the room holds something, and `PUT` when
+  one is opened. The plan schema offers the zone's rooms and containers to
+  `SEARCH`, and the opened containers of the room to `TAKE ... from` and `PUT`.
 - **Player (UI).** The inventory screen shows the weight against the capacity
   in kilograms and each bag with its place and contents; Heavy Load shows in the
   status strip. `/play` gains `carry` (`weight`, `max_weight`, `level`, `bags`)
-  and a `carried` flag on a body.
+  and a `carried` flag on a body, and `rooms`: each room of the zone with whether
+  the player is in it and its containers (`name`, `opened`, and `contents` only
+  once opened). The Nearby screen lists them under "Rooms".
 
 ## Saves
 
-Schema 22. Stage 1 adds nested `contents` on every item, `carrying_corpse` and
+Schema 23. Stage 1 adds nested `contents` on every item, `carrying_corpse` and
 `carrying_skeleton` on the player, and bags in the shoulder slot and worn at the
-body. Incompatible saves are discarded.
+body. Stage 2 adds each zone's rooms (every container's `opened` flag, fixed flag
+and contents, each room's table counts), the zone's entry room and the player's
+room. Incompatible saves are discarded.
 
 ## Edge cases
 
@@ -358,6 +501,11 @@ body. Incompatible saves are discarded.
 - **Dropping a bag** from the back or a hand drops it with its contents inside;
   eating from a bag is a normal `USE_ITEM`.
 - **A body that becomes bones** while carried weighs 2.1 kg from the next action.
+- **A closed container** can't be taken from or put into, so the narrator can't
+  hand the player an unseen item.
+- **A container is never refilled,** even when the player empties it.
+- **A full container during a fill** stops only the list that overflowed.
+- **A saved room that no longer exists** counts as no room.
 
 ## Testing
 
@@ -366,3 +514,8 @@ transfers, bag verbs, Strength XP), `tests/test_corpse_carry.py`,
 `tests/test_validator.py` (the refusals), `tests/test_items.py` (weights, bag
 rows), `tests/test_persistence.py` (nested contents, the carried body),
 `tests/test_context.py` and `tests/test_engine.py` (the blocks and `/play`).
+
+Stage 2: `tests/test_loot_rolls.py` (the roll, the pick, the cutoff, the table
+shape and the catalogue), `tests/test_rooms.py` (the layouts, the starting kit,
+name resolution, room moves), `tests/test_containers.py` (`SEARCH`, `TAKE` and
+`PUT` with containers), `tests/test_plan_schema.py`, `tests/test_corner_store.py`.

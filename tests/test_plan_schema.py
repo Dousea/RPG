@@ -11,12 +11,16 @@ from modules.action.parser import (
     VERBS,
     ParseFailure,
     available_verbs,
+    parse_action_line,
     parse_action_plan,
 )
 from modules.action.schema import SceneChoices, build_plan_schema, parse_plan
+from modules.action.types import SearchAction, TakeAction
 from modules.body import BodyPart
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
+from tests.support import resolve_actions
 from tests.test_context import add_zombie
 
 MAX_ACTIONS = 5
@@ -63,7 +67,23 @@ def give(gm: GameManager, *item_ids: str) -> None:
 def building_scene() -> GameManager:
     gm = GameManager()
     gm.player.current_location_id = "zone_building"
+    gm.player.current_room = "hallway"
     return gm
+
+
+def litter(gm: GameManager, *item_ids: str) -> None:
+    """Put items on the floor of the zone the player is in."""
+    gm.current_location.entities.extend(ItemEntity(item=ITEMS[item_id]) for item_id in item_ids)
+
+
+HOME_FLOOR = (
+    "item_canned_beans",
+    "item_water_bottle",
+    "item_black_jacket",
+    "item_kitchen_knife",
+    "item_frying_pan",
+    "item_schoolbag",
+)
 
 
 class SchemaShapeTests(unittest.TestCase):
@@ -117,6 +137,7 @@ class ClosedFieldTests(unittest.TestCase):
 
     def test_take_is_the_items_here_and_wear_adds_the_jacket_on_the_floor(self):
         gm = GameManager()
+        litter(gm, *HOME_FLOOR)
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(
             enum_of(names["TAKE"], "item"),
@@ -133,6 +154,7 @@ class ClosedFieldTests(unittest.TestCase):
 
     def test_carried_worn_and_held_sets(self):
         gm = GameManager()
+        litter(gm, *HOME_FLOOR)
         give(gm, "item_bandage", "item_bandage")
         names = branches(ContextBuilder(gm).build_plan_schema())
         for verb in ("DROP", "USE_ITEM", "EQUIP"):
@@ -198,6 +220,17 @@ class ClosedFieldTests(unittest.TestCase):
 
     def test_talk_ask_and_give(self):
         gm = building_scene()
+        litter(
+            gm,
+            "item_bandage",
+            "item_adhesive_bandage",
+            "item_alcohol_wipes",
+            "item_painkillers",
+            "item_hammer",
+            "item_nails",
+            "item_plank",
+            "item_hand_axe",
+        )
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(enum_of(names["TALK"], "npc"), ["Emma", "Marcus"])
         self.assertEqual(enum_of(names["TALK"], "approach"), list(TALK_APPROACH_LABELS))
@@ -413,3 +446,57 @@ class PlanReadingTests(unittest.TestCase):
         self.assertEqual({b["properties"]["verb"]["const"] for b in all_branches}, set(VERBS))
         for entry, _ in EQUIVALENTS:
             self.assertTrue(any(fits(b, entry) for b in all_branches), entry)
+
+
+class RoomChoiceTests(unittest.TestCase):
+    """Spec 25, Verbs: SEARCH, TAKE and PUT name the rooms and containers the scene offers."""
+
+    def kitchen(self) -> GameManager:
+        gm = GameManager()
+        gm.player.current_room = "kitchen"
+        return gm
+
+    def test_search_offers_the_zones_rooms_and_containers(self):
+        names = branches(ContextBuilder(self.kitchen()).build_plan_schema())
+        targets = enum_of(names["SEARCH"], "target")
+        for wanted in ("kitchen", "living room", "kitchen counter", "medicine cabinet"):
+            self.assertIn(wanted, targets)
+        self.assertNotIn("hallway", targets)
+
+    def test_carry_still_offers_only_bodies(self):
+        gm = self.kitchen()
+        gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_home",
+            gap=1.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+        )
+        names = branches(ContextBuilder(gm).build_plan_schema())
+        self.assertEqual(enum_of(names["CARRY"], "target"), ["c1", "corpse"])
+        self.assertIn("c1", enum_of(names["SEARCH"], "target"))
+
+    def test_take_from_and_put_in_name_only_opened_containers_of_the_room(self):
+        gm = self.kitchen()
+        names = branches(ContextBuilder(gm).build_plan_schema())
+        self.assertNotIn("TAKE", names)
+        self.assertNotIn("PUT", names)
+        resolve_actions(gm, SearchAction(target_name="kitchen counter"))
+        give(gm, "item_hammer")
+        names = branches(ContextBuilder(gm).build_plan_schema())
+        self.assertEqual(
+            enum_of(names["TAKE"], "item"),
+            ["Canned Beans", "Water Bottle", "Kitchen Knife", "Frying Pan", "all"],
+        )
+        self.assertEqual(enum_of(names["TAKE"], "from"), ["kitchen counter"])
+        self.assertEqual(enum_of(names["PUT"], "bag"), ["kitchen counter"])
+        self.assertEqual(enum_of(names["PUT"], "item"), ["Apartment Key", "Hammer"])
+
+    def test_a_plan_line_reads_back_as_a_take_from_a_container(self):
+        line = "TAKE Water Bottle from kitchen counter"
+        self.assertEqual(
+            parse_action_line(line),
+            TakeAction(item_name="Water Bottle", from_name="kitchen counter"),
+        )

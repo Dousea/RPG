@@ -105,7 +105,7 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 | Clothing | worn items, outer to inner, by body location | `worn` | yes |
 | Character | name, occupation, traits, skills, kills | `character`, `skills` (spec 08), `zombie_kills` (spec 11) | yes |
 | People | NPCs here: disposition, trust, following | `npcs` | yes |
-| Nearby | threats, corpses, doors and windows | `threats` (spec 09), `corpses` (spec 14), `barriers` (spec 13) | no |
+| Nearby | threats, corpses, rooms, doors and windows | `threats` (spec 09), `corpses` (spec 14), `rooms` (spec 25), `barriers` (spec 13) | no |
 | Quests | active quests and their objectives | `quests` | yes |
 
 ### Status
@@ -157,7 +157,9 @@ for other callers; the page doesn't read it.
 
 Threats by distance word and state word, closest first; corpses by distance
 and rot words, with their contents once searched; doors and windows by name
-with their state words, plank counts on each side and a thumping tag. A
+with their state words, plank counts on each side and a thumping tag; rooms
+of the building, the one the player is in marked, each with its containers
+(not opened, or opened with what they held). A
 threat's id is used only to keep rows stable between turns, never shown.
 
 ### Quests

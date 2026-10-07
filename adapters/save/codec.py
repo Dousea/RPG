@@ -53,6 +53,7 @@ from modules.entity.zombie import (
 from modules.item import ClothingItem, ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
+from modules.room import ContainerEntity, RoomEntity
 from modules.social import SocialLog
 from modules.stats import Stats
 from modules.thermal import ThermalState
@@ -60,7 +61,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 22  # spec 25
+SCHEMA_VERSION = 23  # spec 25
 
 MAX_ID_LENGTH = 40
 
@@ -282,6 +283,67 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
             if inner is not None
         ]
     return entity
+
+
+def _container_to_dict(container: ContainerEntity) -> dict[str, Any]:
+    return {
+        "container_id": container.container_id,
+        "name": container.name,
+        "kind": container.kind,
+        "capacity": container.capacity,
+        "aliases": list(container.aliases),
+        "source": list(container.source) if container.source else None,
+        "opened": container.opened,
+        "fixed": container.fixed,
+        "contents": [_item_entity_to_dict(entity) for entity in container.contents],
+    }
+
+
+def _container_from_dict(data: dict[str, Any]) -> ContainerEntity | None:
+    container_id = _as_text(data.get("container_id", ""), MAX_ID_LENGTH)
+    if not container_id:
+        return None
+    source = data.get("source")
+    contents = (_item_entity_from_dict(_as_dict(entry)) for entry in data.get("contents", []))
+    return ContainerEntity(
+        container_id=container_id,
+        name=_as_text(data.get("name", ""), MAX_ID_LENGTH),
+        kind=_as_text(data.get("kind", ""), MAX_ID_LENGTH),
+        capacity=float(data.get("capacity", 0)),
+        aliases=[_as_text(alias, MAX_ID_LENGTH) for alias in data.get("aliases", [])],
+        source=(str(source[0]), str(source[1]))
+        if isinstance(source, list) and len(source) == 2
+        else None,
+        contents=[entity for entity in contents if entity is not None],
+        opened=_as_bool(data.get("opened", False)),
+        fixed=_as_bool(data.get("fixed", False)),
+    )
+
+
+def _room_to_dict(room: RoomEntity) -> dict[str, Any]:
+    return {
+        "room_id": room.room_id,
+        "name": room.name,
+        "kind": room.kind,
+        "aliases": list(room.aliases),
+        "proc_spawned": dict(room.proc_spawned),
+        "containers": [_container_to_dict(container) for container in room.containers],
+    }
+
+
+def _room_from_dict(data: dict[str, Any]) -> RoomEntity | None:
+    room_id = _as_text(data.get("room_id", ""), MAX_ID_LENGTH)
+    if not room_id:
+        return None
+    containers = (_container_from_dict(_as_dict(entry)) for entry in data.get("containers", []))
+    return RoomEntity(
+        room_id=room_id,
+        name=_as_text(data.get("name", ""), MAX_ID_LENGTH),
+        kind=_as_text(data.get("kind", ""), MAX_ID_LENGTH),
+        aliases=[_as_text(alias, MAX_ID_LENGTH) for alias in data.get("aliases", [])],
+        containers=[container for container in containers if container is not None],
+        proc_spawned=_int_map(data.get("proc_spawned")),
+    )
 
 
 # === Serialization ===
@@ -558,6 +620,14 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
                 for barrier_id, barrier in manager.world.barriers.items()
             },
             # Locations themselves are static; only ground items move.
+            "rooms": {
+                location_id: {
+                    "entry_room": location.entry_room,
+                    "rooms": [_room_to_dict(room) for room in location.rooms.values()],
+                }
+                for location_id, location in manager.world.locations.items()
+                if location.rooms
+            },
             "ground_items": {
                 location_id: [
                     _item_entity_to_dict(entity)
@@ -572,6 +642,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "name": player.name,
             "current_location_id": player.current_location_id,
             "current_place": player.current_place,
+            "current_room": player.current_room,
             "stats": player.stats.to_dict(),
             "thermal": player.thermal.to_dict(),
             "asleep": player.asleep,
@@ -703,6 +774,16 @@ def from_dict(data: dict[str, Any]) -> GameManager:
             entity = _item_entity_from_dict(item_data)
             if entity is not None:
                 location.entities.append(entity)
+
+    for location_id, entry in _as_dict(world_data.get("rooms")).items():
+        location = locations.get(location_id)
+        if location is None:
+            logger.warning(f"Dropping rooms for unknown location '{location_id}'.")
+            continue
+        rooms = (_room_from_dict(_as_dict(r)) for r in _as_dict(entry).get("rooms", []))
+        location.rooms = {room.room_id: room for room in rooms if room is not None}
+        entry_room = _optional_text(_as_dict(entry).get("entry_room"))
+        location.entry_room = entry_room if entry_room in location.rooms else None
 
     # World.time/date are derived from the narrative clock, which GameManager
     # re-renders on construction. The saved values are carried over so a save is
@@ -894,6 +975,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         name=data.get("name", ""),
         current_location_id=location_id,
         current_place=_as_text(data.get("current_place", ""), MAX_PLACE_LENGTH),
+        current_room=_optional_text(data.get("current_room")),
         entity_id=data.get("entity_id", "player"),
         inventory=[
             entity

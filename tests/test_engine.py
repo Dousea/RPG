@@ -254,6 +254,28 @@ class TurnTests(EngineTestCase):
         )
         self.assertEqual(self.engine.state()["threats"][0]["state_word"], "crawling toward you")
 
+    def test_snapshot_lists_the_rooms_with_what_an_opened_container_holds(self):
+        """Spec 25, What the narrator and the player see: `rooms`."""
+        rooms = self.engine.state()["rooms"]
+        self.assertEqual(
+            [(room["name"], room["here"]) for room in rooms],
+            [("kitchen", False), ("bedroom", False), ("bathroom", False), ("living room", True)],
+        )
+        self.assertEqual(
+            rooms[0]["containers"][0], {"name": "kitchen counter", "opened": False, "contents": []}
+        )
+        self.llm.actions = "ACTIONS:\nSEARCH kitchen counter"
+        self.engine.play("search the kitchen counter")
+        counter = self.engine.state()["rooms"][0]["containers"][0]
+        self.assertEqual(counter["opened"], True)
+        self.assertEqual(
+            counter["contents"], ["Canned Beans", "Water Bottle", "Kitchen Knife", "Frying Pan"]
+        )
+
+    def test_snapshot_rooms_is_empty_in_a_zone_without_rooms(self):
+        self.engine.game.player.current_location_id = "zone_street"
+        self.assertEqual(self.engine.state()["rooms"], [])
+
     def test_snapshot_carries_the_load_the_bags_and_heavy_load(self):
         """Spec 25, What the narrator and the player see: `carry` and the Heavy Load effect."""
         manager = self.engine.game
@@ -637,12 +659,19 @@ class LifecycleTests(EngineTestCase):
     def test_reset_does_not_leak_previous_world_state(self):
 
         self.engine.play("go out")  # now in zone_building
-        self.llm.actions = "ACTIONS:\nTAKE Painkillers"
+        self.llm.actions = (
+            "ACTIONS:\nSEARCH first-aid cabinet\nTAKE Painkillers from first-aid cabinet"
+        )
         self.engine.play("take the painkillers")
         self.engine.reset()
         self.engine.create_character(ORTON)
         building = self.engine.game.world.locations["zone_building"]
-        item_names = [e.item.name for e in building.entities if isinstance(e, ItemEntity)]
+        item_names = [
+            e.item.name
+            for room in building.rooms.values()
+            for c in room.containers
+            for e in c.contents
+        ]
         self.assertIn("Painkillers", item_names)
 
 

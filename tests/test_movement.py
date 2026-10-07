@@ -78,8 +78,8 @@ class MovementResolutionTests(unittest.TestCase):
 
     def test_naming_the_zone_itself_clears_the_spot(self):
         gm = GameManager()
-        simulate(gm, MoveAction(destination="the kitchen"))
-        self.assertEqual(gm.player.current_place, "the kitchen")
+        simulate(gm, MoveAction(destination="the window"))
+        self.assertEqual(gm.player.current_place, "the window")
         simulate(gm, MoveAction(destination="Your Apartment"))
         self.assertEqual(gm.player.current_place, "")
 

@@ -4,30 +4,6 @@ from typing import NamedTuple
 
 from modules.body import BodyPart
 
-CORPSE_LOOT_MODIFIERS = {  # spec 14: the chance multiplier for each kind of item
-    "other": 0.8,
-    "food": 0.8,
-    "key": 0.4,
-    "medical": 0.6,
-    "literature": 0.6,
-    "container": 0.6,
-    "weapon": 0.6,
-    "media": 0.6,
-    "clothing": 0.6,
-}
-
-# table item name -> (catalogue id, kind of item); names with no catalogue item are skipped when rolled
-LOOT_CATALOGUE: dict[str, tuple[str, str]] = {  # spec 14
-    "pills": ("item_painkillers", "medical"),
-    "nails": ("item_nails", "other"),
-    "kitchen_knife": ("item_kitchen_knife", "weapon"),
-    "crowbar": ("item_crowbar", "weapon"),
-    "hammer": ("item_hammer", "weapon"),
-    "plank": ("item_plank", "weapon"),
-    "baseball_bat": ("item_baseball_bat", "weapon"),
-    "hand_axe": ("item_hand_axe", "weapon"),
-}
-
 LootTable = tuple[tuple[str, float], ...]
 
 # sex -> (item name, chance in percent) in table order

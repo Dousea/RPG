@@ -325,12 +325,13 @@ so the chance is `chance x modifier / 100`. The modifier is by kind of item:
 | --- | --- |
 | other, food | 0.8 |
 | key | 0.4 |
-| medical, literature, container, weapon, media, clothing | 0.6 |
+| medical, literature, container, weapon, media, clothing, material | 0.6 |
 
-Entries whose item is not in the catalogue are skipped without a roll. Today
-Painkillers (chance 0.1, medical) is the only default-table item the catalogue
-has: 0.06% of bodies. A construction worker's table adds Nails (chance 20,
-other: 16%). A skeleton gets no pocket roll, and neither does one that rots into
+Entries whose item is not in the catalogue are skipped without a roll. The
+catalogue includes clothing, so a locket and the like can drop from pockets.
+Painkillers (chance 0.1, medical) drop from 0.06% of bodies. A construction
+worker's table adds Nails (chance 20, material: 12%). Pockets stop filling at
+12 kg. A skeleton gets no pocket roll, and neither does one that rots into
 a skeleton before it is searched. The player's own body is searched already.
 
 A corpse's contents also hold what it was wearing and carrying when it was made,

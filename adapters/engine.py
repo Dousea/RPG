@@ -31,6 +31,7 @@ from managers.event_log import build_event_entry, event_stamp
 from managers.first_aid import part_word
 from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.loot import corpse_views
+from managers.rooms import current_room
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects, player_status_effect_levels
@@ -451,6 +452,7 @@ class GameEngine:
                 for view in threat_views(manager)
             ],
             "corpses": _corpses(manager),
+            "rooms": _rooms(manager),
             "barriers": _barriers(manager),
             "sneaking": player.sneaking,
             "zombie_kills": player.zombie_kills,
@@ -473,6 +475,30 @@ def _carry(player: PlayerEntity) -> dict[str, Any]:
             for bag in carry.carried_bags(player)
         ],
     }
+
+
+def _rooms(manager: GameManager) -> list[dict[str, Any]]:
+    """The rooms of the player's zone and their containers; a container's items show only once it is opened."""
+    zone = manager.current_location
+    here = current_room(zone, manager.player)
+    return [
+        {
+            "id": room.room_id,
+            "name": room.name,
+            "here": room is here,
+            "containers": [
+                {
+                    "name": container.name,
+                    "opened": container.opened,
+                    "contents": [e.item.name for e in container.contents]
+                    if container.opened
+                    else [],
+                }
+                for container in room.containers
+            ],
+        }
+        for room in zone.rooms.values()
+    ]
 
 
 def _corpses(manager: GameManager) -> list[dict[str, Any]]:

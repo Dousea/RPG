@@ -21,9 +21,10 @@ mutable game state, so a shared dict would leak one game's dropped items into
 the next game after a reset.
 """
 
-from data.barriers import HAMMER_ITEM_ID, NAILS_ITEM_ID, PLANK_ITEM_ID
+from data.barriers import PLANK_ITEM_ID
 from data.climate import INDOORS_BY_ZONE
-from data.items import ADHESIVE_BANDAGE_ID, ALCOHOL_WIPES_ID, BANDAGE_ID, ITEMS, PAINKILLERS_ID
+from data.containers import ENTRY_ROOMS, build_rooms
+from data.items import ITEMS
 from data.zombie_lore import ZONE_ZOMBIE_FIELDS
 from modules.entity.item import ItemEntity
 from modules.location import Location
@@ -48,30 +49,6 @@ ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_neighborhood": ("neighborhood", "neighbourhood"),
 }
 
-FIRST_AID_KIT_CONTENTS = [  # spec 12: fixed contents stand in for the kit's loot rolls
-    BANDAGE_ID,
-    BANDAGE_ID,
-    ADHESIVE_BANDAGE_ID,
-    ALCOHOL_WIPES_ID,
-    PAINKILLERS_ID,
-]
-
-BASEMENT_STORAGE_CONTENTS = [  # spec 13: stands in for the basement storage loot
-    HAMMER_ITEM_ID,
-    NAILS_ITEM_ID,
-    PLANK_ITEM_ID,
-    PLANK_ITEM_ID,
-    "item_hand_axe",  # spec 11
-]
-CORNER_STORE_CONTENTS = [  # spec 03: stands in for the store's loot rolls
-    "item_canned_beans",
-    "item_canned_beans",
-    "item_water_bottle",
-    "item_water_bottle",
-    "item_granola_bar",
-    "item_granola_bar",
-    "item_instant_noodles",
-]
 ALLEY_CONTENTS = [PLANK_ITEM_ID, PLANK_ITEM_ID]  # spec 13
 APARTMENT_BLOCK_ID = "apartment_block"  # spec 13
 BUILDING_ZONE_IDS = ("zone_home", "zone_building")  # spec 13
@@ -233,19 +210,13 @@ def build_starting_locations() -> dict[str, Location]:
         locations[zone_id].building = APARTMENT_BLOCK_ID  # spec 13
     locations["zone_bodega"].building = CORNER_STORE_ID
 
+    for zone_id, entry_room in ENTRY_ROOMS.items():
+        locations[zone_id].rooms = build_rooms(zone_id)
+        locations[zone_id].entry_room = entry_room
+
     starting_ground_items = {
-        "zone_home": [
-            "item_canned_beans",
-            "item_water_bottle",
-            "item_black_jacket",
-            "item_kitchen_knife",
-            "item_frying_pan",  # spec 11
-            "item_schoolbag",  # spec 25
-        ],
         "zone_neighborhood": ["item_baseball_bat"],  # spec 11
-        "zone_building": [*FIRST_AID_KIT_CONTENTS, *BASEMENT_STORAGE_CONTENTS],
         "zone_street": ["item_crowbar", *ALLEY_CONTENTS],
-        "zone_bodega": CORNER_STORE_CONTENTS,
     }
     for location_id, item_ids in starting_ground_items.items():
         locations[location_id].entities.extend(

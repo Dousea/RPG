@@ -13,6 +13,7 @@ from modules.action.types import (
     MoveAction,
     OpenAction,
     PutAction,
+    SearchAction,
     ShoveAction,
     SleepAction,
     TakeAction,
@@ -30,11 +31,14 @@ from modules.entity.zombie import ZombieEntity, ZombieState
 from modules.resolution import (
     HeldItem,
     MoveBlocked,
+    MoveToRoom,
     MoveToSpot,
     MoveToZone,
     ShuffleInZone,
     TargetBarrier,
+    TargetContainer,
     TargetNpc,
+    TargetRoom,
     TimeSpan,
     Transfer,
 )
@@ -446,6 +450,8 @@ class CarryRefusalTests(unittest.TestCase):
 
     def test_take_all_past_fifty_kilos_refuses_the_lot(self):
         load_pack(self.gm.player, 45)
+        for item_id in ("item_plank", "item_plank", "item_plank"):
+            self.gm.current_location.entities.append(ItemEntity(item=ITEMS[item_id]))
         self.assertEqual(
             self.reason(TakeAction(item_name="all", all_items=True)), "Orton can't carry any more."
         )
@@ -635,3 +641,81 @@ class BarrierValidationTests(unittest.TestCase):
         result = self.validator.validate(MoveAction(destination="out"))
         assert isinstance(result, Accepted)
         self.assertIsInstance(result.resolved, MoveToZone)
+
+
+class RoomVerbTests(unittest.TestCase):
+    """Spec 25, Verbs: what the validator makes of rooms and containers."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def accepted(self, action):
+        result = self.validator.validate(action)
+        assert isinstance(result, Accepted), result
+        return result.resolved
+
+    def reason(self, action) -> str:
+        result = self.validator.validate(action)
+        assert isinstance(result, Rejected), result
+        return result.reason
+
+    def test_a_room_name_resolves_to_a_room_move_before_any_zone(self):
+        resolved = self.accepted(MoveAction(destination="the bedroom"))
+        assert isinstance(resolved, MoveToRoom)
+        self.assertEqual(resolved.room.room_id, "bedroom")
+
+    def test_the_room_the_player_is_in_is_refused(self):
+        self.assertEqual(
+            self.reason(MoveAction(destination="living room")),
+            "Orton is already in the living room.",
+        )
+
+    def test_search_of_a_room_here_walks_nowhere_and_lists_its_unopened_containers(self):
+        resolved = self.accepted(SearchAction(target_name="living room"))
+        assert isinstance(resolved, TargetRoom)
+        self.assertFalse(resolved.walk)
+        self.assertEqual(
+            [c.name for c in resolved.containers], ["side table", "living room shelves"]
+        )
+
+    def test_search_of_a_room_elsewhere_walks_first(self):
+        resolved = self.accepted(SearchAction(target_name="bedroom"))
+        assert isinstance(resolved, TargetRoom)
+        self.assertTrue(resolved.walk)
+
+    def test_search_of_a_container_names_its_room(self):
+        resolved = self.accepted(SearchAction(target_name="dresser"))
+        assert isinstance(resolved, TargetContainer)
+        self.assertEqual((resolved.room.room_id, resolved.walk), ("bedroom", True))
+
+    def test_search_of_an_opened_container_is_refused(self):
+        self.gm.world.locations["zone_home"].rooms["living_room"].containers[0].opened = True
+        self.assertEqual(
+            self.reason(SearchAction(target_name="side table")),
+            "Orton has already been through the side table.",
+        )
+
+    def test_search_of_nothing_is_refused(self):
+        self.assertEqual(
+            self.reason(SearchAction(target_name="attic")), "There is no 'attic' to search here."
+        )
+
+    def test_a_sleeper_cannot_search(self):
+        self.gm.player.asleep = True
+        self.assertIn("asleep", self.reason(SearchAction(target_name="living room")).lower())
+
+    def test_take_from_a_closed_container_is_refused(self):
+        self.gm.player.current_room = "kitchen"
+        self.assertEqual(
+            self.reason(TakeAction(item_name="Water Bottle", from_name="kitchen counter")),
+            "The kitchen counter hasn't been gone through.",
+        )
+
+    def test_put_into_a_closed_container_is_refused(self):
+        self.gm.player.current_room = "kitchen"
+        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_hammer"]))
+        self.assertEqual(
+            self.reason(PutAction(item_name="Hammer", target_name="kitchen counter")),
+            "The kitchen counter hasn't been gone through.",
+        )
