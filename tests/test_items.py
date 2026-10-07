@@ -6,7 +6,7 @@ from data.items import ITEMS
 from data.locations import build_starting_locations
 from data.melee import BARE_HANDS
 from modules.entity.item import ItemEntity
-from modules.item import MedicalItem, MeleeWeaponItem
+from modules.item import MedicalItem, MeleeWeaponItem, StackItem
 
 
 def weapon(item_id: str) -> MeleeWeaponItem:
@@ -132,7 +132,66 @@ class MedicalCatalogueTests(unittest.TestCase):
         names = sorted(
             entity.item.name for entity in building.entities if isinstance(entity, ItemEntity)
         )
+        kit = [name for name in names if name not in {"Hammer", "Nails", "Plank"}]
         self.assertEqual(
-            names,
+            kit,
             ["Adhesive Bandage", "Alcohol Wipes", "Bandage", "Bandage", "Painkillers"],
         )
+
+
+class BarrierItemTests(unittest.TestCase):
+    """Spec 13, Items."""
+
+    def test_the_hammer_has_its_catalogue_stats(self):
+        hammer = ITEMS["item_hammer"]
+        self.assertIsInstance(hammer, MeleeWeaponItem)
+        assert isinstance(hammer, MeleeWeaponItem)
+        self.assertEqual(hammer.categories, ("smallblunt",))
+        self.assertEqual(hammer.door_damage, 9)
+        self.assertEqual(hammer.condition_max, 10)
+        self.assertEqual(hammer.condition_lower_chance, 30)
+        self.assertFalse(hammer.is_two_handed)
+        self.assertEqual((hammer.min_damage, hammer.max_damage), (0.5, 1.0))
+        self.assertEqual((hammer.critical_chance, hammer.crit_dmg_multiplier), (20.0, 3.0))
+        self.assertEqual((hammer.max_range, hammer.max_hit_count, hammer.weight), (1.1, 1, 1.5))
+        self.assertIn("hammer", hammer.tags)
+        self.assertIn("removes_barricade", hammer.tags)
+
+    def test_the_plank_is_a_two_handed_club_with_door_damage_5(self):
+        plank = ITEMS["item_plank"]
+        assert isinstance(plank, MeleeWeaponItem)
+        self.assertTrue(plank.is_two_handed)
+        self.assertEqual(plank.categories, ("blunt",))
+        self.assertEqual(
+            (plank.door_damage, plank.condition_max, plank.condition_lower_chance), (5, 10, 2)
+        )
+        self.assertEqual((plank.min_damage, plank.max_damage), (0.4, 0.6))
+        self.assertEqual((plank.max_range, plank.max_hit_count, plank.weight), (1.3, 2, 3.0))
+        self.assertEqual((plank.critical_chance, plank.crit_dmg_multiplier), (30.0, 2.0))
+
+    def test_nails_come_five_to_a_stack(self):
+        nails = ITEMS["item_nails"]
+        self.assertIsInstance(nails, StackItem)
+        self.assertEqual(ItemEntity(item=nails).uses, 5)
+
+    def test_the_crowbar_pries_planks_off(self):
+        self.assertIn("removes_barricade", ITEMS["item_crowbar"].tags)
+
+    def test_a_new_hammer_and_plank_are_at_full_condition(self):
+        self.assertEqual(ItemEntity(item=ITEMS["item_hammer"]).condition, 10)
+        self.assertEqual(ItemEntity(item=ITEMS["item_plank"]).condition, 10)
+
+    def test_the_basement_storage_and_the_alley_hold_the_materials(self):
+        zones = build_starting_locations()
+
+        def names(zone_id: str) -> list[str]:
+            return sorted(e.item.name for e in zones[zone_id].entities if isinstance(e, ItemEntity))
+
+        building = names("zone_building")
+        self.assertEqual(
+            [n for n in building if n in {"Hammer", "Nails", "Plank"}],
+            ["Hammer", "Nails", "Plank", "Plank"],
+        )
+        street = names("zone_street")
+        self.assertEqual(street.count("Plank"), 2)
+        self.assertIn("Crowbar", street)

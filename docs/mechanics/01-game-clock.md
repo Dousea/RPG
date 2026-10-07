@@ -79,7 +79,10 @@ the validator's resolved data and returns whole minutes.
 | `TAKE`, `DROP` | 1 |
 | `USE_ITEM` on food or drink | the item's `eat_minutes` (default 5) |
 | `USE_ITEM` on anything else | 1 |
-| `MOVE_TO` another zone | 10 per hop |
+| `OPEN`, `CLOSE` | 0 |
+| `BARRICADE`, `UNBARRICADE`, `ATTACK` on a door, window or plank | 1 |
+| walking to a door or window the player isn't at | 1, before the action |
+| `MOVE_TO` another zone | 10 per hop, +1 through a window |
 | `MOVE_TO` stopped at a locked door | 10 per hop walked, at least 1 |
 | `MOVE_TO` within a zone to a named spot, or a bare direction | 1 |
 | `MOVE_TO` with no destination, or to the spot the player is already at | 0 |

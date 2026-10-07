@@ -98,9 +98,11 @@ drift apart.
 | `USE_ITEM` | item (eating and drinking too) | 1, or the food's time |
 | `WEAR` / `TAKE_OFF` | clothing item | 1 |
 | `EXERCISE` | type, optional minutes | as done |
-| `ATTACK` | NPC name, zombie id, or `zombie` | 1 per swing |
+| `ATTACK` | NPC name, zombie id, `zombie`, or a door or window | 1 per swing |
 | `SHOVE` | zombie id, or `zombie` | 1 per swing |
 | `EQUIP` / `UNEQUIP` | item | 1 |
+| `OPEN` / `CLOSE` | door or window | 0 |
+| `BARRICADE` / `UNBARRICADE` | door or window | 1 |
 | `BANDAGE` | body part, optional `with` item | 1 |
 | `REMOVE_BANDAGE` | body part | 1 |
 | `DISINFECT` | body part, optional `with` item | 1 |
@@ -155,6 +157,7 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[ITEMS HERE]` | item names |
 | `[NPCS HERE]` | each NPC, "(following you)" when they follow, what they hold, and a line per available topic |
 | `[THREATS]` | perceived zombie ids with distance words |
+| `[DOORS AND WINDOWS]` | the doors and windows of the zone in words and plank counts; the names are the targets of the door verbs ([doors](13-doors-and-barricades.md#what-the-narrator-and-the-player-see)) |
 | `[INVENTORY]` | carried items |
 | `[WORN]` | the worn outfit |
 | `[CONDITION]` | status effects by name and level, `sneaking` |
@@ -182,7 +185,8 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `WEAR` | `wearable` | clothing is carried or lies here, so `TAKE` then `WEAR` can be planned |
 | `TAKE_OFF` | `worn` | something is worn or in hand |
 | `TALK`, `ASK`, `GIVE` | `npcs_here` | someone is here |
-| `ATTACK` | `npcs_here`, `threats` | someone is here, or a zombie is perceived |
+| `ATTACK` | `npcs_here`, `threats`, `barriers` | someone is here, a zombie is perceived, or a door or window is here |
+| `OPEN`, `CLOSE`, `BARRICADE`, `UNBARRICADE` | `barriers` | the zone has a door or window ([doors](13-doors-and-barricades.md)) |
 | `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](12-health-and-infection.md)) |
 
 With nothing present, the block lists the eight always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. `EAT` and `DRINK` parse as `USE_ITEM`. Closed labels inside a listed verb are printed in full.
@@ -378,6 +382,7 @@ without this it left out an approaching zombie or the people in the room.
 | `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
 | `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, discovered flags |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
+| `[DOORS AND WINDOWS]` | as the parser sees it |
 | `[CONDITION]` | status effects by name and level, asleep, sneaking, conditions an item put on the character |
 | `[QUESTS]` | active quests |
 | `[NPCS PRESENT]` | each NPC with disposition and trust bands, status, personality, visible intent, and "Following Orton" |

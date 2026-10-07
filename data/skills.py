@@ -51,6 +51,7 @@ SKILLS: dict[str, Skill] = {row.id: row for row in _ROWS}  # spec 08: 35 skills
 
 FITNESS = "fitness"
 STRENGTH = "strength"
+CARPENTRY = "carpentry"  # spec 13
 RUNNING = "running"
 AXE = "axe"  # spec 09
 LIGHTFOOTED = "lightfooted"  # spec 09

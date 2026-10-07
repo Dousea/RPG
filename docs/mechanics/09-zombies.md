@@ -112,8 +112,9 @@ chance and 3 with a 40% chance, using the simulation's own random source.
   A zombie arriving in the player's zone gets a gap and a facing.
 - **No respawn:** a killed zombie is gone for good. The zone's kill count keeps
   its population from growing back over it.
-- **Closed doors:** redistribution never moves a zombie across a locked door, and
-  a zone whose every connection is blocked gains no new zombies.
+- **Closed doors:** redistribution never moves a zombie across a blocking door or
+  window, and a zone whose every connection is blocked gains no new zombies; see
+  [doors](13-doors-and-barricades.md#thumping).
 
 ## A zombie
 
@@ -142,6 +143,9 @@ alerted).
 - **alerted:** heard a sound and walks toward it, facing the way it walks.
 - **chasing:** has spotted the player, faces them and closes the gap.
 - **attacking:** within 1 tile; attacks each minute.
+- **thumping:** held at a blocking door or window, pounding on it; see
+  [doors](13-doors-and-barricades.md#thumping). A new step 3a of the minute loop
+  deals its thumps.
 
 A zombie at 0 health is removed from the world.
 
@@ -155,6 +159,7 @@ stat chunk that covers that minute. It runs only after the outbreak. Each minute
 2. **Hearing:** each idle or alerted zombie checks the loudest sound it hears.
 3. **Movement:** alerted and chasing zombies close their gap; the player's own
    movement opens it.
+   3a. **Thumping:** each thumping zombie deals its thumps ([doors](13-doors-and-barricades.md#thumping)).
 4. **Spotting:** each idle or alerted zombie in the player's zone, and each
    chasing zombie, rolls to see the player.
 5. **Memory:** timers advance; a chaser that lost the player goes idle.
@@ -258,8 +263,9 @@ stands. An alerted zombie in another zone that gets within the player's zone
 size enters it, with its gap equal to what remains. A zombie alerted inside the player's zone
 walks to the sound and idles there; if the player leaves the zone first, it goes
 idle where it stands instead of following. An alerted zombie that
-reaches the player becomes a chaser. A closed door between an alerted or
-chasing zombie and the player stops it: it goes idle.
+reaches the player becomes a chaser. A blocking door or window between an alerted or
+chasing zombie and the player stops it, and it thumps on it; see
+[doors](13-doors-and-barricades.md#thumping).
 
 ## Spotting
 
@@ -492,8 +498,9 @@ and `player.sneaking`. A zombie in an unknown zone is dropped on load.
 
 ## Edge cases
 
-- **Closed doors.** A locked door stops an alerted or chasing zombie, which goes
-  idle. Redistribution never crosses one.
+- **Closed doors.** A blocking door stops an alerted or chasing zombie, which
+  thumps on it. Redistribution never crosses one. See
+  [doors](13-doors-and-barricades.md#thumping).
 - **The outbreak starting mid-action.** The zones fill at that minute, the
   player's own zone included.
 - **Asleep.** Spotting uses the standing-still factor and there are no

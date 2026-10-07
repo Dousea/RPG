@@ -269,8 +269,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_17(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 17)
+    def test_schema_version_is_18(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 18)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -971,3 +971,72 @@ class BodySaveTests(IsolatedSaveTestCase):
         data["player"]["body"]["tail"] = {"health": 3}
         loaded = codec.from_dict(data)
         self.assertEqual(set(loaded.player.body), set(BodyPart))
+
+
+class BarrierSaveTests(IsolatedSaveTestCase):
+    """Spec 13, Saves."""
+
+    def test_barriers_plank_healths_and_the_players_barrier_round_trip(self):
+        gm = GameManager()
+        door = gm.world.barriers["door_apartment"]
+        door.open = True
+        door.locked = False
+        door.health = 321
+        door.barricades["zone_home"] = [1000, 640]
+        door.barricades["zone_building"] = [88]
+        lobby = gm.world.barriers["door_lobby"]
+        lobby.broken = True
+        gm.player.at_barrier = "door_apartment"
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.world.barriers, gm.world.barriers)
+        self.assertEqual(loaded.player.at_barrier, "door_apartment")
+        self.assertEqual(
+            loaded.world.barriers["door_apartment"].barricades["zone_home"], [1000, 640]
+        )
+
+    def test_a_barrier_missing_from_a_save_is_rebuilt_from_the_data(self):
+        gm = GameManager()
+        data = codec.to_dict(gm)
+        del data["world"]["barriers"]
+        loaded = codec.from_dict(data)
+        self.assertEqual(set(loaded.world.barriers), {"door_apartment", "door_lobby"})
+
+    def test_thumping_fields_round_trip(self):
+        gm = GameManager()
+        zombie = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_building",
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.THUMPING,
+            thump_barrier="door_apartment",
+            thump_rate=1.40625,
+            thump_carry=0.25,
+            thump_cooldown=2,
+            was_chasing=True,
+        )
+        gm.world.zombies["z1"] = zombie
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.world.zombies["z1"], zombie)
+
+    def test_the_nails_uses_and_the_building_round_trip(self):
+        gm = GameManager()
+        nails = ItemEntity(item=ITEMS["item_nails"])
+        nails.uses = 3
+        gm.player.inventory.append(nails)
+        files.save(gm, self.save_path)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        saved = [e for e in loaded.player.inventory if e.item.id == "item_nails"]
+        self.assertEqual([e.uses for e in saved], [3])
+        self.assertEqual(loaded.world.locations["zone_building"].building, "apartment_block")

@@ -105,6 +105,13 @@ class MedicalItem(HoldableItem):
 
 
 @dataclass
+class StackItem(HoldableItem):
+    """A stack of small things such as nails; `uses` is how many a full stack holds (spec 13)."""
+
+    uses: int = 1
+
+
+@dataclass
 class MeleeWeaponItem(HoldableItem):
     """A melee weapon's stats; the runtime `condition` lives on its `ItemEntity`."""
 

@@ -21,6 +21,7 @@ from modules.body import BodyPart
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
@@ -940,6 +941,7 @@ class ParserBlockOrderTests(unittest.TestCase):
             "[ITEMS HERE]",
             "[NPCS HERE]",
             "[THREATS]",
+            "[DOORS AND WINDOWS]",
             "[INVENTORY]",
             "[WORN]",
             "[CONDITION]",
@@ -953,7 +955,6 @@ class ParserBlockOrderTests(unittest.TestCase):
 
     def test_blocks_of_later_specs_are_omitted_until_they_land(self):
         prompt = self.builder.build_parser_prompt("look")
-        self.assertNotIn("[DOORS AND WINDOWS]", prompt)
         self.assertNotIn("[CORPSES]", prompt)
 
     def test_character_is_the_name_and_pronouns_only(self):
@@ -1157,6 +1158,7 @@ class SceneKeyTests(unittest.TestCase):
         self.gm.player.inventory.clear()
         self.gm.player.worn.clear()
         self.gm.current_location.entities.clear()
+        self.gm.world.barriers.clear()
         self.builder = ContextBuilder(self.gm)
 
     def test_a_bare_scene_has_no_keys_and_lists_the_eight_verbs(self):
@@ -1384,3 +1386,124 @@ class NarratorBudgetTests(unittest.TestCase):
         with mock.patch("managers.context.logger") as log:
             self.prompt(len(self.prompt()))
         log.warning.assert_not_called()
+
+
+class BarrierBlockTests(unittest.TestCase):
+    """Spec 13, What the narrator and the player see."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.builder = ContextBuilder(self.gm)
+
+    def block(self, prompt: str) -> str:
+        return prompt.split("[DOORS AND WINDOWS]")[1].split("\n[")[0].strip()
+
+    def test_the_parser_block_names_each_barrier_of_the_zone_in_words(self):
+        block = self.block(self.builder.build_parser_prompt("look"))
+        self.assertEqual(block, "- apartment door (to Your Building): closed, locked")
+
+    def test_planks_on_each_side_and_pounding_are_counted_in_words(self):
+        door = self.gm.world.barriers["door_apartment"]
+        door.barricades["zone_home"] = [900, 800, 700]
+        door.barricades["zone_building"] = [400]
+        self.gm.world.outbreak_started_at = 0
+        self.gm.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_building",
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.THUMPING,
+            thump_barrier="door_apartment",
+            thump_rate=1.5,
+        )
+        block = self.block(self.builder.build_parser_prompt("look"))
+        self.assertEqual(
+            block,
+            "- apartment door (to Your Building): closed, locked; 3 planks on this side; "
+            "1 plank on the far side; something pounding on the other side",
+        )
+
+    def test_the_narrator_sees_the_block_too_and_never_a_health(self):
+        door = self.gm.world.barriers["door_apartment"]
+        door.health = 123
+        door.barricades["zone_home"] = [777]
+        prompt = self.builder.build_narrator_prompt("look")
+        self.assertIn("[DOORS AND WINDOWS]", prompt)
+        block = self.block(prompt)
+        self.assertNotIn("123", block)
+        self.assertNotIn("777", block)
+        self.assertNotIn("500", block)
+
+    def test_a_broken_door_and_an_open_one_read_as_such(self):
+        door = self.gm.world.barriers["door_apartment"]
+        door.open = True
+        self.assertIn("open", self.block(self.builder.build_parser_prompt("look")))
+        door.open = False
+        door.broken = True
+        self.assertIn("broken", self.block(self.builder.build_parser_prompt("look")))
+
+    def test_threats_list_a_seen_thumper_by_id_and_an_only_heard_one_in_words(self):
+        self.gm.world.outbreak_started_at = 0
+        window = BarrierEntity(
+            barrier_id="window_test",
+            kind=BarrierKind.WINDOW,
+            zones=("zone_home", "zone_building"),
+            inside_zone="zone_home",
+            name="kitchen window",
+            health=50,
+            max_health=50,
+        )
+        self.gm.world.barriers["window_test"] = window
+        for number, barrier_id in ((1, "window_test"), (2, "door_apartment")):
+            self.gm.world.zombies[f"z{number}"] = ZombieEntity(
+                zombie_id=f"z{number}",
+                zone_id="zone_building",
+                health=2.0,
+                speed_type=3,
+                speed_mod=0.6,
+                lunger=False,
+                strength=3,
+                memory=800,
+                sight=2,
+                hearing=2,
+                state=ZombieState.THUMPING,
+                thump_barrier=barrier_id,
+                thump_rate=1.5,
+            )
+        parser = self.builder.build_parser_prompt("look")
+        threats = parser.split("[THREATS]")[1].split("[DOORS AND WINDOWS]")[0].strip()
+        self.assertEqual(threats, "- z1 (behind the kitchen window)")
+        narrator = self.builder.build_narrator_prompt("look")
+        section = narrator.split("[THREATS]")[1].split("[OUTCOMES]")[0]
+        self.assertIn("a zombie, behind the kitchen window, pounding", section)
+        self.assertIn("something at the apartment door", section)
+
+    def test_a_deaf_player_perceives_a_thumper_only_through_glass(self):
+        self.gm.world.outbreak_started_at = 0
+        self.gm.player.traits.append("deaf")
+        self.gm.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_building",
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.THUMPING,
+            thump_barrier="door_apartment",
+            thump_rate=1.5,
+        )
+        self.assertEqual(self.builder._threats_section(), "None")
+
+    def test_the_door_verbs_are_listed_where_there_is_a_door(self):
+        listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
+        self.assertTrue({"OPEN", "CLOSE", "BARRICADE", "UNBARRICADE", "ATTACK"} <= listed)

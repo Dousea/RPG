@@ -22,6 +22,7 @@ from data.occupations import OCCUPATIONS
 from data.skills import SKILLS
 from data.traits import TRAITS
 from managers import creation
+from managers.barriers import barriers_of, state_word
 from managers.body import open_wounds
 from managers.climate import weather_summary
 from managers.combat import held_entity
@@ -40,7 +41,7 @@ from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
-from modules.item import MedicalItem, MeleeWeaponItem
+from modules.item import MedicalItem, MeleeWeaponItem, StackItem
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
@@ -446,9 +447,27 @@ class GameEngine:
                 }
                 for view in threat_views(manager)
             ],
+            "barriers": _barriers(manager),
             "sneaking": player.sneaking,
             "zombie_kills": player.zombie_kills,
         }
+
+
+def _barriers(manager: GameManager) -> list[dict[str, Any]]:
+    """The doors and windows of the player's zone in words, with plank counts on each side."""
+    here = manager.player.current_location_id
+    pounding = {view.barrier_id for view in threat_views(manager) if view.barrier_id is not None}
+    return [
+        {
+            "id": barrier.barrier_id,
+            "name": barrier.name,
+            "state_word": state_word(barrier),
+            "planks_here": barrier.plank_count(here),
+            "planks_far": barrier.plank_count(barrier.far_side(here)),
+            "thumping": barrier.barrier_id in pounding,
+        }
+        for barrier in barriers_of(manager.world, here)
+    ]
 
 
 def _trait_entries(player: PlayerEntity) -> list[dict[str, str]]:
@@ -529,7 +548,7 @@ def _body(player: PlayerEntity) -> list[dict[str, Any]]:
 def _condition(entity: ItemEntity) -> str:
     if isinstance(entity.item, MeleeWeaponItem):
         return item_condition_word(entity)
-    if isinstance(entity.item, MedicalItem):
+    if isinstance(entity.item, MedicalItem | StackItem):
         return f"{entity.uses} left" if entity.item.uses > 1 else item_condition_word(entity)
     return f"{entity.hit_points}/{entity.max_hit_points}"
 

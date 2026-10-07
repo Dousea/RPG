@@ -43,6 +43,7 @@ class SceneChoices:
     disinfectants: tuple[str, ...] = ()
     npc_items: tuple[str, ...] = ()
     topics: tuple[str, ...] = ()
+    barriers: tuple[str, ...] = ()
     exercises: tuple[str, ...] = ()
     exercise_minutes: tuple[int, ...] = ()
     times_of_day: tuple[str, ...] = ()
@@ -119,7 +120,11 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             )
         case "ATTACK":
             nearest = ("zombie",) if choices.zombie_ids else ()
-            return _target_branch(name, (*choices.npcs, *choices.zombie_ids, *nearest))
+            return _target_branch(
+                name, (*choices.npcs, *choices.zombie_ids, *nearest, *choices.barriers)
+            )
+        case "OPEN" | "CLOSE" | "BARRICADE" | "UNBARRICADE":
+            return _target_branch(name, choices.barriers)
         case "SHOVE":
             return _target_branch(name, choices.zombie_ids)
         case "SHOUT":
@@ -274,6 +279,10 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "EXERCISE": _exercise_line,
     "ATTACK": _target_line("ATTACK"),
     "SHOVE": _target_line("SHOVE"),
+    "OPEN": _target_line("OPEN"),
+    "CLOSE": _target_line("CLOSE"),
+    "BARRICADE": _target_line("BARRICADE"),
+    "UNBARRICADE": _target_line("UNBARRICADE"),
     "SHOUT": lambda fields: "SHOUT",
     "TALK": lambda fields: _line("TALK", _text(fields, "npc"), _text(fields, "approach")),
     "ASK": _ask_line,

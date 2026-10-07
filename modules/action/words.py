@@ -7,11 +7,14 @@ from modules.action.types import (
     AnyAction,
     AttackAction,
     BandageAction,
+    BarricadeAction,
+    CloseAction,
     DisinfectAction,
     DropAction,
     EquipAction,
     ExerciseAction,
     MoveAction,
+    OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
@@ -20,6 +23,7 @@ from modules.action.types import (
     StanceAction,
     TakeAction,
     TakeOffAction,
+    UnbarricadeAction,
     UnequipAction,
     UseItemAction,
     WaitAction,
@@ -56,6 +60,14 @@ def describe_action(action: AnyAction) -> str:
             return f"attack {name}"
         case ShoveAction(target_name=name):
             return f"shove {name}"
+        case OpenAction(barrier_name=name):
+            return f"open the {name}"
+        case CloseAction(barrier_name=name):
+            return f"close the {name}"
+        case BarricadeAction(barrier_name=name):
+            return f"board up the {name}"
+        case UnbarricadeAction(barrier_name=name):
+            return f"pry the planks off the {name}"
         case EquipAction(item_name=name):
             return f"take the {name} in hand"
         case UnequipAction(item_name=name):

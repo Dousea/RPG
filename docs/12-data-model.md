@@ -270,15 +270,11 @@ World(time, date, locations: dict[str, Location])
 ```
 
 `connections` itself still maps a direction to a bare destination id with no
-requirements field — but a requirement can now sit *alongside* it: a
-`DoorEntity` placed in `Location.entities` (see `data/locations.py`'s
-apartment door, on `zone_building` leading into `zone_home`) carries `leads_to`, `state`
-(`UnlockableEntityLockState.LOCKED`/`UNLOCKED`) and `key_id`, and
-`managers/validator.py`'s `ActionValidator` checks for one blocking a
-`MOVE_TO` before accepting it. This is exits-as-structured-data for the one
-case that exists (a locked door with a key), not the general
-hidden/blocked/destroyed-exit model this document describes — there is still
-no way to mark an exit merely hidden, or damaged rather than locked.
+requirements field. A requirement sits alongside it as a barrier: a door or window
+on a connection, in `World.barriers`, with a lock, a key and planks; see
+[doors and barricades](mechanics/13-doors-and-barricades.md). `ActionValidator`
+checks for one blocking a `MOVE_TO` before accepting it. There is still no way to
+mark an exit merely hidden, or damaged rather than locked.
 
 `World.time` and `World.date` are derived from the minute clock; see
 [the game clock](mechanics/01-game-clock.md).

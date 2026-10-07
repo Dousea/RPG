@@ -78,16 +78,23 @@ def trait_for_level(skill_id: str, level: int) -> str | None:
 class SkillEngine:
     """Awards and removes skill XP and keeps the level-bound traits in step."""
 
-    def add_xp(self, player: PlayerEntity, skill_id: str, amount: float) -> list[str]:
-        """Add `amount` XP to a skill after the multipliers; returns the level-change facts."""
+    def add_xp(
+        self, player: PlayerEntity, skill_id: str, amount: float, *, chain: bool = True
+    ) -> list[str]:
+        """Add `amount` XP to a skill after the multipliers; returns the level-change facts.
+
+        With `chain` false the amount goes in flat, skipping the boost, trait and global multipliers.
+        """
         if player.asleep:
             return []
         state = player.skills.setdefault(skill_id, SkillState())
         cap = k.total_xp_for_level(skill_id, k.MAX_LEVEL)
         if amount > 0 and state.xp >= cap:
             return []
-        scaled = amount * _boost_multiplier(skill_id, player.skill_boosts.get(skill_id, 0))
-        scaled *= _trait_multiplier(skill_id, player.traits) * k.GLOBAL_XP_MULTIPLIER
+        scaled = amount
+        if chain:
+            scaled *= _boost_multiplier(skill_id, player.skill_boosts.get(skill_id, 0))
+            scaled *= _trait_multiplier(skill_id, player.traits) * k.GLOBAL_XP_MULTIPLIER
         state.xp = max(0.0, min(float(cap), state.xp + scaled))
         if amount > 0 and skill_id in k.PASSIVE_SKILLS:
             timer = player.loss_timers.get(skill_id, k.LOSS_TIMER_START)

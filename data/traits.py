@@ -973,4 +973,6 @@ THIN_SKINNED_ID = "thinskinned"  # spec 09
 KEEN_HEARING_ID = "keenhearing"  # spec 09
 HARD_OF_HEARING_ID = "hardofhearing"  # spec 09
 DEAF_ID = "deaf"  # spec 09
+JOGGER_ID = "jogger"  # spec 13
+HANDY_ID = "handy"  # spec 13
 ASTHMATIC_ID = "asthmatic"  # spec 11

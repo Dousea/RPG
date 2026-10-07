@@ -24,15 +24,6 @@ class UnlockableEntity(BaseEntity):
 
 
 @dataclass
-class DoorEntity(UnlockableEntity):
-    leads_to: str  # The location_id it connects to
-
-    @property
-    def max_hit_points(self) -> int:
-        return 100
-
-
-@dataclass
 class ContainerEntity(UnlockableEntity):
     items: list[ItemEntity] = field(default_factory=list[ItemEntity])
 

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from .entity import BaseEntity
+from .entity.barrier import BarrierEntity
 from .entity.zombie import ZombieEntity
 
 
@@ -29,6 +30,8 @@ class Location:
     size_tiles: int = 8
     chunks: int = 1
     zombie_intensity: int = 0
+    # The building the zone is part of, if any; a barrier of the building wakes everyone in it (spec 13).
+    building: str | None = None
 
     def bed_type_at(self, place: str) -> str:
         """The bed type at a free-text spot inside this zone."""
@@ -66,3 +69,5 @@ class World:
     zombie_kills: dict[str, int] = field(default_factory=dict[str, int])
     # Story beats that have fired, by id, with the game minute they fired (spec 10).
     fired_beats: dict[str, int] = field(default_factory=dict[str, int])
+    # Doors and windows, each on the connection between two zones (spec 13).
+    barriers: dict[str, BarrierEntity] = field(default_factory=dict[str, BarrierEntity])

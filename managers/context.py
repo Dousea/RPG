@@ -34,6 +34,7 @@ from data.social import TALK_APPROACHES
 from data.status_effects import STATUS_EFFECT_MAX_LEVEL
 from data.time_costs import MAX_PLAN_ACTIONS
 from data.traits import TRAITS
+from managers.barriers import barriers_of, state_word
 from managers.body import open_wounds
 from managers.climate import describe_weather
 from managers.combat import held_entity
@@ -45,8 +46,9 @@ from managers.story import visible_topics
 from managers.zombies import threat_views
 from modules.action.parser import SceneKey, available_verbs
 from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
+from modules.entity.barrier import BarrierEntity
 from modules.entity.item import ItemEntity
-from modules.item import ClothingItem, MedicalItem
+from modules.item import ClothingItem, MedicalItem, StackItem
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
@@ -263,6 +265,31 @@ class ContextBuilder:
                 lines.append(f" - a zombie, {view.distance_word}, {view.state_word}")
         return "\n".join(lines) or "None"
 
+    def _barrier_line(self, barrier: BarrierEntity, pounding: set[str]) -> str:
+        """One barrier of the player's zone in words: its state, its planks and what pounds on it."""
+        manager = self.manager
+        here = manager.player.current_location_id
+        beyond = manager.world.locations[barrier.far_side(here)].name
+        parts = [state_word(barrier)]
+        for side, where in ((here, "on this side"), (barrier.far_side(here), "on the far side")):
+            count = barrier.plank_count(side)
+            if count:
+                parts.append(f"{count} plank{'s' if count != 1 else ''} {where}")
+        if barrier.barrier_id in pounding:
+            parts.append("something pounding on the other side")
+        return f" - {barrier.name} (to {beyond}): {'; '.join(parts)}"
+
+    def _barriers_section(self) -> str:
+        """[DOORS AND WINDOWS]: one line per barrier of the player's zone, in words and counts only."""
+        manager = self.manager
+        barriers = barriers_of(manager.world, manager.player.current_location_id)
+        if not barriers:
+            return "None"
+        pounding = {
+            view.barrier_id for view in threat_views(manager) if view.barrier_id is not None
+        }
+        return "\n".join(self._barrier_line(barrier, pounding) for barrier in barriers)
+
     def _in_view_section(self) -> str:
         """[IN VIEW] after the outcomes: every perceived zombie, then everyone present.
 
@@ -409,6 +436,8 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("threats")
         if any(state.injured or state.bandaged for state in player.body.values()):
             keys.add("hurt")
+        if barriers_of(manager.world, player.current_location_id):
+            keys.add("barriers")
         return frozenset(keys)
 
     def scene_choices(self) -> SceneChoices:
@@ -447,6 +476,9 @@ Traits: {_lines(trait_lines) or "None"}
             disinfectants=_names(disinfectant_items(player)),
             npc_items=_names(entity for npc in npcs for entity in npc.inventory),
             topics=tuple(topic.topic_id for npc in npcs for topic in visible_topics(manager, npc)),
+            barriers=tuple(
+                barrier.name for barrier in barriers_of(manager.world, player.current_location_id)
+            ),
             exercises=tuple(exercise.name for exercise in EXERCISES.values()),
             exercise_minutes=tuple(
                 range(EXERCISE_MINUTES_MIN, EXERCISE_MINUTES_MAX + 1, EXERCISE_MINUTES_STEP)
@@ -596,6 +628,9 @@ door rather than refusing the move.)
 [THREATS]
 {self._parser_threats_section()}
 
+[DOORS AND WINDOWS]
+{self._barriers_section()}
+
 [INVENTORY]
 {inventory_str}
 
@@ -726,6 +761,10 @@ door rather than refusing the move.)
 
 {self._nearby_locations_section().rstrip()}
 
+[DOORS AND WINDOWS]
+(The doors and windows here and what is happening at them. Describe only what is listed.)
+{self._barriers_section()}
+
 [CONDITION]
 ({self._name}'s body and mood right now, as levels out of 4. Describe them; do not
 give them numbers.)
@@ -775,7 +814,7 @@ def _lines(lines: Iterable[str]) -> str:
 
 def _uses_left(entity: ItemEntity) -> str:
     """How many uses a multi-use medical item has left; empty for any other item."""
-    if isinstance(entity.item, MedicalItem) and entity.item.uses > 1:
+    if isinstance(entity.item, MedicalItem | StackItem) and entity.item.uses > 1:
         return f" ({entity.uses} left)"
     return ""
 

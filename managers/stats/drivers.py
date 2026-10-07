@@ -39,6 +39,7 @@ class StatContext:
     bed_type: str = k.DEFAULT_BED_TYPE
     hours_survived: float = 0.0
     new_zombies_seen: int = 0
+    sound_stress: float = 0.0  # spec 13: stress from barrier sounds over the chunk
     weather: WeatherSample | None = None
     body: BodyMultipliers = field(default_factory=BodyMultipliers)
     skills: Mapping[str, int] = field(default_factory=dict[str, int])
@@ -131,6 +132,7 @@ class FatigueDriver:
 
 class StressDriver:
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
+        stats.add(CharacterStat.STRESS, ctx.sound_stress)
         stats.remove(CharacterStat.STRESS, k.STRESS_DECREASE_per_hour * hours)
 
 

@@ -15,7 +15,7 @@ from managers.zombies import (
     stochastic_round,
     zone_target,
 )
-from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.zombie import ZombieState
 
 
@@ -133,6 +133,8 @@ class RedistributionTests(unittest.TestCase):
         self.rng = random.Random(9)
         self.world.outbreak_started_at = 0
         self.world.last_redistribution_minute = 0
+        for barrier in self.world.barriers.values():
+            barrier.open = True
 
     def add(self, zone_id: str, count: int):
         for _ in range(count):
@@ -189,16 +191,21 @@ class RedistributionTests(unittest.TestCase):
         self.assertGreaterEqual(self.counts()["zone_street"], 11)
 
     def test_a_closed_door_stops_movement_and_new_zombies(self):
-        self.world.locations["zone_street"].entities.append(
-            DoorEntity(leads_to="zone_building", state=UnlockableEntityLockState.LOCKED)
-        )
+        self.world.barriers["door_lobby"].open = False
+        self.world.barriers["door_apartment"].open = False
         self.add("zone_street", 20)
         redistribute(self.world, 720, "zone_home", self.rng)
         self.assertEqual(self.counts()["zone_building"], 0)
 
     def test_a_zone_whose_connections_are_all_blocked_gains_nothing(self):
-        self.world.locations["zone_neighborhood"].entities.append(
-            DoorEntity(leads_to="zone_street", state=UnlockableEntityLockState.LOCKED)
+        self.world.barriers["gate"] = BarrierEntity(
+            barrier_id="gate",
+            kind=BarrierKind.DOOR,
+            zones=("zone_street", "zone_neighborhood"),
+            inside_zone="zone_street",
+            name="gate",
+            health=500,
+            max_health=500,
         )
         redistribute(self.world, 720, "zone_home", self.rng)
         self.assertEqual(self.counts()["zone_neighborhood"], 0)
@@ -255,9 +262,8 @@ class RedistributionHomeTests(unittest.TestCase):
             world = GameManager().world
             world.outbreak_started_at = 0
             world.last_redistribution_minute = 0
-            for entity in world.locations["zone_building"].entities:
-                if isinstance(entity, DoorEntity):
-                    entity.state = UnlockableEntityLockState.UNLOCKED
+            for barrier in world.barriers.values():
+                barrier.open = True
             redistribute(world, 720, "zone_street", random.Random(seed))
             if any(z.zone_id == "zone_home" for z in world.zombies.values()):
                 found = True

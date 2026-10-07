@@ -94,6 +94,7 @@ class TimeCostTests(unittest.TestCase):
         gm = GameManager()
         simulate(gm, MoveAction(destination="out"))
         gm.player.inventory.clear()
+        gm.world.barriers["door_apartment"].locked = True  # leaving from inside unlocked it
         self.assertEqual(_spent(gm, MoveAction(destination="Your Apartment")), 1)
 
     def test_zero_minute_verbs_cost_nothing(self):

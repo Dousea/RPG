@@ -3,9 +3,11 @@
 import math
 from dataclasses import dataclass
 
+from data import barriers as barrier_k
 from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
+from managers.barriers import hammer_mod
 from managers.skills import skill_levels
 from modules.body import BodyLocation
 from modules.entity.player import PlayerEntity
@@ -18,6 +20,14 @@ class Sound:
 
     radius: float
     volume: float
+
+
+@dataclass(frozen=True)
+class BarrierSound:
+    """A sound a door, window or plank makes; the zombies in `ignored` stand too close to react (spec 13)."""
+
+    sound: Sound
+    ignored: frozenset[str] = frozenset()
 
 
 def perk_level(player: PlayerEntity, skill_id: str) -> int:
@@ -71,3 +81,17 @@ def footstep_emit_chance(player: PlayerEntity, pace: Pace) -> float:
 
 def cough_sound() -> Sound:
     return Sound(radius=k.COUGH_RADIUS, volume=k.COUGH_VOLUME)
+
+
+def hammer_sound(carpentry: int) -> Sound:
+    """The one sound a plank being nailed on makes; Carpentry quiets it (spec 13)."""
+    radius = math.ceil(round(barrier_k.HAMMER_SOUND_RADIUS_BASE * hammer_mod(carpentry), 6))
+    return Sound(radius=radius, volume=radius)
+
+
+def pry_sound() -> Sound:
+    return Sound(radius=barrier_k.PRY_SOUND_RADIUS, volume=barrier_k.PRY_SOUND_VOLUME)
+
+
+def barrier_hit_sound() -> Sound:
+    return Sound(radius=barrier_k.HIT_SOUND_RADIUS, volume=barrier_k.HIT_SOUND_VOLUME)

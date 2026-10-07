@@ -11,6 +11,8 @@ REAL_TIME_PER_HOUR = 6750  # spec 02
 
 
 MINUTES_PER_HOUR = 60
+TIMED_ACTION_FRAMES_PER_MINUTE = 180  # spec 12
+MINUTE_ROUND_UP_AT = 1.5  # spec 13: a timed action under a minute and a half takes 1 minute
 
 
 def per_minute_from_frame(rate: float) -> float:
@@ -41,3 +43,11 @@ def per_hour_from_frame(rate: float) -> float:
 def per_hour_from_real_frame(rate: float) -> float:
     """A rate applied once per real-time frame, per game hour."""
     return rate * REAL_TIME_PER_HOUR
+
+
+def minutes_from_timed_action_frames(frames: float) -> int:
+    """Whole game minutes a timed action of `frames` frames takes, at least 1."""
+    minutes = frames / TIMED_ACTION_FRAMES_PER_MINUTE
+    if minutes < MINUTE_ROUND_UP_AT:
+        return 1
+    return int(minutes + 0.5)

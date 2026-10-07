@@ -25,6 +25,7 @@ class LiveWorldLockedDoorTests(unittest.TestCase):
         gm = GameManager()
         simulate(gm, MoveAction(destination="out"))
         gm.player.inventory.clear()  # drop the apartment key
+        gm.world.barriers["door_apartment"].locked = True  # leaving from inside unlocked it
         facts = simulate(gm, MoveAction(destination="in"))
         self.assertFalse(facts[0].startswith("Refused:"))
         self.assertIn("blocked", facts[0])
@@ -114,6 +115,7 @@ class MovementResolutionTests(unittest.TestCase):
         gm = GameManager()
         gm.player.inventory.clear()  # drop the apartment key
         simulate(gm, MoveAction(destination="zone_street"))  # no key needed to leave
+        gm.world.barriers["door_apartment"].locked = True  # leaving from inside unlocked it
         facts = simulate(gm, MoveAction(destination="Your Apartment"))
         self.assertEqual(gm.player.current_location_id, "zone_building")
         self.assertEqual(gm.player.current_place, "at the locked door to Your Apartment")
@@ -261,4 +263,5 @@ class PaceTests(unittest.TestCase):
         gm = GameManager()
         simulate(gm, MoveAction(destination="out"))
         gm.player.inventory.clear()
+        gm.world.barriers["door_apartment"].locked = True  # leaving from inside unlocked it
         self.assertEqual(self.minutes_for(gm, MoveAction(destination="in")), 1)

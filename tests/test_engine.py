@@ -202,6 +202,48 @@ class TurnTests(EngineTestCase):
         )
         self.assertIs(state["sneaking"], True)
 
+    def test_snapshot_carries_the_barriers_of_the_zone_in_words_and_counts(self):
+        """Spec 13, What the narrator and the player see."""
+        manager = self.engine.game
+        self.assertEqual(
+            self.engine.state()["barriers"],
+            [
+                {
+                    "id": "door_apartment",
+                    "name": "apartment door",
+                    "state_word": "closed, locked",
+                    "planks_here": 0,
+                    "planks_far": 0,
+                    "thumping": False,
+                }
+            ],
+        )
+        door = manager.world.barriers["door_apartment"]
+        door.barricades["zone_home"] = [900, 800, 700]
+        door.barricades["zone_building"] = [500]
+        door.open = False
+        manager.world.outbreak_started_at = 0
+        manager.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_building",
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.THUMPING,
+            thump_barrier="door_apartment",
+            thump_rate=1.5,
+        )
+        (entry,) = self.engine.state()["barriers"]
+        self.assertEqual((entry["planks_here"], entry["planks_far"]), (3, 1))
+        self.assertIs(entry["thumping"], True)
+        door.broken = True
+        self.assertEqual(self.engine.state()["barriers"][0]["state_word"], "broken")
+
     def test_snapshot_carries_the_body_in_words_and_flags(self):
         """Spec 12, What the narrator and the player see."""
         self.assertEqual(self.engine.state()["body"], [])

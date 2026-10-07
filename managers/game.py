@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import config
+from data.barriers import build_starting_barriers
 from data.clock import (
     WORLD_START_MINUTE_OF_DAY,
     day_number,
@@ -140,6 +141,7 @@ class GameManager:
             if world is not None
             else World(
                 locations=build_starting_locations(),
+                barriers=build_starting_barriers(),
                 seed=random.Random().randrange(WORLD_SEED_LIMIT),
             )
         )
@@ -182,7 +184,9 @@ class GameManager:
     def from_build(cls, build: CharacterBuild) -> "GameManager":
         """A new game for a character build, in a world with a fresh seed."""
         seed = random.Random().randrange(WORLD_SEED_LIMIT)
-        world = World(locations=build_starting_locations(), seed=seed)
+        world = World(
+            locations=build_starting_locations(), barriers=build_starting_barriers(), seed=seed
+        )
         return cls(world=world, player=new_player(build, seed))
 
     # === Clock ===

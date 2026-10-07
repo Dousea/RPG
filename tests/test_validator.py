@@ -7,9 +7,12 @@ from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected, ValidationResult
 from modules.action.types import (
     AttackAction,
+    CloseAction,
     DropAction,
     Duration,
     MoveAction,
+    OpenAction,
+    ShoveAction,
     SleepAction,
     TakeAction,
     TakeOffAction,
@@ -18,14 +21,16 @@ from modules.action.types import (
     WearAction,
 )
 from modules.body import BodyLocation
+from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
-from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.entity.zombie import ZombieEntity, ZombieState
 from modules.resolution import (
     HeldItem,
     MoveBlocked,
     MoveToSpot,
     MoveToZone,
     ShuffleInZone,
+    TargetBarrier,
     TargetNpc,
     TimeSpan,
 )
@@ -114,30 +119,20 @@ class MovementValidationTests(unittest.TestCase):
 
     def test_locked_door_blocks_movement_without_the_key(self):
         # A locked door soft-lands ("blocked") rather than rejecting the move.
-        # A generic locked door, distinct from the real apartment_door in
-        # data/locations.py (whose key the default player already carries).
-        door = DoorEntity(
-            leads_to="zone_building",
-            state=UnlockableEntityLockState.LOCKED,
-            key_id="item_storage_key",
-        )
-        self.gm.current_location.entities.append(door)
+        self.gm.player.current_location_id = "zone_building"
+        self.gm.player.inventory.clear()
 
-        result = _accepted(self.validator.validate(MoveAction(destination="out")))
-        self.assertEqual(result.expect(MoveBlocked).location.id, "zone_home")
+        result = _accepted(self.validator.validate(MoveAction(destination="in")))
+        self.assertEqual(result.expect(MoveBlocked).location.id, "zone_building")
 
     def test_locked_door_opens_with_the_key_in_inventory(self):
-        # Accepted carries kind="zone".
-        from data.items import ITEMS
-        from modules.entity.item import ItemEntity
+        self.gm.player.current_location_id = "zone_building"
 
-        door = DoorEntity(
-            leads_to="zone_building",
-            state=UnlockableEntityLockState.LOCKED,
-            key_id="item_storage_key",
-        )
-        self.gm.current_location.entities.append(door)
-        self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
+        result = _accepted(self.validator.validate(MoveAction(destination="in")))
+        self.assertIsInstance(result.resolved, MoveToZone)
+
+    def test_a_locked_door_needs_no_key_from_its_inside(self):
+        self.gm.player.inventory.clear()
 
         result = _accepted(self.validator.validate(MoveAction(destination="out")))
         self.assertIsInstance(result.resolved, MoveToZone)
@@ -208,7 +203,7 @@ class ItemValidationTests(unittest.TestCase):
 
 class DoorKeyValidationTests(unittest.TestCase):
     """Door keys are engine-owned. A "door key" is any item id that is the
-    `key_id` of a DoorEntity anywhere in the world -- not hard-coded to
+    `key_id` of a barrier anywhere in the world -- not hard-coded to
     item_apartment_key. Dropping or conjuring one could strand Orton outside
     his own apartment, since the door rebuilds LOCKED on every load."""
 
@@ -228,14 +223,18 @@ class DoorKeyValidationTests(unittest.TestCase):
         # not be hard-coded to item_apartment_key.
         from data.items import ITEMS
         from modules.entity.item import ItemEntity
-        from modules.entity.object import DoorEntity, UnlockableEntityLockState
 
-        door = DoorEntity(
-            leads_to="zone_home",
-            state=UnlockableEntityLockState.LOCKED,
+        self.gm.world.barriers["storage_door"] = BarrierEntity(
+            barrier_id="storage_door",
+            kind=BarrierKind.DOOR,
+            zones=("zone_home", "zone_building"),
+            inside_zone="zone_home",
+            name="storage door",
+            health=500,
+            max_health=500,
+            locked=True,
             key_id="item_storage_key",
         )
-        self.gm.current_location.entities.append(door)
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_storage_key"]))
 
         result = self.validator.validate(DropAction(item_name="Storage Room Key"))
@@ -379,3 +378,118 @@ class WearValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BarrierValidationTests(unittest.TestCase):
+    """Spec 13, Opening and closing."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def refusal(self, action) -> str:
+        result = self.validator.validate(action)
+        self.assertIsInstance(result, Rejected)
+        assert isinstance(result, Rejected)
+        return result.reason
+
+    def test_open_refuses_a_barricaded_door(self):
+        self.gm.world.barriers["door_apartment"].barricades["zone_home"] = [1000]
+        self.assertEqual(
+            self.refusal(OpenAction(barrier_name="apartment door")),
+            "The apartment door is barricaded.",
+        )
+
+    def test_open_refuses_a_door_barricaded_on_the_far_side(self):
+        self.gm.world.barriers["door_apartment"].barricades["zone_building"] = [1000]
+        self.assertIn("barricaded", self.refusal(OpenAction(barrier_name="apartment door")))
+
+    def test_open_refuses_a_broken_door(self):
+        self.gm.world.barriers["door_apartment"].broken = True
+        self.assertIn("no door left", self.refusal(OpenAction(barrier_name="apartment door")))
+
+    def test_close_refuses_a_broken_door_and_a_closed_one(self):
+        self.assertIn("already closed", self.refusal(CloseAction(barrier_name="apartment door")))
+        self.gm.world.barriers["door_apartment"].broken = True
+        self.assertEqual(
+            self.refusal(CloseAction(barrier_name="apartment door")),
+            "There's no door left to close.",
+        )
+
+    def test_open_refuses_a_locked_door_from_outside_without_the_key(self):
+        self.gm.player.current_location_id = "zone_building"
+        self.gm.player.inventory.clear()
+        self.assertEqual(self.refusal(OpenAction(barrier_name="apartment door")), "It's locked.")
+
+    def test_open_accepts_the_locked_door_from_outside_with_the_key(self):
+        self.gm.player.current_location_id = "zone_building"
+        result = self.validator.validate(OpenAction(barrier_name="apartment door"))
+        self.assertIsInstance(result, Accepted)
+
+    def test_open_accepts_it_from_inside_without_the_key(self):
+        self.gm.player.inventory.clear()
+        result = self.validator.validate(OpenAction(barrier_name="apartment door"))
+        assert isinstance(result, Accepted)
+        self.assertTrue(result.expect(TargetBarrier).walk)
+
+    def test_a_barrier_of_another_zone_is_refused(self):
+        self.assertEqual(
+            self.refusal(OpenAction(barrier_name="lobby door")), "There's no door here."
+        )
+
+    def test_aliases_and_articles_find_the_door(self):
+        for name in ("the front door", "my door", "door", "apartment door", "door_apartment"):
+            with self.subTest(name=name):
+                self.assertIsInstance(
+                    self.validator.validate(OpenAction(barrier_name=name)), Accepted
+                )
+
+    def test_a_zombie_behind_a_door_cannot_be_attacked(self):
+        self.gm.world.outbreak_started_at = 0
+        self.gm.world.barriers["door_apartment"].open = False
+        self.gm.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id="zone_building",
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.THUMPING,
+            gap=5,
+            thump_barrier="door_apartment",
+            thump_rate=1.5,
+        )
+        self.assertEqual(
+            self.refusal(AttackAction(target_name="z1")), "It's on the other side of the door."
+        )
+        self.assertEqual(
+            self.refusal(ShoveAction(target_name="z1")), "It's on the other side of the door."
+        )
+
+    def test_attack_door_is_accepted_and_names_the_barrier(self):
+        result = self.validator.validate(AttackAction(target_name="apartment door"))
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.expect(TargetBarrier).barrier.barrier_id, "door_apartment")
+
+    def test_move_to_stops_at_a_barricade_on_either_side(self):
+        door = self.gm.world.barriers["door_apartment"]
+        for side in ("zone_home", "zone_building"):
+            with self.subTest(side=side):
+                door.barricades["zone_home"] = []
+                door.barricades["zone_building"] = []
+                door.barricades[side] = [1000]
+                result = self.validator.validate(MoveAction(destination="out"))
+                assert isinstance(result, Accepted)
+                blocked = result.expect(MoveBlocked)
+                self.assertEqual(blocked.place, "at the barricaded door")
+                self.assertEqual(blocked.barrier, door)
+
+    def test_move_to_passes_an_open_barricade_free_door(self):
+        self.gm.world.barriers["door_apartment"].open = True
+        result = self.validator.validate(MoveAction(destination="out"))
+        assert isinstance(result, Accepted)
+        self.assertIsInstance(result.resolved, MoveToZone)

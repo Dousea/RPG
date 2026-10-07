@@ -16,12 +16,14 @@ import random
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from data import barriers as barrier_k
 from data import body as body_k
 from data import exercises as ex_k
 from data import melee as melee_k
 from data import skills as skill_k
 from data import status_effects, survival
 from data import thermal as thermal_k
+from data import traits as trait_k
 from data import zombie_lore as lore_k
 from data.exercises import find_exercise
 from data.npcs import TRUSTS_PLAYER, TRUSTS_PLAYER_BANDS
@@ -33,10 +35,13 @@ from data.time_costs import (
     NONE_TURN_MINUTES,
     SWING_MIN,
     WALK_TO_BARRIER_MIN,
+    WINDOW_CLIMB_MIN,
     action_minutes,
     zone_hop_minutes,
 )
 from data.topics import TOPICS
+from managers.barrier_actions import BarrierActions, unbarricade_minutes
+from managers.barriers import barriers_between
 from managers.body import BodyEngine, action_time_multiplier, limp_factor
 from managers.climate import weather_change_facts
 from managers.combat import equipped_weapon, held_slots, roll_damage
@@ -44,6 +49,7 @@ from managers.events import broadcast_event
 from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.first_aid import FirstAid
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.melee import MeleeEngine
 from managers.noise import Sound, cough_sound
 from managers.skills import SkillEngine, skill_levels
 from managers.social import SocialManager
@@ -67,6 +73,7 @@ from modules.action.types import (
     AnyAction,
     AskAction,
     AttackAction,
+    BarricadeAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
@@ -75,10 +82,12 @@ from modules.action.types import (
     SleepAction,
     StanceAction,
     TalkAction,
+    UnbarricadeAction,
     WaitAction,
 )
 from modules.action.words import describe_action
 from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.player import PlayerEntity
 from modules.event import (
     ApplyItemEvent,
@@ -100,6 +109,7 @@ from modules.modifier import (
 from modules.pace import Pace
 from modules.quest import QuestStatus
 from modules.resolution import (
+    BarricadeKit,
     ExercisePlan,
     FirstAidTarget,
     HeldItem,
@@ -108,7 +118,9 @@ from modules.resolution import (
     MoveToZone,
     NpcItem,
     NpcTopic,
+    PryTarget,
     ShuffleInZone,
+    TargetBarrier,
     TargetNpc,
     TargetZombie,
     TimeSpan,
@@ -143,6 +155,7 @@ TOO_MANY_ACTIONS_FACT = "Too much at once; {name} does the first five things."
 INTERRUPTED_BY_ATTACK = "attacked"
 INTERRUPTED_BY_BEAT = "story beat"
 INTERRUPTED_BY_WEAKENING = "weakening"
+INTERRUPTED_BY_BARRIER = "barrier"
 
 
 @dataclass(frozen=True)
@@ -190,6 +203,14 @@ class SimulationCore:
         self._zombies_seen_this_chunk = 0
         self._weather_facts: list[str] = []
         self._loop = ZombieLoop(manager, self._rng, self.skill_engine)
+        self._barriers = BarrierActions(
+            manager,
+            self._rng,
+            self.skill_engine,
+            MeleeEngine(self._rng, self.skill_engine),
+            self._loop,
+        )
+        self._chunk_sound_stress = 0.0
         self._interruption = ""
         self._pending_sounds: list[Sound] = []
         self._beats = beats if beats is not None else STORY_BEATS
@@ -289,6 +310,8 @@ class SimulationCore:
                 zone = manager.world.locations.get(zone_id)
                 if npc is None or zone is None:
                     logger.warning(f"Beat effect moves unknown NPC or zone: {npc_id}, {zone_id}.")
+                elif self._planked_between(npc.current_location_id, zone_id):
+                    logger.warning(f"Beat effect skipped: planks bar {npc_id} from {zone_id}.")
                 else:
                     manager.move_npc(npc, zone)
             case AddNpcStatus(npc_id=npc_id, status=status):
@@ -376,6 +399,7 @@ class SimulationCore:
         seen: int = 0,
         exerting: bool = False,
         pace: Pace = Pace.STILL,
+        sound_stress: float = 0.0,
     ) -> StatContext:
         manager = self.manager
         player = manager.player
@@ -394,6 +418,7 @@ class SimulationCore:
             bed_type=bed_type or location.bed_type_at(player.current_place),
             hours_survived=manager.narrative.minutes / 60,
             new_zombies_seen=seen,
+            sound_stress=sound_stress,
             floor=location.floor,
             power_on=manager.world.power_on,
             metabolic=self._metabolic_target(action),
@@ -408,6 +433,10 @@ class SimulationCore:
             return attack_metabolic(equipped_weapon(self.manager.player))
         if isinstance(action, ShoveAction):
             return attack_metabolic(None)
+        if isinstance(action, BarricadeAction):
+            return Metabolic.HEAVY_WORK
+        if isinstance(action, UnbarricadeAction):
+            return Metabolic.LIGHT_WORK
         if isinstance(action, ExerciseAction):
             exercise = find_exercise(action.exercise_name)
             if exercise is not None:
@@ -459,6 +488,7 @@ class SimulationCore:
             if beat_in is not None:
                 block = min(block, beat_in)
             before = player_status_effect_levels(manager.player)
+            self._chunk_sound_stress = 0.0
             ran, seen, exerting, loop_facts = self._zombie_minutes(block, asleep, motion, weakens)
             facts.extend(loop_facts)
             self._zombies_seen_this_chunk += seen
@@ -474,7 +504,12 @@ class SimulationCore:
                 manager.player,
                 ran,
                 self._stat_context(
-                    action, asleep=asleep, seen=seen, exerting=exerting, pace=motion.pace
+                    action,
+                    asleep=asleep,
+                    seen=seen,
+                    exerting=exerting,
+                    pace=motion.pace,
+                    sound_stress=self._chunk_sound_stress,
                 ),
                 self._weather_for_chunk,
             )
@@ -523,12 +558,14 @@ class SimulationCore:
                 approach_target=motion.approach_target,
                 swing_target=motion.swing_target,
                 shove=motion.shove,
+                idle=weakens and not asleep,
             )
             sounds, self._pending_sounds = self._pending_sounds, []
             self._shouted = False
             worse = _hurt_levels(player)
             report = self._loop.run_minute(manager.narrative.minutes + ran, minute, sounds)
             ran += 1
+            self._chunk_sound_stress += report.sound_stress
             seen += report.new_seen
             exerting = exerting or report.attacked
             facts.extend(report.facts)
@@ -544,7 +581,11 @@ class SimulationCore:
                 facts.append(body_k.WEAKER_FACT.format(name=self._name))
                 break
             if report.interrupted:
-                self._interruption = report.interruption_fact or INTERRUPTED_BY_ATTACK
+                self._interruption = (
+                    INTERRUPTED_BY_BARRIER
+                    if report.barrier_broke
+                    else report.interruption_fact or INTERRUPTED_BY_ATTACK
+                )
                 if report.interruption_fact:
                     facts.append(
                         report.interruption_fact.format(
@@ -619,6 +660,17 @@ class SimulationCore:
 
     # === Movement ===
 
+    def _planked_between(self, start_id: str, target_id: str) -> bool:
+        """Whether a barrier with planks stands on the way between two zones."""
+        world = self.manager.world
+        path = self.manager.zone_path(start_id, target_id) or []
+        here = start_id
+        for step in path:
+            if any(barrier.total_planks for barrier in barriers_between(world, here, step)):
+                return True
+            here = step
+        return False
+
     def _resolve_move(self, accepted: Accepted) -> str:
         """Apply a `MoveOutcome` that stays in the zone; MOVE_TO never fails.
 
@@ -626,6 +678,7 @@ class SimulationCore:
         shuffle leaves it as it was. Zone changes go through `_resolve_walk`.
         """
         player = self.manager.player
+        player.at_barrier = None
         match accepted.resolved:
             case MoveToSpot(location=zone, place=place):
                 player.current_place = place
@@ -659,6 +712,8 @@ class SimulationCore:
             if self._interruption or manager.narrative.game_over:
                 break
         interrupted = bool(self._interruption) or manager.narrative.game_over
+        if isinstance(resolved, MoveBlocked) and resolved.barrier is not None and not interrupted:
+            player.at_barrier = resolved.barrier.barrier_id
         fact = self._walk_fact(resolved, origin_id, interrupted)
         return [self._check_player_death(fact), *spend_facts], spent
 
@@ -685,17 +740,52 @@ class SimulationCore:
         player = manager.player
         motion = Motion(pace)
         hop = self._hop_minutes(pace)
-        if not self._loop.active():
-            self._enter_zone(zone_id)
-            return self._spend(hop, action, motion=motion)
-        spent, facts = self._spend(hop - 1, action, motion=motion)
+        previous_id = player.current_location_id
+        crossing = barriers_between(manager.world, previous_id, zone_id)
+        active = self._loop.active()
+        spent, facts = (self._spend(hop - 1, action, motion=motion)) if active else (0, [])
         if self._interruption or manager.narrative.game_over:
             return spent, facts
-        previous_id = player.current_location_id
+        shut = self._pass_through(crossing)
+        climbed, climb_facts = self._climb(crossing, action, motion)
+        spent += climbed
+        facts.extend(climb_facts)
+        for barrier, released in shut:
+            if active:
+                self._barriers.close_behind(barrier, previous_id, released)
+            else:
+                barrier.open = False
         self._enter_zone(zone_id)
-        enter_zone(manager.world, zone_id, previous_id, self._rng)
-        last, last_facts = self._spend(1, action, motion=motion)
+        if active:
+            enter_zone(manager.world, zone_id, previous_id, self._rng)
+        player.at_barrier = crossing[-1].barrier_id if crossing else None
+        last, last_facts = self._spend(1 if active else hop, action, motion=motion)
         return spent + last, [*facts, *last_facts]
+
+    def _pass_through(
+        self, crossing: list[BarrierEntity]
+    ) -> list[tuple[BarrierEntity, frozenset[str]]]:
+        """Open each closed barrier on the hop; the doors, with who opening them released, are shut again."""
+        shut: list[tuple[BarrierEntity, frozenset[str]]] = []
+        for barrier in crossing:
+            released = self._barriers.open_to_cross(barrier)
+            if released is not None and barrier.kind == BarrierKind.DOOR:
+                shut.append((barrier, released))
+        return shut
+
+    def _climb(
+        self, crossing: list[BarrierEntity], action: AnyAction, motion: Motion
+    ) -> tuple[int, list[str]]:
+        """Climbing through a window takes a minute more."""
+        windows = [b for b in crossing if b.kind == BarrierKind.WINDOW]
+        if not windows or self.manager.narrative.game_over:
+            return 0, []
+        facts = [
+            barrier_k.CLIMB_FACT.format(name=self._name, barrier=barrier.name)
+            for barrier in windows
+        ]
+        spent, spend_facts = self._spend(WINDOW_CLIMB_MIN * len(windows), action, motion=motion)
+        return spent, [*facts, *spend_facts]
 
     def _walk_fact(
         self, resolved: MoveToZone | MoveBlocked, origin_id: str, interrupted: bool
@@ -847,6 +937,76 @@ class SimulationCore:
         swing_spent, swing_facts = self._spend(SWING_MIN, accepted.action, motion=swing)
         return [*facts, *swing_facts], spent + swing_spent
 
+    # === Doors, windows and planks ===
+
+    def _barrier_verb(
+        self,
+        accepted: Accepted,
+        walk: bool,
+        apply: Callable[[], list[str]],
+        minutes: int,
+    ) -> tuple[list[str], int]:
+        """Walk to the barrier if need be, do `apply`, then spend `minutes` with the sounds it made."""
+        spent = 0
+        facts: list[str] = []
+        if walk:
+            spent, facts = self._spend(
+                WALK_TO_BARRIER_MIN, accepted.action, motion=Motion(Pace.WALK)
+            )
+            if self.manager.narrative.game_over:
+                return facts, spent
+            if self._interruption:
+                never = f"{self._name} never gets to {describe_action(accepted.action)}."
+                return [*facts, never], spent
+        self._skill_facts = []
+        done = apply()
+        self._pending_sounds.extend(self._barriers.sounds)
+        self._barriers.sounds.clear()
+        facts.extend([self._check_player_death(done[0]), *done[1:], *self._skill_facts])
+        if minutes:
+            more, spend_facts = self._spend(minutes, accepted.action, motion=Motion(Pace.STILL))
+            spent += more
+            facts.extend(spend_facts)
+        return facts, spent
+
+    def _resolve_open(self, accepted: Accepted) -> tuple[list[str], int]:
+        target = accepted.expect(TargetBarrier)
+        return self._barrier_verb(
+            accepted, target.walk, lambda: self._barriers.open(target.barrier), 0
+        )
+
+    def _resolve_close(self, accepted: Accepted) -> tuple[list[str], int]:
+        target = accepted.expect(TargetBarrier)
+        return self._barrier_verb(
+            accepted, target.walk, lambda: self._barriers.close(target.barrier), 0
+        )
+
+    def _resolve_barricade(self, accepted: Accepted) -> tuple[list[str], int]:
+        kit = accepted.expect(BarricadeKit)
+        minutes = max(
+            1, round(action_minutes(accepted.action, kit) * self._action_time_multiplier())
+        )
+        return self._barrier_verb(
+            accepted, kit.walk, lambda: self._barriers.barricade(kit), minutes
+        )
+
+    def _resolve_unbarricade(self, accepted: Accepted) -> tuple[list[str], int]:
+        target = accepted.expect(PryTarget)
+        player = self.manager.player
+        carpentry = skill_levels(player).get(skill_k.CARPENTRY, 0)
+        base = unbarricade_minutes(carpentry, handy=trait_k.HANDY_ID in player.traits)
+        minutes = max(1, round(base * self._action_time_multiplier()))
+        return self._barrier_verb(
+            accepted, target.walk, lambda: self._barriers.unbarricade(target), minutes
+        )
+
+    def _resolve_hit_barrier(self, accepted: Accepted) -> tuple[list[str], int]:
+        target = accepted.expect(TargetBarrier)
+        now = self.manager.narrative.minutes
+        return self._barrier_verb(
+            accepted, target.walk, lambda: self._barriers.hit(target.barrier, now), SWING_MIN
+        )
+
     # === First aid ===
 
     def _resolve_bandage(self, accepted: Accepted) -> list[str]:
@@ -885,6 +1045,8 @@ class SimulationCore:
     def _resolve_attack(self, accepted: Accepted) -> str | tuple[list[str], int]:
         if isinstance(accepted.resolved, TargetZombie):
             return self._resolve_zombie_attack(accepted)
+        if isinstance(accepted.resolved, TargetBarrier):
+            return self._resolve_hit_barrier(accepted)
         npc = accepted.expect(TargetNpc).npc
         attacker = self.manager.player
         weapon = equipped_weapon(attacker) or melee_k.BARE_HANDS
@@ -1112,6 +1274,8 @@ class SimulationCore:
         player = self.manager.player
         if self._interruption == INTERRUPTED_BY_BEAT:
             return f"{self._name} is startled awake."
+        if self._interruption == INTERRUPTED_BY_BARRIER:
+            return f"The crash wakes {self._name}."
         zombie_woke = self._interruption not in ("", INTERRUPTED_BY_WEAKENING)
         if self._zombies_seen_this_chunk > 0 or zombie_woke:
             panic = self._rng.uniform(
@@ -1147,6 +1311,10 @@ class SimulationCore:
         "WEAR": _resolve_wear,
         "TAKE_OFF": _resolve_take_off,
         "ATTACK": _resolve_attack,
+        "OPEN": _resolve_open,
+        "CLOSE": _resolve_close,
+        "BARRICADE": _resolve_barricade,
+        "UNBARRICADE": _resolve_unbarricade,
         "SHOVE": _resolve_zombie_attack,
         "EQUIP": _resolve_equip,
         "UNEQUIP": _resolve_unequip,

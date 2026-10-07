@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from data import creation as k_creation
+from data.barriers import MAX_PLANKS_PER_SIDE, build_starting_barriers
 from data.climate import STAGE_PHRASES
 from data.clock import WORLD_START_MINUTE_OF_DAY
 from data.exercises import EXERCISES, REGION_PARTS
@@ -38,6 +39,7 @@ from modules.character.exercise import ExerciseState
 from modules.character.faction import CharacterFaction
 from modules.character.skills import SkillState
 from modules.character.state import CharacterCondition
+from modules.entity.barrier import BarrierEntity
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
@@ -47,7 +49,7 @@ from modules.entity.zombie import (
     ZombieEntity,
     ZombieState,
 )
-from modules.item import ClothingItem, MedicalItem, MeleeWeaponItem
+from modules.item import ClothingItem, MedicalItem, MeleeWeaponItem, StackItem
 from modules.location import World
 from modules.quest import QuestState, QuestStatus
 from modules.social import SocialLog
@@ -57,7 +59,7 @@ from modules.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 17  # spec 10
+SCHEMA_VERSION = 18  # spec 13
 
 MAX_ID_LENGTH = 40
 
@@ -264,7 +266,7 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
             max(int(data.get("condition", entity.item.condition_max)), 0),
             entity.item.condition_max,
         )
-    if isinstance(entity.item, MedicalItem):
+    if isinstance(entity.item, MedicalItem | StackItem):
         entity.uses = min(max(int(data.get("uses", entity.item.uses)), 0), entity.item.uses)
     for name in data.get("holes", []):
         try:
@@ -315,10 +317,50 @@ def _zombie_from_dict(data: dict[str, Any], zone_ids: Any) -> ZombieEntity | Non
             hits_taken=int(data.get("hits_taken", 0)),
             down_until=int(data.get("down_until", 0)),
             staggered=_as_bool(data.get("staggered", False)),
+            thump_barrier=_optional_text(data.get("thump_barrier")),
+            thump_rate=float(data.get("thump_rate", 0.0)),
+            thump_carry=float(data.get("thump_carry", 0.0)),
+            thump_cooldown=int(data.get("thump_cooldown", 0)),
+            was_chasing=_as_bool(data.get("was_chasing", False)),
         )
     except (KeyError, TypeError, ValueError):
         logger.warning("Dropping a zombie with unreadable fields.")
         return None
+
+
+def _barrier_to_dict(barrier: BarrierEntity) -> dict[str, Any]:
+    return {
+        "open": barrier.open,
+        "broken": barrier.broken,
+        "locked": barrier.locked,
+        "health": barrier.health,
+        "barricades": {side: list(planks) for side, planks in barrier.barricades.items()},
+    }
+
+
+def _barriers_from_dict(value: Any) -> dict[str, BarrierEntity]:
+    """The shipped barriers with their saved state laid over them."""
+    barriers = build_starting_barriers()
+    for barrier_id, data in _as_dict(value).items():
+        barrier = barriers.get(barrier_id)
+        if barrier is None:
+            logger.warning(f"Dropping unknown barrier '{barrier_id}'.")
+            continue
+        saved = _as_dict(data)
+        barrier.open = _as_bool(saved.get("open", barrier.open))
+        barrier.broken = _as_bool(saved.get("broken", barrier.broken))
+        barrier.locked = _as_bool(saved.get("locked", barrier.locked))
+        barrier.health = min(max(int(saved.get("health", barrier.health)), 0), barrier.max_health)
+        for side, planks in _as_dict(saved.get("barricades")).items():
+            if side in barrier.zones and isinstance(planks, list):
+                barrier.barricades[side] = [
+                    max(1, int(plank)) for plank in planks[:MAX_PLANKS_PER_SIDE]
+                ]
+    return barriers
+
+
+def _optional_text(value: Any) -> str | None:
+    return _as_text(value, MAX_ID_LENGTH) if isinstance(value, str) and value else None
 
 
 def _optional_float(value: Any) -> float | None:
@@ -407,6 +449,10 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "zombie_kills": dict(manager.world.zombie_kills),
             "fired_beats": dict(manager.world.fired_beats),
             "zombies": [_zombie_to_dict(zombie) for zombie in manager.world.zombies.values()],
+            "barriers": {
+                barrier_id: _barrier_to_dict(barrier)
+                for barrier_id, barrier in manager.world.barriers.items()
+            },
             # Locations themselves are static; only ground items move.
             "ground_items": {
                 location_id: [
@@ -465,6 +511,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             },
             "conditions": [condition.value for condition in player.conditions],
             "zombie_kills": player.zombie_kills,
+            "at_barrier": player.at_barrier,
         },
         "npcs": [
             {
@@ -564,6 +611,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         seed=int(world_data.get("seed", 0)),
         power_on=_as_bool(world_data.get("power_on", True)) if "power_on" in world_data else True,
         locations=locations,
+        barriers=_barriers_from_dict(world_data.get("barriers")),
         outbreak_started_at=_optional_minute(world_data.get("outbreak_started_at")),
         last_redistribution_minute=_optional_minute(world_data.get("last_redistribution_minute")),
         next_zombie_number=int(world_data.get("next_zombie_number", 1)),
@@ -781,6 +829,7 @@ def _player_from_dict(data: dict[str, Any], locations: dict[str, Any]) -> Player
         exercise=_exercise_from_dict(_as_dict(data.get("exercise"))),
         conditions=conditions,
         zombie_kills=max(0, int(data.get("zombie_kills", 0))),
+        at_barrier=_optional_text(data.get("at_barrier")),
     )
     player.equipment = equipment
     player.worn = worn

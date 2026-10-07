@@ -209,6 +209,30 @@ class MeleeEngine:
             zombie.facing_cos = 1.0
         return result
 
+    def strike_object(self, player: PlayerEntity, world: World, now: int) -> SwingResult:
+        """What a swing at a door, window or barricade costs the player: endurance and weapon wear."""
+        held = equipped_weapon(player)
+        held_melee = held if isinstance(held, MeleeWeaponItem) else None
+        result = SwingResult()
+        swing = _Swing(
+            player=player,
+            world=world,
+            now=now,
+            kind=SwingKind.HIT,
+            weapon=held_melee or k.BARE_HANDS,
+            weapon_entity=held_entity(player) if held_melee else None,
+            levels=skill_levels(player),
+            status_effects=player_status_effect_levels(player),
+            crit=False,
+            close_kill=False,
+            hit_count=1,
+            result=result,
+        )
+        self._drain_swing(swing)
+        if swing.weapon_entity is not None:
+            self._wear(swing)
+        return result
+
     @staticmethod
     def _knock(zombie: ZombieEntity, now: int, *, crit: bool) -> None:
         """A crit or a hit on the floor keeps it down; any other hit staggers it."""

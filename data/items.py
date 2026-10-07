@@ -1,3 +1,4 @@
+from data import barriers as barrier_k
 from data import melee as melee_k
 from data.clothing_coverage import covered_parts
 from data.clothing_items import STARTING_CLOTHES
@@ -12,6 +13,7 @@ from modules.item import (
     MedicalItem,
     MeleeWeaponItem,
     RangedWeaponItem,
+    StackItem,
 )
 from modules.weapon import RangedWeaponType
 
@@ -168,7 +170,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Crowbar",
         description="A sturdy piece of metal. Good for prying or hitting.",
         max_hit_points=50,
-        tags=["tool", "weapon"],
+        tags=["tool", "weapon", barrier_k.REMOVE_BARRICADE_TAG],  # spec 13
         damage=5,  # spec 11: HP in a fight with an NPC
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -419,6 +421,61 @@ ITEMS: dict[str, BaseItem] = {
         scratch_defense=40,
         bite_defense=20,
         neck_protection=0.5,
+    ),
+    barrier_k.HAMMER_ITEM_ID: MeleeWeaponItem(
+        id=barrier_k.HAMMER_ITEM_ID,
+        name="Hammer",
+        description="A claw hammer. It drives nails and pries planks off.",
+        max_hit_points=20,
+        tags=["tool", "weapon", barrier_k.HAMMER_TAG, barrier_k.REMOVE_BARRICADE_TAG],  # spec 13
+        damage=3,
+        slots=[CharacterHoldableSlot.RIGHT_HAND],
+        is_two_handed=False,
+        categories=(melee_k.CATEGORY_SMALL_BLUNT,),
+        min_damage=0.5,
+        max_damage=1.0,
+        max_range=1.1,
+        critical_chance=20.0,
+        crit_dmg_multiplier=3.0,
+        max_hit_count=1,
+        knockback_on_no_death=True,
+        condition_max=10,
+        condition_lower_chance=30,
+        weight=1.5,
+        door_damage=9,
+    ),
+    barrier_k.PLANK_ITEM_ID: MeleeWeaponItem(
+        id=barrier_k.PLANK_ITEM_ID,
+        name="Plank",
+        description="A rough length of wood. Nailed across a door, or swung as a club.",
+        max_hit_points=10,
+        tags=["material", "weapon"],  # spec 13
+        damage=2,
+        slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
+        is_two_handed=True,
+        categories=(melee_k.CATEGORY_BLUNT,),
+        min_damage=0.4,
+        max_damage=0.6,
+        max_range=1.3,
+        critical_chance=30.0,
+        crit_dmg_multiplier=2.0,
+        max_hit_count=2,
+        condition_max=10,
+        condition_lower_chance=2,
+        weight=3.0,
+        base_speed=0.9,
+        door_damage=5,
+        no_maintenance_xp=True,
+    ),
+    barrier_k.NAILS_ITEM_ID: StackItem(
+        id=barrier_k.NAILS_ITEM_ID,
+        name="Nails",
+        description="A handful of nails.",
+        max_hit_points=5,
+        tags=["material"],  # spec 13
+        slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
+        is_two_handed=False,
+        uses=5,
     ),
     **MEDICAL_ITEMS,
     **STARTING_CLOTHES,

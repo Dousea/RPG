@@ -99,6 +99,7 @@ class SchemaShapeTests(unittest.TestCase):
         gm = GameManager()
         gm.player.current_location_id = "zone_street"
         gm.player.inventory.clear()
+        gm.world.barriers.clear()
         gm.current_location.entities[:] = [
             entity for entity in gm.current_location.entities if not isinstance(entity, ItemEntity)
         ]
@@ -177,13 +178,22 @@ class ClosedFieldTests(unittest.TestCase):
         zombie = add_zombie(gm, 5.0, ZombieState.IDLE)
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(
-            enum_of(names["ATTACK"], "target"), ["Emma", "Marcus", zombie.zombie_id, "zombie"]
+            enum_of(names["ATTACK"], "target"),
+            ["Emma", "Marcus", zombie.zombie_id, "zombie", "apartment door", "lobby door"],
         )
         self.assertEqual(enum_of(names["SHOVE"], "target"), [zombie.zombie_id])
 
     def test_attack_offers_no_nearest_zombie_when_none_is_seen(self):
         names = branches(ContextBuilder(building_scene()).build_plan_schema())
-        self.assertEqual(enum_of(names["ATTACK"], "target"), ["Emma", "Marcus"])
+        self.assertEqual(
+            enum_of(names["ATTACK"], "target"), ["Emma", "Marcus", "apartment door", "lobby door"]
+        )
+
+    def test_the_door_verbs_offer_the_barriers_of_the_zone(self):
+        names = branches(ContextBuilder(building_scene()).build_plan_schema())
+        for verb in ("OPEN", "CLOSE", "BARRICADE", "UNBARRICADE"):
+            with self.subTest(verb=verb):
+                self.assertEqual(enum_of(names[verb], "target"), ["apartment door", "lobby door"])
 
     def test_talk_ask_and_give(self):
         gm = building_scene()
@@ -195,7 +205,16 @@ class ClosedFieldTests(unittest.TestCase):
         self.assertEqual(enum_of(names["GIVE"], "npc"), ["Emma", "Marcus"])
         self.assertEqual(
             enum_of(names["GIVE"], "item"),
-            ["Apartment Key", "Bandage", "Adhesive Bandage", "Alcohol Wipes", "Painkillers"],
+            [
+                "Apartment Key",
+                "Bandage",
+                "Adhesive Bandage",
+                "Alcohol Wipes",
+                "Painkillers",
+                "Hammer",
+                "Nails",
+                "Plank",
+            ],
         )
 
     def test_ask_offers_only_the_requests_the_scene_can_fill(self):
@@ -274,6 +293,11 @@ EQUIVALENTS = [
     ({"verb": "EXERCISE", "exercise": "Squats"}, "EXERCISE Squats"),
     ({"verb": "ATTACK", "target": "z3"}, "ATTACK z3"),
     ({"verb": "SHOVE", "target": "z3"}, "SHOVE z3"),
+    ({"verb": "ATTACK", "target": "lobby door"}, "ATTACK lobby door"),
+    ({"verb": "OPEN", "target": "lobby door"}, "OPEN lobby door"),
+    ({"verb": "CLOSE", "target": "lobby door"}, "CLOSE lobby door"),
+    ({"verb": "BARRICADE", "target": "lobby door"}, "BARRICADE lobby door"),
+    ({"verb": "UNBARRICADE", "target": "lobby door"}, "UNBARRICADE lobby door"),
     ({"verb": "SHOUT"}, "SHOUT"),
     (
         {"verb": "TALK", "npc": "Emma", "approach": "chat", "speech": "Hi there, how are you?"},
@@ -364,6 +388,7 @@ class PlanReadingTests(unittest.TestCase):
             disinfectants=("Alcohol Wipes",),
             npc_items=("Bandage",),
             topics=("the_pharmacy",),
+            barriers=("lobby door",),
             exercises=("Push-ups", "Squats"),
             exercise_minutes=(10, 20, 30),
             times_of_day=("morning", "night"),

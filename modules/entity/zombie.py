@@ -11,6 +11,7 @@ class ZombieState(StrEnum):
     ALERTED = "alerted"
     CHASING = "chasing"
     ATTACKING = "attacking"
+    THUMPING = "thumping"  # spec 13
 
 
 class AttackSide(StrEnum):
@@ -45,6 +46,11 @@ class ZombieEntity:
     hits_taken: int = 0  # spec 11: it never resets
     down_until: int = 0  # spec 11: the clock minute it gets up
     staggered: bool = False  # spec 11: set by a hit or shove, cleared at the end of that minute
+    thump_barrier: str | None = None  # spec 13: the barrier it pounds on, from its own zone's side
+    thump_rate: float = 0.0  # spec 13: thumps per game minute
+    thump_carry: float = 0.0  # spec 13: the fraction of a thump left for the next minute
+    thump_cooldown: int = 0  # spec 13: minutes before it may thump again
+    was_chasing: bool = False  # spec 13: chasing, not alerted, when it started thumping
 
     def is_down(self, now: int) -> bool:
         """Whether it is on the floor during the minute that starts at clock minute `now`."""

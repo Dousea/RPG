@@ -22,9 +22,11 @@ from modules.action.types import (
     AddGoalAction,
     AttackAction,
     BandageAction,
+    CloseAction,
     DropAction,
     Duration,
     MoveAction,
+    OpenAction,
     ShoutAction,
     SleepAction,
     StanceAction,
@@ -37,8 +39,8 @@ from modules.action.types import (
 from modules.body import BodyLocation, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
 from modules.character.skills import SkillState
+from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
-from modules.entity.object import DoorEntity, UnlockableEntityLockState
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
 from modules.pace import Pace
@@ -458,8 +460,13 @@ if __name__ == "__main__":
 
 
 def zombie_game(zone_id: str = "zone_street") -> GameManager:
-    """A game after the outbreak, with no zombies yet, the player standing in `zone_id`."""
+    """A game after the outbreak, with no zombies yet, the player standing in `zone_id`.
+
+    Every door stands open, so the zombie rules of spec 09 are tested without them.
+    """
     gm = GameManager()
+    for barrier in gm.world.barriers.values():
+        barrier.open = True
     gm.player.current_location_id = zone_id
     gm.world.outbreak_started_at = 0
     gm.world.last_redistribution_minute = 0
@@ -827,17 +834,26 @@ class ZombieFollowUpTests(unittest.TestCase):
         self.assertFalse(redistribution_due(gm.world, 719))
         self.assertTrue(redistribution_due(gm.world, 720))
 
-    def test_a_chaser_in_another_zone_stops_at_a_closed_door(self):
+    def test_a_chaser_in_another_zone_stops_at_a_closed_door_and_pounds_on_it(self):
         gm = zombie_game("zone_street")
-        gm.world.locations["zone_neighborhood"].entities.append(
-            DoorEntity(leads_to="zone_street", state=UnlockableEntityLockState.LOCKED)
+        gm.world.barriers["gate"] = BarrierEntity(
+            barrier_id="gate",
+            kind=BarrierKind.DOOR,
+            zones=("zone_street", "zone_neighborhood"),
+            inside_zone="zone_street",
+            name="gate",
+            health=500,
+            max_health=500,
         )
         chaser = add_zombie(
             gm, "zone_neighborhood", gap=60, state=ZombieState.CHASING, facing_cos=1.0
         )
         chaser.time_since_seen = 0
+        chaser.memory = 10**6
         self.run_wait(gm, 1)
-        self.assertEqual(chaser.state, ZombieState.IDLE)
+        self.assertEqual(chaser.state, ZombieState.CHASING)
+        self.run_wait(gm, 30)
+        self.assertEqual(chaser.state, ZombieState.THUMPING)
         self.assertEqual(chaser.zone_id, "zone_neighborhood")
 
     def test_a_chaser_in_another_zone_closes_in_when_the_way_is_open(self):
@@ -919,7 +935,7 @@ class ZombieFollowUpTests(unittest.TestCase):
         gm = zombie_game()
         zombie = add_zombie(gm, gap=1.5, state=ZombieState.ALERTED)
         zombie.sound_gap = 30
-        self.loop(gm)._follow_sound(zombie, 40)
+        self.loop(gm)._follow_sound(zombie, 40, PlayerMinute(), MinuteReport())
         self.assertEqual(zombie.state, ZombieState.CHASING)
         self.assertTrue(zombie.has_chased)
 
@@ -1331,3 +1347,218 @@ class RisingTests(unittest.TestCase):
         self.assertEqual(
             gm.narrative.death_cause, "Orton died of the zombie infection...and rose again."
         )
+
+
+def shut_game(zone_id: str = "zone_home") -> GameManager:
+    """`zombie_game` with every door shut again."""
+    gm = zombie_game(zone_id)
+    for barrier in gm.world.barriers.values():
+        barrier.open = False
+    return gm
+
+
+def add_thumper(gm: GameManager, barrier_id: str, side: str, rate: float = 1.97) -> ZombieEntity:
+    zombie = add_zombie(gm, side, gap=5, state=ZombieState.THUMPING, facing_cos=-1.0)
+    zombie.thump_barrier = barrier_id
+    zombie.thump_rate = rate
+    return zombie
+
+
+class DoorSimulationTests(unittest.TestCase):
+    """Spec 13, `MOVE_TO` through a barrier, Interruptions and Stress from sounds."""
+
+    def spent(self, gm: GameManager, *actions) -> tuple[int, list[str]]:
+        before = gm.narrative.minutes
+        facts = simulate(gm, *actions, rng=random.Random(1))
+        return gm.narrative.minutes - before, facts
+
+    def test_move_to_home_shuts_the_apartment_door_behind_the_player(self):
+        gm = shut_game("zone_building")
+        minutes, facts = self.spent(gm, MoveAction(destination="in"))
+        self.assertEqual(gm.player.current_location_id, "zone_home")
+        self.assertEqual(minutes, 10)
+        door = gm.world.barriers["door_apartment"]
+        self.assertFalse(door.open)
+        self.assertEqual(gm.player.at_barrier, "door_apartment")
+        self.assertIn("succeeded", facts[0])
+
+    def test_an_open_door_stays_open_after_the_move(self):
+        gm = shut_game("zone_building")
+        gm.world.barriers["door_apartment"].open = True
+        self.spent(gm, MoveAction(destination="in"))
+        self.assertTrue(gm.world.barriers["door_apartment"].open)
+
+    def test_a_later_move_in_the_zone_clears_the_barrier_the_player_is_at(self):
+        gm = shut_game("zone_building")
+        self.spent(gm, MoveAction(destination="in"))
+        self.spent(gm, MoveAction(destination="the kitchen"))
+        self.assertIsNone(gm.player.at_barrier)
+
+    def test_a_chaser_left_behind_the_shut_door_becomes_a_thumper(self):
+        gm = shut_game("zone_building")
+        chaser = add_zombie(
+            gm, "zone_building", gap=30, state=ZombieState.CHASING, speed_mod=0.01, facing_cos=1.0
+        )
+        chaser.time_since_seen = 0
+        chaser.memory = 10**6
+        self.spent(gm, MoveAction(destination="in"))
+        self.assertEqual(chaser.state, ZombieState.THUMPING)
+        self.assertEqual(chaser.thump_barrier, "door_apartment")
+        self.assertEqual(chaser.zone_id, "zone_building")
+
+    def test_every_chaser_left_behind_the_shut_door_thumps_even_one_at_gap_1(self):
+        gm = shut_game("zone_building")
+        near = add_zombie(
+            gm, "zone_building", gap=1, state=ZombieState.CHASING, speed_mod=0.01, facing_cos=1.0
+        )
+        far = add_zombie(
+            gm, "zone_building", gap=5, state=ZombieState.CHASING, speed_mod=0.01, facing_cos=1.0
+        )
+        for chaser in (near, far):
+            chaser.time_since_seen = 0
+            chaser.memory = 10**6
+        self.spent(gm, MoveAction(destination="in"))
+        for chaser in (near, far):
+            self.assertEqual(chaser.state, ZombieState.THUMPING)
+            self.assertEqual(chaser.thump_barrier, "door_apartment")
+
+    def test_the_zombies_the_opening_released_follow_through_instead_of_thumping(self):
+        gm = shut_game("zone_home")
+        released = add_thumper(gm, "door_apartment", "zone_building")
+        self.spent(gm, OpenAction(barrier_name="apartment door"))
+        self.assertEqual(released.state, ZombieState.CHASING)
+        gm = shut_game("zone_home")
+        released = add_thumper(gm, "door_apartment", "zone_building")
+        self.spent(gm, MoveAction(destination="out"))
+        self.assertNotEqual(released.state, ZombieState.THUMPING)
+
+    def test_a_walk_through_the_lobby_door_leaves_street_chasers_pounding_on_it(self):
+        gm = shut_game("zone_street")
+        chaser = add_zombie(
+            gm, "zone_street", gap=35, state=ZombieState.CHASING, speed_mod=0.01, facing_cos=1.0
+        )
+        chaser.time_since_seen = 0
+        chaser.memory = 10**6
+        self.spent(gm, MoveAction(destination="zone_building"))
+        self.assertEqual(chaser.state, ZombieState.THUMPING)
+        self.assertEqual(chaser.thump_barrier, "door_lobby")
+
+    def test_open_and_close_cost_0_and_walking_to_a_barrier_costs_1(self):
+        gm = shut_game("zone_home")
+        minutes, _ = self.spent(gm, OpenAction(barrier_name="apartment door"))
+        self.assertEqual(minutes, 1)
+        minutes, _ = self.spent(gm, CloseAction(barrier_name="apartment door"))
+        self.assertEqual(minutes, 0)
+
+    def test_a_wait_stops_when_thumping_starts(self):
+        gm = shut_game("zone_home")
+        chaser = add_zombie(gm, "zone_building", gap=30, state=ZombieState.CHASING, facing_cos=1.0)
+        chaser.time_since_seen = 0
+        minutes, facts = self.spent(gm, WaitAction(duration=Duration(minutes=30)))
+        self.assertGreater(minutes, 1)
+        self.assertLess(minutes, 30)
+        self.assertEqual(chaser.state, ZombieState.THUMPING)
+        self.assertIn("Something starts pounding on the apartment door.", facts)
+
+    def test_a_sleep_does_not_stop_when_thumping_starts(self):
+        gm = shut_game("zone_home")
+        chaser = add_zombie(gm, "zone_building", gap=30, state=ZombieState.CHASING, facing_cos=1.0)
+        chaser.time_since_seen = 0
+        minutes, facts = self.spent(gm, SleepAction(duration=Duration(minutes=30)))
+        self.assertEqual(minutes, 30)
+        self.assertEqual(chaser.state, ZombieState.THUMPING)
+        self.assertNotIn("Something starts pounding on the apartment door.", facts)
+
+    def test_a_door_breaking_wakes_the_sleeper(self):
+        gm = shut_game("zone_home")
+        gm.world.barriers["door_apartment"].health = 3
+        add_thumper(gm, "door_apartment", "zone_building")
+        add_thumper(gm, "door_apartment", "zone_building")
+        minutes, facts = self.spent(gm, SleepAction(duration=Duration(minutes=60)))
+        self.assertEqual(minutes, 1)
+        self.assertFalse(gm.player.asleep)
+        self.assertIn("The apartment door bursts from its hinges.", facts)
+        self.assertIn("The crash wakes Orton.", facts)
+
+    def test_a_plank_breaking_stops_a_wait_but_not_a_sleep(self):
+        gm = shut_game("zone_home")
+        gm.world.barriers["door_apartment"].barricades["zone_home"] = [3, 3]
+        add_thumper(gm, "door_apartment", "zone_building", rate=3.0)
+        minutes, facts = self.spent(gm, WaitAction(duration=Duration(minutes=30)))
+        self.assertEqual(minutes, 1)
+        self.assertIn("A plank on the apartment door splinters.", facts)
+
+    def test_a_break_outside_the_players_building_is_not_their_business(self):
+        gm = shut_game("zone_home")
+        gm.world.barriers["door_lobby"].health = 3
+        add_thumper(gm, "door_lobby", "zone_street", rate=3.0)
+        add_thumper(gm, "door_lobby", "zone_street", rate=3.0)
+        minutes, _ = self.spent(gm, WaitAction(duration=Duration(minutes=10)))
+        self.assertTrue(gm.world.barriers["door_lobby"].broken)
+        self.assertEqual(minutes, 1)
+
+    def test_thumping_at_the_door_raises_stress_by_about_0_0076_a_minute(self):
+        def stress_after(thumping: bool) -> float:
+            gm = shut_game("zone_home")
+            gm.player.traits.clear()
+            gm.player.stats.set(CharacterStat.STRESS, 0.5)
+            if thumping:
+                add_thumper(gm, "door_apartment", "zone_building")
+            simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
+            return gm.player.stats.get(CharacterStat.STRESS)
+
+        gain = stress_after(True) - stress_after(False)
+        self.assertAlmostEqual(gain, 30 * 0.00768, delta=0.01)
+
+    def test_a_deaf_player_gets_no_stress_from_the_thumping(self):
+        def stress_after(traits: list[str]) -> float:
+            gm = shut_game("zone_home")
+            gm.player.traits[:] = traits
+            gm.player.stats.set(CharacterStat.STRESS, 0.5)
+            add_thumper(gm, "door_apartment", "zone_building")
+            simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
+            return gm.player.stats.get(CharacterStat.STRESS)
+
+        self.assertLess(stress_after(["deaf"]), stress_after([]))
+
+    def test_the_lobby_door_holds_street_zombies_out_of_a_redistribution(self):
+        gm = shut_game("zone_home")
+        for _ in range(30):
+            add_zombie(gm, "zone_street", gap=10)
+        from managers.zombies import redistribute
+
+        redistribute(gm.world, 720, "zone_home", random.Random(2))
+        self.assertEqual([z for z in gm.world.zombies.values() if z.zone_id == "zone_building"], [])
+
+    def test_a_thumper_behind_the_door_shows_up_in_the_threats_in_words(self):
+        gm = shut_game("zone_home")
+        add_thumper(gm, "door_apartment", "zone_building")
+        (view,) = threat_views(gm)
+        self.assertIsNone(view.zombie_id)
+        self.assertEqual(view.state_word, "something at the apartment door")
+
+
+class BarrierStoryBeatTests(unittest.TestCase):
+    """Spec 13, Edge cases: a story beat does not move an NPC across planks."""
+
+    def beat_move(self, gm: GameManager, zone_id: str) -> str:
+        from modules.story import MoveNpc
+
+        npc = next(iter(gm.npcs.values()))
+        SimulationCore(gm).apply_story_effect(MoveNpc(npc_id=npc.npc_id, zone_id=zone_id))
+        return npc.current_location_id
+
+    def test_a_beat_skips_a_move_across_planks_and_logs_it(self):
+        gm = GameManager()
+        npc = next(iter(gm.npcs.values()))
+        npc.current_location_id = "zone_building"
+        gm.world.barriers["door_apartment"].barricades["zone_home"] = [1000]
+        with self.assertLogs("managers.simulation", level="WARNING"):
+            where = self.beat_move(gm, "zone_home")
+        self.assertEqual(where, "zone_building")
+
+    def test_closed_and_locked_doors_do_not_stop_a_beat(self):
+        gm = GameManager()
+        npc = next(iter(gm.npcs.values()))
+        npc.current_location_id = "zone_building"
+        self.assertEqual(self.beat_move(gm, "zone_home"), "zone_home")

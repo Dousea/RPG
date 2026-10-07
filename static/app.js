@@ -18,6 +18,7 @@ const traitList = document.getElementById('trait-list');
 const npcList = document.getElementById('npc-list');
 const questList = document.getElementById('quest-list');
 const threatList = document.getElementById('threat-list');
+const barrierList = document.getElementById('barrier-list');
 const choiceOptions = document.getElementById('choice-options');
 const inputForm = document.getElementById('input-form');
 const playerInput = document.getElementById('player-input');
@@ -416,6 +417,33 @@ function renderThreats(data) {
     }));
 }
 
+function plankWords(count, where) {
+    return `${count} plank${count === 1 ? '' : 's'} ${where}`;
+}
+
+function renderBarriers(data) {
+    const barriers = data.barriers || [];
+    if (barriers.length === 0) {
+        clearAndFill(barrierList, [emptyNote('No doors or windows here.')]);
+        return;
+    }
+    clearAndFill(barrierList, barriers.map(barrier => {
+        const li = el('li', 'row-item');
+        const who = el('span', 'who');
+        who.appendChild(el('span', null, capitalised(barrier.name)));
+        const planks = [];
+        if (barrier.planks_here) planks.push(plankWords(barrier.planks_here, 'on this side'));
+        if (barrier.planks_far) planks.push(plankWords(barrier.planks_far, 'on the far side'));
+        if (planks.length) who.appendChild(el('span', 'aside', planks.join(', ')));
+        li.appendChild(who);
+        const tags = el('span', 'tag-row');
+        tags.appendChild(tag(capitalised(barrier.state_word), /broken|smashed/.test(barrier.state_word) ? 'bad' : ''));
+        if (barrier.thumping) tags.appendChild(tag('Pounding', 'grave'));
+        li.appendChild(tags);
+        return li;
+    }));
+}
+
 function renderQuests(data) {
     const quests = data.quests || [];
     if (quests.length === 0) {
@@ -507,6 +535,7 @@ function updatePanel(data) {
     renderNamedEntries(traitList, data.traits, 'None recorded.');
     renderNpcs(data);
     renderThreats(data);
+    renderBarriers(data);
     renderQuests(data);
     renderChoiceOptions(data);
     applyGameOverState(data);

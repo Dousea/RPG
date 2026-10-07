@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from .body import BodyPart
 from .character.exercise import ExerciseDefinition
+from .entity.barrier import BarrierEntity
 from .entity.item import ItemEntity
 from .entity.npc import NpcEntity
 from .location import Location
@@ -54,6 +55,7 @@ class MoveBlocked:
     hops: int
     target: Location
     pace: Pace = Pace.WALK
+    barrier: BarrierEntity | None = None
 
 
 MoveOutcome = StayPut | ShuffleInZone | MoveToSpot | MoveToZone | MoveBlocked
@@ -104,6 +106,34 @@ class FirstAidTarget:
 
 
 @dataclass(frozen=True)
+class TargetBarrier:
+    """A door or window of the player's zone; `walk` when the player must first get to it (spec 13)."""
+
+    barrier: BarrierEntity
+    walk: bool
+
+
+@dataclass(frozen=True)
+class BarricadeKit:
+    """The barrier and the hammer, plank and nails that board it up (spec 13)."""
+
+    barrier: BarrierEntity
+    hammer: ItemEntity
+    plank: ItemEntity
+    nails: ItemEntity
+    walk: bool
+
+
+@dataclass(frozen=True)
+class PryTarget:
+    """The barrier and the tool that pries a plank off it (spec 13)."""
+
+    barrier: BarrierEntity
+    tool: ItemEntity
+    walk: bool
+
+
+@dataclass(frozen=True)
 class TimeSpan:
     """In-game minutes to pass; `clamped` when the request exceeded the cap."""
 
@@ -126,6 +156,9 @@ Resolution = (
     | NpcItem
     | NpcTopic
     | TargetZombie
+    | TargetBarrier
+    | BarricadeKit
+    | PryTarget
     | TimeSpan
     | ExercisePlan
     | FirstAidTarget

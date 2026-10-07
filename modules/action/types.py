@@ -62,6 +62,36 @@ class ShoveAction:
 
 
 @dataclass
+class OpenAction:
+    """Open a door or window of the player's zone (spec 13)."""
+
+    verb: ClassVar[str] = "OPEN"
+    barrier_name: str
+
+
+@dataclass
+class CloseAction:
+    verb: ClassVar[str] = "CLOSE"
+    barrier_name: str
+
+
+@dataclass
+class BarricadeAction:
+    """Nail one plank across a door or window on the player's side (spec 13)."""
+
+    verb: ClassVar[str] = "BARRICADE"
+    barrier_name: str
+
+
+@dataclass
+class UnbarricadeAction:
+    """Pry the outermost plank off the player's side (spec 13)."""
+
+    verb: ClassVar[str] = "UNBARRICADE"
+    barrier_name: str
+
+
+@dataclass
 class EquipAction:
     """Take a carried item in hand."""
 
@@ -204,6 +234,10 @@ AnyAction = (
     | TakeOffAction
     | AttackAction
     | ShoveAction
+    | OpenAction
+    | CloseAction
+    | BarricadeAction
+    | UnbarricadeAction
     | EquipAction
     | UnequipAction
     | UseItemAction

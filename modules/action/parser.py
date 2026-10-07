@@ -18,6 +18,8 @@ from modules.action.types import (
     AskAction,
     AttackAction,
     BandageAction,
+    BarricadeAction,
+    CloseAction,
     DisinfectAction,
     DropAction,
     Duration,
@@ -25,6 +27,7 @@ from modules.action.types import (
     ExerciseAction,
     GiveAction,
     MoveAction,
+    OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
@@ -34,6 +37,7 @@ from modules.action.types import (
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnbarricadeAction,
     UnequipAction,
     UseItemAction,
     WaitAction,
@@ -130,6 +134,30 @@ def _parse_shove(args: str) -> ShoveAction:
     if not args:
         raise _ActionParseError("SHOVE needs a target.")
     return ShoveAction(target_name=args)
+
+
+def _parse_open(args: str) -> OpenAction:
+    if not args:
+        raise _ActionParseError("OPEN needs a door or window.")
+    return OpenAction(barrier_name=args)
+
+
+def _parse_close(args: str) -> CloseAction:
+    if not args:
+        raise _ActionParseError("CLOSE needs a door or window.")
+    return CloseAction(barrier_name=args)
+
+
+def _parse_barricade(args: str) -> BarricadeAction:
+    if not args:
+        raise _ActionParseError("BARRICADE needs a door or window.")
+    return BarricadeAction(barrier_name=args)
+
+
+def _parse_unbarricade(args: str) -> UnbarricadeAction:
+    if not args:
+        raise _ActionParseError("UNBARRICADE needs a door or window.")
+    return UnbarricadeAction(barrier_name=args)
 
 
 def _parse_equip(args: str) -> EquipAction:
@@ -379,6 +407,7 @@ SceneKey = Literal[
     "npcs_here",
     "threats",
     "hurt",
+    "barriers",
 ]
 
 
@@ -478,11 +507,43 @@ VERBS: dict[str, Verb] = dict(
         ),
         _verb(
             "ATTACK",
-            ("npc", "zombie"),
+            ("npc", "zombie", "barrier"),
             _parse_attack,
-            "an NPC name, a zombie id from [THREATS], or 'zombie' for the nearest",
+            "an NPC name, a zombie id from [THREATS], 'zombie' for the nearest, or a door or window from [DOORS AND WINDOWS]",
             1,
-            ("npcs_here", "threats"),
+            ("npcs_here", "threats", "barriers"),
+        ),
+        _verb(
+            "OPEN",
+            ("barrier",),
+            _parse_open,
+            "a door or window from [DOORS AND WINDOWS]; takes no time",
+            0,
+            ("barriers",),
+        ),
+        _verb(
+            "CLOSE",
+            ("barrier",),
+            _parse_close,
+            "a door or window from [DOORS AND WINDOWS]; takes no time",
+            0,
+            ("barriers",),
+        ),
+        _verb(
+            "BARRICADE",
+            ("barrier",),
+            _parse_barricade,
+            "a closed door or window from [DOORS AND WINDOWS]; nails one plank on this side, needs a hammer, a plank and a nail",
+            1,
+            ("barriers",),
+        ),
+        _verb(
+            "UNBARRICADE",
+            ("barrier",),
+            _parse_unbarricade,
+            "a door or window from [DOORS AND WINDOWS]; pries one plank off this side, needs a hammer, crowbar or similar",
+            1,
+            ("barriers",),
         ),
         _verb(
             "SHOVE",

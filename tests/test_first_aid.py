@@ -40,7 +40,9 @@ class RecordingSkills(SkillEngine):
         super().__init__()
         self.awarded: list[tuple[str, float]] = []
 
-    def add_xp(self, player: PlayerEntity, skill_id: str, amount: float) -> list[str]:
+    def add_xp(
+        self, player: PlayerEntity, skill_id: str, amount: float, *, chain: bool = True
+    ) -> list[str]:
         self.awarded.append((skill_id, amount))
         return []
 

@@ -5,18 +5,28 @@ import random
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
+from data import barriers as barrier_k
 from data import skills as skill_k
 from data import traits as trait_k
 from data import zombie_lore as k
 from data.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
+from managers import thumping
+from managers.barriers import can_see_through, connection_blocked, d_b
 from managers.body import kill, limp_factor
 from managers.game import GameManager
 from managers.locations import zone_path
 from managers.melee import MeleeEngine
-from managers.noise import Sound, footstep_emit_chance, footstep_sound, perk_level, sneak_spot_mod
+from managers.noise import (
+    BarrierSound,
+    Sound,
+    footstep_emit_chance,
+    footstep_sound,
+    perk_level,
+    sneak_spot_mod,
+)
 from managers.skills import SkillEngine
 from managers.zombie_attack import AttackOutcome, resolve_attack
-from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.entity.barrier import BarrierEntity
 from modules.entity.player import PlayerEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
@@ -77,19 +87,6 @@ def zone_target(zone: Location, days: float) -> float:
         * k.POPULATION_MULTIPLIER
         * population_curve(days)
     )
-
-
-def connection_blocked(world: World, zone_a: str, zone_b: str) -> bool:
-    """Whether a closed door stands on the connection between two zones."""
-    for here, there in ((zone_a, zone_b), (zone_b, zone_a)):
-        for entity in world.locations[here].entities:
-            if (
-                isinstance(entity, DoorEntity)
-                and entity.leads_to == there
-                and entity.state == UnlockableEntityLockState.LOCKED
-            ):
-                return True
-    return False
 
 
 def place_in_zone(zombie: ZombieEntity, zone: Location, rng: random.Random) -> None:
@@ -344,6 +341,11 @@ def perceived_zombies(world: World, player: PlayerEntity, light: float) -> list[
     hearing = detection_range(player)
     result: list[Perception] = []
     for zombie in _by_id(world.zombies.values()):
+        if zombie.state == ZombieState.THUMPING:
+            behind = _perceive_thumper(world, player, zombie, sight)
+            if behind is not None:
+                result.append(behind)
+            continue
         if zombie.zone_id != player.current_location_id:
             continue
         seen = zombie.gap <= sight
@@ -351,6 +353,23 @@ def perceived_zombies(world: World, player: PlayerEntity, light: float) -> list[
         if seen or heard:
             result.append(Perception(zombie, seen, heard))
     return result
+
+
+def _perceive_thumper(
+    world: World, player: PlayerEntity, zombie: ZombieEntity, sight: float
+) -> Perception | None:
+    """A thumper on the far side of a barrier of the player's zone: seen through glass, or heard."""
+    barrier = world.barriers.get(zombie.thump_barrier or "")
+    if barrier is None or player.current_location_id not in barrier.zones:
+        return None
+    if zombie.zone_id == player.current_location_id:
+        return None
+    distance = d_b(world, player, barrier)
+    seen = can_see_through(barrier) and distance + 1 <= sight
+    heard = not thumping.is_deaf(player) and distance <= barrier_k.HEARD_THUMP_INTERRUPT_RADIUS
+    if seen or heard:
+        return Perception(zombie, seen, heard)
+    return None
 
 
 def perceived_now(manager: GameManager) -> list[Perception]:
@@ -392,6 +411,8 @@ def enter_zone(world: World, zone_id: str, previous_zone_id: str, rng: random.Ra
     """
     zone = world.locations[zone_id]
     for zombie in _by_id(world.zombies.values()):
+        if zombie.state == ZombieState.THUMPING:
+            continue
         if zombie.state in _HUNTING:
             if zombie.gap <= zone.size_tiles:
                 zombie.zone_id = zone_id
@@ -404,17 +425,25 @@ def enter_zone(world: World, zone_id: str, previous_zone_id: str, rng: random.Ra
             zombie.sound_gap = 0.0
 
 
-def path_blocked(world: World, start_id: str, target_id: str) -> bool:
-    """Whether a closed door stands anywhere on the way between two zones."""
-    path = zone_path(world.locations, start_id, target_id)
-    if path is None:
-        return True
-    here = start_id
-    for step in path:
-        if connection_blocked(world, here, step):
-            return True
-        here = step
-    return False
+def shut_behind(
+    world: World,
+    player: PlayerEntity,
+    barrier: BarrierEntity,
+    previous_id: str,
+    rng: random.Random,
+    released: frozenset[str] = frozenset(),
+) -> None:
+    """The player closed a door behind them: every chaser left in the zone they came from pounds on it.
+
+    The zombies `released` by opening it on that hop follow through instead.
+    """
+    for zombie in _by_id(world.zombies.values()):
+        if (
+            zombie.state in _HUNTING
+            and zombie.zone_id == previous_id
+            and zombie.zombie_id not in released
+        ):
+            thumping.start(world, player, zombie, barrier, previous_id, rng)
 
 
 @dataclass
@@ -426,6 +455,7 @@ class PlayerMinute:
     approach_target: str | None = None
     swing_target: str | None = None
     shove: bool = False
+    idle: bool = False  # waiting or exercising: a new thump or a breaking plank stops it (spec 13)
 
 
 @dataclass
@@ -438,6 +468,8 @@ class MinuteReport:
     new_seen: int = 0
     attacked: bool = False
     death_fact: str = ""
+    sound_stress: float = 0.0
+    barrier_broke: bool = False
 
 
 class ZombieLoop:
@@ -449,6 +481,16 @@ class ZombieLoop:
         self._skills = skills
         self._melee = MeleeEngine(rng, skills)
         self._visible: set[str] | None = None
+        self._barrier_sounds: list[BarrierSound] = []
+        self._extra_stress = 0.0
+
+    def add_barrier_sound(self, sound: BarrierSound) -> None:
+        """A barrier sound the zombies hear in the next minute's step 2."""
+        self._barrier_sounds.append(sound)
+
+    def add_sound_stress(self, amount: float) -> None:
+        """Stress from a barrier sound made outside the minute loop, counted in the next minute."""
+        self._extra_stress += amount
 
     def forget_visible(self) -> None:
         """Count every zombie now in view as newly seen at the next minute."""
@@ -464,6 +506,7 @@ class ZombieLoop:
         report = MinuteReport()
         if not self.active():
             return report
+        report.sound_stress, self._extra_stress = self._extra_stress, 0.0
         manager = self._manager
         world = manager.world
         zone = manager.current_location
@@ -474,7 +517,8 @@ class ZombieLoop:
         self._redistribute_if_due(now)
         swing_sounds = self._swing(now, minute, report)
         self._hear(minute, [*extra_sounds, *swing_sounds], sample)
-        self._move(now, minute)
+        self._move(now, minute, report)
+        self._thump(minute, report)
         spotted = self._spot(minute, sample, light, report)
         self._remember()
         reached = self._report_reach(minute)
@@ -506,7 +550,11 @@ class ZombieLoop:
 
     def _visible_ids(self, light: float) -> set[str]:
         manager = self._manager
-        return {p.zombie.zombie_id for p in perceived_zombies(manager.world, manager.player, light)}
+        return {
+            p.zombie.zombie_id
+            for p in perceived_zombies(manager.world, manager.player, light)
+            if p.seen or p.zombie.state != ZombieState.THUMPING
+        }
 
     def _diff_visible(self, light: float) -> tuple[set[str], int]:
         now_visible = self._visible_ids(light)
@@ -541,11 +589,21 @@ class ZombieLoop:
         walking = minute.pace != Pace.STILL and not minute.asleep
         if walking and self._rng.random() < footstep_emit_chance(player, minute.pace):
             sounds.append(footstep_sound(player, minute.pace, indoors=zone.indoors))
-        if not sounds:
+        barrier_sounds, self._barrier_sounds = self._barrier_sounds, []
+        if not sounds and not barrier_sounds:
             return
         for zombie in _by_id(world.zombies.values()):
-            if zombie.state not in (ZombieState.IDLE, ZombieState.ALERTED):
+            thumper = zombie.state == ZombieState.THUMPING
+            if zombie.state not in (ZombieState.IDLE, ZombieState.ALERTED) and not thumper:
                 continue
+            heard = [
+                *sounds,
+                *(b.sound for b in barrier_sounds if zombie.zombie_id not in b.ignored),
+            ]
+            if thumper:
+                heard = [s for s in heard if s.radius >= barrier_k.THUMP_STOP_SOUND_RADIUS]
+                if zombie.zone_id != player.current_location_id:
+                    continue
             distance = self._distance_to_player(zombie)
             if distance is None:
                 continue
@@ -554,15 +612,19 @@ class ZombieLoop:
             loudest = max(
                 (
                     sound_attract(zombie, sound, distance, other_zone, mismatch, sample)
-                    for sound in sounds
+                    for sound in heard
                 ),
                 default=0.0,
             )
-            if loudest > 0:
+            if loudest <= 0:
+                continue
+            if thumper:
+                thumping.stop_for_sound(zombie, distance)
+            else:
                 zombie.state = ZombieState.ALERTED
                 zombie.sound_gap = distance
 
-    def _move(self, now: int, minute: PlayerMinute) -> None:
+    def _move(self, now: int, minute: PlayerMinute, report: MinuteReport) -> None:
         manager = self._manager
         world, player = manager.world, manager.player
         player_zone = player.current_location_id
@@ -575,29 +637,92 @@ class ZombieLoop:
             if zombie.is_down(now):
                 continue
             if zombie.state in _HUNTING:
-                self._chase(zombie, opens, size)
+                self._chase(zombie, opens, size, minute, report)
             elif zombie.state == ZombieState.ALERTED:
-                self._follow_sound(zombie, size)
+                self._follow_sound(zombie, size, minute, report)
             if zombie.zombie_id == minute.approach_target:
                 zombie.gap = max(
                     float(k.ATTACK_RANGE_TILES), zombie.gap - k.WALK_APPROACH_TILES_PER_MIN * limp
                 )
 
-    def _chase(self, zombie: ZombieEntity, opens: float, size: int) -> None:
+    def _held_at_barrier(
+        self, zombie: ZombieEntity, ahead: float, minute: PlayerMinute, report: MinuteReport
+    ) -> bool:
+        """Whether a zombie in another zone is held at a blocking barrier on its way to the player.
+
+        `ahead` is the gap (or sound gap) it would walk to this minute. A zombie with no way at all
+        goes idle; one with a blocker walks toward it, no closer than the barrier, and starts
+        thumping when it gets there, unless it is still in its cooldown.
+        """
         manager = self._manager
-        world = manager.world
-        player_zone = manager.player.current_location_id
-        if zombie.zone_id != player_zone and path_blocked(world, zombie.zone_id, player_zone):
+        world, player = manager.world, manager.player
+        if zombie.zone_id == player.current_location_id:
+            return False
+        if zone_path(world.locations, zombie.zone_id, player.current_location_id) is None:
             zombie.state = ZombieState.IDLE
+            return True
+        blocker = thumping.first_blocker(world, zombie.zone_id, player.current_location_id)
+        if blocker is None:
+            return False
+        if zombie.thump_cooldown > 0:
+            return True
+        barrier, side = blocker
+        stop = thumping.stop_gap(world, player, barrier, side)
+        hunting = zombie.state in _HUNTING
+        if ahead > stop:
+            if hunting:
+                zombie.gap = ahead
+            else:
+                zombie.sound_gap = ahead
+            return True
+        first = not thumping.thumpers_at(world, barrier.barrier_id)
+        thumping.start(world, player, zombie, barrier, side, self._rng)
+        zombie.gap = stop
+        if first:
+            self._announce_thumping(barrier, minute, report)
+        return True
+
+    def _announce_thumping(
+        self, barrier: BarrierEntity, minute: PlayerMinute, report: MinuteReport
+    ) -> None:
+        """The first zombie at a barrier of the player's zone: a fact if they can hear it, and a stop if idle."""
+        manager = self._manager
+        player, world = manager.player, manager.world
+        if not thumping.of_player_zone(barrier, player) or minute.asleep:
             return
-        gap = zombie.gap - chase_speed(zombie) + opens
-        zombie.gap = max(float(k.ATTACK_RANGE_TILES), gap)
+        if (
+            thumping.is_deaf(player)
+            or d_b(world, player, barrier) > barrier_k.HEARD_THUMP_INTERRUPT_RADIUS
+        ):
+            return
+        fact = barrier_k.THUMP_START_FACT.format(barrier=barrier.name)
+        if minute.idle and not report.interrupted:
+            report.interrupted = True
+            report.interruption_fact = fact
+        else:
+            report.facts.append(fact)
+
+    def _chase(
+        self,
+        zombie: ZombieEntity,
+        opens: float,
+        size: int,
+        minute: PlayerMinute,
+        report: MinuteReport,
+    ) -> None:
+        manager = self._manager
+        player_zone = manager.player.current_location_id
+        gap = max(float(k.ATTACK_RANGE_TILES), zombie.gap - chase_speed(zombie) + opens)
+        if self._held_at_barrier(zombie, gap, minute, report):
+            return
+        zombie.gap = gap
         if zombie.gap <= size:
             zombie.zone_id = player_zone
 
-    def _follow_sound(self, zombie: ZombieEntity, size: int) -> None:
+    def _follow_sound(
+        self, zombie: ZombieEntity, size: int, minute: PlayerMinute, report: MinuteReport
+    ) -> None:
         manager = self._manager
-        world = manager.world
         player_zone = manager.player.current_location_id
         step = chase_speed(zombie)
         if zombie.zone_id == player_zone:
@@ -610,13 +735,39 @@ class ZombieLoop:
             elif zombie.sound_gap <= 0:
                 zombie.state = ZombieState.IDLE
             return
-        if path_blocked(world, zombie.zone_id, player_zone):
-            zombie.state = ZombieState.IDLE
+        if self._held_at_barrier(zombie, zombie.sound_gap - step, minute, report):
             return
         zombie.sound_gap -= step
         if zombie.sound_gap <= size:
             zombie.zone_id = player_zone
             zombie.gap = max(float(k.ATTACK_RANGE_TILES), zombie.sound_gap)
+
+    def _thump(self, minute: PlayerMinute, report: MinuteReport) -> None:
+        """Step 3a: the thumpers deal their thumps; what breaks may stop the player."""
+        manager = self._manager
+        result = thumping.minute(manager.world, manager.player, self._rng)
+        report.sound_stress += result.stress
+        self._barrier_sounds.extend(result.sounds)
+        if result.barrier_broke:
+            report.facts.extend(result.facts)
+            report.barrier_broke = True
+            report.interrupted = True
+            manager.player.asleep = False
+            return
+        if result.plank_broke and minute.idle and not report.interrupted:
+            report.interrupted = True
+            report.interruption_fact = result.facts[0]
+            return
+        if not minute.asleep:
+            report.facts.extend(result.facts)
+
+    def _sees_through_barrier(self, zombie: ZombieEntity) -> bool:
+        """Whether a thumper on the far side of a barrier of the player's zone sees through it."""
+        manager = self._manager
+        barrier = manager.world.barriers.get(zombie.thump_barrier or "")
+        if barrier is None or manager.player.current_location_id not in barrier.zones:
+            return False
+        return zombie.zone_id != manager.player.current_location_id and can_see_through(barrier)
 
     def _spot(
         self, minute: PlayerMinute, sample: WeatherSample, light: float, report: MinuteReport
@@ -630,7 +781,11 @@ class ZombieLoop:
         engaged = (minute.approach_target, minute.swing_target)
         for zombie in _by_id(world.zombies.values()):
             hunting = zombie.state in _HUNTING
-            if not hunting and zombie.zone_id != player_zone:
+            thumper = zombie.state == ZombieState.THUMPING
+            if thumper:
+                if not self._sees_through_barrier(zombie):
+                    continue
+            elif not hunting and zombie.zone_id != player_zone:
                 continue
             if zombie.state == ZombieState.IDLE:
                 zombie.facing_cos = self._rng.uniform(-1.0, 1.0)
@@ -646,7 +801,9 @@ class ZombieLoop:
                 zombie.has_chased = True
                 zombie.bonus_spot_time = float(k.SPOT_BONUS_FRAMES)
                 zombie.facing_cos = 1.0
-                if not hunting:
+                if thumper:
+                    zombie.was_chasing = True
+                elif not hunting:
                     zombie.state = ZombieState.CHASING
                     newly = newly or zombie.zombie_id not in engaged
         if rolled and not spotted_any and not close_call and minute.pace == Pace.SNEAK:
@@ -762,6 +919,7 @@ class ThreatView:
     zombie_id: str | None
     distance_word: str
     state_word: str
+    barrier_id: str | None = None  # spec 13: the barrier a thumper pounds on
 
 
 def _distance_word(gap: float) -> str:
@@ -781,12 +939,25 @@ def _state_word(zombie: ZombieEntity, now: int) -> str:
     return k.STATE_WORDS[zombie.state]
 
 
+def _thumper_view(manager: GameManager, seen: Perception) -> ThreatView:
+    zombie = seen.zombie
+    barrier = manager.world.barriers[zombie.thump_barrier or ""]
+    if seen.seen:
+        where = k.THUMPER_SEEN_WORD.format(barrier=barrier.name)
+        return ThreatView(zombie.zombie_id, where, k.STATE_WORD_THUMPING, barrier.barrier_id)
+    return ThreatView(
+        None, "", k.THUMPER_HEARD_WORD.format(barrier=barrier.name), barrier.barrier_id
+    )
+
+
 def threat_views(manager: GameManager) -> list[ThreatView]:
     """The zombies the player perceives, in words that never show a number."""
     views: list[ThreatView] = []
     for seen in perceived_now(manager):
         zombie = seen.zombie
-        if seen.seen:
+        if zombie.state == ZombieState.THUMPING:
+            views.append(_thumper_view(manager, seen))
+        elif seen.seen:
             views.append(
                 ThreatView(
                     zombie.zombie_id,

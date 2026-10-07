@@ -7,6 +7,7 @@ already decided.
 
 from collections.abc import Callable
 
+from data.barriers import BARRICADE_MIN, UNBARRICADE_MIN
 from modules.action.parser import TALK_TURN_MINUTES
 from modules.action.types import (
     AddGoalAction,
@@ -15,12 +16,15 @@ from modules.action.types import (
     AskAction,
     AttackAction,
     BandageAction,
+    BarricadeAction,
+    CloseAction,
     DisinfectAction,
     DropAction,
     EquipAction,
     ExerciseAction,
     GiveAction,
     MoveAction,
+    OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
@@ -30,6 +34,7 @@ from modules.action.types import (
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnbarricadeAction,
     UnequipAction,
     UseItemAction,
     WaitAction,
@@ -121,6 +126,10 @@ def _exercise_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 TIME_COSTS: dict[type, int | CostFunction] = {
     AttackAction: _attack_minutes,
+    OpenAction: 0,
+    CloseAction: 0,
+    BarricadeAction: BARRICADE_MIN,
+    UnbarricadeAction: UNBARRICADE_MIN,
     ShoveAction: _attack_minutes,
     EquipAction: EQUIP_MIN,
     UnequipAction: UNEQUIP_MIN,
@@ -158,7 +167,9 @@ MULTIPLIED_ACTIONS: tuple[type, ...] = (
     BandageAction,
     RemoveBandageAction,
     DisinfectAction,
-)  # spec 12
+    BarricadeAction,
+    UnbarricadeAction,
+)  # spec 12, 13
 
 
 def action_minutes(action: AnyAction, resolved: Resolution) -> int:

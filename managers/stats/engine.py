@@ -75,7 +75,7 @@ class StatsEngine:
             facts.extend(self._advance_chunk(player, chunk, ctx))
             self.minutes_advanced += chunk
             remaining -= chunk
-            ctx = dataclasses.replace(ctx, new_zombies_seen=0)
+            ctx = dataclasses.replace(ctx, new_zombies_seen=0, sound_stress=0.0)
         return facts
 
     def _advance_chunk(self, player: PlayerEntity, minutes: int, ctx: StatContext) -> list[str]:

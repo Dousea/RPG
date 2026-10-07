@@ -75,6 +75,7 @@ class PlayerEntity(BaseEntity):
     exercise: ExerciseState = field(default_factory=ExerciseState)
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
     zombie_kills: int = 0  # spec 11
+    at_barrier: str | None = None  # spec 13: the barrier the player stands at, for its distance
 
     def __post_init__(self) -> None:
         if not self.appearance.forename:

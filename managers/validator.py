@@ -16,6 +16,7 @@ re-derive the reason something was legal.
 import re
 from dataclasses import dataclass
 
+from data import barriers as barrier_k
 from data import body as body_k
 from data import exercises as ex
 from data import survival
@@ -28,6 +29,7 @@ from data.clock import (
 )
 from data.items import ITEMS
 from data.topics import TOPICS
+from managers.barriers import barriers_between, carried_entities, thumpable_for
 from managers.body import limp_factor
 from managers.combat import held_entity, held_slots
 from managers.exercise import endurance_level
@@ -52,6 +54,8 @@ from modules.action.types import (
     AskAction,
     AttackAction,
     BandageAction,
+    BarricadeAction,
+    CloseAction,
     DisinfectAction,
     DropAction,
     Duration,
@@ -59,6 +63,7 @@ from modules.action.types import (
     ExerciseAction,
     GiveAction,
     MoveAction,
+    OpenAction,
     RemoveBandageAction,
     RemoveGoalAction,
     ShoutAction,
@@ -68,13 +73,15 @@ from modules.action.types import (
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnbarricadeAction,
     UnequipAction,
     UseItemAction,
     WaitAction,
     WearAction,
 )
+from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.npc import NpcEntity
-from modules.entity.object import DoorEntity, UnlockableEntityLockState
+from modules.entity.zombie import ZombieState
 from modules.item import (
     AppliableItem,
     ClothingItem,
@@ -84,6 +91,7 @@ from modules.item import (
 )
 from modules.pace import Pace
 from modules.resolution import (
+    BarricadeKit,
     ExercisePlan,
     FirstAidTarget,
     HeldItem,
@@ -92,9 +100,11 @@ from modules.resolution import (
     MoveToZone,
     NpcItem,
     NpcTopic,
+    PryTarget,
     Resolution,
     ShuffleInZone,
     StayPut,
+    TargetBarrier,
     TargetNpc,
     TargetZombie,
     TimeSpan,
@@ -237,21 +247,18 @@ class ActionValidator:
 
         hop_from = current
         for hop_id in path:
-            door = self._door_blocking(hop_from, hop_id)
-            if (
-                door is not None
-                and door.state == UnlockableEntityLockState.LOCKED
-                and not self._has_key(door.key_id)
-            ):
-                hop_to = manager.world.locations[hop_id]
+            stopped = self._stopping_barrier(hop_from.id, hop_id)
+            if stopped is not None:
+                barrier, place = stopped
                 return Accepted(
                     action,
                     MoveBlocked(
                         location=hop_from,
-                        place=f"at the locked door to {hop_to.name}"[:MAX_PLACE_LENGTH],
+                        place=place[:MAX_PLACE_LENGTH],
                         hops=path.index(hop_id),
                         target=target,
                         pace=self._walk_pace(action),
+                        barrier=barrier,
                     ),
                 )
             hop_from = manager.world.locations[hop_id]
@@ -260,11 +267,20 @@ class ActionValidator:
             action, MoveToZone(target, place, hops=len(path), pace=self._walk_pace(action))
         )
 
-    @staticmethod
-    def _door_blocking(location, target_id: str) -> DoorEntity | None:
-        for entity in location.entities:
-            if isinstance(entity, DoorEntity) and entity.leads_to == target_id:
-                return entity
+    def _stopping_barrier(self, here_id: str, there_id: str) -> tuple[BarrierEntity, str] | None:
+        """The barrier on a hop that ends the walk, and where the player stands then.
+
+        Planks stop the walk on either side; a locked door stops anyone outside it without the key.
+        """
+        there = self.manager.world.locations[there_id]
+        for barrier in barriers_between(self.manager.world, here_id, there_id):
+            if barrier.total_planks:
+                return barrier, f"at the barricaded {barrier.kind.value}"
+            if barrier.open or barrier.broken:
+                continue
+            outside = here_id != barrier.inside_zone
+            if barrier.locked and outside and not self._has_key(barrier.key_id):
+                return barrier, f"at the locked {barrier.kind.value} to {there.name}"
         return None
 
     def _has_key(self, key_id: str | None) -> bool:
@@ -323,16 +339,10 @@ class ActionValidator:
         return Accepted(action, HeldItem(entity))
 
     def _is_door_key(self, item_id: str) -> bool:
-        """Whether `item_id` is the `key_id` of any `DoorEntity` anywhere in
-        the world -- engine-owned, not hard-coded to `item_apartment_key`.
-        Dropping (or duplicating) the key could strand the player outside their own
-        apartment, since the door rebuilds LOCKED on every load (see
-        data/locations.py)."""
-        for location in self.manager.world.locations.values():
-            for entity in location.entities:
-                if isinstance(entity, DoorEntity) and entity.key_id == item_id:
-                    return True
-        return False
+        """Whether `item_id` is the `key_id` of any barrier anywhere in the world --
+        engine-owned, not hard-coded to `item_apartment_key`. Dropping (or duplicating) the key
+        could strand the player outside their own apartment."""
+        return any(barrier.key_id == item_id for barrier in self.manager.world.barriers.values())
 
     def _validate_use_item(self, action: UseItemAction) -> ValidationResult:
         entity = self.manager._find_item_entity(self.manager.player.inventory, action.item_name)
@@ -456,21 +466,160 @@ class ActionValidator:
             return Rejected(action, f"{self._name} has nothing to disinfect with.")
         return Accepted(action, FirstAidTarget(part, entity))
 
+    # === Doors, windows and planks ===
+
+    def _find_barrier(self, name: str) -> BarrierEntity | None:
+        """The barrier `name` points at: its id, its name or an alias, those of this zone first."""
+        needle = name.strip().strip("\"'.,;:").casefold()
+        needle = needle.removeprefix("the ").removeprefix("my ").strip()
+        if not needle:
+            return None
+        here = self.manager.player.current_location_id
+        barriers = sorted(self.manager.world.barriers.values(), key=lambda b: here not in b.zones)
+        for barrier in barriers:
+            names = (barrier.barrier_id, barrier.name, *barrier.aliases)
+            if needle in (n.casefold().removeprefix("the ") for n in names):
+                return barrier
+        return None
+
+    def _barrier_here(self, name: str) -> BarrierEntity | str:
+        """The barrier of the player's zone `name` points at, or the refusal."""
+        barrier = self._find_barrier(name)
+        if barrier is None:
+            return barrier_k.NO_BARRIER_HERE.format(name=f"'{name.strip()}'")
+        if self.manager.player.current_location_id not in barrier.zones:
+            return barrier_k.NO_BARRIER_HERE.format(name=barrier.kind.value)
+        return barrier
+
+    def _walks_to(self, barrier: BarrierEntity) -> bool:
+        return self.manager.player.at_barrier != barrier.barrier_id
+
+    def _validate_open(self, action: OpenAction) -> ValidationResult:
+        found = self._barrier_here(action.barrier_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        barrier = found
+        if barrier.broken:
+            return Rejected(
+                action,
+                barrier_k.NO_DOOR_LEFT_OPEN
+                if barrier.kind == BarrierKind.DOOR
+                else barrier_k.SMASHED_WINDOW,
+            )
+        if barrier.open:
+            return Rejected(action, barrier_k.ALREADY_OPEN.format(barrier=barrier.name))
+        if barrier.total_planks:
+            return Rejected(action, barrier_k.BARRICADED.format(barrier=barrier.name))
+        player = self.manager.player
+        outside = player.current_location_id != barrier.inside_zone
+        if barrier.locked and outside and not self._has_key(barrier.key_id):
+            return Rejected(action, barrier_k.LOCKED)
+        return Accepted(action, TargetBarrier(barrier, self._walks_to(barrier)))
+
+    def _validate_close(self, action: CloseAction) -> ValidationResult:
+        found = self._barrier_here(action.barrier_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        barrier = found
+        if barrier.broken:
+            return Rejected(
+                action,
+                barrier_k.NO_DOOR_LEFT
+                if barrier.kind == BarrierKind.DOOR
+                else barrier_k.SMASHED_WINDOW,
+            )
+        if not barrier.open:
+            return Rejected(action, barrier_k.ALREADY_CLOSED.format(barrier=barrier.name))
+        if barrier.total_planks:
+            return Rejected(action, barrier_k.BARRICADED.format(barrier=barrier.name))
+        return Accepted(action, TargetBarrier(barrier, self._walks_to(barrier)))
+
+    def _validate_barricade(self, action: BarricadeAction) -> ValidationResult:
+        found = self._barrier_here(action.barrier_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        barrier = found
+        player = self.manager.player
+        door = barrier.kind == BarrierKind.DOOR
+        if door and barrier.broken:
+            return Rejected(action, barrier_k.NOTHING_TO_BOARD)
+        if door and barrier.open:
+            return Rejected(action, barrier_k.CLOSE_FIRST)
+        if barrier.plank_count(player.current_location_id) >= barrier_k.MAX_PLANKS_PER_SIDE:
+            return Rejected(action, barrier_k.FULL_BARRICADE.format(barrier=barrier.name))
+        carried = carried_entities(player)
+        hammers = [e for e in carried if barrier_k.HAMMER_TAG in e.item.tags and not e.broken]
+        if not hammers:
+            return Rejected(action, barrier_k.NO_HAMMER.format(name=self._name))
+        planks = [e for e in carried if e.item.id == barrier_k.PLANK_ITEM_ID]
+        if not planks:
+            return Rejected(action, barrier_k.NO_PLANK.format(name=self._name))
+        nails = [e for e in carried if e.item.id == barrier_k.NAILS_ITEM_ID and e.uses > 0]
+        if not nails:
+            return Rejected(action, barrier_k.NO_NAILS.format(name=self._name))
+        best = max(planks, key=lambda e: e.condition)
+        return Accepted(
+            action, BarricadeKit(barrier, hammers[0], best, nails[0], self._walks_to(barrier))
+        )
+
+    def _validate_unbarricade(self, action: UnbarricadeAction) -> ValidationResult:
+        found = self._barrier_here(action.barrier_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        barrier = found
+        side = self.manager.player.current_location_id
+        if not barrier.plank_count(side):
+            far = barrier.plank_count(barrier.far_side(side))
+            return Rejected(
+                action,
+                barrier_k.PLANKS_ON_OTHER_SIDE
+                if far
+                else barrier_k.NO_PLANKS.format(barrier=barrier.name),
+            )
+        tools = [
+            e
+            for e in carried_entities(self.manager.player)
+            if barrier_k.REMOVE_BARRICADE_TAG in e.item.tags and not e.broken
+        ]
+        if not tools:
+            return Rejected(action, barrier_k.NO_PRY_TOOL.format(name=self._name))
+        return Accepted(action, PryTarget(barrier, tools[0], self._walks_to(barrier)))
+
     # === Combat ===
+
+    def _behind_a_barrier(self, zombie_id: str) -> str:
+        """The refusal when `zombie_id` is pounding on a barrier between it and the player, else ''."""
+        zombie = self.manager.world.zombies[zombie_id]
+        barrier = self.manager.world.barriers.get(zombie.thump_barrier or "")
+        if zombie.state != ZombieState.THUMPING or barrier is None:
+            return ""
+        return barrier_k.OTHER_SIDE_OF_BARRIER.format(kind=barrier.kind.value)
 
     def _validate_attack(self, action: AttackAction) -> ValidationResult:
         manager = self.manager
         zombie_target = self._zombie_target(action.target_name)
         if zombie_target is not None:
+            if refusal := self._behind_a_barrier(zombie_target.zombie_id):
+                return Rejected(action, refusal)
             return Accepted(action, zombie_target)
         if self._names_a_zombie(action.target_name):
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
+        if self._find_barrier(action.target_name) is not None:
+            return self._validate_hit_barrier(action)
         npc = manager.resolve_npc(action.target_name)
         if npc is None or npc.current_location_id != manager.player.current_location_id:
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
         if npc.hit_points <= 0:
             return Rejected(action, f"{npc.name} is already down.")
         return Accepted(action, TargetNpc(npc))
+
+    def _validate_hit_barrier(self, action: AttackAction) -> ValidationResult:
+        found = self._barrier_here(action.target_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        if thumpable_for(found, self.manager.player.current_location_id) is None:
+            return Rejected(action, barrier_k.NOTHING_TO_HIT)
+        return Accepted(action, TargetBarrier(found, self._walks_to(found)))
 
     def _validate_shove(self, action: ShoveAction) -> ValidationResult:
         manager = self.manager
@@ -479,6 +628,8 @@ class ActionValidator:
             if self._names_a_zombie(action.target_name):
                 return Rejected(action, f"'{action.target_name}' is not here to shove.")
             return Rejected(action, f"{self._name} can only shove zombies.")
+        if refusal := self._behind_a_barrier(zombie_target.zombie_id):
+            return Rejected(action, refusal)
         zombie = manager.world.zombies[zombie_target.zombie_id]
         if zombie.is_down(manager.narrative.minutes):
             return Rejected(action, "It's already down.")
@@ -671,6 +822,10 @@ class ActionValidator:
         "DROP": _validate_drop,
         "WEAR": _validate_wear,
         "TAKE_OFF": _validate_take_off,
+        "OPEN": _validate_open,
+        "CLOSE": _validate_close,
+        "BARRICADE": _validate_barricade,
+        "UNBARRICADE": _validate_unbarricade,
         "ATTACK": _validate_attack,
         "SHOVE": _validate_shove,
         "EQUIP": _validate_equip,
