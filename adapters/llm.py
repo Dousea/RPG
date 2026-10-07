@@ -407,3 +407,12 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
         "story": story or EMPTY_STORY,
         "options": options,
     }
+
+
+def has_options_section(llm_response_text: str) -> bool:
+    """Whether the narrator wrote an OPTIONS header at all; `OPTIONS: NONE` counts."""
+    return any(
+        (match := _SECTION_HEADER.match(line.strip()))
+        and (match.group(1) or match.group(2)).upper() == "OPTIONS"
+        for line in llm_response_text.splitlines()
+    )

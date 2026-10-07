@@ -14,6 +14,7 @@ from adapters.llm import (
     PARSER_SYSTEM_PROMPT,
     SUMMARIZER_SYSTEM_PROMPT,
     LLMError,
+    has_options_section,
     parse_action_response,
     parse_narrator_response,
     parse_plan_response,
@@ -170,6 +171,20 @@ class ParseNarratorResponseTests(unittest.TestCase):
             "STORY:\nYou pause.\n\nOPTIONS:\n- Call out to Emma\n- NONE"
         )
         self.assertEqual(parsed["options"], ["Call out to Emma"])
+
+
+class HasOptionsSectionTests(unittest.TestCase):
+    def test_a_reply_with_options_has_the_section(self):
+        self.assertTrue(has_options_section("STORY:\nYou wait.\n\nOPTIONS:\n- Rest"))
+
+    def test_options_none_still_counts_as_the_section(self):
+        self.assertTrue(has_options_section("STORY:\nYou wait.\n\nOPTIONS: NONE"))
+
+    def test_a_bracketed_header_counts(self):
+        self.assertTrue(has_options_section("[STORY]\nYou wait.\n\n[OPTIONS]\n- Rest"))
+
+    def test_a_story_alone_has_no_section(self):
+        self.assertFalse(has_options_section("STORY:\nYou wait. Your options are few."))
 
 
 class PromptRuleTests(unittest.TestCase):

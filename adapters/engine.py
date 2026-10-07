@@ -48,6 +48,10 @@ CORRECTION_BLOCK = (
     "\n\n[CORRECTION]\nYour last story got these facts wrong. "
     "Write the story again so it agrees with them and with every outcome:\n{facts}\n"
 )
+OPTIONS_BLOCK = (
+    "\n\n[STORY WRITTEN]\nYou already wrote this turn's story, below. Reply with only "
+    "its OPTIONS section.\n{story}\n"
+)
 
 
 class GameEngine:
@@ -157,8 +161,9 @@ class GameEngine:
                 files.save(manager)
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
-            parsed = llm.parse_narrator_response(raw_response)
+            parsed = self._reply(raw_response)
             parsed = self._fact_checked(parsed, context, player_input, outcome_facts, deep_memories)
+            parsed = self._with_options(parsed, context, player_input, outcome_facts, deep_memories)
             story_text = str(parsed["story"])
             options = list(parsed["options"])
             entry = build_event_entry(manager, stamp, player_input, outcome_facts)
@@ -205,7 +210,7 @@ class GameEngine:
             + block
         )
         try:
-            retry = llm.parse_narrator_response(llm.query_narrator(retry_prompt))
+            retry = self._reply(llm.query_narrator(retry_prompt))
         except llm.LLMError as exc:
             logger.warning(f"Narrator retry failed, keeping the first story: {exc}")
             return parsed
@@ -214,6 +219,46 @@ class GameEngine:
             return parsed
         retry_conflicts = self.factcheck.conflicts(str(retry["story"]), questions)
         return retry if len(retry_conflicts) <= len(conflicts) else parsed
+
+    def _with_options(
+        self,
+        parsed: dict[str, Any],
+        context: ContextBuilder,
+        player_input: str,
+        outcome_facts: list[str],
+        deep_memories: list[str],
+    ) -> dict[str, Any]:
+        """The reply, with options from one follow-up call when it had no OPTIONS section.
+
+        A turn that ended the game is left without options; the story never changes.
+        """
+        if parsed["has_options"] or context.manager.narrative.game_over:
+            return parsed
+        logger.warning("Narrator reply has no OPTIONS section; asking for the options alone.")
+        block = OPTIONS_BLOCK.format(story=parsed["story"])
+        prompt = (
+            context.build_narrator_prompt(
+                player_input,
+                outcome_facts,
+                deep_memories,
+                max_chars=self._narrator_budget() - len(block),
+            )
+            + block
+        )
+        try:
+            reply = llm.query_narrator(prompt)
+        except llm.LLMError as exc:
+            logger.warning(f"Options follow-up failed, leaving the turn without options: {exc}")
+            return parsed
+        return {**parsed, "options": llm.parse_narrator_response(reply)["options"]}
+
+    @staticmethod
+    def _reply(raw_response: str) -> dict[str, Any]:
+        """The narrator's parsed reply, noting whether it wrote an OPTIONS section."""
+        return {
+            **llm.parse_narrator_response(raw_response),
+            "has_options": llm.has_options_section(raw_response),
+        }
 
     def _run_summarization(self, manager: GameManager) -> None:
         """Fold the oldest unsummarized events into a narrative paragraph."""

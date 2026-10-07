@@ -34,7 +34,7 @@ from tests.support import (
 )
 
 MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
-MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
+MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building\n\nOPTIONS:\nNONE"
 
 
 class EngineTestCase(IsolatedSaveTestCase):
@@ -304,7 +304,7 @@ class TurnTests(EngineTestCase):
         self.assertEqual(result["options"], ["Check the mailboxes", "Look out the window"])
 
     def test_no_options_offered_yields_an_empty_list(self):
-        # MOVE_OUT_STORY has no OPTIONS section at all.
+        # MOVE_OUT_STORY offers OPTIONS: NONE.
         result = self.engine.play("go out")
         self.assertEqual(result["options"], [])
 
@@ -908,3 +908,73 @@ class FactCheckRetryTests(EngineTestCase):
         ):
             self.engine.play("go out")
         self.assertEqual(checker.calls, [])
+
+
+class MissingOptionsTests(EngineTestCase):
+    """A reply with no OPTIONS section gets one follow-up call asking for the options alone."""
+
+    NO_OPTIONS = "STORY:\nYou walk out."
+    OPTIONS_ONLY = "OPTIONS:\n- Check the mailboxes\n- Knock on a door"
+
+    def script(self, replies: list[str | LLMError]) -> None:
+        self.llm = SequencedNarrator(replies, actions=MOVE_OUT_ACTIONS)
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
+
+    def test_the_follow_up_options_join_the_first_story(self):
+        self.script([self.NO_OPTIONS, self.OPTIONS_ONLY])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "You walk out.")
+        self.assertEqual(result["options"], ["Check the mailboxes", "Knock on a door"])
+        self.assertEqual(self.engine.game.memory.last_story, "You walk out.")
+
+    def test_the_follow_up_prompt_shows_the_story_and_asks_for_options_only(self):
+        self.script([self.NO_OPTIONS, self.OPTIONS_ONLY])
+        self.engine.play("go out")
+        first, follow_up = self.llm.narrator_prompts
+        block = follow_up[follow_up.index("[STORY WRITTEN]") :]
+        self.assertEqual(
+            block,
+            "[STORY WRITTEN]\nYou already wrote this turn's story, below. Reply with only "
+            "its OPTIONS section.\nYou walk out.\n",
+        )
+        self.assertNotIn("[STORY WRITTEN]", first)
+
+    def test_options_none_is_not_followed_up(self):
+        self.script(["STORY:\nYou wait.\n\nOPTIONS:\nNONE"])
+        result = self.engine.play("go out")
+        self.assertEqual(result["options"], [])
+        self.assertEqual(len(self.llm.narrator_prompts), 1)
+
+    def test_a_turn_that_ends_the_game_is_not_followed_up(self):
+        self.script([self.NO_OPTIONS])
+        make_dying(self.engine.game.player)
+        self.llm.actions = "ACTIONS:\nWAIT 10m"
+        self.engine.play("wait here")
+        self.assertTrue(self.engine.game.narrative.game_over)
+        self.assertEqual(len(self.llm.narrator_prompts), 1)
+
+    def test_a_follow_up_error_leaves_no_options(self):
+        self.script([self.NO_OPTIONS, LLMError("dropped")])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "You walk out.")
+        self.assertEqual(result["options"], [])
+
+    def test_a_follow_up_with_no_options_is_not_repeated(self):
+        self.script([self.NO_OPTIONS, "Nothing useful."])
+        result = self.engine.play("go out")
+        self.assertEqual(result["options"], [])
+        self.assertEqual(len(self.llm.narrator_prompts), 2)
+
+    def test_the_follow_up_prompt_is_rebuilt_inside_the_budget_less_the_block(self):
+        self.script([self.NO_OPTIONS, self.OPTIONS_ONLY])
+        with mock.patch.object(
+            engine_module.ContextBuilder,
+            "build_narrator_prompt",
+            autospec=True,
+            return_value="prompt",
+        ) as build:
+            self.engine.play("go out")
+        first, follow_up = build.call_args_list
+        block = self.llm.narrator_prompts[1][len("prompt") :]
+        self.assertEqual(follow_up.kwargs["max_chars"], first.kwargs["max_chars"] - len(block))
