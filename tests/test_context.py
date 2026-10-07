@@ -1332,6 +1332,18 @@ class SceneKeyTests(unittest.TestCase):
         self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_water_bottle"]))
         self.assertEqual(self.builder.scene_choices().carried, ("Apartment Key", "Water Bottle"))
 
+    def test_an_opened_container_in_another_room_offers_its_items_so_move_then_take_can_be_planned(
+        self,
+    ):
+        self.gm.player.current_location_id = "zone_home"
+        self.gm.player.current_room = "bedroom"
+        counter = self.gm.current_location.rooms["kitchen"].containers[0]
+        counter.opened = True
+        choices = self.builder.scene_choices()
+        self.assertIn("kitchen counter", choices.open_containers)
+        self.assertIn("Water Bottle", choices.container_items)
+        self.assertIn("Water Bottle", choices.carried)
+
     def test_a_carried_item_gives_carried(self):
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
         self.assertEqual(self.builder.scene_keys(), frozenset({"carried"}))

@@ -498,7 +498,7 @@ class RoomChoiceTests(unittest.TestCase):
         self.assertEqual(enum_of(names["CARRY"], "target"), ["c1", "corpse"])
         self.assertIn("c1", enum_of(names["SEARCH"], "target"))
 
-    def test_take_from_and_put_in_name_only_opened_containers_of_the_room(self):
+    def test_take_from_and_put_in_name_only_opened_containers_of_the_zone(self):
         gm = self.kitchen()
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertNotIn("TAKE", names)
@@ -512,7 +512,17 @@ class RoomChoiceTests(unittest.TestCase):
         )
         self.assertEqual(enum_of(names["TAKE"], "from"), ["kitchen counter"])
         self.assertEqual(enum_of(names["PUT"], "bag"), ["kitchen counter"])
-        self.assertEqual(enum_of(names["PUT"], "item"), ["Apartment Key", "Hammer"])
+        self.assertEqual(
+            enum_of(names["PUT"], "item"),
+            [
+                "Apartment Key",
+                "Hammer",
+                "Canned Beans",
+                "Water Bottle",
+                "Kitchen Knife",
+                "Frying Pan",
+            ],
+        )
 
     def test_a_plan_line_reads_back_as_a_take_from_a_container(self):
         line = "TAKE Water Bottle from kitchen counter"

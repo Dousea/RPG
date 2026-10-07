@@ -494,23 +494,26 @@ Traits: {_lines(trait_lines) or "None"}
             keys.add("barriers")
         if manager.current_location.rooms:
             keys.add("rooms")
-        opened = self._opened_here()
+        opened = self._opened_in_zone()
         if opened:
             keys.add("opened")
         if any(container.contents for container in opened):
             keys.add("stocked")
         return frozenset(keys)
 
-    def _opened_here(self) -> list[ContainerEntity]:
-        """The opened containers of the room the player is in, in layout order."""
-        zone = self.manager.current_location
-        room = current_room(zone, self.manager.player)
-        return [c for c in room.containers if c.opened] if room is not None else []
+    def _opened_in_zone(self) -> list[ContainerEntity]:
+        """The opened containers of every room of this zone, in layout order.
+
+        Other rooms count too, since a plan may move to a room before taking from it.
+        """
+        rooms = self.manager.current_location.rooms.values()
+        return [c for room in rooms for c in room.containers if c.opened]
 
     def scene_choices(self) -> SceneChoices:
         """The closed sets of names the scene offers, as the validator would accept them.
 
-        Carried and wearable names include the floor's, since a plan may take an item first.
+        Carried and wearable names include the floor's and the opened containers', since a
+        plan may take an item first.
         """
         manager = self.manager
         player = manager.player
@@ -518,13 +521,14 @@ Traits: {_lines(trait_lines) or "None"}
         npcs = manager.npcs_in_location(player.current_location_id)
         bodies = perceived_corpses(manager)
         bags = carry.carried_bags(player)
+        stocked = [entity for c in self._opened_in_zone() for entity in c.contents]
         return SceneChoices(
             items_here=_names(ground),
-            carried=tuple(dict.fromkeys(_names([*self._carried_things(), *ground]))),
+            carried=tuple(dict.fromkeys(_names([*self._carried_things(), *ground, *stocked]))),
             held=_names(carry.held_things(self.manager.player)),
             wearable=_names(
                 entity
-                for entity in [*carry.carried_items(player), *ground]
+                for entity in [*carry.carried_items(player), *ground, *stocked]
                 if isinstance(entity.item, ClothingItem)
                 or (isinstance(entity.item, ContainerItem) and entity.item.body_location)
             ),
@@ -541,12 +545,8 @@ Traits: {_lines(trait_lines) or "None"}
             containers=tuple(
                 c.name for room in manager.current_location.rooms.values() for c in room.containers
             ),
-            open_containers=tuple(c.name for c in self._opened_here()),
-            container_items=tuple(
-                dict.fromkeys(
-                    entity.item.name for c in self._opened_here() for entity in c.contents
-                )
-            ),
+            open_containers=tuple(c.name for c in self._opened_in_zone()),
+            container_items=tuple(dict.fromkeys(_names(stocked))),
             bags=tuple(dict.fromkeys(_names(bags))),
             bag_items=tuple(dict.fromkeys(_names(e for bag in bags for e in bag.contents))),
             hurt_parts=tuple(

@@ -712,6 +712,33 @@ class RoomVerbTests(unittest.TestCase):
             "The kitchen counter hasn't been gone through.",
         )
 
+    def test_a_plain_take_reaches_into_the_opened_container_holding_the_item(self):
+        self.gm.player.current_room = "kitchen"
+        counter = self.gm.world.locations["zone_home"].rooms["kitchen"].containers[0]
+        counter.opened = True
+        resolved = self.accepted(TakeAction(item_name="Water Bottle"))
+        assert isinstance(resolved, Transfer)
+        self.assertIs(resolved.source, counter)
+        self.assertEqual([e.item.name for e in resolved.entities], ["Water Bottle"])
+
+    def test_take_all_with_a_bare_floor_empties_the_opened_containers_of_the_room(self):
+        self.gm.player.current_room = "kitchen"
+        kitchen = self.gm.world.locations["zone_home"].rooms["kitchen"]
+        kitchen.containers[0].opened = True
+        resolved = self.accepted(TakeAction(item_name="all", all_items=True))
+        assert isinstance(resolved, Transfer)
+        self.assertEqual(
+            [e.item.name for e in resolved.entities],
+            [e.item.name for e in kitchen.containers[0].contents],
+        )
+
+    def test_a_plain_take_skips_a_closed_container(self):
+        self.gm.player.current_room = "kitchen"
+        self.assertEqual(
+            self.reason(TakeAction(item_name="Water Bottle")),
+            "No 'Water Bottle' here to take.",
+        )
+
     def test_put_into_a_closed_container_is_refused(self):
         self.gm.player.current_room = "kitchen"
         self.gm.player.inventory.append(ItemEntity(item=ITEMS["item_hammer"]))

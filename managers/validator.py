@@ -357,6 +357,8 @@ class ActionValidator:
             return self._take_all_here(action)
         entity = manager._find_item_entity(manager._ground_items(), action.item_name)
         if entity is None:
+            if container := self._opened_container_holding(action.item_name):
+                return self._take_from_container(action, container)
             return Rejected(action, f"No '{action.item_name}' here to take.")
         if carry.over_the_limit(manager.player, extra=[entity]):
             return Rejected(action, self._cant_carry())
@@ -367,6 +369,8 @@ class ActionValidator:
         manager = self.manager
         entities = tuple(manager._ground_items())
         if not entities:
+            if container := self._opened_container_holding(None):
+                return self._take_from_container(action, container)
             return Rejected(action, carry_k.NOTHING_HERE)
         if carry.over_the_limit(manager.player, extra=entities):
             return Rejected(action, self._cant_carry())
@@ -385,6 +389,18 @@ class ActionValidator:
         if isinstance(found, str):
             return Rejected(action, found)
         return self._take_from_container(action, found)
+
+    def _opened_container_holding(self, item_name: str | None) -> ContainerEntity | None:
+        """The first opened container of the player's room, in layout order, that holds `item_name`, or anything when None."""
+        room = current_room(self.manager.current_location, self.manager.player)
+        if room is None:
+            return None
+        for container in room.containers:
+            if not container.opened or not container.contents:
+                continue
+            if item_name is None or carry.find_named(container.contents, item_name) is not None:
+                return container
+        return None
 
     def _container_named(self, name: str) -> ContainerEntity | str | None:
         """The container `name` points at in this zone; the question to ask when several match, None when none do."""

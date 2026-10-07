@@ -518,11 +518,14 @@ its transfer time.
   the container.
 
 - **`TAKE <item> from <corpse, bag or container>`, `TAKE all`, `TAKE all from
-  <source>`:** the plain `TAKE <item>` (the ground) and `from <corpse>` stay; the
+  <source>`:** the plain `TAKE <item>` takes from the ground, or, when the ground
+  has none, from the first opened container of the player's room (in layout
+  order) that holds it; `from <corpse>` stays; the
   source may be a carried bag or an opened container in the room the player
   is in ("The kitchen counter hasn't been gone through."; "The kitchen counter is
   in the kitchen, not here."; "The kitchen counter holds no 'x'."). `TAKE all` with no source takes everything
-  on the ground; with a source, everything in it, as one action. Refused: no
+  on the ground, or, when the ground is bare, everything in the first opened
+  container of the room that holds anything; with a source, everything in it, as one action. Refused: no
   such bag ("<name> has no 'x' to take from."); the bag holds no such item;
   nothing to take; the pack would pass 50 kg ("<name> can't carry any more.");
   carrying a body. A bag lying on the ground is taken as one item, with its
