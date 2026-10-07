@@ -30,6 +30,47 @@ LM_STUDIO_URL = config.llm.base_url
 MODEL_NAME = config.llm.model_name
 PARSER_MODEL_NAME = config.llm.parser_model_name or MODEL_NAME
 
+# The sampler settings LM Studio's chat endpoint honors.
+SAMPLER_KEYS = ("temperature", "top_k", "top_p", "min_p", "repeat_penalty")
+
+
+def read_sampler(settings: dict[str, Any] | None, name: str) -> dict[str, float]:
+    """The numeric SAMPLER_KEYS settings in a config map; anything else is dropped with a warning."""
+    kept: dict[str, float] = {}
+    for key, value in (settings or {}).items():
+        numeric = isinstance(value, int | float) and not isinstance(value, bool)
+        if key in SAMPLER_KEYS and numeric:
+            kept[key] = value
+        else:
+            logger.warning(f"Ignoring llm.{name} setting {key}={value!r}.")
+    return kept
+
+
+# What LM Studio's reasoning_effort accepts; "none" turns a thinking model's reasoning off.
+REASONING_EFFORTS = ("none", "low", "medium", "high")
+
+
+def read_reasoning_effort(effort: Any, name: str) -> str:
+    """A REASONING_EFFORTS value from config; anything else is "none", with a warning."""
+    if isinstance(effort, str) and effort in REASONING_EFFORTS:
+        return effort
+    logger.warning(f"Ignoring llm.{name}={effort!r}; reasoning stays off.")
+    return "none"
+
+
+NARRATOR_SAMPLER = read_sampler(config.llm.narrator_sampler, "narrator_sampler")
+PARSER_SAMPLER = read_sampler(config.llm.parser_sampler, "parser_sampler")
+SUMMARIZER_SAMPLER = read_sampler(config.llm.summarizer_sampler, "summarizer_sampler")
+NARRATOR_REASONING_EFFORT = read_reasoning_effort(
+    config.llm.narrator_reasoning_effort, "narrator_reasoning_effort"
+)
+PARSER_REASONING_EFFORT = read_reasoning_effort(
+    config.llm.parser_reasoning_effort, "parser_reasoning_effort"
+)
+SUMMARIZER_REASONING_EFFORT = read_reasoning_effort(
+    config.llm.summarizer_reasoning_effort, "summarizer_reasoning_effort"
+)
+
 
 EMPTY_STORY = "The world is silent."
 
@@ -211,21 +252,21 @@ def _chat(
     model: str,
     system_prompt: str,
     user_content: str,
-    temperature: float,
     max_tokens: int,
+    sampler: dict[str, float],
+    reasoning_effort: str,
     response_format: dict[str, Any] | None = None,
 ) -> str:
     payload: dict[str, Any] = {
+        **sampler,
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": temperature,
         "max_tokens": max_tokens,
-        # A thinking model spends the reply cap on hidden reasoning and can return
-        # nothing; LM Studio ignores this for models that don't think.
-        "reasoning_effort": "none",
+        # LM Studio ignores this for models that don't think.
+        "reasoning_effort": reasoning_effort,
     }
     if response_format is not None:
         payload["response_format"] = response_format
@@ -268,7 +309,6 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
     With a `schema` the reply is constrained to it; a server that rejects the
     request gets the text prompt once instead.
     """
-    temperature = config.llm.parser_temperature
     max_tokens = config.llm.parser_max_tokens
     if schema is not None:
         response_format = {
@@ -280,8 +320,9 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
                 PARSER_MODEL_NAME,
                 PARSER_JSON_SYSTEM_PROMPT,
                 prompt_text,
-                temperature,
                 max_tokens,
+                PARSER_SAMPLER,
+                PARSER_REASONING_EFFORT,
                 response_format,
             )
         except LLMRequestRejected as exc:
@@ -289,7 +330,14 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
         else:
             logger.debug("Parser raw response:\n%s", raw)
             return ParserReply(raw, structured=True)
-    raw = _chat(PARSER_MODEL_NAME, PARSER_SYSTEM_PROMPT, prompt_text, temperature, max_tokens)
+    raw = _chat(
+        PARSER_MODEL_NAME,
+        PARSER_SYSTEM_PROMPT,
+        prompt_text,
+        max_tokens,
+        PARSER_SAMPLER,
+        PARSER_REASONING_EFFORT,
+    )
     logger.debug("Parser raw response:\n%s", raw)
     return ParserReply(raw, structured=False)
 
@@ -316,8 +364,9 @@ def query_narrator(prompt_text: str) -> str:
         MODEL_NAME,
         NARRATOR_SYSTEM_PROMPT,
         prompt_text,
-        temperature=config.llm.narrator_temperature,
         max_tokens=config.llm.narrator_max_tokens,
+        sampler=NARRATOR_SAMPLER,
+        reasoning_effort=NARRATOR_REASONING_EFFORT,
     )
     logger.debug("Narrator raw response:\n%s", raw)
     return raw
@@ -329,8 +378,9 @@ def query_summary(text_to_summarize: str) -> str:
         MODEL_NAME,
         SUMMARIZER_SYSTEM_PROMPT,
         text_to_summarize,
-        temperature=config.llm.summarizer_temperature,
         max_tokens=config.llm.summarizer_max_tokens,
+        sampler=SUMMARIZER_SAMPLER,
+        reasoning_effort=SUMMARIZER_REASONING_EFFORT,
     ).strip()
 
 

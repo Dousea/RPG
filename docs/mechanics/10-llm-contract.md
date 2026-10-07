@@ -41,16 +41,22 @@ parser.
 
 Three calls:
 
-| Call | Temperature | Gets | Returns | Decides |
+| Call | Default temperature | Gets | Returns | Decides |
 | --- | --- | --- | --- | --- |
 | **Parser** | 0.2 | the scene, in the parser blocks below | a JSON plan `{"actions": [...]}`, or `ACTIONS:` lines as the fallback | which verb, which listed target, which listed label |
 | **Narrator** | 0.7 | memory, state and this turn's `[OUTCOMES]` | `STORY`, `OPTIONS` | the words |
 | **Summarizer** | 0.5 | older event-log entries | one paragraph | the words |
 
 Each call carries a reply cap, `max_tokens`: narrator 800, parser 400, summarizer
-300. The model's context is 8192 tokens (`llm.context_tokens`). Each call also sends
-`reasoning_effort: "none"`: a model that thinks would spend the cap on hidden
-reasoning and could return nothing.
+300. The model's context is 8192 tokens (`llm.context_tokens`).
+
+Each call's sampler settings come from `llm.narrator_sampler`, `llm.parser_sampler`
+and `llm.summarizer_sampler`, so a model can run at what its card recommends:
+`temperature`, `top_k`, `top_p`, `min_p` and `repeat_penalty`. A setting left out
+keeps the temperature above, or LM Studio's default for the others; any other key
+is dropped with a warning. Each call also sends its role's `reasoning_effort`
+(`none`, `low`, `medium` or `high`; default `none`). The hidden reasoning counts
+against the reply cap, so a thinking role needs a higher cap or it can return nothing.
 
 **The test for a lever:** could a player get a different result by rewording the
 same action? If so, the model is deciding an outcome, and the verb has to change.

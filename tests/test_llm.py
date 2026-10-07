@@ -389,15 +389,42 @@ class ReasoningTests(unittest.TestCase):
             call()
         return post.call_args.kwargs["json"]
 
-    def test_every_game_request_turns_reasoning_off(self):
-        calls = (
-            lambda: llm.query_narrator("p"),
-            lambda: llm.query_parser("p", SCHEMA),
-            lambda: llm.query_parser("p"),
-            lambda: llm.query_summary("p"),
+    def test_reasoning_is_off_by_default_for_every_role(self):
+        defaults = config._DEFAULTS["llm"]
+        self.assertEqual(
+            (
+                defaults["narrator_reasoning_effort"],
+                defaults["parser_reasoning_effort"],
+                defaults["summarizer_reasoning_effort"],
+            ),
+            ("none", "none", "none"),
         )
-        for call in calls:
-            self.assertEqual(self.sent(call)["reasoning_effort"], "none")
+
+    def test_each_role_sends_its_own_reasoning_effort(self):
+        calls = {
+            "narrator": (lambda: llm.query_narrator("p"), "high"),
+            "parser json": (lambda: llm.query_parser("p", SCHEMA), "low"),
+            "parser text": (lambda: llm.query_parser("p"), "low"),
+            "summary": (lambda: llm.query_summary("p"), "medium"),
+        }
+        with mock.patch.multiple(
+            llm,
+            NARRATOR_REASONING_EFFORT="high",
+            PARSER_REASONING_EFFORT="low",
+            SUMMARIZER_REASONING_EFFORT="medium",
+        ):
+            for name, (call, want) in calls.items():
+                self.assertEqual(self.sent(call)["reasoning_effort"], want, name)
+
+    def test_a_known_effort_is_kept(self):
+        for effort in ("none", "low", "medium", "high"):
+            self.assertEqual(llm.read_reasoning_effort(effort, "narrator_reasoning_effort"), effort)
+
+    def test_an_unknown_effort_turns_reasoning_off_with_a_warning(self):
+        for effort in ("max", "", None, True):
+            with self.assertLogs("adapters.llm", "WARNING"):
+                got = llm.read_reasoning_effort(effort, "narrator_reasoning_effort")
+            self.assertEqual(got, "none", effort)
 
 
 class ModelPerRoleTests(unittest.TestCase):
@@ -454,6 +481,72 @@ class CharsPerTokenTests(unittest.TestCase):
         before = llm.chars_per_token()
         self.ask(FakeResponse(200, "x"))
         self.assertEqual(llm.chars_per_token(), before)
+
+
+class SamplerTests(unittest.TestCase):
+    """Per-role sampler settings from config.yml, sent as the model card recommends."""
+
+    SAMPLERS = {
+        "NARRATOR_SAMPLER": {"temperature": 1.0, "top_k": 64},
+        "PARSER_SAMPLER": {"min_p": 0.1},
+        "SUMMARIZER_SAMPLER": {"repeat_penalty": 1.05},
+    }
+
+    def sent(self, call, samplers: dict) -> dict:
+        with (
+            mock.patch.multiple(llm, **samplers),
+            mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post,
+        ):
+            call()
+        return post.call_args.kwargs["json"]
+
+    def test_the_defaults_set_only_each_roles_temperature(self):
+        defaults = config._DEFAULTS["llm"]
+        self.assertEqual(
+            (
+                defaults["narrator_sampler"],
+                defaults["parser_sampler"],
+                defaults["summarizer_sampler"],
+            ),
+            ({"temperature": 0.7}, {"temperature": 0.2}, {"temperature": 0.5}),
+        )
+
+    def test_an_empty_sampler_adds_nothing_to_the_request(self):
+        empty = dict.fromkeys(self.SAMPLERS, {})
+        body = self.sent(lambda: llm.query_narrator("p"), empty)
+        self.assertFalse(set(body) & set(llm.SAMPLER_KEYS))
+
+    def test_each_role_sends_its_own_sampler(self):
+        calls = {
+            "narrator": (lambda: llm.query_narrator("p"), {"temperature": 1.0, "top_k": 64}),
+            "parser json": (lambda: llm.query_parser("p", SCHEMA), {"min_p": 0.1}),
+            "parser text": (lambda: llm.query_parser("p"), {"min_p": 0.1}),
+            "summary": (lambda: llm.query_summary("p"), {"repeat_penalty": 1.05}),
+        }
+        for name, (call, want) in calls.items():
+            body = self.sent(call, self.SAMPLERS)
+            got = {key: body[key] for key in llm.SAMPLER_KEYS if key in body}
+            self.assertEqual(got, want, name)
+
+    def test_known_settings_are_kept(self):
+        settings = {
+            "temperature": 1.0,
+            "top_k": 64,
+            "top_p": 0.95,
+            "min_p": 0.1,
+            "repeat_penalty": 1.0,
+        }
+        self.assertEqual(llm.read_sampler(settings, "narrator_sampler"), settings)
+
+    def test_unknown_or_non_numeric_settings_are_dropped_with_a_warning(self):
+        settings = {"top_k": 64, "dry_multiplier": 0.8, "seed": 7, "min_p": "high"}
+        with self.assertLogs("adapters.llm", "WARNING") as logs:
+            kept = llm.read_sampler(settings, "narrator_sampler")
+        self.assertEqual(kept, {"top_k": 64})
+        self.assertEqual(len(logs.records), 3)
+
+    def test_a_blank_sampler_is_empty(self):
+        self.assertEqual(llm.read_sampler(None, "narrator_sampler"), {})
 
 
 class NarratorPromptLengthTests(unittest.TestCase):

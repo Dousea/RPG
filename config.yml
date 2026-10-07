@@ -13,12 +13,21 @@ llm:
   parser_model_name: ""
   # Seconds to wait for a response before giving up.
   request_timeout: 300
-  # Sampling temperature for the intent parser (proposes actions, not prose).
-  parser_temperature: 0.2
-  # Sampling temperature for the narrator's prose turns.
-  narrator_temperature: 0.7
-  # Sampling temperature for summarizing old events.
-  summarizer_temperature: 0.5
+  # Sampler settings per call, as the loaded model's card recommends:
+  # temperature, top_k, top_p, min_p, repeat_penalty. A setting left out keeps
+  # the default here for temperature and LM Studio's default for the rest;
+  # anything else is ignored with a warning. The parser stays cool: it proposes
+  # actions, not prose. Example for Gemma 4:
+  #   narrator_sampler: {temperature: 1.0, top_k: 64, top_p: 0.95, min_p: 0.0, repeat_penalty: 1.0}
+  narrator_sampler: {temperature: 0.7}
+  parser_sampler: {temperature: 0.2}
+  summarizer_sampler: {temperature: 0.5}
+  # Thinking per call for a model that can think: none, low, medium or high.
+  # The hidden reasoning counts against the reply cap below, so raise the cap
+  # when turning it on, or the reply can come back empty.
+  narrator_reasoning_effort: "none"
+  parser_reasoning_effort: "none"
+  summarizer_reasoning_effort: "none"
   # The loaded model's context window, in tokens; the narrator prompt is cut to fit it.
   context_tokens: 8192
   # Reply caps, in tokens, per call.

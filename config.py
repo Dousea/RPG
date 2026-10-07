@@ -21,11 +21,14 @@ _DEFAULTS: dict[str, Any] = {
         # Empty: the parser asks the narrator's model.
         "parser_model_name": "",
         "request_timeout": 300,
+        "narrator_sampler": {"temperature": 0.7},
         # Low temperature: the parser proposes actions, not prose, so it
         # should be as consistent/predictable as the local model allows.
-        "parser_temperature": 0.2,
-        "narrator_temperature": 0.7,
-        "summarizer_temperature": 0.5,
+        "parser_sampler": {"temperature": 0.2},
+        "summarizer_sampler": {"temperature": 0.5},
+        "narrator_reasoning_effort": "none",
+        "parser_reasoning_effort": "none",
+        "summarizer_reasoning_effort": "none",
         "context_tokens": 8192,
         "narrator_max_tokens": 800,
         "parser_max_tokens": 400,
