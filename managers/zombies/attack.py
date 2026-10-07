@@ -12,7 +12,7 @@ from data.zombies import lore as k
 from managers.body.health import land_wound
 from managers.body.stats.status_effects import defence_penalty, player_status_effect_levels
 from managers.character.skills import skill_levels
-from managers.combat.weapons import equipped_weapon
+from managers.combat import weapons
 from modules.body.parts import BodyPart
 from modules.body.stats import StatusEffect
 from modules.entity.player import PlayerEntity
@@ -56,7 +56,7 @@ class AttackOutcome:
 
 def weapon_level(player: PlayerEntity) -> int:
     """The held weapon's category skill less one (an axe takes its level whole), 0 to 10."""
-    weapon = equipped_weapon(player)
+    weapon = weapons.equipped_weapon(player)
     if not isinstance(weapon, MeleeWeaponItem):
         return 0
     levels = skill_levels(player)

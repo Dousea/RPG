@@ -13,12 +13,12 @@ from managers.body.stats.drivers import StatContext
 from managers.body.stats.status_effects import hypothermia_level, status_effect_level
 from managers.character.skills import fitness_level
 from managers.world.climate import FeltAir, felt_air
+from modules import units
 from modules.body.parts import BodyPart
 from modules.body.stats import CharacterStat, Stats, StatusEffect
 from modules.body.thermal import ThermalState
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, MeleeWeaponItem, RangedWeaponItem
-from modules.units import real_frames_per_minute
 from modules.weapon import RangedWeaponType
 
 logger = logging.getLogger(__name__)
@@ -485,7 +485,7 @@ class ThermoregulatorDriver:
         air, humidity = chunk_air(ctx)
         stats.set(CharacterStat.WINDCHILL, air.windchill_amount)
         inp = thermal_inputs(stats, ctx, air, humidity)
-        remaining = hours * MINUTES_PER_HOUR * real_frames_per_minute()
+        remaining = hours * MINUTES_PER_HOUR * units.real_frames_per_minute()
         core = stats.get(CharacterStat.TEMPERATURE)
         while remaining > 1e-9:
             frames = min(float(k.THERMO_SUBSTEP_FRAMES), remaining)

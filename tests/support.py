@@ -8,7 +8,7 @@ from pathlib import Path
 
 from adapters.llm import DeltaCallback, ParserReply
 from adapters.save import files
-from managers.carry import carried_weight
+from managers import carry
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion
@@ -221,7 +221,7 @@ def load_pack(player: PlayerEntity, kg: float) -> None:
         tags=[],
         slots=[CharacterHoldableSlot.RIGHT_HAND],
         is_two_handed=False,
-        weight=kg - carried_weight(player),
+        weight=kg - carry.carried_weight(player),
     )
     assert ballast.weight > 0
     player.inventory.append(ItemEntity(item=ballast))

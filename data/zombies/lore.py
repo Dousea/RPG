@@ -7,8 +7,8 @@ from data.character.traits import (
     PRONE_TO_ILLNESS_ID,
     RESILIENT_ID,
 )
+from modules import units
 from modules.body.parts import BodyPart
-from modules.units import per_minute_from_frame
 
 HOP_TILES = 40  # spec 09: every zone connection
 
@@ -100,7 +100,7 @@ RISE_CRAWLING_FACT = (
     "A body on the ground twitches and starts to drag itself across the floor."  # spec 14
 )
 
-CORPSE_STRIP_UNHAPPINESS_PER_MIN = per_minute_from_frame(
+CORPSE_STRIP_UNHAPPINESS_PER_MIN = units.per_minute_from_frame(
     0.01
 )  # spec 14: unhappiness points per minute of taking an item
 STRIP_UNHAPPINESS_TRAIT_MULT = {COWARDLY_ID: 2.0, BRAVE_ID: 0.5, DESENSITIZED_ID: 0.0}  # spec 14

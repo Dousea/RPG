@@ -516,11 +516,11 @@ class TimedActionTests(unittest.TestCase):
                     self.assertEqual(unbarricade_minutes(level, handy=handy), 1)
 
     def test_a_timed_action_under_a_minute_and_a_half_is_one_minute(self):
-        from modules.units import minutes_from_timed_action_frames
+        from modules import units
 
-        self.assertEqual(minutes_from_timed_action_frames(269), 1)
-        self.assertEqual(minutes_from_timed_action_frames(270), 2)
-        self.assertEqual(minutes_from_timed_action_frames(0), 1)
+        self.assertEqual(units.minutes_from_timed_action_frames(269), 1)
+        self.assertEqual(units.minutes_from_timed_action_frames(270), 2)
+        self.assertEqual(units.minutes_from_timed_action_frames(0), 1)
 
 
 class OpeningIntoTheDeadTests(unittest.TestCase):

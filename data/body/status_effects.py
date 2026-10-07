@@ -7,8 +7,8 @@ gives that level. Endurance is inverted: a value at or below a column.
 from dataclasses import dataclass
 
 from data.carry import HEAVY_LOAD_THRESHOLDS
+from modules import units
 from modules.body.stats import CharacterStat, StatusEffect
-from modules.units import per_hour_from_frame
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,7 @@ BLEEDING_LEVEL_CAP = 4  # spec 03
 FOOD_EATEN_PER_HUNGER = 13000  # spec 03: timer units per 1.0 hunger
 FOOD_EATEN_COOKED_MULT = 2  # spec 03
 FOOD_EATEN_CAP = 11000  # spec 03: timer units
-FOOD_EATEN_DRAIN_per_hour = per_hour_from_frame(1)  # spec 03: 1 timer unit per frame
+FOOD_EATEN_DRAIN_per_hour = units.per_hour_from_frame(1)  # spec 03: 1 timer unit per frame
 PANIC_MELEE_PENALTY_PER_LEVEL = 0.1  # spec 03: Panic level 2 and up
 STRESS_MELEE_PENALTY_PER_LEVEL = 0.1  # spec 03: Stress level 2 and up
 MELEE_DAMAGE_FLOOR = 0.1  # spec 03

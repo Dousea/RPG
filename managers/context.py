@@ -40,7 +40,7 @@ from managers.body.first_aid import bandage_items, disinfectant_items, part_word
 from managers.body.health import open_wounds
 from managers.body.stats.status_effects import active_status_effects
 from managers.character.skills import level_word
-from managers.combat.weapons import held_entity
+from managers.combat import weapons
 from managers.corpses.search import corpse_views, perceived_corpses
 from managers.game import GameManager
 from managers.story.beats import visible_topics
@@ -240,7 +240,7 @@ class ContextBuilder:
             parts.extend(condition.value for condition in player.conditions)
         line = ", ".join(parts) or "Fine"
         line += "".join(f"\n{part_line}" for part_line in self._part_lines())
-        held = held_entity(player)
+        held = weapons.held_entity(player)
         if held is not None:
             line += f"\nHolding: {held.item.name.lower()} ({item_condition_word(held)})"
         return line

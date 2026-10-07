@@ -12,7 +12,7 @@ from data.loot.tables import (
     LootTable,
     ProcedureEntry,
 )
-from managers.carry import rounded
+from managers import carry
 from modules.entity.item import ItemEntity
 from modules.item import ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
 from modules.world.room import ContainerEntity, RoomEntity
@@ -92,7 +92,9 @@ def _roll_list(
             ):
                 continue
             entity = ItemEntity(item=item)
-            if rounded(held + sum(e.weight for e in found) + entity.weight) > rounded(capacity):
+            if carry.rounded(held + sum(e.weight for e in found) + entity.weight) > carry.rounded(
+                capacity
+            ):
                 return
             if randomise and not shop:
                 _randomise(rng, entity)
@@ -178,4 +180,6 @@ def container_weight(container: ContainerEntity) -> float:
 
 def has_room_for(container: ContainerEntity, entity: ItemEntity) -> bool:
     """Whether `entity` fits in the container beside what it already holds."""
-    return rounded(container_weight(container) + entity.weight) <= rounded(container.capacity)
+    return carry.rounded(container_weight(container) + entity.weight) <= carry.rounded(
+        container.capacity
+    )

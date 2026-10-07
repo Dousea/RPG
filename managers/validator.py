@@ -43,7 +43,7 @@ from managers.body.first_aid import (
 from managers.body.health import limp_factor
 from managers.body.stats.status_effects import status_effect_level
 from managers.character.exercise import endurance_level
-from managers.combat.weapons import held_slots
+from managers.combat import weapons
 from managers.corpses.search import find_content, perceived_corpses, with_article
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.story.beats import visible_topics
@@ -673,7 +673,7 @@ class ActionValidator:
             return Rejected(action, f"{item.name} cannot be held.")
         if entity.broken:
             return Rejected(action, f"The {item.name} is broken.")
-        for slot in held_slots(item):
+        for slot in weapons.held_slots(item):
             occupant = player.equipment.get(slot)
             if occupant is not None:
                 return Rejected(

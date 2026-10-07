@@ -9,20 +9,20 @@ from data.items import ITEMS
 from data.world import barriers as k
 from managers import carry
 from managers.character.skills import SkillEngine, skill_levels
+from managers.combat import weapons
 from managers.combat.melee import MeleeEngine
-from managers.combat.weapons import equipped_weapon
 from managers.game import GameManager
 from managers.world.barriers import BARRIER, door_damage, plank_condition, plank_health, weapon_hit
 from managers.zombies import thumping
 from managers.zombies.attack import weapon_level
 from managers.zombies.noise import Sound, barrier_hit_sound, hammer_sound, pry_sound
 from managers.zombies.population import ZombieLoop, shut_behind
+from modules import units
 from modules.body.stats import CharacterStat
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.item import MeleeWeaponItem
 from modules.resolution import BarricadeKit, PryTarget
-from modules.units import minutes_from_timed_action_frames
 
 
 def unbarricade_minutes(carpentry: int, *, handy: bool) -> int:
@@ -30,7 +30,7 @@ def unbarricade_minutes(carpentry: int, *, handy: bool) -> int:
     frames = k.UNBARRICADE_TIME_FRAMES_BASE - k.UNBARRICADE_TIME_FRAMES_PER_CARPENTRY * carpentry
     if handy:
         frames -= k.UNBARRICADE_TIME_FRAMES_HANDY_BONUS
-    return minutes_from_timed_action_frames(frames)
+    return units.minutes_from_timed_action_frames(frames)
 
 
 class BarrierActions:
@@ -143,7 +143,7 @@ class BarrierActions:
         manager = self._manager
         player, world = manager.player, manager.world
         self.reach(barrier)
-        weapon = equipped_weapon(player)
+        weapon = weapons.equipped_weapon(player)
         melee = weapon if isinstance(weapon, MeleeWeaponItem) else None
         side = player.current_location_id
         levels = self._levels()

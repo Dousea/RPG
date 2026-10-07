@@ -6,8 +6,8 @@ visible where it was converted through `modules/units.py`.
 
 from dataclasses import dataclass
 
+from modules import units
 from modules.body.parts import PART_WEIGHT, BodyPart
-from modules.units import per_hour_from_frame
 
 
 @dataclass(frozen=True)
@@ -83,11 +83,11 @@ BLEED_HP_PER_HOUR_PER_UNIT = 1.763  # spec 12: HP per hour per unit of bleeding_
 BLEED_HP_PER_HOUR_PER_UNIT_NECK = 8.82  # spec 12
 
 # Healing, health per game hour
-HEAL_AWAKE_PER_HOUR = per_hour_from_frame(0.002)  # spec 12: 21.6
-HEAL_REDUCED_PER_HOUR = per_hour_from_frame(0.0013)  # spec 12: 14.04
-HEAL_SEVERELY_REDUCED_PER_HOUR = per_hour_from_frame(0.0008)  # spec 12: 8.64
-HEAL_ASLEEP_PER_HOUR = per_hour_from_frame(0.02)  # spec 12: 216
-HEAL_FOOD_PER_HOUR = per_hour_from_frame(0.015)  # spec 12: 162
+HEAL_AWAKE_PER_HOUR = units.per_hour_from_frame(0.002)  # spec 12: 21.6
+HEAL_REDUCED_PER_HOUR = units.per_hour_from_frame(0.0013)  # spec 12: 14.04
+HEAL_SEVERELY_REDUCED_PER_HOUR = units.per_hour_from_frame(0.0008)  # spec 12: 8.64
+HEAL_ASLEEP_PER_HOUR = units.per_hour_from_frame(0.02)  # spec 12: 216
+HEAL_FOOD_PER_HOUR = units.per_hour_from_frame(0.015)  # spec 12: 162
 HEAL_REDUCED_LEVEL = 2  # spec 12
 HEAL_SEVERELY_REDUCED_LEVEL = 3  # spec 12
 HEAL_NONE_LEVEL = 4  # spec 12: Hungry or Thirst
@@ -160,11 +160,11 @@ WOUND_INFECTION_N_DIRTY_BANDAGE = -35000  # spec 12
 WOUND_INFECTION_N_SCRATCH = -20000  # spec 12
 WOUND_INFECTION_N_CUT = -25000  # spec 12
 WOUND_INFECTION_N_FLOOR = 5000  # spec 12
-WOUND_INFECTION_ALCOHOL_PER_HOUR = per_hour_from_frame(0.0002)  # spec 12: 2.16
-WOUND_INFECTION_POWER_PER_HOUR = per_hour_from_frame(0.0002)  # spec 12: 2.16
-WOUND_INFECTION_ZOMBIE_RISE_PER_HOUR = per_hour_from_frame(0.0002)  # spec 12: 2.16
-WOUND_INFECTION_RISE_PER_HOUR = per_hour_from_frame(0.00001)  # spec 12: 0.108
-WOUND_INFECTION_ALCOHOL_BANDAGE_PER_HOUR = per_hour_from_frame(0.0006)  # spec 12: 6.48
+WOUND_INFECTION_ALCOHOL_PER_HOUR = units.per_hour_from_frame(0.0002)  # spec 12: 2.16
+WOUND_INFECTION_POWER_PER_HOUR = units.per_hour_from_frame(0.0002)  # spec 12: 2.16
+WOUND_INFECTION_ZOMBIE_RISE_PER_HOUR = units.per_hour_from_frame(0.0002)  # spec 12: 2.16
+WOUND_INFECTION_RISE_PER_HOUR = units.per_hour_from_frame(0.00001)  # spec 12: 0.108
+WOUND_INFECTION_ALCOHOL_BANDAGE_PER_HOUR = units.per_hour_from_frame(0.0006)  # spec 12: 6.48
 WOUND_INFECTION_MAX = 10.0  # spec 12
 WOUND_INFECTION_FLOOR = -2.0  # spec 12
 ALCOHOL_DECAY_PER_HOUR = WOUND_INFECTION_ALCOHOL_PER_HOUR  # spec 12

@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 from data.carry import CARRY_CORPSE_MIN
 from data.world.barriers import BARRICADE_MIN, UNBARRICADE_MIN
+from modules import units
 from modules.action.parser import TALK_TURN_MINUTES
 from modules.action.types import (
     AddGoalAction,
@@ -60,7 +61,6 @@ from modules.resolution import (
     TimeSpan,
     Transfer,
 )
-from modules.units import minutes_from_timed_action_frames
 from modules.world.pace import Pace
 
 SWING_MIN = 1  # spec 11
@@ -116,7 +116,7 @@ def _search_minutes(action: AnyAction, resolved: Resolution) -> int:
 def _transfer_minutes(action: AnyAction, resolved: Resolution) -> int:
     """A move of items: its frames by the shared rule."""
     if isinstance(resolved, Transfer):
-        return minutes_from_timed_action_frames(resolved.frames)
+        return units.minutes_from_timed_action_frames(resolved.frames)
     return QUICK_ACTION_MIN
 
 

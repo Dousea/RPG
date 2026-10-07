@@ -70,6 +70,14 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
   not `data/zombie_outfits.py`); only what every domain uses sits at a layer's
   top. Tests split along the same lines, one file per area, in the same
   packages.
+- **Imports:** call a function through its module (`from modules import
+  units`, then `units.per_hour_from_frame(...)`), so a call says where it comes
+  from; import classes and constants by name, or a data module under a short
+  alias (`from data.character import traits as trait_k`). `typing`,
+  `collections.abc` and `dataclasses` are imported by name. Ruff (ICN003)
+  enforces this for the modules listed under `banned-from` in
+  `pyproject.toml`; add a module there once it holds plain functions. Source:
+  [Google's Python style guide, Imports](https://google.github.io/styleguide/pyguide.html#22-imports).
 - **Logging, not print:** each module uses `logger = logging.getLogger(__name__)`.
   `debug` for per-turn traces, `info` for lifecycle, `warning` for dropped or
   repaired data. Ruff bans `print`.

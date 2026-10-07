@@ -1,7 +1,7 @@
 """Doors, windows, planks and thumping: the shipped barriers, tables and wording (spec 13)."""
 
+from modules import units
 from modules.entity.barrier import BarrierEntity, BarrierKind
-from modules.units import minutes_from_timed_action_frames
 
 DOOR_HEALTH = 500  # spec 13: health
 WINDOW_HEALTH_SINGLE = 50  # spec 13: health, fixtures only
@@ -166,8 +166,8 @@ BARRICADE_XP_CARPENTRY = 10  # spec 13: XP, through the XP chain
 UNBARRICADE_XP_CARPENTRY = 2  # spec 13: XP, flat
 UNBARRICADE_XP_STRENGTH = 2  # spec 13: XP, flat
 HAMMER_WEAR_MULT = 6.0  # spec 13
-BARRICADE_MIN = minutes_from_timed_action_frames(BARRICADE_TIME_FRAMES)  # spec 13
-UNBARRICADE_MIN = minutes_from_timed_action_frames(UNBARRICADE_TIME_FRAMES_BASE)  # spec 13
+BARRICADE_MIN = units.minutes_from_timed_action_frames(BARRICADE_TIME_FRAMES)  # spec 13
+UNBARRICADE_MIN = units.minutes_from_timed_action_frames(UNBARRICADE_TIME_FRAMES_BASE)  # spec 13
 
 DOOR_HIT_MULT = 2  # spec 13
 DOOR_HIT_EXTRA_MULT = 6  # spec 13

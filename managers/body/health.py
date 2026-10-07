@@ -13,6 +13,7 @@ from data.zombies import lore as zombie_lore
 from managers import carry
 from managers.body.stats.status_effects import player_status_effect_levels
 from managers.body.thermoregulator import health_cap
+from modules import units
 from modules.body.parts import (
     PART_HEALTH_MAX,
     PART_WEIGHT,
@@ -23,7 +24,6 @@ from modules.body.parts import (
 )
 from modules.body.stats import CharacterStat, StatusEffect
 from modules.entity.player import PlayerEntity
-from modules.units import real_frames_per_minute
 
 HOUR_PER_MINUTE = 1 / 60
 
@@ -153,7 +153,7 @@ def infection_chance(state: PartState) -> float:
     if state.cut_time > 0:
         n += k.WOUND_INFECTION_N_CUT
     n = max(n, k.WOUND_INFECTION_N_FLOOR)
-    return 1 - (1 - 1 / n) ** real_frames_per_minute()
+    return 1 - (1 - 1 / n) ** units.real_frames_per_minute()
 
 
 def _can_catch_infection(state: PartState) -> bool:

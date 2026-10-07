@@ -9,8 +9,8 @@ rates (180 per game minute). Per-minute forms go through `modules/units.py`.
 from dataclasses import dataclass
 from enum import StrEnum
 
+from modules import units
 from modules.body.parts import BodyPart
-from modules.units import per_minute_from_frame, per_minute_from_real_frame, real_frames_per_minute
 
 
 class Metabolic(StrEnum):
@@ -196,8 +196,8 @@ RAIN_MIN_INTENSITY = 0.1  # spec 06
 DRYING_BASE_RATE = 0.1  # spec 06
 DRYING_REFERENCE_C = 5  # spec 06
 DRYING_PER_DEGREE = 0.1  # spec 06: (T - 5) / 10
-WETNESS_INCREASE_per_min = per_minute_from_frame(0.015)  # spec 06
-WETNESS_DECREASE_per_min = per_minute_from_frame(0.01)  # spec 06
+WETNESS_INCREASE_per_min = units.per_minute_from_frame(0.015)  # spec 06
+WETNESS_DECREASE_per_min = units.per_minute_from_frame(0.01)  # spec 06
 WETNESS_HYSTERESIS_WET = 25  # spec 06: sweat reaches clothing at or above this skin wetness
 WETNESS_HYSTERESIS_DRY = 50  # spec 06: skin dries clothing at or below this skin wetness
 PERSPIRATION_MIN = 0.1  # spec 06
@@ -228,18 +228,18 @@ COLD_NODE_FACTOR = 0.25  # spec 06
 WET_CLOTHING_FROM = 0.5  # spec 06
 HYPOTHERMIA_DELTA_FROM_LEVEL = 1  # spec 06: the delta is multiplied above this level
 CATCH_COLD_DELTA_MIN = 0.1  # spec 06
-CATCH_COLD_INCREASE_per_min = per_minute_from_frame(0.003)  # spec 06: per unit of delta
-CATCH_COLD_DECREASE_per_min = per_minute_from_real_frame(0.175)  # spec 06
+CATCH_COLD_INCREASE_per_min = units.per_minute_from_frame(0.003)  # spec 06: per unit of delta
+CATCH_COLD_DECREASE_per_min = units.per_minute_from_real_frame(0.175)  # spec 06
 CATCH_COLD_THRESHOLD = 100  # spec 06
 COLD_START_STRENGTH = 20  # spec 06
 COLD_STRENGTH_MAX = 100  # spec 06
-COLD_PROGRESSION_per_min = per_minute_from_frame(0.0112)  # spec 06
-COLD_REDUCTION_per_min = per_minute_from_frame(0.005)  # spec 06
+COLD_PROGRESSION_per_min = units.per_minute_from_frame(0.0112)  # spec 06
+COLD_REDUCTION_per_min = units.per_minute_from_frame(0.005)  # spec 06
 COLD_REDUCTION_STRENGTH_MULT = 2  # spec 06: strength falls twice as fast
 COLD_RECOVER_FATIGUE_MAX = 0.5  # spec 06
 COLD_RECOVER_HUNGER_MAX = 0.25  # spec 06
 COLD_RECOVER_THIRST_MAX = 0.25  # spec 06
-SNEEZE_FRAMES_PER_MIN = real_frames_per_minute()  # spec 06
+SNEEZE_FRAMES_PER_MIN = units.real_frames_per_minute()  # spec 06
 SNEEZE_MIN_LEVEL = 2  # spec 06: Has a Cold level
 SNEEZE_TIMER_FRAMES = {2: (600, 800), 3: (300, 600), 4: (200, 300)}  # spec 06
 SNEEZE_COIN_SIDES = 100  # spec 06

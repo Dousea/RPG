@@ -15,6 +15,7 @@ select = [
     "SIM",          # simplifications
     "T20",          # print: use logging (see AGENTS.md)
     "TID251",       # banned APIs below
+    "ICN003",       # function modules imported whole (see AGENTS.md: imports)
 ]
 # The formatter owns line length; long strings and comments are allowed.
 ignore = ["E501"]
@@ -38,6 +39,11 @@ ignore = ["E501"]
 "datetime.datetime.now".msg = "Use the game clock (see AGENTS.md: time)."
 "datetime.datetime.today".msg = "Use the game clock (see AGENTS.md: time)."
 "datetime.date.today".msg = "Use the game clock (see AGENTS.md: time)."
+
+[tool.ruff.lint.flake8-import-conventions]
+# Modules of plain functions: call them through the module
+# (`units.per_hour_from_frame`), so a call says where it comes from.
+banned-from = ["modules.units", "managers.carry", "managers.combat.weapons"]
 
 [tool.ruff.lint.per-file-ignores]
 # The outside world may read the wall clock (timestamps, timeouts).

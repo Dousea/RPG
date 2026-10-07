@@ -27,7 +27,7 @@ from managers.body.health import open_wounds
 from managers.body.stats.status_effects import active_status_effects, player_status_effect_levels
 from managers.character import creation
 from managers.character.skills import skill_progress
-from managers.combat.weapons import held_entity
+from managers.combat import weapons
 from managers.context import NOTHING_DONE_FACT, ContextBuilder
 from managers.corpses.search import corpse_views
 from managers.events.log import build_event_entry, event_stamp
@@ -618,7 +618,7 @@ def _condition(entity: ItemEntity) -> str:
 
 
 def _held(player: PlayerEntity) -> dict[str, str] | None:
-    entity = held_entity(player)
+    entity = weapons.held_entity(player)
     if entity is None:
         return None
     return {"name": entity.item.name, "condition_word": item_condition_word(entity)}

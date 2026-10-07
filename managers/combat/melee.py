@@ -17,7 +17,7 @@ from managers.body.stats.status_effects import (
     player_status_effect_levels,
 )
 from managers.character.skills import SkillEngine, skill_levels
-from managers.combat.weapons import equipped_weapon, held_entity
+from managers.combat import weapons
 from managers.zombies.attack import weapon_level
 from managers.zombies.dress import make_crawler
 from managers.zombies.noise import Sound
@@ -198,7 +198,7 @@ class MeleeEngine:
         """One swing at `target_id` at clock minute `now`, hitting what the weapon reaches."""
         result = SwingResult()
         target = world.zombies[target_id]
-        held = equipped_weapon(player)
+        held = weapons.equipped_weapon(player)
         held_melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
         weapon = held_melee or k.BARE_HANDS
         kind = self._kind(shove, target.on_floor(now), held_melee is not None)
@@ -213,7 +213,7 @@ class MeleeEngine:
             now=now,
             kind=kind,
             weapon=weapon,
-            weapon_entity=held_entity(player) if held_melee else None,
+            weapon_entity=weapons.held_entity(player) if held_melee else None,
             levels=levels,
             status_effects=status_effects,
             crit=crit,
@@ -238,7 +238,7 @@ class MeleeEngine:
 
     def strike_object(self, player: PlayerEntity, world: World, now: int) -> SwingResult:
         """What a swing at a door, window or barricade costs the player: endurance and weapon wear."""
-        held = equipped_weapon(player)
+        held = weapons.equipped_weapon(player)
         held_melee = held if isinstance(held, MeleeWeaponItem) else None
         result = SwingResult()
         swing = _Swing(
@@ -247,7 +247,7 @@ class MeleeEngine:
             now=now,
             kind=SwingKind.HIT,
             weapon=held_melee or k.BARE_HANDS,
-            weapon_entity=held_entity(player) if held_melee else None,
+            weapon_entity=weapons.held_entity(player) if held_melee else None,
             levels=skill_levels(player),
             status_effects=player_status_effect_levels(player),
             crit=False,

@@ -62,8 +62,8 @@ from managers.body.stats.status_effects import (
 from managers.body.thermoregulator import attack_metabolic
 from managers.character.exercise import ExerciseEngine, endurance_level, reps_per_minute
 from managers.character.skills import SkillEngine, skill_levels
+from managers.combat import weapons
 from managers.combat.melee import MeleeEngine
-from managers.combat.weapons import equipped_weapon, held_slots, roll_damage
 from managers.corpses.bodies import dress_as_player
 from managers.corpses.search import (
     contents_in_words,
@@ -91,6 +91,7 @@ from managers.zombies.population import (
     roll_zombie,
     start_outbreak,
 )
+from modules import units
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -167,7 +168,6 @@ from modules.story.beats import (
     StartOutbreak,
 )
 from modules.story.quest import QuestStatus
-from modules.units import minutes_from_timed_action_frames
 from modules.world.pace import Pace
 from modules.world.room import ContainerEntity
 from modules.world.weather import WeatherSample
@@ -475,7 +475,7 @@ class SimulationCore:
         if isinstance(action, MoveAction):
             return Metabolic.WALKING_5KMH
         if isinstance(action, AttackAction):
-            return attack_metabolic(equipped_weapon(self.manager.player))
+            return attack_metabolic(weapons.equipped_weapon(self.manager.player))
         if isinstance(action, ShoveAction):
             return attack_metabolic(None)
         if isinstance(action, BarricadeAction):
@@ -708,7 +708,7 @@ class SimulationCore:
         ]
         minutes = action_minutes(accepted.action, accepted.resolved)
         if isinstance(accepted.resolved, Transfer):
-            minutes = minutes_from_timed_action_frames(accepted.resolved.frames * slowdown)
+            minutes = units.minutes_from_timed_action_frames(accepted.resolved.frames * slowdown)
         elif isinstance(accepted.action, MULTIPLIED_ACTIONS):
             minutes = max(1, round(minutes * slowdown))
         if isinstance(accepted.action, SOCIAL_ACTIONS):
@@ -938,7 +938,9 @@ class SimulationCore:
         return max(1, round(minutes * self._action_time_multiplier()))
 
     def _transfer_minutes(self, transfer: Transfer) -> int:
-        return minutes_from_timed_action_frames(transfer.frames * self._action_time_multiplier())
+        return units.minutes_from_timed_action_frames(
+            transfer.frames * self._action_time_multiplier()
+        )
 
     def _resolve_take_from_corpse(self, accepted: Accepted) -> str:
         transfer = accepted.expect(Transfer)
@@ -1345,7 +1347,7 @@ class SimulationCore:
             return melee_k.EQUIP_FACT.format(name=self._name, item=item.name.lower())
         assert isinstance(item, HoldableItem), "_validate_equip checks this"
         carry.take_out(player, entity)
-        for slot in held_slots(item):
+        for slot in weapons.held_slots(item):
             player.equipment[slot] = entity
         return melee_k.EQUIP_FACT.format(name=self._name, item=item.name.lower())
 
@@ -1390,8 +1392,8 @@ class SimulationCore:
             return self._resolve_hit_barrier(accepted)
         npc = accepted.expect(TargetNpc).npc
         attacker = self.manager.player
-        weapon = equipped_weapon(attacker) or melee_k.BARE_HANDS
-        damage, modifiers = roll_damage(attacker, weapon, npc, self._rng)
+        weapon = weapons.equipped_weapon(attacker) or melee_k.BARE_HANDS
+        damage, modifiers = weapons.roll_damage(attacker, weapon, npc, self._rng)
         npc.hit_points -= damage
         self._apply_relationship_modifiers(modifiers)
         if isinstance(weapon, MeleeWeaponItem):

@@ -1,7 +1,7 @@
 """Carry weight, capacity, Heavy Load and the cost of moving things (spec 25)."""
 
+from modules import units
 from modules.body.stats import StatusEffect
-from modules.units import per_hour_from_frame
 
 BASE_MAX_WEIGHT = 8  # spec 25: kg
 WEIGHT_MOD_BY_STRENGTH = (
@@ -87,7 +87,7 @@ CORPSE_WEIGHT = 20.0  # spec 25: kg
 SKELETON_WEIGHT = 7.0  # spec 25: kg
 CARRY_CORPSE_MIN = 1  # spec 25: minutes
 SPRINTING_ENDURANCE_REDUCE = 0.000455  # spec 25: per frame
-CORPSE_CARRY_ENDURANCE_DRAIN_per_hour = per_hour_from_frame(
+CORPSE_CARRY_ENDURANCE_DRAIN_per_hour = units.per_hour_from_frame(
     SPRINTING_ENDURANCE_REDUCE * 0.5
 )  # spec 25: moving a body, 8.75 times the exercising drain
 

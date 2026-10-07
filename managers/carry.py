@@ -7,12 +7,12 @@ from enum import StrEnum
 from data import carry as k
 from data.character import skills as skill_k
 from managers.character.skills import skill_levels
+from modules import units
 from modules.body.stats import StatusEffect
 from modules.character.equipment import AnyCharacterEquipmentSlot, CharacterArmorSlot
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ContainerItem
-from modules.units import per_hour_from_frame, per_minute_from_frame
 
 
 class Place(StrEnum):
@@ -82,7 +82,7 @@ def walk_drain_per_hour(level: int, traits: Iterable[str]) -> float:
     elif k.ATHLETIC_ID in traits:
         enddelta = k.WALK_DRAIN_ENDDELTA_ATHLETIC
     mod = k.WALK_DRAIN_MOD_ASTHMATIC if k.ASTHMATIC_ID in traits else k.WALK_DRAIN_MOD
-    return per_hour_from_frame(
+    return units.per_hour_from_frame(
         k.WALK_DRAIN_FRAME_RATE
         * enddelta
         * k.WALK_DRAIN_FACTOR
@@ -95,7 +95,7 @@ def walk_drain_per_hour(level: int, traits: Iterable[str]) -> float:
 def overload_loss(level: int) -> float:
     """HP lost a minute at Heavy Load 3 or 4 (the expected value of the per-frame hit)."""
     per_hit = k.OVERLOAD_FRAME_LOSS / ((k.OVERLOAD_LEVEL_SPAN - level) / k.OVERLOAD_LEVEL_DIVISOR)
-    return per_minute_from_frame(per_hit * k.OVERLOAD_HIT_CHANCE)
+    return units.per_minute_from_frame(per_hit * k.OVERLOAD_HIT_CHANCE)
 
 
 def fitness_endurance_mult(level: int) -> int:

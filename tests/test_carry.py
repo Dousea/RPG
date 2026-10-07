@@ -10,9 +10,9 @@ from managers import carry
 from managers.body.health import BodyEngine
 from managers.body.stats.drivers import EnduranceDriver, StatContext
 from managers.body.stats.status_effects import player_status_effect_levels
-from managers.carry import Place
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from modules import units
 from modules.action.parser import VERBS, ParseFailure, parse_action_line
 from modules.action.types import (
     CarryAction,
@@ -36,7 +36,6 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ContainerItem, HoldableItem
-from modules.units import minutes_from_timed_action_frames
 from tests.support import ScriptedRandom, set_health, simulate
 
 
@@ -413,43 +412,59 @@ class TransferFramesTests(unittest.TestCase):
         return carry.transfer_frames(entity(item_id), source, target, **kw)
 
     def test_a_small_can_from_a_world_container_is_40_frames_and_a_minute(self):
-        frames = self.frames("item_canned_beans", Place.WORLD, Place.PACK)
+        frames = self.frames("item_canned_beans", carry.Place.WORLD, carry.Place.PACK)
         self.assertAlmostEqual(frames, 40)
-        self.assertEqual(minutes_from_timed_action_frames(frames), 1)
+        self.assertEqual(units.minutes_from_timed_action_frames(frames), 1)
 
     def test_twelve_cans_taken_at_once_are_480_frames_and_three_minutes(self):
-        frames = sum(self.frames("item_canned_beans", Place.WORLD, Place.PACK) for _ in range(12))
+        frames = sum(
+            self.frames("item_canned_beans", carry.Place.WORLD, carry.Place.PACK) for _ in range(12)
+        )
         self.assertAlmostEqual(frames, 480)
-        self.assertEqual(minutes_from_timed_action_frames(frames), 3)
+        self.assertEqual(units.minutes_from_timed_action_frames(frames), 3)
 
     def test_a_plank_into_a_bag_at_90_percent_is_324_frames_and_two_minutes(self):
         bag = entity("item_garbage_bag")  # capacity 20
         bag.contents = [entity("item_barbell") for _ in range(3)]  # 18 kg: 90 percent
-        frames = carry.transfer_frames(entity("item_plank"), Place.PACK, Place.BAG, bag=bag)
+        frames = carry.transfer_frames(
+            entity("item_plank"), carry.Place.PACK, carry.Place.BAG, bag=bag
+        )
         self.assertAlmostEqual(frames, 324)
-        self.assertEqual(minutes_from_timed_action_frames(frames), 2)
+        self.assertEqual(units.minutes_from_timed_action_frames(frames), 2)
 
     def test_an_emptier_bag_counts_as_at_least_40_percent_full(self):
-        frames = self.frames("item_plank", Place.PACK, Place.BAG, bag=entity("item_duffel_bag"))
+        frames = self.frames(
+            "item_plank", carry.Place.PACK, carry.Place.BAG, bag=entity("item_duffel_bag")
+        )
         self.assertAlmostEqual(frames, 120 * 3 * 0.4)
 
     def test_a_heavy_item_counts_as_3_kilos(self):
-        self.assertAlmostEqual(self.frames("item_barbell", Place.WORLD, Place.PACK), 150)
+        self.assertAlmostEqual(
+            self.frames("item_barbell", carry.Place.WORLD, carry.Place.PACK), 150
+        )
 
     def test_dropping_on_the_floor_is_a_tenth(self):
-        self.assertAlmostEqual(self.frames("item_canned_beans", Place.PACK, Place.FLOOR), 4)
+        self.assertAlmostEqual(
+            self.frames("item_canned_beans", carry.Place.PACK, carry.Place.FLOOR), 4
+        )
 
     def test_the_floor_and_a_corpse_count_as_the_world(self):
-        self.assertAlmostEqual(self.frames("item_canned_beans", Place.FLOOR, Place.PACK), 40)
+        self.assertAlmostEqual(
+            self.frames("item_canned_beans", carry.Place.FLOOR, carry.Place.PACK), 40
+        )
 
     def test_anything_out_of_a_carried_bag_is_120_a_kilo(self):
-        for target in (Place.PACK, Place.FLOOR, Place.WORLD, Place.BAG):
-            self.assertAlmostEqual(self.frames("item_canned_beans", Place.BAG, target), 96)
+        for target in (carry.Place.PACK, carry.Place.FLOOR, carry.Place.WORLD, carry.Place.BAG):
+            self.assertAlmostEqual(self.frames("item_canned_beans", carry.Place.BAG, target), 96)
 
     def test_dextrous_halves_and_all_thumbs_doubles(self):
-        base = self.frames("item_canned_beans", Place.WORLD, Place.PACK)
-        dextrous = self.frames("item_canned_beans", Place.WORLD, Place.PACK, traits=("dextrous",))
-        clumsy = self.frames("item_canned_beans", Place.WORLD, Place.PACK, traits=("allthumbs",))
+        base = self.frames("item_canned_beans", carry.Place.WORLD, carry.Place.PACK)
+        dextrous = self.frames(
+            "item_canned_beans", carry.Place.WORLD, carry.Place.PACK, traits=("dextrous",)
+        )
+        clumsy = self.frames(
+            "item_canned_beans", carry.Place.WORLD, carry.Place.PACK, traits=("allthumbs",)
+        )
         self.assertAlmostEqual(dextrous, base / 2)
         self.assertAlmostEqual(clumsy, base * 2)
 
