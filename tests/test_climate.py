@@ -476,6 +476,7 @@ class IndoorsTest(unittest.TestCase):
                 "zone_home": True,
                 "zone_building": True,
                 "zone_street": False,
+                "zone_bodega": True,
                 "zone_neighborhood": False,
             },
         )

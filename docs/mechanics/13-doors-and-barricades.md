@@ -61,8 +61,8 @@ once. They replace the old door entity.
 A **barrier of a zone** is any barrier on one of its connections.
 
 `Location.building` names the building a zone is part of. `zone_home` and
-`zone_building` are the `apartment_block`. The street and the neighbourhood have
-none.
+`zone_building` are the `apartment_block`, `zone_bodega` is the `corner_store`.
+The street and the neighbourhood have none.
 
 ### The shipped barriers
 
@@ -70,13 +70,17 @@ none.
 | --- | --- | --- | --- | --- |
 | `door_apartment` | door, 500 | `zone_home` and `zone_building` | `zone_home` | closed, locked, key `item_apartment_key` |
 | `door_lobby` | door, 500 | `zone_building` and `zone_street` | `zone_building` | closed, unlocked |
+| `window_bodega` | window, 50 | `zone_street` and `zone_bodega` | `zone_bodega` | closed, locked, no key |
 
 - The apartment door starts locked: from the building side it needs the key
   while it is locked, from inside it doesn't. Opening a locked barrier from its
   inside, by `OPEN` or by a `MOVE_TO` crossing, unlocks it for good. Opening
   with the key from outside leaves the lock as it was.
-- No shipped barrier is a window. Windows are fully built and tested with
-  fixtures that set `max_health` to 50 or 100.
+- The shop window is the only way into the corner store (`zone_bodega`, the
+  `corner_store` building): its door is chained shut from inside. It has no key,
+  so from the street it can't be opened, only smashed or boarded up; from inside
+  it opens and unlocks. A zombie shut in the store thumps it from within. Double
+  panes (`max_health` 100) are tested only with fixtures.
 
 ### The player's distance to a barrier
 
@@ -267,12 +271,12 @@ with nothing else costs the one-minute floor.
 - **A closed door:** the player opens it (a locked one from inside unlocks),
   passes, and shuts it again behind them. An open door stays open. A broken door
   is a gap. Each costs 0 minutes.
-- **A locked door from outside, no key:** the move stops at it ("at the locked
-  door to Your Apartment").
+- **A locked door or window from outside, no key:** the move stops at it ("at
+  the locked door to Your Apartment"); a window stays closed.
 - **A barricade on either side:** the move stops at it ("at the barricaded
   door"). The player can't remove someone else's planks, only break them.
 - **A window:** an open or smashed window is climbed through, **+1 minute**. A
-  closed one is opened first and stays open.
+  closed, unlocked one is opened first and stays open.
 - **Zombies already thumping the far side:** opening the door releases them onto
   the player.
 

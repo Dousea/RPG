@@ -23,6 +23,7 @@ ZONE_ZOMBIE_FIELDS: dict[str, tuple[int, int, int]] = {  # spec 09
     "zone_home": (8, 1, 0),
     "zone_building": (20, 3, 32),
     "zone_street": (40, 6, 96),
+    "zone_bodega": (10, 1, 63),
     "zone_neighborhood": (80, 16, 64),
 }
 

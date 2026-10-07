@@ -11,11 +11,12 @@ SIGHT_BLOCKING_PLANKS = 3  # spec 13: planks on one side
 
 APARTMENT_DOOR_ID = "door_apartment"
 LOBBY_DOOR_ID = "door_lobby"
+SHOP_WINDOW_ID = "window_bodega"
 APARTMENT_KEY_ID = "item_apartment_key"
 
 
 def build_starting_barriers() -> dict[str, BarrierEntity]:
-    """The two shipped doors; no shipped barrier is a window."""
+    """The two shipped doors and the shop window."""
     barriers = [
         BarrierEntity(
             barrier_id=APARTMENT_DOOR_ID,
@@ -38,6 +39,17 @@ def build_starting_barriers() -> dict[str, BarrierEntity]:
             aliases=["street door", "front door", "door", "building door", "the door"],
             health=DOOR_HEALTH,
             max_health=DOOR_HEALTH,
+        ),
+        BarrierEntity(
+            barrier_id=SHOP_WINDOW_ID,
+            kind=BarrierKind.WINDOW,
+            zones=("zone_street", "zone_bodega"),
+            inside_zone="zone_bodega",
+            name="shop window",
+            aliases=["window", "store window", "bodega window", "the window", "shop window"],
+            health=WINDOW_HEALTH_SINGLE,
+            max_health=WINDOW_HEALTH_SINGLE,
+            locked=True,
         ),
     ]
     return {barrier.barrier_id: barrier for barrier in barriers}

@@ -96,6 +96,7 @@ INDOORS_BY_ZONE = {  # spec 04
     "zone_home": True,
     "zone_building": True,
     "zone_street": False,
+    "zone_bodega": True,
     "zone_neighborhood": False,
 }
 

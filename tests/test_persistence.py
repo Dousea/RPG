@@ -269,8 +269,8 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """Spec 01, Saves."""
 
-    def test_schema_version_is_18(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 18)
+    def test_schema_version_is_19(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 19)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()
@@ -1001,7 +1001,9 @@ class BarrierSaveTests(IsolatedSaveTestCase):
         data = codec.to_dict(gm)
         del data["world"]["barriers"]
         loaded = codec.from_dict(data)
-        self.assertEqual(set(loaded.world.barriers), {"door_apartment", "door_lobby"})
+        self.assertEqual(
+            set(loaded.world.barriers), {"door_apartment", "door_lobby", "window_bodega"}
+        )
 
     def test_thumping_fields_round_trip(self):
         gm = GameManager()

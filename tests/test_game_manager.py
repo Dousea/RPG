@@ -97,10 +97,10 @@ class StartingStateTests(unittest.TestCase):
         for key, location in self.gm.world.locations.items():
             self.assertEqual(key, location.id)
 
-    def test_zone_roster_is_exactly_the_four_zones(self):
+    def test_zone_roster_is_exactly_the_five_zones(self):
         self.assertEqual(
             set(self.gm.world.locations.keys()),
-            {"zone_home", "zone_building", "zone_street", "zone_neighborhood"},
+            {"zone_home", "zone_building", "zone_street", "zone_bodega", "zone_neighborhood"},
         )
 
     def test_resolve_location_by_alias(self):
@@ -140,10 +140,9 @@ class StartingStateTests(unittest.TestCase):
             self.gm.resolve_location("the alley behind the building").id,
             "zone_street",
         )
-        self.assertEqual(
-            self.gm.resolve_location("the corner store across from the city").id,
-            "zone_street",
-        )
+        found = self.gm.resolve_location("the pharmacy across from the park")
+        self.assertIsNotNone(found)
+        self.assertEqual(found and found.id, "zone_neighborhood")
 
         # R3 must stay unchanged: from zone_street, "the street" (position 1)
         # still beats "my apartment" (position 3).
@@ -157,12 +156,13 @@ class StartingStateTests(unittest.TestCase):
         self.assertEqual(self.gm.resolve_location("the lobby downstairs").id, "zone_building")
 
     def test_exit_phrase_fires_only_on_the_zone_itself(self):
-        # "outside the bodega" on the street (a landmark, not the zone) and
+        # "outside the bus stop" on the street (a landmark, not the zone) and
         # "outside Emma's apartment" in the building must not exit the zone.
         # The exit rule fires only when the phrase names the zone itself
         # (ZONE_EXIT_NOUNS), keyed off the current zone.
         self.gm.player.current_location_id = "zone_street"
-        self.assertEqual(self.gm.resolve_location("outside the bodega").id, "zone_street")
+        found = self.gm.resolve_location("outside the bus stop")
+        self.assertEqual(found and found.id, "zone_street")
 
         self.gm.player.current_location_id = "zone_building"
         self.assertEqual(self.gm.resolve_location("outside Emma's apartment").id, "zone_building")

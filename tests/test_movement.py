@@ -188,13 +188,13 @@ class ResidualFixExitPhraseTests(unittest.TestCase):
     """The exit rule fires only when the phrase's object names the zone
     itself, never a landmark inside it."""
 
-    def test_outside_the_bodega_stays_on_the_street_as_a_spot(self):
-        # bodega is a zone_street landmark, not the zone -- must not exit
+    def test_outside_the_bus_stop_stays_on_the_street_as_a_spot(self):
+        # the bus stop is a zone_street landmark, not the zone -- must not exit
         # into the neighborhood. A spot, not a zone change: no tick.
         gm = GameManager()
         gm.player.current_location_id = "zone_street"
         before_tick = gm.narrative.time_of_day
-        facts = simulate(gm, MoveAction(destination="outside the bodega"))
+        facts = simulate(gm, MoveAction(destination="outside the bus stop"))
         self.assertEqual(gm.player.current_location_id, "zone_street")
         self.assertEqual(gm.narrative.time_of_day, before_tick)
         self.assertFalse(facts[0].startswith("Refused:"))

@@ -44,6 +44,7 @@ ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_home": ("apartment", "apartment 3b", "3b", "flat", "home", "place"),
     "zone_building": ("building", "apartment building"),
     "zone_street": ("street", "block"),
+    "zone_bodega": ("bodega", "corner store", "store", "shop"),
     "zone_neighborhood": ("neighborhood", "neighbourhood"),
 }
 
@@ -61,9 +62,19 @@ BASEMENT_STORAGE_CONTENTS = [  # spec 13: stands in for the basement storage loo
     PLANK_ITEM_ID,
     PLANK_ITEM_ID,
 ]
+CORNER_STORE_CONTENTS = [  # spec 03: stands in for the store's loot rolls
+    "item_canned_beans",
+    "item_canned_beans",
+    "item_water_bottle",
+    "item_water_bottle",
+    "item_granola_bar",
+    "item_granola_bar",
+    "item_instant_noodles",
+]
 ALLEY_CONTENTS = [PLANK_ITEM_ID, PLANK_ITEM_ID]  # spec 13
 APARTMENT_BLOCK_ID = "apartment_block"  # spec 13
 BUILDING_ZONE_IDS = ("zone_home", "zone_building")  # spec 13
+CORNER_STORE_ID = "corner_store"  # spec 13
 
 
 def build_starting_locations() -> dict[str, Location]:
@@ -139,7 +150,11 @@ def build_starting_locations() -> dict[str, Location]:
                 "The block outside: the sidewalk, parked cars, the bodega on the "
                 "corner, the alley behind the building, a bus stop."
             ),
-            connections={"in": "zone_building", "out": "zone_neighborhood"},
+            connections={
+                "in": "zone_building",
+                "out": "zone_neighborhood",
+                "store": "zone_bodega",
+            },
             # "outside" is not a global alias -- it collides with
             # zone_building's own "outside the building" and is handled as a
             # direction synonym (`DIRECTION_SYNONYMS`) instead.
@@ -148,14 +163,28 @@ def build_starting_locations() -> dict[str, Location]:
                 "sidewalk",
                 "road",
                 "alley",
-                "bodega",
-                "corner store",
                 "bus stop",
                 "parking lot",
                 "my car",
                 "the block",
                 "front steps",
                 "out front",
+            ],
+        ),
+        "zone_bodega": Location(
+            id="zone_bodega",
+            name="The Corner Store",
+            description=(
+                "The bodega on the corner: a narrow shop with the shelves half "
+                "emptied, the till, and a back room. The front door is chained "
+                "shut from inside, so the shop window is the way in."
+            ),
+            connections={"out": "zone_street"},
+            aliases=[
+                "bodega",
+                "corner store",
+                "the bodega",
+                "the corner store",
             ],
         ),
         "zone_neighborhood": Location(
@@ -166,8 +195,9 @@ def build_starting_locations() -> dict[str, Location]:
                 "a walk-in clinic, the subway entrance, the park."
             ),
             connections={"in": "zone_street"},
-            # Bare "store" is not an alias -- too generic (any shop). "grocery
-            # store" and "corner store" (zone_street) stay, being specific.
+            # Bare "store" and "shop" are not aliases anywhere -- too generic
+            # (any shop). "grocery store" here and "corner store" (zone_bodega)
+            # stay, being specific.
             aliases=[
                 "neighborhood",
                 "neighbourhood",
@@ -200,6 +230,7 @@ def build_starting_locations() -> dict[str, Location]:
 
     for zone_id in BUILDING_ZONE_IDS:
         locations[zone_id].building = APARTMENT_BLOCK_ID  # spec 13
+    locations["zone_bodega"].building = CORNER_STORE_ID
 
     starting_ground_items = {
         "zone_home": [
@@ -210,6 +241,7 @@ def build_starting_locations() -> dict[str, Location]:
         ],
         "zone_building": [*FIRST_AID_KIT_CONTENTS, *BASEMENT_STORAGE_CONTENTS],
         "zone_street": ["item_crowbar", *ALLEY_CONTENTS],
+        "zone_bodega": CORNER_STORE_CONTENTS,
     }
     for location_id, item_ids in starting_ground_items.items():
         locations[location_id].entities.extend(

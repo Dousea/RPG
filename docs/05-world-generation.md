@@ -1,6 +1,6 @@
 # World Generation, Topology and Travel
 
-> **Status: Planned.** Four hand-written coarse zones in `data/locations.py` (`zone_home`, `zone_building`, `zone_street`, `zone_neighborhood`), with aliases and a free-text `PlayerEntity.current_place` for where within a zone the player is. No seed, no generator, no tiers, no hierarchy. See [Implementation Status](00-status.md).
+> **Status: Planned.** Five hand-written coarse zones in `data/locations.py` (`zone_home`, `zone_building`, `zone_street`, `zone_bodega`, `zone_neighborhood`), with aliases and a free-text `PlayerEntity.current_place` for where within a zone the player is. No seed, no generator, no tiers, no hierarchy. See [Implementation Status](00-status.md).
 
 ## Location Hierarchy
 

@@ -355,7 +355,7 @@ $env:RPG_TEST_EMBEDDINGS="1"; mise run test
   Story Director reacting to arbitrary world state (docs/07-story-architecture.md).
 - No seeded randomness: combat damage jitter and the LLM itself are both
   unseeded (docs/16-determinism-and-versioning.md is out of scope).
-- The map is four hand-written zones. No procedural generation, no
+- The map is five hand-written zones. No procedural generation, no
   simulation level-of-detail for distant NPCs (docs/05, 06 are out of scope).
 - `adapters/memory.py` imports `sentence_transformers` at module scope, which
   contacts the Hugging Face Hub on import even when no embedding is needed.

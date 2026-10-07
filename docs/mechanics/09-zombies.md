@@ -77,6 +77,7 @@ Zombies ignore NPCs.
 | `zone_home` | 8 | 1 | 0 | 0 (spawn building cleared) |
 | `zone_building` | 20 | 3 | 32 | about 2 |
 | `zone_street` | 40 | 6 | 96 | 9 |
+| `zone_bodega` | 10 | 1 | 63 | about 1 |
 | `zone_neighborhood` | 80 | 16 | 64 | 16 |
 
 `size_tiles` is the farthest a zombie in the zone can be from the player.

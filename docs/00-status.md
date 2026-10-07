@@ -43,7 +43,7 @@ what the game now does.
 
 The design target inverts the real control flow. That inversion is now real
 for the axis document 01 cares about — outcomes are decided before they are
-narrated — at the scale the game actually runs at (four zones, three NPCs).
+narrated — at the scale the game actually runs at (five zones, three NPCs).
 
 ```text
 DESIGNED (docs 01, 15, 21)            BUILT (adapters/engine.py)
@@ -94,8 +94,8 @@ this one.
 | [02 System Boundaries](02-system-boundaries.md) | Partial | `managers/events.py` `broadcast_event`, `EVENT_TO_EFFECT_TYPES` | Combat and item-use events are constructed and dispatched, role-aware (a "damage taken" handler only fires for the actual target). This is direct dispatch to a fixed pair of event families, not a general publish/subscribe bus other subsystems can register against — the typed event taxonomy in this document is still aspirational. |
 | [03 Intent Parsing](03-intent-parsing.md) | Partial | `modules/action/parser.py`, `adapters/llm.py` `query_parser` | A separate parser call proposes a typed `AnyAction` plan (`modules/action/parser.py`) before anything is decided, matching this document's intent. The reply is constrained to a per-turn JSON schema (`modules/action/schema.py`) with the text lines as a fallback when the server rejects it. Still missing: true entity-resolution ambiguity handling (04 is unchanged). |
 | [04 Entity Resolution](04-entity-resolution.md) | Partial | `resolve_npc`, `resolve_location`, `_find_item_entity` | NPC resolution is still exact casefold matching on name or id only. Location resolution (`resolve_location`) now also matches connection direction, alias, and — as a last pass — whole words shared with a zone's name or aliases (a loose substring match is deliberately excluded). No description-based resolution, no ambiguity state, no clarification round trip. |
-| [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Four hand-written coarse zones (`zone_home`, `zone_building`, `zone_street`, `zone_neighborhood`), each with aliases and a free-text `PlayerEntity.current_place` for where within the zone the player narratively is. Two doors (the apartment, locked, and the lobby), described by [mechanics 13](mechanics/13-doors-and-barricades.md). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
-| [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are seven of them (four zones, three NPCs). Out of scope for the engine-authority work. |
+| [05 World Generation](05-world-generation.md) | Planned | `data/locations.py` | Five hand-written coarse zones (`zone_home`, `zone_building`, `zone_street`, `zone_bodega`, `zone_neighborhood`), each with aliases and a free-text `PlayerEntity.current_place` for where within the zone the player narratively is. Two doors (the apartment, locked, and the lobby) and the corner store's shop window, described by [mechanics 13](mechanics/13-doors-and-barricades.md). No seed, no generator, no tiers, no travel nodes. `Location` is flat — no region/zone/location/room hierarchy. Out of scope for the engine-authority work; see the note at the top of this document. |
+| [06 Simulation LOD](06-simulation-lod.md) | Planned | — | Every location and NPC is always live in memory. There are eight of them (five zones, three NPCs). Out of scope for the engine-authority work. |
 | [07 Story Architecture](07-story-architecture.md) | Partial | `modules/quest.py` `QuestState`, `data/quests.py`, `GameManager.quests` | Quest progress is now engine-tracked and engine-completed (`SimulationCore._advance_quests`, fired on a matching validated action, never on an LLM-declared verb) — but it is a flat objective-completion checklist, not the arc/objective/condition/event graph this document describes, and there is no Story Director reacting to world state. Deliberately thin; a real director is out of scope. One decided-but-unbuilt change is recorded in that document's *As Implemented* section: `discover:`/`npc_status:` objectives currently depend on names the *parser* invents, and need engine producers instead. |
 | [08 Time and Scheduling](08-time-and-scheduling.md) | Planned | `data/clock.py`, `managers/game.py` `NarrativeState` | The player-facing minute clock is [mechanics 01](mechanics/01-game-clock.md). NPC and world scheduling, sub-tick frequencies and everything else in this document is not built. |
 | [09 Zombie Survival](09-zombie-survival.md) | Partial | `managers/zombies.py`, `managers/noise.py` | Noise, light and visibility are [mechanics 09](mechanics/09-zombies.md). No scavenging model. |
@@ -227,7 +227,7 @@ NPC tells, or the derived `trusts_player` status (see
 the roster stays inside them.
 
 **Scale is still unaddressed.** Everything above holds at the game's current
-size — four zones, three NPCs. Documents 05 (world generation), 06
+size — five zones, three NPCs. Documents 05 (world generation), 06
 (simulation LOD) and 09 (zombie survival systems) describe what growing past
 that would need, and none of it exists. That remains a separate, larger
 rewrite, not an increment on the engine-authority work.

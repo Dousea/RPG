@@ -144,7 +144,7 @@ def _walk_out(
 ) -> Location | None:
     """Where an exit phrase whose object starts with a zone's exit noun goes.
 
-    Only the current zone's noun walks out of it; "outside the bodega" names
+    Only the current zone's noun walks out of it; "outside the bus stop" names
     no zone and lands on the landmark through the whole-word match instead.
     An exit phrase naming another zone can't be walked out of from here, so
     whatever follows its noun decides, and nothing following means nowhere.

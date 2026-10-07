@@ -285,7 +285,7 @@ class ActionValidator:
 
     def _has_key(self, key_id: str | None) -> bool:
         if key_id is None:
-            return True
+            return False
         return any(entity.item.id == key_id for entity in self.manager.player.inventory)
 
     # === Items ===
