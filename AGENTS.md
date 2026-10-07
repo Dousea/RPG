@@ -2,7 +2,7 @@
 
 A text RPG in a zombie apocalypse. A local LLM (LM Studio) parses the player's
 intent and narrates; the Python engine owns every rule and every outcome. The
-README covers architecture and setup; `docs/00-status.md` says which
+README covers architecture and setup; `docs/status.md` says which
 architecture docs are real code and which are design intent.
 
 ## Commands
@@ -53,7 +53,7 @@ The turn is parse → validate → resolve → narrate (`adapters/engine.py`). T
 LLM's output changes state only through `modules.action.parser.parse_action_plan`,
 `ActionValidator` and `SimulationCore`, never by reading narrator prose back
 into state. Outcome facts handed to the narrator describe events in words and
-never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
+never contain numbers (HP, damage, odds). See `docs/architecture/engine-authority.md`.
 
 ## Code conventions
 
@@ -108,7 +108,7 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
 - **Saves:** no save migration: a change to saved state bumps
   `SCHEMA_VERSION` (`adapters/save/codec.py`) and old saves are discarded.
 - **Tests:** a test for a spec'd mechanic names the spec and section in its
-  class docstring (`"""Spec 16, The arm pain divisor."""`) and asserts the
+  class docstring (`"""`arm-injuries`, The arm pain divisor."""`) and asserts the
   spec's numbers. Tests stay offline: the LLM and the embedding model
   are stubbed (`tests/support.py`). Tests ignore `config.yml`
   (`tests/__init__.py` points `RPG_CONFIG` at `/dev/null`) and fix the world

@@ -38,8 +38,8 @@ Every such dependency lives in `adapters/`:
 | `adapters/save/files.py` | Save/load that dict to `gamedata/engine_state.json` |
 | `adapters/engine.py` | `GameEngine` -- orchestrates one turn end to end |
 
-See [docs/01-engine-authority.md](docs/01-engine-authority.md) for why the turn
-is shaped this way: the engine decides every outcome doc 01 lists as
+See [docs/architecture/engine-authority.md](docs/architecture/engine-authority.md) for why the turn
+is shaped this way: the engine decides every outcome the engine-authority doc lists as
 authoritative (HP, inventory, movement, combat, quest completion, time) before
 the LLM is ever asked to narrate it, instead of narrating first and vetoing
 afterward.
@@ -145,11 +145,11 @@ NPC_MOVE <npc> TO <zone>             NPC_STATUS <npc> ADD|REMOVE <status>
 
 `UPDATE_CONDITION` is always refused: the engine moves hunger, thirst, fatigue and
 the other survival stats with the clock (see
-[docs/mechanics/02-survival-stats.md](docs/mechanics/02-survival-stats.md)), and
-player health is never LLM-declarable (see docs/01-engine-authority.md). Player
+[docs/mechanics/survival-stats.md](docs/mechanics/survival-stats.md)), and
+player health is never LLM-declarable (see docs/architecture/engine-authority.md). Player
 health is derived from the body parts and only changes through zombie wounds,
 bleeding, infection and the other body effects described in
-[docs/mechanics/12-health-and-infection.md](docs/mechanics/12-health-and-infection.md);
+[docs/mechanics/health.md](docs/mechanics/health.md);
 `_check_player_death` (`managers/simulation.py`) is the only producer of
 `game_over`. `MOVE_TO` resolves its
 destination against a zone id, display name, alias, or `in`/`out` connection
@@ -179,7 +179,7 @@ deleting, or duplicating his key (the door rebuilds `LOCKED` on every load).
 `UPDATE_CONDITION` is unaffected, since it never removes an item. `SET_FLAG`
 sets the engine's ground truth for a world fact; `DISCOVER_FLAG` separately
 marks that the player has learned it, which is what makes it visible in the
-narrator's prompt (doc 11's knowledge firewall applied to world flags, not
+narrator's prompt (the knowledge-firewall doc's knowledge firewall applied to world flags, not
 just relationship scores).
 
 Relationships are directional and stored source -> target. Everything that reads
@@ -357,9 +357,9 @@ $env:RPG_TEST_EMBEDDINGS="1"; mise run test
   relationship scores and world flags go through the knowledge firewall.
 - Quest state (`GameManager.quests`) is a flat objective-completion checklist
   advanced by the Simulation Core noticing a matching action -- there is no
-  Story Director reacting to arbitrary world state (docs/07-story-architecture.md).
+  Story Director reacting to arbitrary world state (docs/architecture/story.md).
 - No seeded randomness: combat damage jitter and the LLM itself are both
-  unseeded (docs/16-determinism-and-versioning.md is out of scope).
+  unseeded (docs/architecture/determinism-and-versioning.md is out of scope).
 - The map is five hand-written zones. No procedural generation, no
   simulation level-of-detail for distant NPCs (docs/05, 06 are out of scope).
 - `adapters/memory.py` imports `sentence_transformers` at module scope, which
