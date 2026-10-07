@@ -181,6 +181,27 @@ What this does *not* address is everything above the checklist: no arcs, no
 branches, no failure conditions, no dynamic storylines, no emergent consequences,
 no director consuming faction state. Those remain out of scope at the current size.
 
+### Decided direction
+
+Story content will come in three layers, all producing the engine-owned state
+above; none is built yet.
+
+- **A small authored main arc:** what the outbreak is, where the player
+  character's story goes, and a goal or ending, written as data like today's
+  quests and beats.
+- **Per-NPC stories generated once, as data.** At a new game, or when the
+  player first meets an NPC, one LLM call fills a fixed schema: backstory, a
+  want, a secret, and one to three quest hooks built only from the objective
+  kinds above. The engine validates every id against the world, drops or
+  repairs the rest, and stores the result as topics, quests and beats in the
+  save. The narrator voices them; secrets stay behind trust bands like today's
+  topics. No per-turn, per-NPC LLM calls: they would multiply turn time on a
+  single local GPU, and free prose cannot become state.
+- **Dynamic storylines from simulation state.** Once NPCs have bodies and
+  needs and the world has loot, the engine writes quests from real state (an
+  NPC who is hurt needs bandages, one who is starving needs food) and the LLM
+  only words them.
+
 ---
 
 [← Simulation Level of Detail](06-simulation-lod.md) · [Index](README.md) · [Time and Scheduling →](08-time-and-scheduling.md)
