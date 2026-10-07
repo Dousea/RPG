@@ -141,6 +141,7 @@ from modules.resolution import (
     BarricadeKit,
     ExercisePlan,
     FirstAidTarget,
+    Gathering,
     HeldItem,
     MoveBlocked,
     MoveToRoom,
@@ -718,7 +719,7 @@ class SimulationCore:
             ),
         ]
         minutes = action_minutes(accepted.action, accepted.resolved)
-        if isinstance(accepted.resolved, Transfer):
+        if isinstance(accepted.resolved, Transfer | Gathering):
             minutes = units.minutes_from_timed_action_frames(accepted.resolved.frames * slowdown)
         elif isinstance(accepted.action, MULTIPLIED_ACTIONS):
             minutes = max(1, round(minutes * slowdown))
@@ -970,11 +971,8 @@ class SimulationCore:
             name=self._name, sex=sex, item=entity.item.name.lower()
         )
 
-    def _resolve_take_transfer(self, accepted: Accepted) -> str:
+    def _resolve_take_transfer(self, action: TakeAction, transfer: Transfer) -> str:
         """TAKE of everything a source holds, or of one thing out of a carried bag."""
-        transfer = accepted.expect(Transfer)
-        action = accepted.action
-        assert isinstance(action, TakeAction), "only TAKE is routed here"
         manager = self.manager
         source = transfer.source
         for entity in transfer.entities:
@@ -1087,14 +1085,16 @@ class SimulationCore:
             )
         return [*facts, *search_facts], spent
 
-    def _resolve_take(self, accepted: Accepted) -> str:
-        transfer = accepted.expect(Transfer)
+    def _resolve_take(self, accepted: Accepted) -> str | list[str]:
         action = accepted.action
         assert isinstance(action, TakeAction), "only TAKE is routed here"
+        if isinstance(accepted.resolved, Gathering):
+            return [self._resolve_take_transfer(action, part) for part in accepted.resolved.parts]
+        transfer = accepted.expect(Transfer)
         if action.all_items or (
             transfer.source is not None and not isinstance(transfer.source, CorpseEntity)
         ):
-            return self._resolve_take_transfer(accepted)
+            return self._resolve_take_transfer(action, transfer)
         if isinstance(transfer.source, CorpseEntity):
             return self._resolve_take_from_corpse(accepted)
         entity = transfer.entities[0]

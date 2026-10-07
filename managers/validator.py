@@ -114,6 +114,7 @@ from modules.resolution import (
     BarricadeKit,
     ExercisePlan,
     FirstAidTarget,
+    Gathering,
     HeldItem,
     MoveBlocked,
     MoveToRoom,
@@ -366,16 +367,30 @@ class ActionValidator:
         return Accepted(action, Transfer((entity,), frames))
 
     def _take_all_here(self, action: TakeAction) -> ValidationResult:
+        """Everything on the ground, then everything in each stocked opened container of the room."""
         manager = self.manager
-        entities = tuple(manager._ground_items())
-        if not entities:
-            if container := self._opened_container_holding(None):
-                return self._take_from_container(action, container)
+        parts: list[Transfer] = []
+        if ground := tuple(manager._ground_items()):
+            parts.append(
+                Transfer(ground, self._frames(ground, carry.Place.FLOOR, carry.Place.PACK))
+            )
+        for container in self._stocked_containers():
+            entities = tuple(container.contents)
+            frames = self._frames(entities, carry.Place.WORLD, carry.Place.PACK)
+            parts.append(Transfer(entities, frames, source=container))
+        if not parts:
             return Rejected(action, carry_k.NOTHING_HERE)
-        if carry.over_the_limit(manager.player, extra=entities):
+        everything = [entity for part in parts for entity in part.entities]
+        if carry.over_the_limit(manager.player, extra=everything):
             return Rejected(action, self._cant_carry())
-        frames = self._frames(entities, carry.Place.FLOOR, carry.Place.PACK)
-        return Accepted(action, Transfer(entities, frames))
+        return Accepted(action, parts[0] if len(parts) == 1 else Gathering(tuple(parts)))
+
+    def _stocked_containers(self) -> list[ContainerEntity]:
+        """The opened containers of the player's room that hold anything, in layout order."""
+        room = current_room(self.manager.current_location, self.manager.player)
+        if room is None:
+            return []
+        return [c for c in room.containers if c.opened and c.contents]
 
     def _validate_take_from(self, action: TakeAction, source: str) -> ValidationResult:
         if carry.clean_name(source) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(source.strip()):
@@ -390,15 +405,10 @@ class ActionValidator:
             return Rejected(action, found)
         return self._take_from_container(action, found)
 
-    def _opened_container_holding(self, item_name: str | None) -> ContainerEntity | None:
-        """The first opened container of the player's room, in layout order, that holds `item_name`, or anything when None."""
-        room = current_room(self.manager.current_location, self.manager.player)
-        if room is None:
-            return None
-        for container in room.containers:
-            if not container.opened or not container.contents:
-                continue
-            if item_name is None or carry.find_named(container.contents, item_name) is not None:
+    def _opened_container_holding(self, item_name: str) -> ContainerEntity | None:
+        """The first opened container of the player's room, in layout order, that holds `item_name`."""
+        for container in self._stocked_containers():
+            if carry.find_named(container.contents, item_name) is not None:
                 return container
         return None
 

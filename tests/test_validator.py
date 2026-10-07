@@ -30,6 +30,7 @@ from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
 from modules.resolution import (
+    Gathering,
     HeldItem,
     MoveBlocked,
     MoveToRoom,
@@ -731,6 +732,20 @@ class RoomVerbTests(unittest.TestCase):
             [e.item.name for e in resolved.entities],
             [e.item.name for e in kitchen.containers[0].contents],
         )
+
+    def test_take_all_takes_the_floor_and_every_stocked_opened_container_of_the_room(self):
+        self.gm.player.current_room = "kitchen"
+        counter, cupboards, fridge, freezer = (
+            self.gm.world.locations["zone_home"].rooms["kitchen"].containers
+        )
+        counter.opened = cupboards.opened = fridge.opened = True
+        cupboards.contents = [ItemEntity(item=ITEMS["item_hammer"])]
+        freezer.contents = [ItemEntity(item=ITEMS["item_bandage"])]
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_plank"]))
+        resolved = self.accepted(TakeAction(item_name="all", all_items=True))
+        assert isinstance(resolved, Gathering)
+        self.assertEqual([part.source for part in resolved.parts], [None, counter, cupboards])
+        self.assertEqual(resolved.frames, sum(part.frames for part in resolved.parts))
 
     def test_a_plain_take_skips_a_closed_container(self):
         self.gm.player.current_room = "kitchen"

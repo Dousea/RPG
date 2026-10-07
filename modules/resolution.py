@@ -127,6 +127,17 @@ class Transfer:
 
 
 @dataclass(frozen=True)
+class Gathering:
+    """`TAKE all` from several places at once: one transfer per place, in order (carrying-and-loot)."""
+
+    parts: tuple[Transfer, ...]
+
+    @property
+    def frames(self) -> float:
+        return sum(part.frames for part in self.parts)
+
+
+@dataclass(frozen=True)
 class TargetNpc:
     npc: NpcEntity
 
@@ -210,6 +221,7 @@ Resolution = (
     | TargetRoom
     | TargetContainer
     | Transfer
+    | Gathering
     | TargetBarrier
     | BarricadeKit
     | PryTarget

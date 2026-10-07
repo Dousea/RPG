@@ -662,6 +662,23 @@ class PutAndTakeTests(unittest.TestCase):
         self.assertEqual(gm.current_location.entities, [])
         self.assertEqual(minutes, 2)  # 355 frames
 
+    def test_take_all_with_a_bare_floor_empties_every_opened_container_of_the_room(self):
+        gm = home()
+        gm.player.current_room = "kitchen"
+        counter, cupboards, *_ = gm.current_location.rooms["kitchen"].containers
+        counter.opened = cupboards.opened = True
+        counter.contents = [entity("item_canned_beans")]
+        cupboards.contents = [entity("item_bandage")]
+        _, facts = minutes_of(gm, TakeAction(item_name="all", all_items=True))
+        self.assertEqual(counter.contents + cupboards.contents, [])
+        self.assertEqual(
+            facts[:2],
+            [
+                "Orton takes canned beans from the kitchen counter.",
+                "Orton takes a bandage from the kitchen cupboards.",
+            ],
+        )
+
     def test_dextrous_halves_a_take_all(self):
         gm = home_with_things_on_the_floor()
         gm.player.traits.append("dextrous")

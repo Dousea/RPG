@@ -524,8 +524,9 @@ its transfer time.
   source may be a carried bag or an opened container in the room the player
   is in ("The kitchen counter hasn't been gone through."; "The kitchen counter is
   in the kitchen, not here."; "The kitchen counter holds no 'x'."). `TAKE all` with no source takes everything
-  on the ground, or, when the ground is bare, everything in the first opened
-  container of the room that holds anything; with a source, everything in it, as one action. Refused: no
+  on the ground and everything in each opened container of the player's room, in
+  layout order, with one fact per place; with a source, everything in it. Either
+  way it is one action. Refused: no
   such bag ("<name> has no 'x' to take from."); the bag holds no such item;
   nothing to take; the pack would pass 50 kg ("<name> can't carry any more.");
   carrying a body. A bag lying on the ground is taken as one item, with its
@@ -658,11 +659,6 @@ Incompatible saves are discarded.
 
 Found in the 2026-10-08 playtest.
 
-- **`TAKE all` with a bare floor empties one container.** The fallback takes from
-  the first opened container of the room that holds anything; "search the exam room
-  and take everything" took the counter's items and left the side table's mask.
-  *Fix:* resolve it as one transfer per stocked container in the room, in layout
-  order.
 - **Take-all facts list without counts.** "Orton takes a bandage, painkillers,
   alcohol wipes, painkillers from the supply crates." repeats a name and has no
   "and". *Fix:* build it with the counted listing the `SEARCH` fact already uses
