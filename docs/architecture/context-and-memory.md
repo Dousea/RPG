@@ -180,10 +180,25 @@ transcript*, and stops there. The concrete answer:
 - `faiss.IndexFlatIP` over L2-normalized vectors, i.e. exact cosine similarity;
 - the index is **rebuilt from scratch** after every turn, not appended to.
 
-A full rebuild each turn is O(n) in events and wasteful in principle. At the
-scale this game runs at it costs less than the LLM call by orders of magnitude,
-and it removes an entire class of index-drift bug. Revisit it when the event
-log reaches thousands of entries, not before.
+**Limitation, to fix:** the rebuild re-embeds the whole event log every turn,
+so a turn's embedding cost grows linearly with the length of the game. Early on
+it is negligible next to the LLM calls; over a long game it is not.
+
+The fix is to append rather than rebuild. `full_event_log` only grows (summaries
+leave it intact), so an event's position never changes and the index can grow
+with it:
+
+- give `SemanticMemory` a `sync(events)` that embeds only `events[size:]` and
+  adds them to the index, falling back to a full `rebuild` if the log is ever
+  shorter than what is indexed, so the index cannot drift from the log;
+- call `sync` instead of `rebuild` on both per-turn paths in
+  `GameEngine.play` (the narrated turn and the narrator-failure turn);
+- keep `rebuild` where the log is replaced wholesale: startup, reset, character
+  creation and save import.
+
+Loading a save still embeds the full log once. Persisting the embeddings with
+the save would remove that too, but it changes the save format, so it waits
+until load time is a measured problem.
 
 The model is loaded lazily on first use, so importing `adapters.memory` stays
 cheap for tooling and tests that never embed anything.
