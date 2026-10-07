@@ -48,7 +48,9 @@ Three calls:
 | **Summarizer** | 0.5 | older event-log entries | one paragraph | the words |
 
 Each call carries a reply cap, `max_tokens`: narrator 800, parser 400, summarizer
-300. The model's context is 8192 tokens (`llm.context_tokens`).
+300. The model's context is 8192 tokens (`llm.context_tokens`). Each call also sends
+`reasoning_effort: "none"`: a model that thinks would spend the cap on hidden
+reasoning and could return nothing.
 
 **The test for a lever:** could a player get a different result by rewording the
 same action? If so, the model is deciding an outcome, and the verb has to change.

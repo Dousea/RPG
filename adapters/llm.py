@@ -212,6 +212,9 @@ def _chat(
         ],
         "temperature": temperature,
         "max_tokens": max_tokens,
+        # A thinking model spends the reply cap on hidden reasoning and can return
+        # nothing; LM Studio ignores this for models that don't think.
+        "reasoning_effort": "none",
     }
     if response_format is not None:
         payload["response_format"] = response_format

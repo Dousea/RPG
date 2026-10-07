@@ -355,6 +355,25 @@ class ReplyCapTests(unittest.TestCase):
         self.assertEqual(self.sent(lambda: llm.query_summary("p"))["max_tokens"], 300)
 
 
+class ReasoningTests(unittest.TestCase):
+    """Spec 10, The rule."""
+
+    def sent(self, call) -> dict:
+        with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
+            call()
+        return post.call_args.kwargs["json"]
+
+    def test_every_game_request_turns_reasoning_off(self):
+        calls = (
+            lambda: llm.query_narrator("p"),
+            lambda: llm.query_parser("p", SCHEMA),
+            lambda: llm.query_parser("p"),
+            lambda: llm.query_summary("p"),
+        )
+        for call in calls:
+            self.assertEqual(self.sent(call)["reasoning_effort"], "none")
+
+
 class CharsPerTokenTests(unittest.TestCase):
     """Spec 10, Token budget: characters per token."""
 
