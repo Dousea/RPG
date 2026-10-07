@@ -336,6 +336,19 @@ class WeaponHitTests(unittest.TestCase):
         self.assertEqual(barrier.barricades[HOME], [960])
         self.assertEqual(barrier.barricades[BUILDING], [1000])
 
+    def test_a_hand_axe_does_40_to_a_door_at_strength_5_and_100_to_a_plank(self):
+        axe_damage = door_damage(weapon("item_hand_axe"))
+        seen = {
+            weapon_hit(door(), HOME, axe_damage, 5, random.Random(seed)).damage
+            for seed in range(200)
+        }
+        self.assertIn(40, seen)
+        planked = door()
+        planked.barricades[HOME] = [1000]
+        result = weapon_hit(planked, HOME, axe_damage, 5, random.Random(1))
+        self.assertEqual(result.damage, 100)
+        self.assertEqual(planked.barricades[HOME], [900])
+
     def test_an_open_unplanked_barrier_cannot_be_hit(self):
         barrier = door()
         barrier.open = True

@@ -15,8 +15,13 @@ def weapon(item_id: str) -> MeleeWeaponItem:
     return item
 
 
+def ground_ids(zone_id: str) -> list[str]:
+    zone = build_starting_locations()[zone_id]
+    return [e.item.id for e in zone.entities if isinstance(e, ItemEntity)]
+
+
 class WeaponCatalogueTests(unittest.TestCase):
-    """Spec 11, Weapons: the crowbar, the kitchen knife and bare hands."""
+    """Spec 11, Weapons: the catalogue and its per-weapon fields."""
 
     def test_the_crowbar(self):
         crowbar = weapon("item_crowbar")
@@ -45,6 +50,77 @@ class WeaponCatalogueTests(unittest.TestCase):
         self.assertEqual(knife.weight, 0.7)
         self.assertEqual(knife.damage, 3)
         self.assertFalse(knife.is_two_handed)
+
+    def test_the_baseball_bat(self):
+        bat = weapon("item_baseball_bat")
+        self.assertEqual(bat.categories, ("blunt",))
+        self.assertEqual((bat.min_damage, bat.max_damage), (0.8, 1.1))
+        self.assertEqual(bat.max_range, 1.25)
+        self.assertEqual((bat.critical_chance, bat.crit_dmg_multiplier), (40.0, 2.0))
+        self.assertEqual(bat.max_hit_count, 2)
+        self.assertTrue(bat.knockback_on_no_death)
+        self.assertEqual((bat.condition_max, bat.condition_lower_chance), (15, 20))
+        self.assertEqual(bat.weight, 2.0)
+        self.assertEqual((bat.endurance_mod, bat.base_speed, bat.door_damage), (1.0, 1.0, 5))
+        self.assertTrue(bat.is_two_handed)
+        self.assertFalse(bat.is_stab)
+        self.assertFalse(bat.no_maintenance_xp)
+        self.assertEqual(bat.damage, 5)
+        self.assertEqual(len(bat.slots), 2)
+        self.assertIsNone(bat.sharpness)
+        self.assertIsNone(bat.head_condition)
+        self.assertIn("repairable_with_glue", bat.tags)
+        self.assertIn("repairable_with_tape", bat.tags)
+
+    def test_the_baseball_bat_starts_in_the_neighborhood(self):
+        self.assertIn("item_baseball_bat", ground_ids("zone_neighborhood"))
+
+    def test_the_frying_pan(self):
+        pan = weapon("item_frying_pan")
+        self.assertEqual(pan.categories, ("smallblunt",))
+        self.assertEqual((pan.min_damage, pan.max_damage), (0.3, 0.5))
+        self.assertEqual(pan.max_range, 1.1)
+        self.assertEqual((pan.critical_chance, pan.crit_dmg_multiplier), (30.0, 2.0))
+        self.assertEqual(pan.max_hit_count, 1)
+        self.assertTrue(pan.knockback_on_no_death)
+        self.assertEqual((pan.condition_max, pan.condition_lower_chance), (10, 12))
+        self.assertEqual(pan.weight, 1.5)
+        self.assertEqual((pan.endurance_mod, pan.base_speed, pan.door_damage), (1.3, 1.0, 3))
+        self.assertFalse(pan.is_two_handed)
+        self.assertFalse(pan.is_stab)
+        self.assertTrue(pan.no_maintenance_xp)
+        self.assertEqual(pan.damage, 2)
+        self.assertEqual(len(pan.slots), 1)
+        self.assertIsNone(pan.sharpness)
+        self.assertIsNone(pan.head_condition)
+
+    def test_the_frying_pan_starts_in_the_apartment(self):
+        self.assertIn("item_frying_pan", ground_ids("zone_home"))
+
+    def test_the_hand_axe(self):
+        axe = weapon("item_hand_axe")
+        self.assertEqual(axe.categories, ("axe",))
+        self.assertEqual((axe.min_damage, axe.max_damage), (0.7, 1.5))
+        self.assertEqual(axe.max_range, 1.1)
+        self.assertEqual((axe.critical_chance, axe.crit_dmg_multiplier), (15.0, 5.0))
+        self.assertEqual(axe.max_hit_count, 2)
+        self.assertFalse(axe.knockback_on_no_death)
+        self.assertEqual((axe.condition_max, axe.condition_lower_chance), (10, 15))
+        self.assertEqual(axe.weight, 1.5)
+        self.assertEqual((axe.endurance_mod, axe.base_speed, axe.door_damage), (1.0, 1.0, 20))
+        self.assertFalse(axe.is_two_handed)
+        self.assertFalse(axe.is_stab)
+        self.assertFalse(axe.no_maintenance_xp)
+        self.assertEqual(axe.damage, 6)
+        self.assertEqual(len(axe.slots), 1)
+        self.assertEqual(axe.sharpness, 1.0)
+        self.assertEqual((axe.head_condition, axe.head_condition_max), (10, 10))
+        self.assertEqual(axe.head_condition_lower_chance_multiplier, 1.5)
+        for tag in ("sharpenable", "repairable_with_tape", "repairable_with_glue"):
+            self.assertIn(tag, axe.tags)
+
+    def test_the_hand_axe_is_in_the_basement_storage(self):
+        self.assertIn("item_hand_axe", ground_ids("zone_building"))
 
     def test_bare_hands(self):
         self.assertEqual((BARE_HANDS.min_damage, BARE_HANDS.max_damage), (0.2, 0.4))
@@ -132,7 +208,7 @@ class MedicalCatalogueTests(unittest.TestCase):
         names = sorted(
             entity.item.name for entity in building.entities if isinstance(entity, ItemEntity)
         )
-        kit = [name for name in names if name not in {"Hammer", "Nails", "Plank"}]
+        kit = [name for name in names if name not in {"Hammer", "Nails", "Plank", "Hand Axe"}]
         self.assertEqual(
             kit,
             ["Adhesive Bandage", "Alcohol Wipes", "Bandage", "Bandage", "Painkillers"],

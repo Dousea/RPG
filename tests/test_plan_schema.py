@@ -120,7 +120,7 @@ class ClosedFieldTests(unittest.TestCase):
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(
             enum_of(names["TAKE"], "item"),
-            ["Canned Beans", "Water Bottle", "Black jacket", "Kitchen Knife"],
+            ["Canned Beans", "Water Bottle", "Black jacket", "Kitchen Knife", "Frying Pan"],
         )
         self.assertEqual(enum_of(names["WEAR"], "item"), ["Black jacket"])
 
@@ -138,7 +138,7 @@ class ClosedFieldTests(unittest.TestCase):
             self.assertEqual(
                 enum_of(names[verb], "item"),
                 ["Apartment Key", "Bandage", "Canned Beans", "Water Bottle", "Black jacket"]
-                + ["Kitchen Knife"],
+                + ["Kitchen Knife", "Frying Pan"],
             )
         self.assertEqual(
             enum_of(names["TAKE_OFF"], "item"),
@@ -214,6 +214,7 @@ class ClosedFieldTests(unittest.TestCase):
                 "Hammer",
                 "Nails",
                 "Plank",
+                "Hand Axe",
             ],
         )
 

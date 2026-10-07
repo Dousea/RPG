@@ -132,6 +132,11 @@ class MeleeWeaponItem(HoldableItem):
     door_damage: int = 1
     no_criticals: bool = False
     no_maintenance_xp: bool = False
+    # Stored, unused until the weapon upkeep spec.
+    sharpness: float | None = None
+    head_condition: int | None = None
+    head_condition_max: int | None = None
+    head_condition_lower_chance_multiplier: float = 1.0
 
     def __post_init__(self):
         super().__post_init__()

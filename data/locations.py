@@ -61,6 +61,7 @@ BASEMENT_STORAGE_CONTENTS = [  # spec 13: stands in for the basement storage loo
     NAILS_ITEM_ID,
     PLANK_ITEM_ID,
     PLANK_ITEM_ID,
+    "item_hand_axe",  # spec 11
 ]
 CORNER_STORE_CONTENTS = [  # spec 03: stands in for the store's loot rolls
     "item_canned_beans",
@@ -238,7 +239,9 @@ def build_starting_locations() -> dict[str, Location]:
             "item_water_bottle",
             "item_black_jacket",
             "item_kitchen_knife",
+            "item_frying_pan",  # spec 11
         ],
+        "zone_neighborhood": ["item_baseball_bat"],  # spec 11
         "zone_building": [*FIRST_AID_KIT_CONTENTS, *BASEMENT_STORAGE_CONTENTS],
         "zone_street": ["item_crowbar", *ALLEY_CONTENTS],
         "zone_bodega": CORNER_STORE_CONTENTS,

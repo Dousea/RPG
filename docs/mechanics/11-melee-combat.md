@@ -24,7 +24,7 @@ Two rules shape everything below:
 | `ZombieEntity.hits_taken`, `down_until`, `staggered`; `PlayerEntity.zombie_kills` | `modules/entity/zombie.py`, `modules/entity/player.py` |
 | The verbs `SHOVE`, `EQUIP`, `UNEQUIP` | `modules/action/types.py`, `modules/action/parser.py`, `modules/action/words.py` |
 | Every number below, bare hands, the fact wording, the condition words | `data/melee.py` |
-| The crowbar, the kitchen knife | `data/items.py`, `data/locations.py` |
+| The crowbar, the kitchen knife, the bat, the pan, the axe | `data/items.py`, `data/locations.py` |
 | The 1-minute costs | `data/time_costs.py` |
 | Crits, the damage chain, knockdown and stagger, the knife jaw stab, endurance, wear, kills, XP, hit noise | `managers/melee.py` |
 | Swing as step 0 of the minute loop, down and staggered zombies, the threat words | `managers/zombies.py` |
@@ -68,6 +68,16 @@ A two-handed weapon fills both hands.
 | --- | --- | --- |
 | Crowbar | `zone_street` | blunt, 0.6 to 1.15, reach 1.25, crit 20% x 2.5, hits 3, condition 15, wear 1 in 70, 2 kg, two-handed, NPC damage 5 |
 | Kitchen knife | `zone_home` | small blade, stab, 0.3 to 0.7, reach 0.9, crit 25% x 4, hits 1, condition 10, wear 1 in 2, 0.7 kg, one-handed, NPC damage 3 |
+| Baseball bat | `zone_neighborhood` | blunt, 0.8 to 1.1, reach 1.25, crit 40% x 2, hits 2, condition 15, wear 1 in 20, 2 kg, two-handed, knockback on no kill, door damage 5, NPC damage 5 |
+| Frying pan | `zone_home` | small blunt, 0.3 to 0.5, reach 1.1, crit 30% x 2, hits 1, condition 10, wear 1 in 12, 1.5 kg, one-handed, endurance x1.3, no Maintenance XP, door damage 3, NPC damage 2 |
+| Hand axe | `zone_building` (basement storage) | axe, 0.7 to 1.5, reach 1.1, crit 15% x 5, hits 2, condition 10, wear 1 in 15, 1.5 kg, one-handed, no Strength XP on a hit that doesn't kill, door damage 20, NPC damage 6 |
+
+The bat swings wider and crits more than the crowbar but fills both hands. The
+pan is a light club that tires the player faster. The axe hits hard, crits for
+x5 and opens doors fast. The axe also stores a sharpness of 1.0, a head
+condition of 10 (max 10), a head multiplier of 1.5 and its repair and sharpen
+tags; nothing reads them yet, so sharpness counts as 1 and no head roll happens.
+Placement stands in for loot until carrying and containers land.
 
 ## Holding a weapon
 
@@ -343,7 +353,7 @@ A planned `ATTACK` on a zombie that is already dead is refused and costs 0.
 `ATTACK` on an NPC keeps the older resolution: the trait modifier events, a +/-10%
 jitter, and the held weapon's `damage` (2 bare-handed) as HP,
 `final = max(1, int(damage x multiplier x jitter))`. An unmodified crowbar hit
-takes 4 or 5 HP, a knife 2 or 3, bare hands 1 or 2. `SHOVE` on an NPC is refused.
+takes 4 or 5 HP, a knife 2 or 3, a bat 4 or 5, a pan 1 or 2, an axe 5 or 6, bare hands 1 or 2. `SHOVE` on an NPC is refused.
 
 ## Hooks into earlier specs
 

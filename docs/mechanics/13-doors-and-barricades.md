@@ -344,8 +344,8 @@ the walk to it. It hits the first of: the barricade on the player's side, the
 barricade on the far side, the door or window. An open or broken barrier with no
 planks can't be hit ("There's nothing to hit.").
 
-`door_damage` is the weapon's door damage: crowbar 8, hammer 9, plank 5, kitchen
-knife 1, bare hands 0.
+`door_damage` is the weapon's door damage: crowbar 8, hammer 9, hand axe 20, baseball bat 5, frying pan 3, plank 5,
+kitchen knife 1, bare hands 0.
 
 | Target | Damage per hit |
 | --- | --- |
@@ -361,6 +361,9 @@ knife 1, bare hands 0.
 | Crowbar (8) | 16, or 64 on the 1 in 10: about 24 swings | 40: 25 swings |
 | Hammer (9) | 18, or 72: about 22 swings | 45: 23 swings |
 | Kitchen knife (1) | 2, or 8: about 190 swings | 5: 200 swings |
+| Baseball bat (5) | 10, or 40: about 38 swings | 25: 40 swings |
+| Frying pan (3) | 6, or 24: about 64 swings | 15: 67 swings |
+| Hand axe (20) | 40, or 160: about 10 swings | 100: 10 swings |
 | Bare hands (0) | nothing, but the noise carries | nothing |
 
 - **Endurance:** the swing's usual cost, plus, for a hit on a door itself, by

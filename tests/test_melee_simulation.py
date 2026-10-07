@@ -227,6 +227,15 @@ class FightingNpcTests(unittest.TestCase):
     def test_a_knife_takes_two_or_three(self):
         self.assertEqual({self.damage("item_kitchen_knife", s) for s in range(60)}, {2, 3})
 
+    def test_a_bat_takes_four_or_five(self):
+        self.assertEqual({self.damage("item_baseball_bat", s) for s in range(60)}, {4, 5})
+
+    def test_a_pan_takes_one_or_two(self):
+        self.assertEqual({self.damage("item_frying_pan", s) for s in range(60)}, {1, 2})
+
+    def test_an_axe_takes_five_or_six(self):
+        self.assertEqual({self.damage("item_hand_axe", s) for s in range(60)}, {5, 6})
+
     def test_bare_hands_take_one_or_two(self):
         self.assertEqual({self.damage(None, s) for s in range(60)}, {1, 2})
 

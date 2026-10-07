@@ -81,6 +81,12 @@ CONDITION_WORD_BADLY_WORN = "badly worn"  # spec 11
 CONDITION_WORD_BROKEN = "broken"  # spec 11
 
 NPC_BARE_DAMAGE = 2  # spec 11: HP
+NPC_BAT_DAMAGE = 5  # spec 11: HP
+NPC_PAN_DAMAGE = 2  # spec 11: HP
+NPC_AXE_DAMAGE = 6  # spec 11: HP
+TAG_REPAIRABLE_WITH_GLUE = "repairable_with_glue"  # spec 11
+TAG_REPAIRABLE_WITH_TAPE = "repairable_with_tape"  # spec 11
+TAG_SHARPENABLE = "sharpenable"  # spec 11
 
 SHARPNESS = 1.0  # spec 11: stays 1 until the weapon upkeep spec
 SHARPNESS_MULT = 1.0  # spec 11: stays 1 until the weapon upkeep spec
