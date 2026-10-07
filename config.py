@@ -12,7 +12,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yml")
+# RPG_CONFIG lets the test suite run on the defaults alone, whatever this
+# machine's config.yml says.
+CONFIG_PATH = os.environ.get("RPG_CONFIG") or os.path.join(os.path.dirname(__file__), "config.yml")
 
 _DEFAULTS: dict[str, Any] = {
     "llm": {

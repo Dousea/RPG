@@ -9,8 +9,13 @@ out. The one test that exercises real FAISS is skipped unless you opt in with
 RPG_TEST_EMBEDDINGS=1, because it downloads a sentence-transformer model.
 """
 
+import os
 import sys
 from pathlib import Path
+
+# config.yml may hold machine-specific settings (a LAN server, a bigger reply
+# cap, the factcheck off); the tests assert the shipped defaults instead.
+os.environ["RPG_CONFIG"] = os.devnull
 
 # Allow `python -m unittest discover -s tests` from the project root without
 # requiring the package to be installed.
