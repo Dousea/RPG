@@ -738,9 +738,10 @@ class SimulationCore:
         manager = self.manager
         manager.current_location.entities.remove(entity)
         manager.player.inventory.append(entity)
-        return self._with_quest_note(
-            f"Take {entity.item.name}: succeeded.", f"take:{entity.item.id}"
-        )
+        fact = f"Take {entity.item.name}: succeeded."
+        if isinstance(entity.item, ClothingItem):
+            fact += f" {self._name} carries it; {self._subject} is not wearing it."
+        return self._with_quest_note(fact, f"take:{entity.item.id}")
 
     def _resolve_drop(self, accepted: Accepted) -> str:
         entity = accepted.expect(HeldItem).entity

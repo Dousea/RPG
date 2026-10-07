@@ -292,6 +292,27 @@ class WearResolutionTests(unittest.TestCase):
         self.assertLessEqual(entity.wetness, 40.0)
 
 
+class TakeClothingFactTests(unittest.TestCase):
+    """Spec 05, Actions: taking a garment carries it; only WEAR puts it on."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.inventory.clear()
+
+    def _take(self, item_id: str) -> list[str]:
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS[item_id]))
+        return SimulationCore(self.gm).resolve([TakeAction(item_name=ITEMS[item_id].name)])
+
+    def test_the_fact_says_a_taken_garment_is_carried_not_worn(self):
+        facts = self._take("item_black_jacket")
+        self.assertIn(
+            "Take Black jacket: succeeded. Orton carries it; he is not wearing it.", facts
+        )
+
+    def test_other_items_keep_the_plain_fact(self):
+        self.assertIn("Take Water Bottle: succeeded.", self._take("item_water_bottle"))
+
+
 class BoundaryTickWiringTests(unittest.TestCase):
     """Spec 08, Regularity and stiffness over time: the clock drives the ticks."""
 

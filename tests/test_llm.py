@@ -197,6 +197,12 @@ class PromptRuleTests(unittest.TestCase):
     def test_nothing_appears_in_anyones_hands_unless_the_blocks_say_so(self):
         self.assertIn("in anyone's hands", NARRATOR_SYSTEM_PROMPT)
 
+    def test_only_listed_loose_items_can_be_found(self):
+        self.assertIn(
+            "only loose things to find or take are in [ITEMS IN CURRENT LOCATION]",
+            NARRATOR_SYSTEM_PROMPT,
+        )
+
     def test_the_narrator_is_not_asked_for_an_event_line(self):
         self.assertNotIn("EVENT:", NARRATOR_SYSTEM_PROMPT)
         self.assertNotIn("After EVENT", NARRATOR_SYSTEM_PROMPT)

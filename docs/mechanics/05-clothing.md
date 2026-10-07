@@ -94,6 +94,8 @@ Coverage by clothing kind (the ones the catalog uses):
   - Refused if the item is not worn.
   - Refused with "Inventory is full." when the inventory holds its maximum
     number of items.
+- `TAKE` of a garment only carries it. Its fact says so ("Take Black jacket: succeeded.
+  Orton carries it; he is not wearing it."), so the narrator doesn't dress the character.
 - A refused action costs no time.
 
 ## Items

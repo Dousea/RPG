@@ -728,6 +728,36 @@ def threats_block(prompt: str) -> str:
     return prompt.split("[THREATS]")[1].split("\n[")[0]
 
 
+def in_view_block(prompt: str) -> str:
+    return prompt.split("[IN VIEW]")[1].split("\n[")[0]
+
+
+class InViewTests(unittest.TestCase):
+    """Spec 10, What the narrator sees: [IN VIEW] repeats who and what the story must show."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.gm.player.current_location_id = "zone_building"
+        self.gm.world.outbreak_started_at = 0
+        clear_sky(self.gm)
+
+    def prompt(self) -> str:
+        return ContextBuilder(self.gm).build_narrator_prompt("look", ["a fact"])
+
+    def test_it_lists_each_perceived_zombie_then_each_person_present(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING)
+        lines = in_view_block(self.prompt()).strip().splitlines()[1:]
+        self.assertEqual(lines, [" - a zombie, close, coming at you", " - Emma", " - Marcus"])
+
+    def test_it_comes_after_the_outcomes(self):
+        prompt = self.prompt()
+        self.assertLess(prompt.index("[OUTCOMES]"), prompt.index("[IN VIEW]"))
+
+    def test_it_is_left_out_when_no_one_and_nothing_is_in_view(self):
+        self.gm.player.current_location_id = "zone_home"
+        self.assertNotIn("[IN VIEW]", self.prompt())
+
+
 class ThreatsContextTests(unittest.TestCase):
     """Spec 09, What the narrator and the player see: the [THREATS] block."""
 
@@ -999,11 +1029,12 @@ class NarratorBlockOrderTests(unittest.TestCase):
             "[CURRENT LOCATION]",
             "[ITEMS IN CURRENT LOCATION]",
             "[NEARBY LOCATIONS]",
-            "[NPCS PRESENT]",
-            "[THREATS]",
             "[CONDITION]",
             "[QUESTS]",
+            "[NPCS PRESENT]",
+            "[THREATS]",
             "[OUTCOMES]",
+            "[IN VIEW]",
             "[CONTINUITY]",
             "[SCENE]",
         ]

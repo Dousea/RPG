@@ -257,6 +257,21 @@ class ContextBuilder:
                 lines.append(f" - a zombie, {view.distance_word}, {view.state_word}")
         return "\n".join(lines) or "None"
 
+    def _in_view_section(self) -> str:
+        """[IN VIEW] after the outcomes: every perceived zombie, then everyone present.
+
+        Placed last so a small narrator that skims the scene blocks still shows them.
+        """
+        manager = self.manager
+        threats = self._threats_section().splitlines() if threat_views(manager) else []
+        people = [
+            f" - {npc.name}" for npc in manager.npcs_in_location(manager.player.current_location_id)
+        ]
+        if not threats and not people:
+            return ""
+        lines = "\n".join(threats + people)
+        return f"[IN VIEW]\n(Who and what the story must show this turn, however briefly.)\n{lines}\n\n"
+
     def _parser_threats_section(self) -> str:
         """Seen zombies by id and distance only, so the parser can aim ATTACK at one."""
         lines = [
@@ -702,16 +717,6 @@ door rather than refusing the move.)
 
 {self._nearby_locations_section().rstrip()}
 
-[NPCS PRESENT]
-
-{self._npcs_present_section().rstrip()}
-
-[THREATS]
-(The zombies {self._name} can see or hear, and what each is doing. Describe only
-these; never invent a zombie that is not listed, and never give a zombie a
-number.)
-{self._threats_section()}
-
 [CONDITION]
 ({self._name}'s body and mood right now, as levels out of 4. Describe them; do not
 give them numbers.)
@@ -722,6 +727,16 @@ give them numbers.)
 
 {self._quests_section().rstrip()}
 
+[NPCS PRESENT]
+
+{self._npcs_present_section().rstrip()}
+
+[THREATS]
+(The zombies {self._name} can see or hear, and what each is doing. Describe only
+these; never invent a zombie that is not listed, and never give a zombie a
+number.)
+{self._threats_section()}
+
 [OUTCOMES]
 (What actually happened this turn, already decided by the engine. Narrate
 these -- do not contradict them, and do not invent HP/inventory/combat
@@ -730,7 +745,7 @@ the player phrased their input.)
 
 {self._outcomes_section(outcome_facts).rstrip()}
 
-[CONTINUITY]
+{self._in_view_section()}[CONTINUITY]
 (This should normally be empty: outcomes are validated before you narrate
 them, not after. Anything here is a defensive fallback for a state change the
 engine could not decide at all -- treat it the same as [OUTCOMES].)

@@ -352,6 +352,9 @@ neighbor") stay as they are. Only story beats change them.
 ### What the narrator sees
 
 In this order. Memory comes first, so current state and this turn's outcomes win.
+Who is present and what threatens the character sit just before the outcomes, and
+`[IN VIEW]` repeats them after: a small narrator follows what it reads last, and
+without this it left out an approaching zombie or the people in the room.
 
 | Block | Contents |
 | --- | --- |
@@ -361,11 +364,12 @@ In this order. Memory comes first, so current state and this turn's outcomes win
 | `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
 | `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, discovered flags |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
-| `[NPCS PRESENT]` | each NPC with disposition and trust bands, status, personality, visible intent, and "Following Orton" |
-| `[THREATS]` | perceived zombies |
 | `[CONDITION]` | status effects by name and level, asleep, sneaking, conditions an item put on the character |
 | `[QUESTS]` | active quests |
+| `[NPCS PRESENT]` | each NPC with disposition and trust bands, status, personality, visible intent, and "Following Orton" |
+| `[THREATS]` | perceived zombies |
 | `[OUTCOMES]` | this turn's facts, in order |
+| `[IN VIEW]` | every perceived zombie, then every person present, as the things the story must show; omitted when there are none |
 | `[CONTINUITY]` | the defensive fallback |
 | `[SCENE]` | what the player typed |
 
@@ -388,7 +392,9 @@ The system prompt keeps its style section and states these rules:
 - Every body in the prose is in `[CORPSES]` and is dead until a fact says it rises.
 - Every person present is in `[NPCS PRESENT]`. Others can be remembered or mentioned,
   not met.
-- The character holds only what the inventory, equipment and outfit lines say.
+- The character holds only what the inventory, equipment and outfit lines say. The
+  only loose things to find are in `[ITEMS IN CURRENT LOCATION]`. Taking a garment
+  carries it, and its fact says it isn't worn; only `WEAR` puts it on.
 - NPC reactions follow the reaction fact and the bands.
 - An NPC states world facts only from the blocks. A topic's fact is said only when
   `[OUTCOMES]` says it was told.
