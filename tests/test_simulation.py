@@ -6,11 +6,11 @@ import unittest
 
 from adapters.save import codec
 from data.items import ITEMS
+from managers.character.skills import SkillEngine
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from managers.skills import SkillEngine
 from managers.validator import ActionValidator, Rejected
-from managers.zombies import (
+from managers.zombies.population import (
     MinuteReport,
     PlayerMinute,
     ZombieLoop,
@@ -37,7 +37,8 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
-from modules.body import BodyLocation, BodyPart
+from modules.body.parts import BodyLocation, BodyPart
+from modules.body.stats import CharacterStat
 from modules.character.equipment import CharacterHoldableSlot
 from modules.character.skills import SkillState
 from modules.entity.barrier import BarrierEntity, BarrierKind
@@ -45,10 +46,9 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
-from modules.pace import Pace
-from modules.stats import CharacterStat
-from modules.story import StartOutbreak
-from modules.weather import WeatherSample
+from modules.story.beats import StartOutbreak
+from modules.world.pace import Pace
+from modules.world.weather import WeatherSample
 from tests.support import make_dying, set_health, simulate
 
 
@@ -330,7 +330,7 @@ class BoundaryTickWiringTests(unittest.TestCase):
         self.assertAlmostEqual(gm.player.exercise.regularity["squats"], 50 - 0.002)
 
     def test_a_boundary_drains_one_unit_of_stiffness_into_each_part(self):
-        from data.exercises import REGION_PARTS
+        from data.character.exercises import REGION_PARTS
 
         gm = GameManager()
         gm.player.exercise.region_timers["arms"] = 0
@@ -1261,7 +1261,7 @@ class LimpWiringTests(unittest.TestCase):
         self.assertAlmostEqual(free - limping, 8 * (1 - 0.25))
 
     def test_a_limp_lengthens_the_walk_up_to_a_zombie(self):
-        from managers.zombies import approach_minutes
+        from managers.zombies.population import approach_minutes
 
         self.assertEqual(approach_minutes(10.0, 1.0), 3)
         self.assertEqual(approach_minutes(10.0, 0.25), 9)
@@ -1366,11 +1366,11 @@ class WoundLandsInThePartTests(unittest.TestCase):
         zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING, facing_cos=1.0)
         zombie.time_since_seen = 0
         with (
-            patch("managers.zombie_attack.player_defence", return_value=-100),
-            patch("managers.zombie_attack.roll_body_part", return_value=BodyPart.NECK),
-            patch("managers.zombie_attack.roll_wound_kind", return_value="bite"),
-            patch("managers.zombie_attack.roll_wound_damage", return_value=5.0),
-            patch("managers.zombie_attack.clothing_defence", return_value=0),
+            patch("managers.zombies.attack.player_defence", return_value=-100),
+            patch("managers.zombies.attack.roll_body_part", return_value=BodyPart.NECK),
+            patch("managers.zombies.attack.roll_wound_kind", return_value="bite"),
+            patch("managers.zombies.attack.roll_wound_damage", return_value=5.0),
+            patch("managers.zombies.attack.clothing_defence", return_value=0),
         ):
             simulate(gm, WaitAction(duration=Duration(minutes=1)), rng=random.Random(1))
         neck = gm.player.body[BodyPart.NECK]
@@ -1591,7 +1591,7 @@ class DoorSimulationTests(unittest.TestCase):
         gm = shut_game("zone_home")
         for _ in range(30):
             add_zombie(gm, "zone_street", gap=10)
-        from managers.zombies import redistribute
+        from managers.zombies.population import redistribute
 
         redistribute(gm.world, 720, "zone_home", random.Random(2))
         self.assertEqual([z for z in gm.world.zombies.values() if z.zone_id == "zone_building"], [])
@@ -1608,7 +1608,7 @@ class BarrierStoryBeatTests(unittest.TestCase):
     """Spec 13, Edge cases: a story beat does not move an NPC across planks."""
 
     def beat_move(self, gm: GameManager, zone_id: str) -> str:
-        from modules.story import MoveNpc
+        from modules.story.beats import MoveNpc
 
         npc = next(iter(gm.npcs.values()))
         SimulationCore(gm).apply_story_effect(MoveNpc(npc_id=npc.npc_id, zone_id=zone_id))

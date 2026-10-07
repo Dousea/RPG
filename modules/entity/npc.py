@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 
-from ..character.faction import CharacterFaction
-from ..character.state import CharacterCondition
-from . import BaseEntity
-from .item import ItemEntity
+from modules.character.faction import CharacterFaction
+from modules.character.state import CharacterCondition
+from modules.entity import BaseEntity
+from modules.entity.item import ItemEntity
 
 
 @dataclass

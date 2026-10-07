@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 
-from ..body import BodyPart
-from ..item import BaseItem, MedicalItem, MeleeWeaponItem, StackItem
-from . import BaseEntity
+from modules.body.parts import BodyPart
+from modules.entity import BaseEntity
+from modules.item import BaseItem, MedicalItem, MeleeWeaponItem, StackItem
 
 
 @dataclass

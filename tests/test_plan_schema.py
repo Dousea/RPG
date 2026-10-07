@@ -16,7 +16,7 @@ from modules.action.parser import (
 )
 from modules.action.schema import SceneChoices, build_plan_schema, parse_plan
 from modules.action.types import SearchAction, TakeAction
-from modules.body import BodyPart
+from modules.body.parts import BodyPart
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState

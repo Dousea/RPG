@@ -1,6 +1,6 @@
 """Carry weight, capacity, Heavy Load and the cost of moving things (spec 25)."""
 
-from modules.stats import StatusEffect
+from modules.body.stats import StatusEffect
 from modules.units import per_hour_from_frame
 
 BASE_MAX_WEIGHT = 8  # spec 25: kg

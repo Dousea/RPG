@@ -11,15 +11,15 @@ from adapters.save import files
 from managers.carry import carried_weight
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from managers.story_check import StateQuestion
+from managers.story.check import StateQuestion
 from modules.action.types import AnyAction
-from modules.body import PART_WEIGHT, BodyPart
+from modules.body.parts import PART_WEIGHT, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
+from modules.events.modifier import AffinityModifier
 from modules.item import HoldableItem
-from modules.modifier import AffinityModifier
 
 
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:

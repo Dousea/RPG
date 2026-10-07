@@ -5,7 +5,7 @@ import unittest
 from adapters import engine as engine_module
 from adapters.llm import DeltaCallback, LLMError
 from adapters.save import codec
-from data.memory import LAST_SCENE_MAX_CHARS
+from data.story.memory import LAST_SCENE_MAX_CHARS
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from tests.test_engine import EngineTestCase

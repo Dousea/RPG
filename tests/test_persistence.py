@@ -17,15 +17,15 @@ from modules.action.types import (
     TakeAction,
     WaitAction,
 )
-from modules.body import BodyLocation, BodyPart
+from modules.body.parts import BodyLocation, BodyPart
+from modules.body.stats import CharacterStat
 from modules.character.equipment import CharacterArmorSlot
 from modules.character.state import CharacterCondition
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
-from modules.quest import QuestState, QuestStatus
-from modules.room import ContainerEntity, RoomEntity
-from modules.stats import CharacterStat
+from modules.story.quest import QuestState, QuestStatus
+from modules.world.room import ContainerEntity, RoomEntity
 from tests.support import (
     IsolatedSaveTestCase,
     adjust_regard,
@@ -141,7 +141,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(restored.exercise, player.exercise)
 
     def test_a_created_character_round_trips(self):
-        from managers import creation
+        from managers.character import creation
 
         build = creation.randomize(random.Random(3))
         gm = GameManager(player=creation.new_player(build))
@@ -566,7 +566,7 @@ class WeatherSaveTests(IsolatedSaveTestCase):
         return gm, restored
 
     def test_a_non_default_front_round_trips(self):
-        from modules.weather import AirFront
+        from modules.world.weather import AirFront
 
         gm = self._stormy_game()
         gm.climate.front = AirFront(positive=True, strength=0.7, start_hour=5)
@@ -591,7 +591,7 @@ class WeatherSaveTests(IsolatedSaveTestCase):
             lambda w: w["period"]["stages"][0].update(name="hailstorm")
         )
         self.assertIsNone(loaded.climate.period)
-        from managers.climate import describe_weather
+        from managers.world.climate import describe_weather
 
         minutes = loaded.narrative.minutes
         describe_weather(loaded.climate.sample(minutes), True)

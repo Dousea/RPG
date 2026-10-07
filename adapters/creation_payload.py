@@ -2,20 +2,20 @@
 
 from typing import Any
 
-from data import creation as k
-from data.clothing_selection import (
+from data.character import creation as k
+from data.character.names import BEARD_STYLES, HAIR_COLOURS, HAIR_STYLES, SKIN_TONE_WORDS
+from data.character.occupations import OCCUPATIONS
+from data.character.presets import PRESETS
+from data.character.traits import TRAITS
+from data.clothing.selection import (
     DEFAULT_CLOTHING,
     OCCUPATION_CLOTHING,
     TRAIT_CLOTHING,
     GenderedClothing,
 )
 from data.items import ITEMS
-from data.names import BEARD_STYLES, HAIR_COLOURS, HAIR_STYLES, SKIN_TONE_WORDS
-from data.occupations import OCCUPATIONS
-from data.presets import PRESETS
-from data.traits import TRAITS
-from data.zombie_clothing import ZOMBIE_CLOTHING
-from managers import creation
+from data.zombies.clothing import ZOMBIE_CLOTHING
+from managers.character import creation
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.item import ClothingItem

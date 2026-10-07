@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass, field, replace
 
-from ..body import (
+from modules.body.parts import (
     LAYER_ORDER,
     BodyLocation,
     BodyPart,
@@ -9,20 +9,20 @@ from ..body import (
     new_body,
     overall_health,
 )
-from ..character.appearance import Appearance
-from ..character.equipment import (
+from modules.body.stats import Stats
+from modules.body.thermal import ThermalState
+from modules.character.appearance import Appearance
+from modules.character.equipment import (
     AnyCharacterEquipmentSlot,
     CharacterArmorSlot,
     CharacterHoldableSlot,
 )
-from ..character.exercise import ExerciseState
-from ..character.skills import SkillState
-from ..character.state import CharacterCondition
-from ..item import ClothingItem
-from ..stats import Stats
-from ..thermal import ThermalState
-from . import BaseEntity
-from .item import ItemEntity
+from modules.character.exercise import ExerciseState
+from modules.character.skills import SkillState
+from modules.character.state import CharacterCondition
+from modules.entity import BaseEntity
+from modules.entity.item import ItemEntity
+from modules.item import ClothingItem
 
 
 @dataclass

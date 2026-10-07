@@ -5,7 +5,7 @@ from unittest import mock
 
 from adapters import llm
 from data.items import ITEMS
-from managers import creation
+from managers.character import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -18,7 +18,8 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
-from modules.body import BodyLocation, BodyPart
+from modules.body.parts import BodyLocation, BodyPart
+from modules.body.stats import CharacterStat
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
@@ -28,9 +29,8 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
-from modules.quest import QuestState
-from modules.stats import CharacterStat
-from modules.weather import WeatherSample
+from modules.story.quest import QuestState
+from modules.world.weather import WeatherSample
 from tests.support import adjust_regard, npc_of, resolve_actions, set_health
 
 
@@ -402,7 +402,7 @@ class WeatherWordBandTests(unittest.TestCase):
     """Spec 04, Word bands."""
 
     def test_wind_bands(self):
-        from managers.climate import wind_word
+        from managers.world.climate import wind_word
 
         self.assertEqual(wind_word(0.05), "still")
         self.assertEqual(wind_word(0.06), "mild")
@@ -413,7 +413,7 @@ class WeatherWordBandTests(unittest.TestCase):
         self.assertEqual(wind_word(0.76), "storm-strength")
 
     def test_cloud_bands(self):
-        from managers.climate import cloud_word
+        from managers.world.climate import cloud_word
 
         self.assertEqual(cloud_word(0.0), "clear skies")
         self.assertEqual(cloud_word(0.4), "clear skies")
@@ -422,7 +422,7 @@ class WeatherWordBandTests(unittest.TestCase):
         self.assertEqual(cloud_word(0.71), "overcast")
 
     def test_fog_bands(self):
-        from managers.climate import fog_word
+        from managers.world.climate import fog_word
 
         self.assertIsNone(fog_word(0.2))
         self.assertEqual(fog_word(0.21), "light fog")
@@ -432,7 +432,7 @@ class WeatherWordBandTests(unittest.TestCase):
         self.assertEqual(fog_word(1.0), "very thick fog")
 
     def test_temperature_bands(self):
-        from managers.climate import temperature_word
+        from managers.world.climate import temperature_word
 
         for value, word in [
             (-10.1, "freezing"),
@@ -479,7 +479,7 @@ class WeatherBlockTests(unittest.TestCase):
         self.assertIn("no", block)
 
     def test_stage_phrases_turn_to_snow_when_it_snows(self):
-        from managers.climate import precipitation_phrase
+        from managers.world.climate import precipitation_phrase
 
         self.assertEqual(precipitation_phrase("heavy_precipitation", False), "heavy rain")
         self.assertEqual(precipitation_phrase("heavy_precipitation", True), "heavy snow")
@@ -500,7 +500,7 @@ class WeatherFactTests(unittest.TestCase):
     """Spec 04, What the narrator and the player see: outcomes."""
 
     def _sample(self, **changes):
-        from modules.weather import WeatherSample
+        from modules.world.weather import WeatherSample
 
         base = {
             "air_temperature": 10.0,
@@ -516,7 +516,7 @@ class WeatherFactTests(unittest.TestCase):
         return WeatherSample(**{**base, **changes})
 
     def test_changes_become_facts(self):
-        from managers.climate import weather_change_facts
+        from managers.world.climate import weather_change_facts
 
         dry = self._sample()
         rain = self._sample(precipitation_intensity=0.5, stage="showers")
@@ -540,13 +540,13 @@ class WeatherFactTests(unittest.TestCase):
         self.assertIn("It starts to rain.", facts)
 
     def test_thunder_is_reported_once(self):
-        from managers.climate import weather_change_facts
+        from managers.world.climate import weather_change_facts
 
         thunder = self._sample(precipitation_intensity=1.0, thunder=True)
         self.assertEqual(weather_change_facts(thunder, thunder), [])
 
     def test_fog_rolling_in_is_a_fact(self):
-        from managers.climate import weather_change_facts
+        from managers.world.climate import weather_change_facts
 
         self.assertEqual(
             weather_change_facts(self._sample(), self._sample(fog_intensity=0.5)),
@@ -554,14 +554,14 @@ class WeatherFactTests(unittest.TestCase):
         )
 
     def test_the_block_lists_fog_only_above_point_two(self):
-        from managers.climate import describe_weather
+        from managers.world.climate import describe_weather
 
         self.assertIn("Fog: light fog", describe_weather(self._sample(fog_intensity=0.6), True))
         self.assertNotIn("Fog", describe_weather(self._sample(fog_intensity=0.2), True))
 
     def test_every_stage_has_a_rain_and_a_snow_phrase(self):
-        from data.climate import STAGE_PHRASES
-        from managers.climate import precipitation_phrase
+        from data.world.climate import STAGE_PHRASES
+        from managers.world.climate import precipitation_phrase
 
         for stage, (rain, snow) in STAGE_PHRASES.items():
             self.assertEqual(precipitation_phrase(stage, False), rain)

@@ -6,15 +6,15 @@ exactly the entities the legality check saw.
 
 from dataclasses import dataclass
 
-from .body import BodyPart
-from .character.exercise import ExerciseDefinition
-from .entity.barrier import BarrierEntity
-from .entity.corpse import CorpseEntity
-from .entity.item import ItemEntity
-from .entity.npc import NpcEntity
-from .location import Location
-from .pace import Pace
-from .room import ContainerEntity, RoomEntity
+from modules.body.parts import BodyPart
+from modules.character.exercise import ExerciseDefinition
+from modules.entity.barrier import BarrierEntity
+from modules.entity.corpse import CorpseEntity
+from modules.entity.item import ItemEntity
+from modules.entity.npc import NpcEntity
+from modules.world.location import Location
+from modules.world.pace import Pace
+from modules.world.room import ContainerEntity, RoomEntity
 
 
 @dataclass(frozen=True)

@@ -7,8 +7,8 @@ already decided.
 
 from collections.abc import Callable
 
-from data.barriers import BARRICADE_MIN, UNBARRICADE_MIN
 from data.carry import CARRY_CORPSE_MIN
+from data.world.barriers import BARRICADE_MIN, UNBARRICADE_MIN
 from modules.action.parser import TALK_TURN_MINUTES
 from modules.action.types import (
     AddGoalAction,
@@ -46,7 +46,6 @@ from modules.action.types import (
 )
 from modules.entity.item import ItemEntity
 from modules.item import ConsumableItem
-from modules.pace import Pace
 from modules.resolution import (
     ExercisePlan,
     HeldItem,
@@ -62,6 +61,7 @@ from modules.resolution import (
     Transfer,
 )
 from modules.units import minutes_from_timed_action_frames
+from modules.world.pace import Pace
 
 SWING_MIN = 1  # spec 11
 SEARCH_MIN = 1  # spec 14

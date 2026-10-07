@@ -7,7 +7,7 @@ from unittest.mock import patch
 from data.items import ITEMS
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from managers.zombies import MinuteReport
+from managers.zombies.population import MinuteReport
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -21,8 +21,8 @@ from modules.action.types import (
     UseItemAction,
     WaitAction,
 )
+from modules.body.stats import CharacterStat
 from modules.entity.item import ItemEntity
-from modules.stats import CharacterStat
 from tests.support import make_dying, simulate
 
 

@@ -23,7 +23,8 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
-from modules.body import BodyLocation
+from modules.body.parts import BodyLocation
+from modules.body.stats import CharacterStat
 from modules.character.equipment import CharacterArmorSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
@@ -42,7 +43,6 @@ from modules.resolution import (
     TimeSpan,
     Transfer,
 )
-from modules.stats import CharacterStat
 from tests.support import load_pack
 
 

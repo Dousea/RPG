@@ -12,7 +12,7 @@ import math
 import requests
 
 import config
-from managers.story_check import StateQuestion
+from managers.story.check import StateQuestion
 
 logger = logging.getLogger(__name__)
 

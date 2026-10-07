@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from adapters import llm  # noqa: E402
 from managers.context import ContextBuilder  # noqa: E402
 from managers.game import GameManager  # noqa: E402
-from managers.locations import connection_target  # noqa: E402
+from managers.world.locations import connection_target  # noqa: E402
 from modules.action.parser import parse_action_plan  # noqa: E402
 from modules.action.types import AnyAction, MoveAction  # noqa: E402
 

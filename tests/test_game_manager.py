@@ -6,7 +6,7 @@ tests/test_validator.py and tests/test_simulation.py.
 
 import unittest
 
-from data.presets import ORTON
+from data.character.presets import ORTON
 from managers.context import ContextBuilder
 from managers.game import (
     MAX_RECENT_EVENTS,

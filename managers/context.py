@@ -16,9 +16,8 @@ import re
 from collections.abc import Iterable
 from datetime import date
 
-from data import containers as container_k
-from data.clock import TIMES_OF_DAY
-from data.exercises import (
+from data.body.status_effects import STATUS_EFFECT_MAX_LEVEL
+from data.character.exercises import (
     BARBELL_ID,
     DUMBBELL_ID,
     EXERCISE_MINUTES_MAX,
@@ -26,35 +25,36 @@ from data.exercises import (
     EXERCISE_MINUTES_STEP,
     EXERCISES,
 )
+from data.character.names import SKIN_TONE_WORDS
+from data.character.occupations import OCCUPATIONS
+from data.character.skills import SKILLS
+from data.character.traits import TRAITS
 from data.items import ITEMS, item_condition_word, wetness_word
-from data.memory import LAST_SCENE_MAX_CHARS
-from data.names import SKIN_TONE_WORDS
-from data.occupations import OCCUPATIONS
-from data.skills import SKILLS
-from data.social import TALK_APPROACHES
-from data.status_effects import STATUS_EFFECT_MAX_LEVEL
+from data.loot import containers as container_k
+from data.story.memory import LAST_SCENE_MAX_CHARS
+from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
-from data.traits import TRAITS
+from data.world.clock import TIMES_OF_DAY
 from managers import carry
-from managers.barriers import barriers_of, state_word
-from managers.body import open_wounds
-from managers.climate import describe_weather
-from managers.combat import held_entity
-from managers.first_aid import bandage_items, disinfectant_items, part_word
+from managers.body.first_aid import bandage_items, disinfectant_items, part_word
+from managers.body.health import open_wounds
+from managers.body.stats.status_effects import active_status_effects
+from managers.character.skills import level_word
+from managers.combat.weapons import held_entity
+from managers.corpses.search import corpse_views, perceived_corpses
 from managers.game import GameManager
-from managers.loot import corpse_views, perceived_corpses
-from managers.rooms import current_room
-from managers.skills import level_word
-from managers.stats.status_effects import active_status_effects
-from managers.story import visible_topics
-from managers.zombies import threat_views
+from managers.story.beats import visible_topics
+from managers.world.barriers import barriers_of, state_word
+from managers.world.climate import describe_weather
+from managers.world.rooms import current_room
+from managers.zombies.population import threat_views
 from modules.action.parser import SceneKey, available_verbs
 from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
 from modules.entity.barrier import BarrierEntity
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, ContainerItem, MedicalItem, StackItem
-from modules.quest import QuestStatus
-from modules.room import ContainerEntity
+from modules.story.quest import QuestStatus
+from modules.world.room import ContainerEntity
 
 logger = logging.getLogger(__name__)
 

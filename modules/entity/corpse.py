@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from .item import ItemEntity
+from modules.entity.item import ItemEntity
 
 
 @dataclass

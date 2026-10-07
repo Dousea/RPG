@@ -2,7 +2,7 @@
 
 import unittest
 
-from managers.event_log import build_event_entry, event_stamp
+from managers.events.log import build_event_entry, event_stamp
 from managers.game import GameManager
 
 

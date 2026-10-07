@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from ..item import BaseItem
-from . import BaseEntity
-from .item import ItemEntity
+from modules.entity import BaseEntity
+from modules.entity.item import ItemEntity
+from modules.item import BaseItem
 
 
 class UnlockableEntityLockState(StrEnum):

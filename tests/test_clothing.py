@@ -1,11 +1,11 @@
 import unittest
 
-from data.body_locations import EXCLUSIVE_LOCATIONS
-from data.clothing_coverage import CLOTHING_COVERAGE, covered_parts
+from data.clothing.coverage import CLOTHING_COVERAGE, covered_parts
+from data.clothing.locations import EXCLUSIVE_LOCATIONS
 from data.items import ITEMS, ORTON_OUTFIT_IDS, find_item_by_name, wetness_word
 from managers.context import ContextBuilder
 from managers.game import GameManager
-from modules.body import LAYER_ORDER, BodyLocation, BodyPart
+from modules.body.parts import LAYER_ORDER, BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ClothingItem

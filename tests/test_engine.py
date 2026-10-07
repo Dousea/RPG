@@ -18,12 +18,12 @@ from adapters.engine import GameEngine
 from adapters.llm import NARRATOR_SYSTEM_PROMPT, DeltaCallback, LLMError
 from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
+from data.character.presets import ORTON
 from data.items import ITEMS
-from data.memory import BUDGET_MARGIN_TOKENS
-from data.presets import ORTON
+from data.story.memory import BUDGET_MARGIN_TOKENS
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
-from modules.body import BodyLocation, BodyPart
+from modules.body.parts import BodyLocation, BodyPart
 from modules.character.equipment import CharacterArmorSlot
 from modules.character.skills import SkillState
 from modules.entity.corpse import CorpseEntity

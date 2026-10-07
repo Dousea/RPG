@@ -3,9 +3,9 @@
 import unittest
 
 from data.items import ITEMS
-from data.locations import build_starting_locations
 from data.melee import BARE_HANDS
-from modules.body import BodyLocation
+from data.world.locations import build_starting_locations
+from modules.body.parts import BodyLocation
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.entity.item import ItemEntity
 from modules.item import ContainerItem, MedicalItem, MeleeWeaponItem, StackItem

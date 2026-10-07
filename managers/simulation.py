@@ -16,22 +16,20 @@ import random
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from data import barriers as barrier_k
-from data import body as body_k
 from data import carry as carry_k
-from data import containers as container_k
-from data import exercises as ex_k
 from data import melee as melee_k
-from data import skills as skill_k
-from data import status_effects, survival
-from data import thermal as thermal_k
-from data import traits as trait_k
-from data import zombie_lore as lore_k
-from data.clock import MINUTES_PER_DAY
-from data.exercises import find_exercise
-from data.npcs import TRUSTS_PLAYER, TRUSTS_PLAYER_BANDS
-from data.story_beats import STORY_BEATS, Beat
-from data.thermal import Metabolic
+from data.body import health as body_k
+from data.body import status_effects, survival
+from data.body import thermal as thermal_k
+from data.body.thermal import Metabolic
+from data.character import exercises as ex_k
+from data.character import skills as skill_k
+from data.character import traits as trait_k
+from data.character.exercises import find_exercise
+from data.loot import containers as container_k
+from data.story.beats import STORY_BEATS, Beat
+from data.story.npcs import TRUSTS_PLAYER, TRUSTS_PLAYER_BANDS
+from data.story.topics import TOPICS
 from data.time_costs import (
     MAX_PLAN_ACTIONS,
     MOVE_ROOM_MIN,
@@ -45,30 +43,15 @@ from data.time_costs import (
     action_minutes,
     zone_hop_minutes,
 )
-from data.topics import TOPICS
+from data.world import barriers as barrier_k
+from data.world.clock import MINUTES_PER_DAY
+from data.zombies import lore as lore_k
 from managers import carry
-from managers.barrier_actions import BarrierActions, unbarricade_minutes
-from managers.barriers import barriers_between
-from managers.body import BodyEngine, action_time_multiplier, limp_factor
-from managers.climate import weather_change_facts
-from managers.combat import equipped_weapon, held_slots, roll_damage
-from managers.containers import open_container
-from managers.corpse_sickness import corpse_count, corpse_defence, smell_fact
-from managers.corpses import dress_as_player
-from managers.events import broadcast_event
-from managers.exercise import ExerciseEngine, endurance_level, reps_per_minute
-from managers.first_aid import FirstAid
-from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
-from managers.loot import contents_in_words, items_in_words, names_in_words, strip_unhappiness
-from managers.loot import search as loot_search
-from managers.melee import MeleeEngine
-from managers.noise import Sound, cough_sound
-from managers.rooms import move_to_room
-from managers.skills import SkillEngine, skill_levels
-from managers.social import SocialManager
-from managers.stats.drivers import StatContext
-from managers.stats.engine import StatsEngine
-from managers.stats.status_effects import (
+from managers.body.first_aid import FirstAid
+from managers.body.health import BodyEngine, action_time_multiplier, limp_factor
+from managers.body.stats.drivers import StatContext
+from managers.body.stats.engine import StatsEngine
+from managers.body.stats.status_effects import (
     alcohol_intoxication,
     injury_words,
     level_change_fact_texts,
@@ -76,10 +59,38 @@ from managers.stats.status_effects import (
     player_status_effect_levels,
     status_effect_level,
 )
-from managers.story import clock_minutes, holds
-from managers.thermoregulator import attack_metabolic
+from managers.body.thermoregulator import attack_metabolic
+from managers.character.exercise import ExerciseEngine, endurance_level, reps_per_minute
+from managers.character.skills import SkillEngine, skill_levels
+from managers.combat.melee import MeleeEngine
+from managers.combat.weapons import equipped_weapon, held_slots, roll_damage
+from managers.corpses.bodies import dress_as_player
+from managers.corpses.search import (
+    contents_in_words,
+    items_in_words,
+    names_in_words,
+    strip_unhappiness,
+)
+from managers.corpses.search import search as loot_search
+from managers.corpses.sickness import corpse_count, corpse_defence, smell_fact
+from managers.events.pipeline import broadcast_event
+from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.story.beats import clock_minutes, holds
+from managers.story.social import SocialManager
 from managers.validator import Accepted, ActionValidator, Rejected
-from managers.zombies import PlayerMinute, ZombieLoop, enter_zone, roll_zombie, start_outbreak
+from managers.world.barrier_use import BarrierActions, unbarricade_minutes
+from managers.world.barriers import barriers_between
+from managers.world.climate import weather_change_facts
+from managers.world.containers import open_container
+from managers.world.rooms import move_to_room
+from managers.zombies.noise import Sound, cough_sound
+from managers.zombies.population import (
+    PlayerMinute,
+    ZombieLoop,
+    enter_zone,
+    roll_zombie,
+    start_outbreak,
+)
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -101,13 +112,19 @@ from modules.action.types import (
     WaitAction,
 )
 from modules.action.words import describe_action
+from modules.body.stats import CharacterStat, StatusEffect
 from modules.character.equipment import CharacterArmorSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.corpse import CorpseEntity
 from modules.entity.player import PlayerEntity
-from modules.event import (
+from modules.events.event import (
     ApplyItemEvent,
     ConsumeItemEvent,
+)
+from modules.events.modifier import (
+    AffinityModifier,
+    ConditionsModifier,
+    ReputationModifier,
 )
 from modules.item import (
     AppliableItem,
@@ -118,13 +135,6 @@ from modules.item import (
     MedicalItem,
     MeleeWeaponItem,
 )
-from modules.modifier import (
-    AffinityModifier,
-    ConditionsModifier,
-    ReputationModifier,
-)
-from modules.pace import Pace
-from modules.quest import QuestStatus
 from modules.resolution import (
     BarricadeKit,
     ExercisePlan,
@@ -147,9 +157,7 @@ from modules.resolution import (
     TimeSpan,
     Transfer,
 )
-from modules.room import ContainerEntity
-from modules.stats import CharacterStat, StatusEffect
-from modules.story import (
+from modules.story.beats import (
     AddNpcStatus,
     DiscoverFlag,
     Effect,
@@ -158,8 +166,11 @@ from modules.story import (
     SetFlag,
     StartOutbreak,
 )
+from modules.story.quest import QuestStatus
 from modules.units import minutes_from_timed_action_frames
-from modules.weather import WeatherSample
+from modules.world.pace import Pace
+from modules.world.room import ContainerEntity
+from modules.world.weather import WeatherSample
 
 
 def _span_words(minutes: int) -> str:

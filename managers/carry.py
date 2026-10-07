@@ -5,13 +5,13 @@ from collections.abc import Collection, Iterable, Mapping
 from enum import StrEnum
 
 from data import carry as k
-from data import skills as skill_k
-from managers.skills import skill_levels
+from data.character import skills as skill_k
+from managers.character.skills import skill_levels
+from modules.body.stats import StatusEffect
 from modules.character.equipment import AnyCharacterEquipmentSlot, CharacterArmorSlot
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ContainerItem
-from modules.stats import StatusEffect
 from modules.units import per_hour_from_frame, per_minute_from_frame
 
 

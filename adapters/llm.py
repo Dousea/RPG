@@ -18,7 +18,7 @@ from typing import Any
 import requests
 
 import config
-from data.memory import DEFAULT_CHARS_PER_TOKEN
+from data.story.memory import DEFAULT_CHARS_PER_TOKEN
 from data.time_costs import MAX_PLAN_ACTIONS
 from modules.action.parser import ParseFailure, parse_action_plan
 from modules.action.schema import parse_plan

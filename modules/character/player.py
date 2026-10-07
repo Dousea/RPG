@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     # Imported lazily to break the cycle:
     # effect -> entity.player -> character.player -> effect
-    from ..effect import AnyEffect
+    from modules.events.effect import AnyEffect
 
 
 @dataclass

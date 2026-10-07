@@ -19,7 +19,7 @@ from adapters.llm import (
     parse_narrator_response,
     parse_plan_response,
 )
-from data.memory import DEFAULT_CHARS_PER_TOKEN
+from data.story.memory import DEFAULT_CHARS_PER_TOKEN
 
 
 class ParseActionResponseTests(unittest.TestCase):

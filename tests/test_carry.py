@@ -4,15 +4,15 @@ import random
 import unittest
 from unittest import mock
 
+from data.body.status_effects import STATUS_EFFECT_THRESHOLDS
 from data.items import ITEMS
-from data.status_effects import STATUS_EFFECT_THRESHOLDS
 from managers import carry
-from managers.body import BodyEngine
+from managers.body.health import BodyEngine
+from managers.body.stats.drivers import EnduranceDriver, StatContext
+from managers.body.stats.status_effects import player_status_effect_levels
 from managers.carry import Place
 from managers.game import GameManager
 from managers.simulation import SimulationCore
-from managers.stats.drivers import EnduranceDriver, StatContext
-from managers.stats.status_effects import player_status_effect_levels
 from modules.action.parser import VERBS, ParseFailure, parse_action_line
 from modules.action.types import (
     CarryAction,
@@ -28,14 +28,14 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
-from modules.body import BodyLocation
+from modules.body.parts import BodyLocation
+from modules.body.stats import CharacterStat, Stats, StatusEffect
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.skills import SkillState
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ContainerItem, HoldableItem
-from modules.stats import CharacterStat, Stats, StatusEffect
 from modules.units import minutes_from_timed_action_frames
 from tests.support import ScriptedRandom, set_health, simulate
 
@@ -818,7 +818,7 @@ class CarriedBodyBonesTests(unittest.TestCase):
     """Spec 25, Carrying a corpse: a carried body that turns to bones weighs less."""
 
     def test_the_weight_follows_the_body_at_the_next_action(self):
-        from tests.test_corpse_carry import carrying
+        from tests.corpses.test_carry import carrying
 
         gm, corpse = carrying()
         gm.player.worn.clear()

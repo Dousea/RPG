@@ -9,8 +9,8 @@ import adapters.engine as engine_module
 import app as app_module
 from adapters.engine import GameEngine
 from adapters.llm import LLMError
-from data.presets import ORTON
-from modules.stats import CharacterStat
+from data.character.presets import ORTON
+from modules.body.stats import CharacterStat
 from tests.support import FakeMemory, FakeStoryChecker, IsolatedSaveTestCase, ScriptedLLM
 
 ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"

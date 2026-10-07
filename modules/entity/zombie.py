@@ -3,8 +3,8 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from ..body import BodyLocation
-from .item import ItemEntity
+from modules.body.parts import BodyLocation
+from modules.entity.item import ItemEntity
 
 TIME_SINCE_SEEN_START = 100000.0  # spec 09: frames
 

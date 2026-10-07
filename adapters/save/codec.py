@@ -10,19 +10,18 @@ import dataclasses
 import logging
 from typing import Any
 
-from data import creation as k_creation
-from data.barriers import MAX_PLANKS_PER_SIDE, build_starting_barriers
-from data.climate import STAGE_PHRASES
-from data.clock import WORLD_START_MINUTE_OF_DAY
-from data.exercises import EXERCISES, REGION_PARTS
+from data.character import creation as k_creation
+from data.character.exercises import EXERCISES, REGION_PARTS
+from data.character.skills import MAX_LEVEL, SKILLS, total_xp_for_level
+from data.character.traits import TRAITS
 from data.items import ITEMS, WETNESS_MAX
-from data.locations import STARTING_ZONE_ID, build_starting_locations
-from data.memory import LAST_STORY_MAX_LENGTH
-from data.npcs import build_starting_npcs
-from data.quests import build_starting_quests
-from data.skills import MAX_LEVEL, SKILLS, total_xp_for_level
-from data.traits import TRAITS
-from managers.climate import ClimateEngine
+from data.story.memory import LAST_STORY_MAX_LENGTH
+from data.story.npcs import build_starting_npcs
+from data.story.quests import build_starting_quests
+from data.world.barriers import MAX_PLANKS_PER_SIDE, build_starting_barriers
+from data.world.climate import STAGE_PHRASES
+from data.world.clock import WORLD_START_MINUTE_OF_DAY
+from data.world.locations import STARTING_ZONE_ID, build_starting_locations
 from managers.game import (
     DEATH_CAUSE_MAX_LENGTH,
     MAX_PLACE_LENGTH,
@@ -31,8 +30,11 @@ from managers.game import (
     MemoryState,
     NarrativeState,
 )
-from managers.relationship import RelationshipManager
-from modules.body import BodyLocation, BodyPart, PartState, new_body
+from managers.story.relationship import RelationshipManager
+from managers.world.climate import ClimateEngine
+from modules.body.parts import BodyLocation, BodyPart, PartState, new_body
+from modules.body.stats import Stats
+from modules.body.thermal import ThermalState
 from modules.character.appearance import Appearance, Gender
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.exercise import ExerciseState
@@ -51,13 +53,11 @@ from modules.entity.zombie import (
     ZombieState,
 )
 from modules.item import ClothingItem, ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
-from modules.location import World
-from modules.quest import QuestState, QuestStatus
-from modules.room import ContainerEntity, RoomEntity
-from modules.social import SocialLog
-from modules.stats import Stats
-from modules.thermal import ThermalState
-from modules.weather import AirFront, PeriodStage, WeatherPeriod
+from modules.story.quest import QuestState, QuestStatus
+from modules.story.social import SocialLog
+from modules.world.location import World
+from modules.world.room import ContainerEntity, RoomEntity
+from modules.world.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 

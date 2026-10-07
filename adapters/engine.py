@@ -16,36 +16,37 @@ from adapters import llm
 from adapters.factcheck import StoryChecker
 from adapters.memory import DEFAULT_RECALL, SemanticMemory
 from adapters.save import codec, files
+from data.character.occupations import OCCUPATIONS
+from data.character.skills import SKILLS
+from data.character.traits import TRAITS
 from data.items import item_condition_word, wetness_word
-from data.memory import BUDGET_MARGIN_TOKENS
-from data.occupations import OCCUPATIONS
-from data.skills import SKILLS
-from data.traits import TRAITS
-from managers import carry, creation
-from managers.barriers import barriers_of, state_word
-from managers.body import open_wounds
-from managers.climate import weather_summary
-from managers.combat import held_entity
+from data.story.memory import BUDGET_MARGIN_TOKENS
+from managers import carry
+from managers.body.first_aid import part_word
+from managers.body.health import open_wounds
+from managers.body.stats.status_effects import active_status_effects, player_status_effect_levels
+from managers.character import creation
+from managers.character.skills import skill_progress
+from managers.combat.weapons import held_entity
 from managers.context import NOTHING_DONE_FACT, ContextBuilder
-from managers.event_log import build_event_entry, event_stamp
-from managers.first_aid import part_word
+from managers.corpses.search import corpse_views
+from managers.events.log import build_event_entry, event_stamp
 from managers.game import MAX_RECENT_EVENTS, GameManager
-from managers.loot import corpse_views
-from managers.rooms import current_room
 from managers.simulation import SimulationCore
-from managers.skills import skill_progress
-from managers.stats.status_effects import active_status_effects, player_status_effect_levels
-from managers.story_check import build_questions
-from managers.zombies import threat_views
+from managers.story.check import build_questions
+from managers.world.barriers import barriers_of, state_word
+from managers.world.climate import weather_summary
+from managers.world.rooms import current_room
+from managers.zombies.population import threat_views
 from modules.action.words import refusal_in_words
+from modules.body.stats import StatusEffect
 from modules.character.build import CharacterBuild
 from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.item import MedicalItem, MeleeWeaponItem, StackItem
-from modules.quest import QuestStatus
-from modules.stats import StatusEffect
+from modules.story.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
 

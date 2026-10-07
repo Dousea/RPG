@@ -26,6 +26,24 @@
                 }
             }
         ],
+        "./tests/story/test_quests.py": [
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 15,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 15,
+                    "endColumn": 25,
+                    "lineCount": 1
+                }
+            }
+        ],
         "./tests/test_context.py": [
             {
                 "code": "reportOptionalMemberAccess",
@@ -710,24 +728,6 @@
                 "range": {
                     "startColumn": 32,
                     "endColumn": 38,
-                    "lineCount": 1
-                }
-            }
-        ],
-        "./tests/test_quests.py": [
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 34,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 25,
                     "lineCount": 1
                 }
             }

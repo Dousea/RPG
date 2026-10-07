@@ -16,49 +16,49 @@ re-derive the reason something was legal.
 import re
 from dataclasses import dataclass
 
-from data import barriers as barrier_k
-from data import body as body_k
 from data import carry as carry_k
-from data import containers as container_k
-from data import exercises as ex
-from data import survival
-from data import zombie_lore as zombie_k
-from data.body_locations import EXCLUSIVE_LOCATIONS
-from data.clock import (
+from data.body import health as body_k
+from data.body import survival
+from data.character import exercises as ex
+from data.clothing.locations import EXCLUSIVE_LOCATIONS
+from data.items import ITEMS
+from data.loot import containers as container_k
+from data.story.topics import TOPICS
+from data.world import barriers as barrier_k
+from data.world.clock import (
     SLEEP_CAP_MIN,
     TIME_OF_DAY_START,
     WAIT_CAP_MIN,
     minutes_until,
 )
-from data.items import ITEMS
-from data.topics import TOPICS
+from data.zombies import lore as zombie_k
 from managers import carry
-from managers.barriers import barriers_between, carried_entities, thumpable_for
-from managers.body import limp_factor
-from managers.combat import held_slots
-from managers.containers import has_room_for, unopened
-from managers.exercise import endurance_level
-from managers.first_aid import (
+from managers.body.first_aid import (
     bandage_items,
     disinfectant_items,
     find_part,
     most_needed_part,
     part_word,
 )
+from managers.body.health import limp_factor
+from managers.body.stats.status_effects import status_effect_level
+from managers.character.exercise import endurance_level
+from managers.combat.weapons import held_slots
+from managers.corpses.search import find_content, perceived_corpses, with_article
 from managers.game import MAX_PLACE_LENGTH, GameManager
-from managers.locations import BARE_DIRECTIONS, connection_target
-from managers.loot import find_content, perceived_corpses, with_article
-from managers.rooms import (
+from managers.story.beats import visible_topics
+from managers.story.social import locked_out
+from managers.world.barriers import barriers_between, carried_entities, thumpable_for
+from managers.world.containers import has_room_for, unopened
+from managers.world.locations import BARE_DIRECTIONS, connection_target
+from managers.world.rooms import (
     container_by_name,
     current_room,
     resolve_container,
     resolve_room,
     room_holding,
 )
-from managers.social import locked_out
-from managers.stats.status_effects import status_effect_level
-from managers.story import visible_topics
-from managers.zombies import approach_minutes, perceived_now
+from managers.zombies.population import approach_minutes, perceived_now
 from modules.action.parser import CORPSE_WORDS, GOAL_HORIZON_LABELS, TALK_APPROACH_LABELS
 from modules.action.types import (
     AddGoalAction,
@@ -95,6 +95,7 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
+from modules.body.stats import CharacterStat, StatusEffect
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.corpse import CorpseEntity
@@ -109,7 +110,6 @@ from modules.item import (
     HoldableItem,
     MedicalItem,
 )
-from modules.pace import Pace
 from modules.resolution import (
     BarricadeKit,
     ExercisePlan,
@@ -134,8 +134,8 @@ from modules.resolution import (
     TimeSpan,
     Transfer,
 )
-from modules.room import ContainerEntity
-from modules.stats import CharacterStat, StatusEffect
+from modules.world.pace import Pace
+from modules.world.room import ContainerEntity
 
 GOAL_HORIZONS = GOAL_HORIZON_LABELS
 

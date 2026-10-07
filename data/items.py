@@ -1,10 +1,10 @@
-from data import barriers as barrier_k
 from data import melee as melee_k
-from data.clothing_coverage import covered_parts
-from data.clothing_items import STARTING_CLOTHES
-from data.loot_items import LOOT_ITEMS
-from data.zombie_clothing import ZOMBIE_CLOTHING
-from modules.body import BodyLocation
+from data.clothing.coverage import covered_parts
+from data.clothing.items import STARTING_CLOTHES
+from data.loot.items import LOOT_ITEMS
+from data.world import barriers as barrier_k
+from data.zombies.clothing import ZOMBIE_CLOTHING
+from modules.body.parts import BodyLocation
 from modules.character.equipment import (
     AnyCharacterEquipmentSlot,
     CharacterArmorSlot,

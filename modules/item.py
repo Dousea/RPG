@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 
-from .body import BodyLocation, BodyPart
-from .character.equipment import AnyCharacterEquipmentSlot, CharacterHoldableSlot
-from .modifier import AnyModifier
-from .weapon import RangedWeaponType
+from modules.body.parts import BodyLocation, BodyPart
+from modules.character.equipment import AnyCharacterEquipmentSlot, CharacterHoldableSlot
+from modules.events.modifier import AnyModifier
+from modules.weapon import RangedWeaponType
 
 DEFAULT_EAT_MINUTES = 5  # spec 03
 SCRATCH_DEFENSE_DEFAULT = 0  # spec 05
