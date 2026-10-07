@@ -136,8 +136,9 @@ chance = clamp(chance, 10, 90), truncated
 
 `crit_skill` starts as the Long Blunt level. It is replaced in turn by Axe, Long
 Blade, Spear, Short Blade and Short Blunt when the weapon has that category, so
-the last one listed wins. Heavy Load is 0 until carrying weight exists. Sharpness
-is 1 until weapon upkeep exists.
+the last one listed wins. Heavy Load is the player's level
+([carrying-and-loot](carrying-and-loot.md#carrying)). Sharpness is 1 until
+`weapon-upkeep` exists.
 
 **A shove or stomp:** `35 - 5 x Endurance - 5 x Heavy Load - 1.3 x Panic + 2 x
 Strength`, with no clamp.

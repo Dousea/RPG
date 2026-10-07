@@ -42,30 +42,32 @@ take is not part of it: it runs in the body minute ([health](health.md#the-body-
 
 `StatContext` is a frozen dataclass built for each chunk.
 
-| Field | Value now |
+| Field | Value |
 | --- | --- |
 | `asleep` | the `SLEEP` span |
 | `resting` | the action is `WAIT` |
-| `exercising` | the action is `ATTACK`, a zombie attacked this chunk, or the player ran |
+| `exercising` | the action is `ATTACK` or `SHOVE`, a zombie attacked this chunk, or the player ran |
 | `walking` | the action is `MOVE_TO` |
+| `talking` | the action is `TALK`, `ASK` or `GIVE` |
 | `sneaking` | the player is sneaking |
-| `indoors` | false until weather defines it per zone |
-| `talking` | false until `TALK`, `ASK` and `GIVE` land |
+| `indoors`, `floor`, `bed_type` | from the zone and the player's spot ([Sleep](#sleep)) |
+| `power_on` | whether the world still has power |
 | `npcs_present` | any NPC shares the zone |
-| `bed_type` | from the zone and the player's spot ([Sleep](#sleep)) |
 | `hours_survived` | game minutes since the start, in hours |
 | `new_zombies_seen` | zombies that came into view this chunk ([Zombies](zombies.md)) |
-| `weather` | none until weather lands |
-| `body` | energy, fluids and fatigue multipliers, all 1 until body temperature lands |
+| `sound_stress` | stress from door and window sounds this chunk ([doors](doors.md)) |
+| `weather` | the weather sample for the chunk ([weather](weather.md)) |
+| `body` | energy, fluids and fatigue multipliers from body temperature ([body-temperature](body-temperature.md)) |
+| `metabolic` | the action's metabolic target ([body-temperature](body-temperature.md)) |
 | `skills` | each skill's level; Fitness reads 5 when none is recorded |
+| `traits` | the player's trait ids ([character-creation](character-creation.md)) |
 | `corpse_count`, `corpse_defence` | the bodies the player stands among and the best worn defence ([The Zombie Lifecycle](zombie-lifecycle.md#corpse-sickness)) |
-| `traits` | empty until character creation lands |
-| `food_eaten_level` | 0 until eating gives a well-fed timer |
+| `carry_ratio`, `heavy_load`, `carrying_corpse` | carried weight over capacity, the Heavy Load level, and whether a corpse is carried ([carrying-and-loot](carrying-and-loot.md#carrying)) |
+| `food_eaten_level` | the Food Eaten level from the well-fed timer |
+| `wearer` | the player, for drivers that read worn clothing |
 
-Trait multipliers are all 1 for now. Pain, zombie infection and stress from
-sounds are 0 until their specs land. Endurance regeneration is multiplied by a
-recovery factor from the player's Fitness level
-([skills](skills.md#effects-wired-now)).
+Endurance regeneration is multiplied by a recovery factor from the player's
+Fitness level ([skills](skills.md#effects-wired-now)).
 
 ## Turn flow
 
@@ -162,8 +164,8 @@ about 16 hours.
 ### Stress
 
 Falls by 0.108 × h. Wound and zombie-infection stress join through the
-[body minute](health.md#stress); stress from sounds joins when
-that spec lands.
+[body minute](health.md#stress), and door and window sounds add stress
+([doors](doors.md#sounds)).
 
 ### Endurance
 

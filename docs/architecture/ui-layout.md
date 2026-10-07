@@ -1,6 +1,6 @@
 # UI Layout
 
-> **Status: Partial.** `templates/index.html`, `static/app.js`, `static/style.css`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts and the creation screen exist; screens whose mechanics haven't landed stay hidden, and [What the page lacks today](#what-the-page-lacks-today) lists the rest. See [Implementation Status](../status.md).
+> **Status: Implemented.** `templates/index.html`, `static/app.js`, `static/style.css`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts, all eight screens and the creation screen exist; fields of mechanics not built yet arrive with those mechanics. See [Implementation Status](../status.md).
 
 The browser page is one HTML template with its script and stylesheet, and it
 renders the snapshot the engine returns.
@@ -101,11 +101,11 @@ screen whose fields don't exist yet stays hidden until its first field lands.
 | --- | --- | --- | --- |
 | Status | status effects, conditions, goals | `effects`, `conditions`, `sneaking` (`zombies`), `goals` | yes |
 | Health | per body part: wounds, bleeding, bandaged, dirty, infected | `body` (`health` and `injuries`) | yes, without `injuries`'s flags |
-| Inventory | held item, equipped slots, carried items, load and bags | `held` (`melee` and `weapon-upkeep`), `equipment`, `inventory`, `carry` (`carrying-and-loot`) | yes, without `held` |
+| Inventory | held item, equipped slots, carried items, load and bags | `held` (`melee` and `weapon-upkeep`), `equipment`, `inventory`, `carry` (`carrying-and-loot`) | yes |
 | Clothing | worn items, outer to inner, by body location | `worn` | yes |
 | Character | name, occupation, traits, skills, kills | `character`, `skills` (`skills`), `zombie_kills` (`melee`) | yes |
 | People | NPCs here: disposition, trust, following | `npcs` | yes |
-| Nearby | threats, corpses, rooms, doors and windows | `threats` (`zombies`), `corpses` (`zombie-lifecycle`), `rooms` (`carrying-and-loot`), `barriers` (`doors`) | no |
+| Nearby | threats, corpses, rooms, doors and windows | `threats` (`zombies`), `corpses` (`zombie-lifecycle`), `rooms` (`carrying-and-loot`), `barriers` (`doors`) | yes |
 | Quests | active quests and their objectives | `quests` | yes |
 
 ### Status
@@ -115,8 +115,7 @@ are marked severe by colour, never by a number. Conditions and the narrator's
 status effects follow as tags, then goals, short-term before long-term.
 `sneaking` is a tag here while it is on.
 
-There is no health bar: `health` removed it and its `vitals` field, and no health
-number replaces them.
+There is no health bar and no health number.
 
 ### Health
 
@@ -127,10 +126,9 @@ level, no healing progress.
 
 ### Inventory
 
-The held item first, with its condition, sharpness and head words when it has
-them. Then the equipped slots, empty ones marked empty, then carried items by
-name. Item condition moves from the `hits/max` text it shows today to the
-condition word when `melee` sends one. The carried weight shows against what the
+The held item first, with its condition word (sharpness and head words come
+with `weapon-upkeep`). Then the equipped slots, empty ones marked empty, then
+carried items by name. The carried weight shows against what the
 character can carry, in kilograms, and each bag shows its place and contents
 (`carry`, see `mechanics/carrying-and-loot.md`).
 
@@ -143,7 +141,8 @@ Worn items outer to inner, each with its body location as words
 
 The name, the occupation (or the job title the player wrote) and the trait
 names with their descriptions. Skills: a row per trained skill, grouped by
-category, with the level number and a bar for `progress` toward the next level. The zombie kill count comes with `melee`. The appearance chosen at
+category, with the level number and a bar for `progress` toward the next level, and the
+zombie kill count. The appearance chosen at
 creation is not shown: the narrator describes it.
 
 ### People
@@ -234,10 +233,7 @@ A mechanic that adds or changes a snapshot field:
    what un-hides a screen;
 5. updates the table's *Exists* column.
 
-## What the page lacks today
-
-| Gap | Fix |
-| --- | --- |
+--- | --- |
 | Header shows the outbreak stage | now `outbreak_day` (`llm-contract`): "Before the outbreak" or "Outbreak day N" |
 | Inventory and equipment show item condition as `n/max` | condition word with `melee` |
 

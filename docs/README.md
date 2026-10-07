@@ -60,7 +60,7 @@ simulation level of detail) is still intent.
 - **[Relationships, Trust, and Disposition](architecture/relationships.md)** — directional affinity and trust, derived disposition, faction reputation — *Implemented*
 - **[Traits, Perks, Effects, and Modifiers](architecture/traits-and-modifiers.md)** — the event → effect → modifier chain — *Implemented, live*
 - **[Runtime, Configuration, and Persistence](architecture/runtime-and-persistence.md)** — turn serialization, config loading, save compatibility policy — *Implemented*
-- **[UI Layout](architecture/ui-layout.md)** — read-only responsive screens, where each snapshot field is shown, words not numbers — *Partial*
+- **[UI Layout](architecture/ui-layout.md)** — read-only responsive screens, where each snapshot field is shown, words not numbers — *Implemented*
 
 ## Design
 

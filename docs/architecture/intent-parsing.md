@@ -82,42 +82,12 @@ The parser does not guarantee that the entire sentence will succeed.
 ### 3. Action Vocabulary
 
 Use a controlled action vocabulary rather than allowing arbitrary action names.
+Every action has a typed schema and explicit engine validation, and the LLM is
+constrained to valid structured output through a schema where available.
 
-```text
-LOOK
-MOVE
-SEARCH
-TAKE
-DROP
-USE
-EQUIP
-UNEQUIP
-OPEN
-CLOSE
-LOCK
-UNLOCK
-ATTACK
-AIM
-SHOOT
-DODGE
-BLOCK
-SNEAK
-RUN
-CLIMB
-TALK
-ASK
-THREATEN
-TRADE
-GIVE
-CRAFT
-REST
-WAIT
-TRAVEL
-```
-
-Every action has a typed schema and explicit engine validation.
-
-The LLM should also be constrained to valid structured output through a schema or grammar-constrained decoding mechanism where available.
+The vocabulary is `VERBS` in `modules/action/parser.py`, with its JSON schema in
+`modules/action/schema.py`; the verbs, their arguments and their costs are in
+[the LLM contract](../mechanics/llm-contract.md#parser).
 
 ---
 

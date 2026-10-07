@@ -1,6 +1,6 @@
 # Combat and Stealth Resolution
 
-> **Status: Partial.** Melee combat is built: against zombies as [`melee`](../mechanics/melee.md) describes (crits, the damage chain, knockdowns, shoves, weapon condition), with clothing armour from [`zombie-lifecycle`](../mechanics/zombie-lifecycle.md); against NPCs through the event and modifier chain of [the traits-and-modifiers doc](../architecture/traits-and-modifiers.md). Stealth and ranged combat are not built. See [Implementation Status](../status.md).
+> **Status: Partial.** Built parts are mechanics: melee against zombies in [`melee`](../mechanics/melee.md), with clothing armour from [`zombie-lifecycle`](../mechanics/zombie-lifecycle.md); attacks on NPCs go through [the traits-and-modifiers chain](../architecture/traits-and-modifiers.md). Stealth and ranged combat are intent. See [Implementation Status](../status.md).
 
 ## Combat
 

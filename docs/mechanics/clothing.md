@@ -83,7 +83,7 @@ Coverage by clothing kind (the ones the catalog uses):
 
 ## Actions
 
-- `WEAR <item>` puts on a carried garment at its location. It costs 1 minute, scaled by the action-time multiplier (1 for now).
+- `WEAR <item>` puts on a carried garment at its location. It costs 1 minute, scaled by the action-time multiplier ([health](health.md)).
   - Refused if the item is not carried: "No 'X' in inventory to wear."
   - Refused if the item is not clothing: "X cannot be worn."
   - Refused if the location is taken: "Orton is already wearing a T-shirt there." (plural names such as Jeans take no article)

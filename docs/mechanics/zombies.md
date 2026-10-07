@@ -348,7 +348,8 @@ Each attack, in order:
    A roll of 0 to 99 below `defend` defends: the player shoves the zombie off and
    the attack ends. `weapon_level` is the held weapon's category skill minus 1
    (an axe takes the Axe level whole), at most 10, with 0 for bare hands and
-   whenever the result would be below 0. Heavy Load is 0 for now.
+   whenever the result would be below 0. Heavy Load is the player's level
+   ([carrying-and-loot](carrying-and-loot.md#carrying)).
 2. **Drag-down**, if the attack wasn't defended: with 3 or more attackers the
    player is pulled down and killed. The game ends with "<name> was dragged down
    by the dead."

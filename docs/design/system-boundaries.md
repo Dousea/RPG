@@ -1,6 +1,6 @@
 # System Boundaries
 
-> **Status: Planned.** There is no event bus and no simulation core. `GameManager.event_queue` exists and is drained, but nothing enqueues. See [Implementation Status](../status.md).
+> **Status: Planned.** There is no event bus. `SimulationCore` (`managers/simulation.py`) resolves every accepted action, but not as the separate core this document describes; `GameManager.event_queue` exists and nothing fills or drains it. See [Implementation Status](../status.md).
 
 ## Simulation Core
 

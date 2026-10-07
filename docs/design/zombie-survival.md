@@ -1,6 +1,6 @@
 # Zombie Survival Simulation
 
-> **Status: Partial.** Noise, light and visibility are [`zombies`](../mechanics/zombies.md); the scavenging model below is not built. See [Implementation Status](../status.md).
+> **Status: Partial.** Built parts are mechanics: noise, hearing, spotting and light in [`zombies`](../mechanics/zombies.md), and searching rooms and containers in [`carrying-and-loot`](../mechanics/carrying-and-loot.md). The rest of this document, including time-decay scavenging, is intent. See [Implementation Status](../status.md).
 
 ## Spatial Threat and Noise
 

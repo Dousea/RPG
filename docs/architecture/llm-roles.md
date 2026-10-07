@@ -63,15 +63,12 @@ characters. What is cut, and in what order, is in
 
 ### The fact check
 
-After the narrator replies, a small decision model (`adapters/factcheck.py`), served by
-LM Studio next to the narrator, answers one state question about the end of the story:
-has the zombie the turn's facts are about been killed (yes, no or unclear). For now only a turn whose facts name exactly one zombie is checked. An
-answer the engine's state does not allow, given with probability 0.9 or more
-(`factcheck.conflict_threshold`), makes the engine ask the narrator once more with a
-`[CORRECTION]` block stating the true state; "unclear" never conflicts. The retry is kept
-unless it conflicts on more questions than the first story. The check only chooses
-which prose is shown and never changes a fact. `factcheck.enabled: false` turns it off.
-Details in [the LLM contract](../mechanics/llm-contract.md).
+After the narrator replies, a small decision model (`adapters/factcheck.py`)
+answers state questions about the end of the story. An answer the engine's
+state rules out makes the engine ask the narrator once more; the check only
+chooses which prose is shown and never changes a fact. The questions, the
+threshold and the retry rule are in
+[the LLM contract](../mechanics/llm-contract.md#the-fact-check).
 
 ---
 

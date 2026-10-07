@@ -131,20 +131,15 @@ remain as a simpler broadcast-and-apply convenience for a future event that
 only needs one perspective, and `SimulationCore.resolve` uses it for item
 use (`ConsumeItemEvent`/`ApplyItemEvent`), where there's no dealt/taken split.
 
-## Why it used to be unreachable, and isn't now
+## Where the events come from
 
-`GameManager.event_queue` used to be drained by `drain_event_queue`, called by
-`process_turn`, called by nothing — the live turn loop was `GameEngine.play`,
-which never touched the queue. Both `process_turn` and its placeholder
-`_generate_narrative_for_turn` (a hardcoded string) have been deleted; they
-were the dead scaffold this section used to describe.
-
-[The engine-authority doc](engine-authority.md)'s architecture answers the question
-this document used to leave open: the engine decides whether a hit landed,
-not the LLM. `managers/validator.py`'s `ActionValidator` accepts or rejects
-an `ATTACK` (is the target here, are they already down, is the player
-capable of attacking), and `SimulationCore._resolve_attack` is what actually
-constructs the events above and lets this chain run.
+The engine builds the events, never the LLM.
+[The engine-authority doc](engine-authority.md) has the validator accept or
+reject an action first; then `managers/combat/weapons.py`'s `roll_damage`
+builds the dealt and taken damage events for an `ATTACK` on an NPC, and
+`SimulationCore` builds the consume and apply events for `USE_ITEM`, and
+broadcasts them through this chain. `GameManager.event_queue` and
+`drain_event_queue` are still defined but nothing fills or drains them.
 
 ---
 

@@ -50,8 +50,8 @@ the level.
 - Bleeding counts the bleeding parts ([health](health.md#bleeding));
   `bleeding_level(parts, neck)` applies the cap.
 - The "Well Fed" name is shared by all four Food Eaten levels for now.
-- Wet, Hypothermia, Hyperthermia, Has a Cold and Windchill join this table with
-  the weather and body-temperature specs.
+- Wet, Hypothermia, Hyperthermia, Has a Cold and Windchill are defined in
+  [body-temperature](body-temperature.md#status-effects-it-adds).
 
 `status_effect_level(status_effect, value)` returns 0 to 4. `StatsEngine` compares every
 status effect's level before and after each chunk and reports one fact per change, in
@@ -73,9 +73,10 @@ on, so a long wait says "Orton is now Extremely Bored." and not every step up to
 | Defence | 2 per Endurance level, 3 per Tired level and 2 per Drunk level are lost. |
 
 `melee_status_effect_penalty`, `damage_after_status_effects`, `crit_penalty` and
-`defence_penalty` in `managers/body/stats/status_effects.py` compute these. The melee spec calls
-`melee_status_effect_penalty` (through `damage_after_status_effects`) and `crit_penalty`; the
-zombie and health specs call the rest. Heavy Load is 0 until the carrying spec.
+`defence_penalty` in `managers/body/stats/status_effects.py` compute these. [melee](melee.md) calls
+`melee_status_effect_penalty` (through `damage_after_status_effects`) and `crit_penalty`;
+[zombies](zombies.md) and [health](health.md) call the rest. Heavy Load comes from what
+the player carries ([carrying-and-loot](carrying-and-loot.md#carrying)).
 
 ## Eating and drinking
 

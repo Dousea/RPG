@@ -88,7 +88,8 @@ sickness yet).
 **Metabolic target.** It starts at the default and every candidate only raises
 it. Candidates: the activity, and an exercise term
 `clamp01(1 − endurance) × 3.0 × energy`. The target is capped at 10.3, then
-multiplied by `1 + w² × 0.35` with `w` the carried-weight ratio (0 for now).
+multiplied by `1 + w² × 0.35` with `w` the carried weight over capacity, from 0
+to 1 ([carrying-and-loot](carrying-and-loot.md#carrying)).
 
 | Metabolic | Met | | Metabolic | Met |
 | --- | --- | --- | --- | --- |
@@ -335,7 +336,7 @@ frames left in that minute. The narrator gets "<name> sneezes." or "<name>
 coughs." A sneeze would make a noise of radius 20 and volume 25, a cough radius
 35 and volume 40; nothing hears them yet. Rolls use the injected random source.
 
-## Status effects added to 03
+## Status effects it adds
 
 | Status effect | Driven by | L1 | L2 | L3 | L4 | Names |
 | --- | --- | --- | --- | --- | --- | --- |

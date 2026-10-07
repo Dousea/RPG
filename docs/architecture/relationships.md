@@ -96,14 +96,9 @@ seed of the data-model doc's *Factions and World Systems*, not an implementation
 
 ## What the prompt exposes
 
-`_get_npcs_present_section` writes, for every NPC in the player's location:
-their name, age, description, **numeric affinity and trust**, derived
-disposition, status list, personality tags, and free-text notes.
-
-That is the whole record, unfiltered. It is exactly what
-[the knowledge-firewall doc](knowledge-firewall.md) says not to do — Orton has no way of
-knowing that Emma's trust in him is `+5` — and it is the largest single reason
-the knowledge firewall is worth building.
+The narrator and the parser see each present NPC's disposition and trust as
+bands, never as scores; the `[NPCS PRESENT]` block is listed in
+[the LLM contract](../mechanics/llm-contract.md#narrator).
 
 ---
 
