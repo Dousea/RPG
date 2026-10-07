@@ -18,21 +18,21 @@ parser.
 | `Verb`, `VERBS`, the closed label sets, the removed verbs | `modules/action/parser.py` |
 | `TalkAction`, `AskAction`, `GiveAction`, `ShoutAction` | `modules/action/types.py` |
 | Words for an action that never ran | `modules/action/words.py` |
-| `NpcEntity.following`, `World.fired_beats` | `modules/entity/npc.py`, `modules/location.py` |
-| Beat conditions and effects | `modules/story.py` |
-| `SocialLog` | `modules/social.py` |
-| The approach table, `GIVE` deltas, `ASK` odds | `data/social.py` |
-| Topics | `data/topics.py` |
-| Story beats | `data/story_beats.py` |
+| `NpcEntity.following`, `World.fired_beats` | `modules/entity/npc.py`, `modules/world/location.py` |
+| Beat conditions and effects | `modules/story/beats.py` |
+| `SocialLog` | `modules/story/social.py` |
+| The approach table, `GIVE` deltas, `ASK` odds | `data/story/social.py` |
+| Topics | `data/story/topics.py` |
+| Story beats | `data/story/beats.py` |
 | `MAX_PLAN_ACTIONS`, `TALK_TURN_MINUTES`, `NONE_TURN_MINUTES` | `data/time_costs.py` |
-| Shout sizes | `data/zombie_lore.py` |
-| `TALK`, `GIVE`, `ASK` resolution | `managers/social.py` |
-| Reading beat conditions, visible topics | `managers/story.py` |
+| Shout sizes | `data/zombies/lore.py` |
+| `TALK`, `GIVE`, `ASK` resolution | `managers/story/social.py` |
+| Reading beat conditions, visible topics | `managers/story/beats.py` |
 | Validators and resolvers keyed by verb name, beats, derived statuses | `managers/validator.py`, `managers/simulation.py` |
 | `GameManager.move_npc`, `outbreak_day`, `NarrativeState.social_log` | `managers/game.py` |
 | Both prompts' blocks | `managers/context.py` |
 | The parser prompt built from `VERBS`, the narrator rules, the summarizer note | `adapters/llm.py` |
-| The event-log entry written for a turn | `managers/event_log.py` |
+| The event-log entry written for a turn | `managers/events/log.py` |
 | Parse-failure facts, the page payload | `adapters/engine.py` |
 | Saving | `adapters/save/codec.py` |
 | Hand-run parser quality check | `evals/parser_cases.yaml`, `scripts/eval_parser.py` |
@@ -308,7 +308,7 @@ day window, divisor and Hostile rule; both deltas are divided.
 
 ### Topics
 
-Things an NPC can tell the player live in `data/topics.py`, not in the model. A topic
+Things an NPC can tell the player live in `data/story/topics.py`, not in the model. A topic
 has an id, an NPC, a gloss (the line the parser sees), an optional condition it
 requires (it isn't listed until it holds), a minimum trust band, the fact the NPC
 says, and the flag it reveals.
@@ -328,7 +328,7 @@ says, and the flag it reveals.
 
 ## Story beats
 
-`data/story_beats.py` holds beats: an id, a condition, effects, a fact and whether it
+`data/story/beats.py` holds beats: an id, a condition, effects, a fact and whether it
 interrupts. Each beat fires once, and `World.fired_beats` records the minute.
 
 - **Conditions:** the clock at or past a minute; the player in a zone; a flag
@@ -363,7 +363,7 @@ action.
   `quest_marcus_trust` completes by earning Solid trust.
 - It disappears if trust falls, but quest progress stays one-way.
 
-The descriptive statuses in `data/npcs.py` ("friendly", "curious about new
+The descriptive statuses in `data/story/npcs.py` ("friendly", "curious about new
 neighbor") stay as they are. Only story beats change them.
 
 ## Narrator
@@ -600,11 +600,11 @@ characters on load and emptied when the narrator fails. Older saves are discarde
   parser prompt lists exactly the registry, every verb has a validator and a resolver.
 - `tests/test_simulation.py`: the five-action cap, an interrupted plan, a `NONE` turn
   and an all-refused turn, `SHOUT` at 30 and 6 tiles.
-- `tests/test_social.py`: each approach's deltas, repetition and reset, the Hostile
+- `tests/story/test_social.py`: each approach's deltas, repetition and reset, the Hostile
   halving, band-change facts, `ASK` odds and lockout, followers, `GIVE`.
-- `tests/test_topics.py`: deflecting, telling, the quest through the topic, a topic
+- `tests/story/test_topics.py`: deflecting, telling, the quest through the topic, a topic
   hidden before the outbreak.
-- `tests/test_story_beats.py`: the outbreak beat at minute 2760 in the middle of a
+- `tests/story/test_story_beats.py`: the outbreak beat at minute 2760 in the middle of a
   `WAIT` or `SLEEP`, each condition and effect, `trusts_player`.
 - `tests/test_context.py`: both prompts' blocks in order, no numbers in the narrator's
   blocks, `[CHARACTER]` without the old lines.

@@ -11,13 +11,13 @@ the main way the player moves stats back down.
 
 | Layer | File | What it holds |
 | --- | --- | --- |
-| modules | `modules/stats.py` | `StatusEffect` |
+| modules | `modules/body/stats.py` | `StatusEffect` |
 | modules | `modules/item.py` | the food fields on `ConsumableItem` |
 | modules | `modules/entity/player.py` | `PlayerEntity.food_eaten_timer` |
-| data | `data/status_effects.py` | `STATUS_EFFECT_THRESHOLDS`, level names, well-fed, alcohol and penalty constants |
+| data | `data/body/status_effects.py` | `STATUS_EFFECT_THRESHOLDS`, level names, well-fed, alcohol and penalty constants |
 | data | `data/items.py` | the shipped food and drink |
-| managers | `managers/stats/status_effects.py` | `status_effect_level`, `active_status_effects`, the penalty functions, `alcohol_intoxication` |
-| managers | `managers/stats/engine.py` | the timer drain |
+| managers | `managers/body/stats/status_effects.py` | `status_effect_level`, `active_status_effects`, the penalty functions, `alcohol_intoxication` |
+| managers | `managers/body/stats/engine.py` | the timer drain |
 | managers | `managers/simulation.py` | consuming an item |
 | managers | `managers/context.py` | the `[CONDITION]` block |
 | adapters | `adapters/engine.py` | the `/play` `effects` payload |
@@ -73,7 +73,7 @@ on, so a long wait says "Orton is now Extremely Bored." and not every step up to
 | Defence | 2 per Endurance level, 3 per Tired level and 2 per Drunk level are lost. |
 
 `melee_status_effect_penalty`, `damage_after_status_effects`, `crit_penalty` and
-`defence_penalty` in `managers/stats/status_effects.py` compute these. The melee spec calls
+`defence_penalty` in `managers/body/stats/status_effects.py` compute these. The melee spec calls
 `melee_status_effect_penalty` (through `damage_after_status_effects`) and `crit_penalty`; the
 zombie and health specs call the rest. Heavy Load is 0 until the carrying spec.
 
@@ -160,12 +160,12 @@ discarded.
 
 ## Testing
 
-- `tests/test_stats.py`: every threshold just below, at and just above, the
+- `tests/body/test_stats.py`: every threshold just below, at and just above, the
   inverted Endurance column, the Food Eaten timer, Injured, Bleeding, and the
   penalty functions.
-- `tests/test_stats_engine.py`: one fact per crossing, none without one; the
+- `tests/body/test_stats_engine.py`: one fact per crossing, none without one; the
   timer drain.
-- `tests/test_consumption.py`: item fields, the timer (apple, cooked, cap),
+- `tests/body/test_consumption.py`: item fields, the timer (apple, cooked, cap),
   alcohol, eat time, no instant healing.
 - `tests/test_context.py`, `tests/test_routes.py`: the `[CONDITION]` block and
   the `effects` payload.

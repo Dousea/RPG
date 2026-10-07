@@ -17,13 +17,13 @@ player character".
 | `Appearance`, `Gender` | `modules/character/appearance.py` |
 | `CharacterBuild`, `ResolvedCharacter` | `modules/character/build.py` |
 | `TraitDefinition`, `OccupationDefinition` | `modules/character/definitions.py` |
-| The 25 occupations | `data/occupations.py` |
-| Trait definitions and the trait factors | `data/traits.py` |
-| Limits and the skill list | `data/creation.py` |
-| Starting-outfit lists | `data/clothing_selection.py` |
-| Name lists and appearance word lists | `data/names.py` |
-| The Orton preset | `data/presets.py` |
-| `validate`, `resolve`, `randomize`, `new_player` | `managers/creation.py` |
+| The 25 occupations | `data/character/occupations.py` |
+| Trait definitions and the trait factors | `data/character/traits.py` |
+| Limits and the skill list | `data/character/creation.py` |
+| Starting-outfit lists | `data/clothing/selection.py` |
+| Name lists and appearance word lists | `data/character/names.py` |
+| The Orton preset | `data/character/presets.py` |
+| `validate`, `resolve`, `randomize`, `new_player` | `managers/character/creation.py` |
 | The creation screen's JSON and the build reader | `adapters/creation_payload.py` |
 | `GET /creation`, `POST /creation` | `app.py` |
 
@@ -71,7 +71,7 @@ Developer"), up to 40 characters. It is narration only and has no mechanics.
 
 ## Traits
 
-`data/traits.py` holds 97 trait definitions: an id, a name, a one-line
+`data/character/traits.py` holds 97 trait definitions: an id, a name, a one-line
 description, a cost, a flag for occupation-only traits, skill boosts, and the
 traits it excludes. 81 can be picked and 16 only come from an occupation or
 from body weight. Ids are lowercase, with underscores instead of spaces and no
@@ -161,7 +161,7 @@ good trait.
 
 **Changing occupation** removes the old occupation's granted traits, drops any
 chosen trait that a new granted trait excludes (refunding its cost), and adds
-the new granted traits. `managers/creation.change_occupation` does this.
+the new granted traits. `managers/character/creation.change_occupation` does this.
 
 ## Starting skills
 
@@ -192,7 +192,7 @@ level into XP and reads the boosts.
 | `beard_style` | none, stubble, short beard, full beard, moustache; male only |
 | `backstory` | up to 200 characters, optional, narration only |
 
-`data/names.py` holds 30 female forenames, 30 male forenames and 30 surnames for
+`data/character/names.py` holds 30 female forenames, 30 male forenames and 30 surnames for
 random characters, each under 20 characters.
 
 **Pronouns** follow `gender`: she/her or he/him. Engine facts and prompts use the

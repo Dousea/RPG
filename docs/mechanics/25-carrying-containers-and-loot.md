@@ -35,16 +35,16 @@ Ids and names stay generic: `schoolbag`, `toolbox`, `satchel`.
 | Weight, capacity, Heavy Load level, transfer frames, bag room, Strength XP rolls, walking drain, overload loss | `managers/carry.py` |
 | The bag type and each item's weight | `modules/item.py`, `data/items.py` |
 | What a bag holds | `modules/entity/item.py` |
-| Heavy Load in the endurance driver and the status effect row | `managers/stats/drivers.py`, `managers/stats/status_effects.py`, `data/status_effects.py` |
-| The overload loss | `managers/body.py` |
+| Heavy Load in the endurance driver and the status effect row | `managers/body/stats/drivers.py`, `managers/body/stats/status_effects.py`, `data/body/status_effects.py` |
+| The overload loss | `managers/body/health.py` |
 | The verbs `PUT` and `CARRY`, `TAKE all` | `modules/action/types.py`, `modules/action/parser.py`, `managers/validator.py`, `managers/simulation.py` |
-| The six new zones, their exits and aliases | `data/locations.py` |
-| Their room layouts | `data/containers.py` |
-| Their barriers | `data/barriers.py` |
-| Their zombie fields and indoors flags | `data/zombie_lore.py`, `data/climate.py` |
-| The new foods, drinks and weapons | `data/loot_items.py`, `data/items.py` |
-| The loot tables and the item mapping (generated) | `data/loot_tables.py`, `data/loot_catalogue.py` |
-| Bags in zombie outfits and on corpses | `data/zombie_outfits.py`, `managers/zombie_dress.py`, `managers/loot.py` |
+| The six new zones, their exits and aliases | `data/world/locations.py` |
+| Their room layouts | `data/loot/containers.py` |
+| Their barriers | `data/world/barriers.py` |
+| Their zombie fields and indoors flags | `data/zombies/lore.py`, `data/world/climate.py` |
+| The new foods, drinks and weapons | `data/loot/items.py`, `data/items.py` |
+| The loot tables and the item mapping (generated) | `data/loot/tables.py`, `data/loot/catalogue.py` |
+| Bags in zombie outfits and on corpses | `data/zombies/outfits.py`, `managers/zombies/dress.py`, `managers/corpses/search.py` |
 
 ## Converting rates to game hours
 
@@ -337,8 +337,8 @@ the rest of that list stops. A full junk list does not stop the main list.
   a bag is empty.
 
 A body's pockets use the same roll with the body's 12 kg as the capacity. The
-tables are generated data: `data/loot_tables.py` holds 78 item lists, 42
-container sources and 16 bag tables; `data/loot_catalogue.py` maps each table
+tables are generated data: `data/loot/tables.py` holds 78 item lists, 42
+container sources and 16 bag tables; `data/loot/catalogue.py` maps each table
 item name to a catalogue item and its kind. Only items that exist in the game are
 rolled, so the tables grow with the catalogue.
 
@@ -422,7 +422,7 @@ something for them.
 
 ### Item mapping
 
-The loot tables name items by their table name. `data/loot_catalogue.py` maps
+The loot tables name items by their table name. `data/loot/catalogue.py` maps
 each to a catalogue id and a kind. The generator keeps only mapped names, so a
 table can only ever name items that exist; an unmapped name is skipped without a
 roll.
@@ -653,19 +653,19 @@ Incompatible saves are discarded.
 ## Testing
 
 `tests/test_carry.py` (capacity, weight, Heavy Load, drains, overload loss,
-transfers, bag verbs, Strength XP), `tests/test_corpse_carry.py`,
+transfers, bag verbs, Strength XP), `tests/corpses/test_carry.py`,
 `tests/test_validator.py` (the refusals), `tests/test_items.py` (weights, bag
 rows), `tests/test_persistence.py` (nested contents, the carried body),
 `tests/test_context.py` and `tests/test_engine.py` (the blocks and `/play`).
 
-Stage 2: `tests/test_loot_rolls.py` (the roll, the pick, the cutoff, the table
-shape and the catalogue), `tests/test_rooms.py` (the layouts, the starting kit,
-name resolution, room moves), `tests/test_containers.py` (`SEARCH`, `TAKE` and
-`PUT` with containers), `tests/test_plan_schema.py`, `tests/test_corner_store.py`.
+Stage 2: `tests/loot/test_rolls.py` (the roll, the pick, the cutoff, the table
+shape and the catalogue), `tests/world/test_rooms.py` (the layouts, the starting kit,
+name resolution, room moves), `tests/loot/test_containers.py` (`SEARCH`, `TAKE` and
+`PUT` with containers), `tests/test_plan_schema.py`, `tests/world/test_corner_store.py`.
 
-Stage 3: `tests/test_loot_data.py` (the new foods, drinks and weapons, the item
+Stage 3: `tests/loot/test_data.py` (the new foods, drinks and weapons, the item
 mapping, every container bound to a generated table, every container opening
-within its capacity), `tests/test_places.py` (the zones, their barriers,
-aliases, exit phrases and rooms), `tests/test_population.py` (the outbreak
-targets), `tests/test_zombie_outfits.py` (bags on the dead), plus the schema and
+within its capacity), `tests/world/test_places.py` (the zones, their barriers,
+aliases, exit phrases and rooms), `tests/zombies/test_population.py` (the outbreak
+targets), `tests/zombies/test_outfits.py` (bags on the dead), plus the schema and
 `/play` checks in `tests/test_persistence.py` and `tests/test_engine.py`.

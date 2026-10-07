@@ -58,13 +58,18 @@ never contain numbers (HP, damage, odds). See `docs/01-engine-authority.md`.
 - **Modules:** one module, one job. Split a module once it holds two jobs
   that can be read apart (types and their parser, a save format and its file
   I/O, a stat engine and its drivers), and group a family of two or more such
-  modules as a package (`managers/stats/`, `modules/action/`, `adapters/save/`).
+  modules as a package (`managers/body/stats/`, `modules/action/`, `adapters/save/`).
   A package's `__init__.py` holds only a docstring: import from the submodule
-  (`from managers.stats.engine import StatsEngine`), never re-export. Don't
+  (`from managers.body.stats.engine import StatsEngine`), never re-export. Don't
   split a cohesive module just for its length, don't make a one-module
   package, and don't name a module you'd import bare after a builtin
-  (`from adapters.save import format` hides `format()`). Tests split along the
-  same lines, one file per area.
+  (`from adapters.save import format` hides `format()`). A new file goes into
+  its domain's package (`world`, `zombies`, `corpses`, `loot`, `body`,
+  `clothing`, `character`, `combat`, `story`, `events`, the same names in every
+  layer), dropping a prefix the package already says (`data/zombies/outfits.py`,
+  not `data/zombie_outfits.py`); only what every domain uses sits at a layer's
+  top. Tests split along the same lines, one file per area, in the same
+  packages.
 - **Logging, not print:** each module uses `logger = logging.getLogger(__name__)`.
   `debug` for per-turn traces, `info` for lifecycle, `warning` for dropped or
   repaired data. Ruff bans `print`.

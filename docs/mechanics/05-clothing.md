@@ -15,9 +15,9 @@ and wetness.
 
 | Piece | File |
 | --- | --- |
-| `BodyPart`, `BodyLocation`, layer order | `modules/body.py` |
-| Exclusivity between locations | `data/body_locations.py` |
-| Coverage by clothing kind | `data/clothing_coverage.py` |
+| `BodyPart`, `BodyLocation`, layer order | `modules/body/parts.py` |
+| Exclusivity between locations | `data/clothing/locations.py` |
+| Coverage by clothing kind | `data/clothing/coverage.py` |
 | `ClothingItem` | `modules/item.py` |
 | The catalog entries and Orton's outfit | `data/items.py` |
 

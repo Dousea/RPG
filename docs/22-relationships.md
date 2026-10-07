@@ -1,6 +1,6 @@
 # Relationships, Trust, and Disposition
 
-> **Status: Implemented.** `managers/relationship.py`. See [Implementation Status](00-status.md).
+> **Status: Implemented.** `managers/story/relationship.py`. See [Implementation Status](00-status.md).
 
 Document 12 sketches NPC relationships as a single number on the NPC record:
 
@@ -40,9 +40,9 @@ a score off the scale.
 This holds in three places that must agree, and silently produces wrong output
 if any one of them flips:
 
-- the starting values in `data/npcs.py` (`STARTING_RELATIONSHIPS`), seeded in
+- the starting values in `data/story/npcs.py` (`STARTING_RELATIONSHIPS`), seeded in
   `GameManager.__init__`;
-- the social resolvers in `managers/social.py`;
+- the social resolvers in `managers/story/social.py`;
 - the disposition line the prompt builder writes for each NPC present.
 
 There is no enforcement of this convention in code. It is a convention.
@@ -91,7 +91,7 @@ changing one function. Trust does not affect it.
 `reputations` is faction-to-faction and `CharacterFaction`-keyed. The plumbing
 is complete — `ReputationModifier`, `apply_reputation_modifier`,
 `get_reputation`, and persistence — but nothing in the game writes to it.
-`NpcEntity.faction` is set in `data/npcs.py` and read by nothing. This is the
+`NpcEntity.faction` is set in `data/story/npcs.py` and read by nothing. This is the
 seed of document 12's *Factions and World Systems*, not an implementation of it.
 
 ## What the prompt exposes

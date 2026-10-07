@@ -33,7 +33,7 @@ clock and re-renders them, and nothing else writes them.
 | `MINUTES_PER_DAY` | 1440 | minutes |
 | `TIME_OF_DAY_BANDS` | morning 06:00, afternoon 12:00, evening 18:00, night 22:00 | band starts |
 
-They live in `data/clock.py`, with the arithmetic over them.
+They live in `data/world/clock.py`, with the arithmetic over them.
 
 ## Actions
 

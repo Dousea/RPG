@@ -21,16 +21,16 @@ infection and the limp belong to the [health mechanic](12-health-and-infection.m
 | Piece | File |
 | --- | --- |
 | `ZombieEntity` and its states | `modules/entity/zombie.py` |
-| Zone `size_tiles`, `chunks`, `zombie_intensity`; the outbreak time, the zombies, the kill counts | `modules/location.py` |
-| `Pace`, the four ways the player moves | `modules/pace.py` |
+| Zone `size_tiles`, `chunks`, `zombie_intensity`; the outbreak time, the zombies, the kill counts | `modules/world/location.py` |
+| `Pace`, the four ways the player moves | `modules/world/pace.py` |
 | `PlayerEntity.sneaking` | `modules/entity/player.py` |
 | `MOVE_TO ... run`, `STANCE`, the zombie `ATTACK` target | `modules/action/types.py`, `modules/action/parser.py`, `modules/resolution.py` |
-| The story effect that starts the outbreak | `modules/story.py`, `managers/simulation.py` |
-| Every number below | `data/zombie_lore.py`, `data/locations.py` |
+| The story effect that starts the outbreak | `modules/story/beats.py`, `managers/simulation.py` |
+| Every number below | `data/zombies/lore.py`, `data/world/locations.py` |
 | Hop minutes by pace, the approach minutes on an `ATTACK` | `data/time_costs.py` |
-| Rolling, population, spotting, hearing, movement, memory, the minute loop, the threat words | `managers/zombies.py` |
-| Footstep and cough noise | `managers/noise.py` |
-| The defence roll, drag-down, wounds, clothing defence and holes | `managers/zombie_attack.py` |
+| Rolling, population, spotting, hearing, movement, memory, the minute loop, the threat words | `managers/zombies/population.py` |
+| Footstep and cough noise | `managers/zombies/noise.py` |
+| The defence roll, drag-down, wounds, clothing defence and holes | `managers/zombies/attack.py` |
 | Running the loop before each stat chunk, interruptions, pace on a walk | `managers/simulation.py` |
 | Zombie ids, `STANCE` and pace in the validator | `managers/validator.py` |
 | The `[THREATS]` block | `managers/context.py` |

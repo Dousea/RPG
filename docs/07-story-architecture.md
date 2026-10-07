@@ -1,6 +1,6 @@
 # Story and Narrative Architecture
 
-> **Status: Partial.** Story state is two lists of goal strings, a flag dict, and a flat quest checklist (`modules/quest.py` `QuestState`, seeded from `data/quests.py`) that only the engine can complete. No arcs, conditions or director. The *As Implemented* section at the end records what exists. Story-significant flags and NPC statuses are engine-produced (see [the LLM contract](mechanics/10-llm-contract.md)). See [Implementation Status](00-status.md).
+> **Status: Partial.** Story state is two lists of goal strings, a flag dict, and a flat quest checklist (`modules/story/quest.py` `QuestState`, seeded from `data/story/quests.py`) that only the engine can complete. No arcs, conditions or director. The *As Implemented* section at the end records what exists. Story-significant flags and NPC statuses are engine-produced (see [the LLM contract](mechanics/10-llm-contract.md)). See [Implementation Status](00-status.md).
 
 ## Story State Is Engine State
 
@@ -136,8 +136,8 @@ while satisfying none of the structure around it.
 
 ### What exists
 
-`QuestState` (`modules/quest.py`) is a quest id, a status, a list of
-objective key strings, and the subset of them completed. `data/quests.py`
+`QuestState` (`modules/story/quest.py`) is a quest id, a status, a list of
+objective key strings, and the subset of them completed. `data/story/quests.py`
 seeds three of them on a new game. Completion is engine-decided: there is no
 LLM verb that can advance a quest, and no narrator output is consulted.
 `SimulationCore._advance_quests` is the only writer, called from inside the

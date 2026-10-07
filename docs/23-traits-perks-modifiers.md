@@ -1,6 +1,6 @@
 # Traits, Effects, and Modifiers
 
-> **Status: Implemented, live.** `modules/effect.py`, `modules/modifier.py`, `managers/events.py`. `managers/simulation.py`'s `SimulationCore` now constructs the events that drive it — every `ATTACK` and `USE_ITEM` action goes through this chain. See [Implementation Status](00-status.md).
+> **Status: Implemented, live.** `modules/events/effect.py`, `modules/events/modifier.py`, `managers/events/pipeline.py`. `managers/simulation.py`'s `SimulationCore` now constructs the events that drive it — every `ATTACK` and `USE_ITEM` action goes through this chain. See [Implementation Status](00-status.md).
 
 The design documents mention traits only in passing, as something a world
 generator might roll for an NPC. In the implementation they are a general
@@ -31,7 +31,7 @@ Nothing in this chain names a specific trait. A new trait is data.
 
 ## Events
 
-`modules/event.py`. Five types, all generic over the entity types involved:
+`modules/events/event.py`. Five types, all generic over the entity types involved:
 
 ```text
 QuestCompletionEvent     source, styles[]
@@ -48,7 +48,7 @@ one is what [document 02](02-system-boundaries.md)'s event bus would require.
 
 ## Effects
 
-`modules/effect.py`. An effect handler is a `condition`/`effect` pair of
+`modules/events/effect.py`. An effect handler is a `condition`/`effect` pair of
 callables, both taking the event:
 
 ```python
@@ -82,7 +82,7 @@ which is a rearrangement, not a prefix. It was never observed failing only
 because nothing enqueued an event to dispatch.
 
 It has been replaced with exactly the registry this document suggested:
-`EVENT_TO_EFFECT_TYPES` in `managers/events.py` maps each event type to the
+`EVENT_TO_EFFECT_TYPES` in `managers/events/pipeline.py` maps each event type to the
 effect-handler types that react to it, checked with `isinstance`. A second
 map, `EFFECT_REQUIRED_ROLE`, closes a related bug the string comparison could
 never have caught even if fixed naively: `broadcast_event` visits both an
@@ -93,7 +93,7 @@ outgoing hit. Each effect type now declares which role (`"source"` or
 
 ## Modifiers
 
-`modules/modifier.py`. Five types, deliberately dumb — they describe a change
+`modules/events/modifier.py`. Five types, deliberately dumb — they describe a change
 and carry no logic:
 
 ```text
@@ -110,7 +110,7 @@ than letting the order in which traits happened to fire decide the outcome.
 
 ## Application
 
-`apply_event_modifiers` (`managers/events.py`) handles four of the five:
+`apply_event_modifiers` (`managers/events/pipeline.py`) handles four of the five:
 `DamageMultiplicativeModifier` (composed, then applied to the event's target),
 `AffinityModifier` and `ReputationModifier` (forwarded to the
 [relationship manager](22-relationships.md)), and `ConditionsModifier` (applied

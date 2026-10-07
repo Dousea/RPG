@@ -21,6 +21,11 @@ adapters/    Everything that touches the outside world.
 app.py       HTTP only.
 ```
 
+Inside `modules/`, `data/`, `managers/` and `tests/`, files group into the same
+domain packages (`world`, `zombies`, `corpses`, `loot`, `body`, `clothing`,
+`character`, `combat`, `story`, `events`); files every domain uses (the
+simulation, validator, context builder, items, carrying) stay at the layer's top.
+
 `modules/` and `managers/` know nothing about Flask, HTTP, JSON files or FAISS.
 Every such dependency lives in `adapters/`:
 
@@ -153,7 +158,7 @@ directly adjacent is reached by walking the connection graph
 (`GameManager.zone_path`). Generic room nouns ("kitchen", "bathroom",
 "office", "upstairs", ...) are deliberately *not* global aliases -- only
 names that unambiguously mean one particular zone are (see
-`data/locations.py`'s `aliases` lists); anything else, including a
+`data/world/locations.py`'s `aliases` lists); anything else, including a
 now-unaliased room word, becomes a free-text spot inside the zone the player
 is already in rather than teleporting him. `MOVE_TO` never refuses. A locked
 door (`DoorEntity`) along the walk stops the player at the door rather than
@@ -179,7 +184,7 @@ just relationship scores).
 
 Relationships are directional and stored source -> target. Everything that reads
 them asks how the **NPC** regards the **player**, so that is the direction
-`UPDATE_RELATIONSHIP` and the starting values in `data/npcs.py` write.
+`UPDATE_RELATIONSHIP` and the starting values in `data/story/npcs.py` write.
 
 The scores themselves never reach the prompt. `build_prompt` sends banded labels
 -- `Disposition: friendly (trust: solid)` -- because the player has no way to
@@ -297,12 +302,12 @@ rather than your real save.
 | `tests/test_action.py` | ACTIONS-line parsing into typed `AnyAction`/`ParseFailure` |
 | `tests/test_validator.py` | Action Validator: preconditions only, no mutation |
 | `tests/test_simulation.py` | Simulation Core: item effects, world-state actions, player death, outcome facts, weather |
-| `tests/test_movement.py` | `MOVE_TO` resolution: zones, spots, the apartment door, exits |
-| `tests/test_combat.py` | `ATTACK` resolution: weapons, damage, trait and perk reactions |
+| `tests/world/test_movement.py` | `MOVE_TO` resolution: zones, spots, the apartment door, exits |
+| `tests/combat/test_combat.py` | `ATTACK` resolution: weapons, damage, trait and perk reactions |
 | `tests/test_time_and_sleep.py` | Action time costs, the clock, stats per turn, sleep, stat deaths |
-| `tests/test_consumption.py` | Eating and drinking: consumable fields, status effect facts, alcohol |
+| `tests/body/test_consumption.py` | Eating and drinking: consumable fields, status effect facts, alcohol |
 | `tests/test_context.py` | ContextBuilder: the knowledge firewall (world flags, NPC goals vs. knowledge) |
-| `tests/test_quests.py` | Quest state: engine-only completion |
+| `tests/story/test_quests.py` | Quest state: engine-only completion |
 | `tests/test_game_manager.py` | Starting state, prompt assembly, memory tiers |
 | `tests/test_persistence.py` | Save/load round trip, schema guarding, corrupt and stale saves |
 | `tests/test_llm.py` | Parser ACTIONS extraction and narrator STORY/OPTIONS parsing |

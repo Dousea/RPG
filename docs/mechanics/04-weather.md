@@ -11,11 +11,11 @@ only produces the weather. Status effects and the narrator read it.
 
 | Layer | File | What it holds |
 | --- | --- | --- |
-| modules | `modules/simplex.py` | 2D simplex noise |
-| modules | `modules/weather.py` | `WeatherSample`, `SeasonModel`, `ClimateValues`, `AirFront`, `WeatherPeriod`, `period_seed` |
-| modules | `modules/location.py` | `Location.indoors`, `World.seed` |
-| data | `data/climate.py` | configuration, stage templates, word bands, `INDOORS_BY_ZONE` |
-| managers | `managers/climate.py` | `ClimateEngine`, word and fact helpers |
+| modules | `modules/world/simplex.py` | 2D simplex noise |
+| modules | `modules/world/weather.py` | `WeatherSample`, `SeasonModel`, `ClimateValues`, `AirFront`, `WeatherPeriod`, `period_seed` |
+| modules | `modules/world/location.py` | `Location.indoors`, `World.seed` |
+| data | `data/world/climate.py` | configuration, stage templates, word bands, `INDOORS_BY_ZONE` |
+| managers | `managers/world/climate.py` | `ClimateEngine`, word and fact helpers |
 | managers | `managers/simulation.py` | advances the climate per stat chunk |
 | managers | `managers/context.py` | the `[WEATHER]` block |
 | adapters | `adapters/save/codec.py` | seed, front and period in the save |

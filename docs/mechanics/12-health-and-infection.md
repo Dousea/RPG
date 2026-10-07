@@ -24,19 +24,19 @@ Three rules shape everything below:
 
 | Piece | File |
 | --- | --- |
-| `PartState`, the part weights, overall health, the general wound infection | `modules/body.py` |
+| `PartState`, the part weights, overall health, the general wound infection | `modules/body/parts.py` |
 | `MedicalItem`, and `uses` on the item entity | `modules/item.py`, `modules/entity/item.py` |
 | `PlayerEntity.body`, `zombie_infection_since`, `zombie_infection_hours`, `pain_effect_minutes`, `reduce_infection_power`; `hit_points` as a read-only view | `modules/entity/player.py` |
 | The verbs `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` and the part target | `modules/action/types.py`, `modules/action/parser.py`, `modules/action/words.py`, `modules/resolution.py` |
-| Every number below and the fact wording | `data/body.py` |
-| The 11 medical items; the first aid kit's fixed contents | `data/items.py`, `data/locations.py` |
+| Every number below and the fact wording | `data/body/health.py` |
+| The 11 medical items; the first aid kit's fixed contents | `data/items.py`, `data/world/locations.py` |
 | The 1-minute costs and the slowed actions | `data/time_costs.py` |
-| `reduce_general`, `add_general`, wound landing, the body minute, pain, the limp, the action-time multiplier, the zombie infection | `managers/body.py` |
-| The three treatments, painkillers, antibiotics, the choice of part and item | `managers/first_aid.py` |
-| A zombie's wound going into a part | `managers/zombie_attack.py` |
-| Wound infection joining the Sick status effect, the Bleeding level | `managers/stats/status_effects.py` |
+| `reduce_general`, `add_general`, wound landing, the body minute, pain, the limp, the action-time multiplier, the zombie infection | `managers/body/health.py` |
+| The three treatments, painkillers, antibiotics, the choice of part and item | `managers/body/first_aid.py` |
+| A zombie's wound going into a part | `managers/zombies/attack.py` |
+| Wound infection joining the Sick status effect, the Bleeding level | `managers/body/stats/status_effects.py` |
 | The body minute after the zombie minute, interruptions, the limp on hops, death causes | `managers/simulation.py` |
-| The limp on the player's pace and the walk up to a zombie | `managers/zombies.py` |
+| The limp on the player's pace and the walk up to a zombie | `managers/zombies/population.py` |
 | The refusals | `managers/validator.py` |
 | `[CONDITION]` part lines, `[INVENTORY]` uses, the `hurt` scene key | `managers/context.py` |
 | `body` in the page payload and the Health screen | `adapters/engine.py`, `static/app.js` |
@@ -609,11 +609,11 @@ discarded.
 
 ## Testing
 
-`tests/test_body.py` covers the part table, overall health, the two helpers, wound
+`tests/body/test_body.py` covers the part table, overall health, the two helpers, wound
 landing, part pain, the pain stat, the limp and the action-time multiplier.
-`tests/test_body_minute.py` covers bleeding, wound damage, timers, bandage wear,
+`tests/body/test_body_minute.py` covers bleeding, wound damage, timers, bandage wear,
 healing, status effect damage, death causes, pain over minutes, infection, stress, the zombie infection and
-the thermal cap. `tests/test_first_aid.py` covers the parser forms, the three verbs,
+the thermal cap. `tests/body/test_first_aid.py` covers the parser forms, the three verbs,
 the choice of part and item, pills, antibiotics and every refusal.
 `tests/test_simulation.py` covers the sleep refusals, the slowed actions, the limp on
 hops and chases, the weakening interruption, a wound landing in a part and rising.

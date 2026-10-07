@@ -23,19 +23,19 @@ Four facts shape everything below:
 | Piece | File |
 | --- | --- |
 | `BarrierEntity` and `BarrierKind` | `modules/entity/barrier.py` |
-| `World.barriers`, `Location.building` | `modules/location.py` |
+| `World.barriers`, `Location.building` | `modules/world/location.py` |
 | The thumping fields and the `thumping` state | `modules/entity/zombie.py` |
 | `PlayerEntity.at_barrier` | `modules/entity/player.py` |
 | `StackItem` (nails) | `modules/item.py`, `modules/entity/item.py` |
 | The verbs `OPEN`, `CLOSE`, `BARRICADE`, `UNBARRICADE`; `ATTACK` on a barrier | `modules/action/types.py`, `modules/action/parser.py`, `modules/action/schema.py`, `modules/action/words.py`, `modules/resolution.py` |
-| The two shipped doors, every number and every fact | `data/barriers.py` |
-| Hammer, Plank, Nails, starting loot | `data/items.py`, `data/locations.py` |
+| The two shipped doors, every number and every fact | `data/world/barriers.py` |
+| Hammer, Plank, Nails, starting loot | `data/items.py`, `data/world/locations.py` |
 | Time costs | `data/time_costs.py`, `modules/units.py` |
-| Blocking, vision, damage, plank health, distance | `managers/barriers.py` |
-| The verbs and the crossing | `managers/barrier_actions.py`, `managers/simulation.py`, `managers/validator.py` |
-| Starting, stepping and releasing thumpers | `managers/thumping.py`, `managers/zombies.py` |
-| Barrier sounds | `managers/noise.py` |
-| Stress from sounds | `managers/stats/drivers.py`, `managers/stats/engine.py` |
+| Blocking, vision, damage, plank health, distance | `managers/world/barriers.py` |
+| The verbs and the crossing | `managers/world/barrier_use.py`, `managers/simulation.py`, `managers/validator.py` |
+| Starting, stepping and releasing thumpers | `managers/zombies/thumping.py`, `managers/zombies/population.py` |
+| Barrier sounds | `managers/zombies/noise.py` |
+| Stress from sounds | `managers/body/stats/drivers.py`, `managers/body/stats/engine.py` |
 | `[DOORS AND WINDOWS]` and `[THREATS]` | `managers/context.py` |
 | The `barriers` payload, saves | `adapters/engine.py`, `adapters/save/codec.py`, `static/app.js`, `templates/index.html` |
 
@@ -521,11 +521,11 @@ from the data. Saves of other versions are discarded and a new game starts.
 
 ## Testing
 
-- `tests/test_barriers.py`: blocking, vision, the order a thump lands, thump and
+- `tests/world/test_barriers.py`: blocking, vision, the order a thump lands, thump and
   hit damage, plank health, distance, stress.
-- `tests/test_thumping.py`: the three rates, starting, the two-zombie rule, break
+- `tests/zombies/test_thumping.py`: the three rates, starting, the two-zombie rule, break
   times, release, stopping, sounds, the cut-off zone.
-- `tests/test_barricade.py`: the verbs, their refusals and costs, XP, hammer wear,
+- `tests/world/test_barricade.py`: the verbs, their refusals and costs, XP, hammer wear,
   sounds, hits on barriers, window crossing.
 - `tests/test_simulation.py`: `MOVE_TO` through doors, interruptions, stress,
   story beats.

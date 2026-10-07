@@ -12,13 +12,13 @@ energy, water and sleep.
 
 | Piece | File |
 | --- | --- |
-| Felt air and wind chill | `managers/climate.py` |
-| Thermal state saved per player | `modules/thermal.py` |
-| Constants, met table and node table | `data/thermal.py`, `data/climate.py`, `data/traits.py` |
-| Heat balance, body multipliers, thermal damage | `managers/thermoregulator.py` |
-| Wetness driver | `managers/wetness.py` |
-| Cold driver | `managers/cold.py` |
-| Status effect rows | `data/status_effects.py`, `managers/stats/status_effects.py` |
+| Felt air and wind chill | `managers/world/climate.py` |
+| Thermal state saved per player | `modules/body/thermal.py` |
+| Constants, met table and node table | `data/body/thermal.py`, `data/world/climate.py`, `data/character/traits.py` |
+| Heat balance, body multipliers, thermal damage | `managers/body/thermoregulator.py` |
+| Wetness driver | `managers/body/wetness.py` |
+| Cold driver | `managers/body/cold.py` |
+| Status effect rows | `data/body/status_effects.py`, `managers/body/stats/status_effects.py` |
 
 The three drivers join the stat engine's default list after the survival
 drivers, in the order wetness, thermoregulator, cold. `StatContext` carries the
@@ -110,7 +110,7 @@ multiplied by `1 + w² × 0.35` with `w` the carried-weight ratio (0 for now).
 | attack, blade (one-handed) or a non-pistol firearm | light work |
 | attack, pistol | using tools |
 
-The other rows are in `data/thermal.py` for the actions that will use them.
+The other rows are in `data/body/thermal.py` for the actions that will use them.
 
 **Metabolic rate** eases toward the target: 0.001 per frame when the target is
 higher, 0.0004 when lower. The real rate is `rate × (0.2 + 0.8 × energy × move)`,

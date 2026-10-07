@@ -24,13 +24,13 @@ Two rules shape everything below:
 | `ZombieEntity.hits_taken`, `down_until`, `staggered`; `PlayerEntity.zombie_kills` | `modules/entity/zombie.py`, `modules/entity/player.py` |
 | The verbs `SHOVE`, `EQUIP`, `UNEQUIP` | `modules/action/types.py`, `modules/action/parser.py`, `modules/action/words.py` |
 | Every number below, bare hands, the fact wording, the condition words | `data/melee.py` |
-| The crowbar, the kitchen knife, the bat, the pan, the axe | `data/items.py`, `data/locations.py` |
+| The crowbar, the kitchen knife, the bat, the pan, the axe | `data/items.py`, `data/world/locations.py` |
 | The 1-minute costs | `data/time_costs.py` |
-| Crits, the damage chain, knockdown and stagger, the knife jaw stab, endurance, wear, kills, XP, hit noise | `managers/melee.py` |
-| Swing as step 0 of the minute loop, down and staggered zombies, the threat words | `managers/zombies.py` |
+| Crits, the damage chain, knockdown and stagger, the knife jaw stab, endurance, wear, kills, XP, hit noise | `managers/combat/melee.py` |
+| Swing as step 0 of the minute loop, down and staggered zombies, the threat words | `managers/zombies/population.py` |
 | `SHOVE`, `EQUIP`, `UNEQUIP` in the validator and the simulation | `managers/validator.py`, `managers/simulation.py` |
-| Which item is in the hands | `managers/combat.py` |
-| Hit XP | `managers/skills.py` |
+| Which item is in the hands | `managers/combat/weapons.py` |
+| Hit XP | `managers/character/skills.py` |
 | `[THREATS]`, `[INVENTORY]` and `[CONDITION]` | `managers/context.py` |
 | `held` and `zombie_kills` in the page payload | `adapters/engine.py`, `static/app.js` |
 | Saving weapon condition, zombie hits and the kill count | `adapters/save/codec.py` |
@@ -426,9 +426,9 @@ at condition 0.
 
 ## Testing
 
-`tests/test_melee.py` covers crit chance, the damage chain, targets, floor
+`tests/combat/test_melee.py` covers crit chance, the damage chain, targets, floor
 attacks, stomps, shoves, knockdowns, the knife, endurance, wear, XP and noise.
-`tests/test_melee_simulation.py` covers `EQUIP`, `UNEQUIP`, `SHOVE`, the loop's
+`tests/combat/test_melee_simulation.py` covers `EQUIP`, `UNEQUIP`, `SHOVE`, the loop's
 down and staggered zombies, fights through `ATTACK`, NPC damage and fight
 interruptions. `tests/test_items.py` pins the weapon catalogue,
 `tests/test_context.py` the prompt blocks, `tests/test_engine.py` the payload and

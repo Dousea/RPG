@@ -58,8 +58,8 @@ by id on load.
 SAVED                              LOOKED UP BY ID ON LOAD
 player position, condition,        item definitions (data/items.py)
   inventory, equipment,            location names, descriptions,
-  appearance, occupation, skills,   connections (data/locations.py)
-  XP, level                        trait definitions (data/traits.py)
+  appearance, occupation, skills,   connections (data/world/locations.py)
+  XP, level                        trait definitions (data/character/traits.py)
 trait ids
 NPC position, status, notes,
   condition

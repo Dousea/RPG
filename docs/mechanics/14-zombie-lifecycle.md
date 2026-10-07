@@ -24,19 +24,19 @@ Four facts shape the rest:
 
 | Piece | File |
 | --- | --- |
-| The outfit pool and each outfit's item references | `data/zombie_outfits.py` |
-| The clothing items the outfits can produce | `data/zombie_clothing.py` |
-| Pocket tables, attached weapon definitions, loot multipliers | `data/zombie_loot.py` |
-| Every number below | `data/zombie_lore.py` |
+| The outfit pool and each outfit's item references | `data/zombies/outfits.py` |
+| The clothing items the outfits can produce | `data/zombies/clothing.py` |
+| Pocket tables, attached weapon definitions, loot multipliers | `data/zombies/loot.py` |
+| Every number below | `data/zombies/lore.py` |
 | Sex, outfit, worn items, attached weapon, the crawler flags | `modules/entity/zombie.py` |
 | `CorpseEntity` | `modules/entity/corpse.py` |
-| Dressing a zombie, crawler speed | `managers/zombie_dress.py` |
-| Zombie defence, the hit part, the crawler roll, crawler posture | `managers/melee.py` |
-| The crawler attack branch | `managers/zombie_attack.py` |
-| Step 3b, crawlers in the minute loop, the corpse on a kill | `managers/zombies.py` |
-| Outbreak corpses, rot, removal, fake-dead rising, the rising player | `managers/corpses.py` |
-| `SEARCH`, `TAKE ... from`, pocket rolls, perceived bodies | `managers/loot.py` |
-| Corpse count, defence and the smell fact | `managers/corpse_sickness.py` |
+| Dressing a zombie, crawler speed | `managers/zombies/dress.py` |
+| Zombie defence, the hit part, the crawler roll, crawler posture | `managers/combat/melee.py` |
+| The crawler attack branch | `managers/zombies/attack.py` |
+| Step 3b, crawlers in the minute loop, the corpse on a kill | `managers/zombies/population.py` |
+| Outbreak corpses, rot, removal, fake-dead rising, the rising player | `managers/corpses/bodies.py` |
+| `SEARCH`, `TAKE ... from`, pocket rolls, perceived bodies | `managers/corpses/search.py` |
+| Corpse count, defence and the smell fact | `managers/corpses/sickness.py` |
 
 Every corpse timer is in game hours. The two rates that began as per-frame values
 (corpse sickness and the unhappiness from stripping a corpse) are stated here per
@@ -484,10 +484,10 @@ worn item saves its holes.
 
 | Module | What it covers |
 | --- | --- |
-| `tests/test_zombie_outfits.py` | the pool, references, the catalogue items, attached weapons, zombie defence, the hit part, the armour step |
-| `tests/test_crawlers.py` | the crawler roll, going down, speed, posture, thumping, crawler attacks, `attackers` |
-| `tests/test_corpses.py` | kill corpses, outbreak corpses, rot and removal, fake-dead rising |
-| `tests/test_corpse_loot.py` | `SEARCH`, `TAKE ... from`, pocket chances, unhappiness |
-| `tests/test_corpse_sickness.py` | the count, the rate, the decay rule, the smell fact |
-| `tests/test_reanimation.py` | the player who rises |
+| `tests/zombies/test_outfits.py` | the pool, references, the catalogue items, attached weapons, zombie defence, the hit part, the armour step |
+| `tests/zombies/test_crawlers.py` | the crawler roll, going down, speed, posture, thumping, crawler attacks, `attackers` |
+| `tests/corpses/test_corpses.py` | kill corpses, outbreak corpses, rot and removal, fake-dead rising |
+| `tests/corpses/test_loot.py` | `SEARCH`, `TAKE ... from`, pocket chances, unhappiness |
+| `tests/corpses/test_sickness.py` | the count, the rate, the decay rule, the smell fact |
+| `tests/zombies/test_reanimation.py` | the player who rises |
 | `tests/test_context.py`, `tests/test_engine.py`, `tests/test_plan_schema.py`, `tests/test_persistence.py` | the `[CORPSES]` block, the payload, the plan schema, the save |

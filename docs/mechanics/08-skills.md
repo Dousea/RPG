@@ -18,10 +18,10 @@ built are wired.
 | --- | --- |
 | `SkillDefinition`, `SkillState` | `modules/character/skills.py` |
 | `ExerciseDefinition`, `ExerciseState` | `modules/character/exercise.py` |
-| The 35 skills, XP tables, XP multipliers, loss-timer numbers, trait table, recovery table | `data/skills.py` |
-| The 7 exercises and their rep, regularity and stiffness numbers | `data/exercises.py` |
-| `SkillEngine`: XP, levels, loss timers, trait swap, exhaustion and hit XP | `managers/skills.py` |
-| `ExerciseEngine`: reps, regularity, stiffness, starting regularity | `managers/exercise.py` |
+| The 35 skills, XP tables, XP multipliers, loss-timer numbers, trait table, recovery table | `data/character/skills.py` |
+| The 7 exercises and their rep, regularity and stiffness numbers | `data/character/exercises.py` |
+| `SkillEngine`: XP, levels, loss timers, trait swap, exhaustion and hit XP | `managers/character/skills.py` |
+| `ExerciseEngine`: reps, regularity, stiffness, starting regularity | `managers/character/exercise.py` |
 | `EXERCISE` action, resolution and validation | `modules/action/`, `modules/resolution.py`, `managers/validator.py`, `managers/simulation.py` |
 | The `EXERCISE` time cost row (chosen minutes, or minutes run on an early stop; the resolver reads it) | `data/time_costs.py` |
 

@@ -11,13 +11,13 @@ the bands the engine needs (see [Stats](#stats)).
 
 | Layer | File | What it holds |
 | --- | --- | --- |
-| modules | `modules/stats.py` | `CharacterStat` (range and default per stat), `Stats`, `StatusEffect` |
+| modules | `modules/body/stats.py` | `CharacterStat` (range and default per stat), `Stats`, `StatusEffect` |
 | modules | `modules/units.py` | the three rate conversions |
-| data | `data/survival.py` | every rate and threshold, named, with its unit |
-| data | `data/status_effects.py` | `STATUS_EFFECT_THRESHOLDS` and the level names |
-| managers | `managers/stats/status_effects.py` | `status_effect_level` |
-| managers | `managers/stats/drivers.py` | `StatContext`, the drivers |
-| managers | `managers/stats/engine.py` | `StatsEngine` |
+| data | `data/body/survival.py` | every rate and threshold, named, with its unit |
+| data | `data/body/status_effects.py` | `STATUS_EFFECT_THRESHOLDS` and the level names |
+| managers | `managers/body/stats/status_effects.py` | `status_effect_level` |
+| managers | `managers/body/stats/drivers.py` | `StatContext`, the drivers |
+| managers | `managers/body/stats/engine.py` | `StatsEngine` |
 | managers | `managers/simulation.py` | builds the context, calls the engine, runs `SLEEP` |
 
 `Stats` is a clamped mapping with `get`, `set`, `add`, `remove` and `reset`. It
@@ -121,7 +121,7 @@ The status effect thresholds and level names are in [03 Status Effects and Consu
 
 ## Converting rates to game hours
 
-`modules/units.py` holds the three rules. Every rate in `data/survival.py`
+`modules/units.py` holds the three rules. Every rate in `data/body/survival.py`
 ends `_per_hour` and goes through one of them.
 
 | Rule | Function | Factor |
@@ -310,12 +310,12 @@ are gone. A save of any other version is discarded.
 
 ## Testing
 
-- `tests/test_stats.py`: ranges, defaults, clamping, dict round-trip, and each
+- `tests/body/test_stats.py`: ranges, defaults, clamping, dict round-trip, and each
   constant's per-hour value.
-- `tests/test_stats_engine.py`: one hand-computed hour (or chunk) per driver,
+- `tests/body/test_stats_engine.py`: one hand-computed hour (or chunk) per driver,
   Peckish at 4 to 5 hours, Drowsy at 15 to 17 hours, fatigue from 0.8 in bed,
   chunk equivalence, a registered driver, and exactly one fact per status effect change.
-  The three health-loss figures are in `tests/test_body_minute.py`.
+  The three health-loss figures are in `tests/body/test_body_minute.py`.
 - `tests/test_time_and_sleep.py`: stats advance per action, the sleep wake causes,
   death by thirst with its cause, and the clock stopping at the minute of death.
 - `tests/test_validator.py`: `SLEEP`

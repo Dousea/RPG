@@ -144,7 +144,7 @@ material. Beyond the three tiers, two more pieces reach a model:
 `[LAST SCENE]`, the last paragraph of the previous turn's story, goes to the
 narrator (only the last paragraph, because a narrator handed the whole story copied it,
 contradictions included, instead of narrating the new turn; cut on a sentence or line
-boundary to `LAST_SCENE_MAX_CHARS` in `data/memory.py`, and
+boundary to `LAST_SCENE_MAX_CHARS` in `data/story/memory.py`, and
 left out when there is none), and `[LAST TURN]`, the newest entry of the event
 log, goes to the parser. The parser never sees story text.
 
