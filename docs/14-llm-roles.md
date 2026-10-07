@@ -59,6 +59,19 @@ arrives), and the engine cuts the narrator's user prompt to
 characters. What is cut, and in what order, is in
 [document 13](13-context-and-memory.md).
 
+### The fact check
+
+After the narrator replies, a small decision model (`adapters/factcheck.py`), served by
+LM Studio next to the narrator, answers one state question about the end of the story:
+what state is the zombie the turn's facts are about in (standing, down, dead or
+unclear). For now only a turn whose facts name exactly one zombie is checked. An
+answer the engine's state does not allow, given with probability 0.9 or more
+(`factcheck.conflict_threshold`), makes the engine ask the narrator once more with a
+`[CORRECTION]` block stating the true state; "unclear" never conflicts. The retry is kept
+unless it conflicts on more questions than the first story. The check only chooses
+which prose is shown and never changes a fact. `factcheck.enabled: false` turns it off.
+Details in [the LLM contract](mechanics/10-llm-contract.md).
+
 ---
 
 ## Narrator Constraints

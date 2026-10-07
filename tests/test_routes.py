@@ -11,7 +11,7 @@ from adapters.engine import GameEngine
 from adapters.llm import LLMError
 from data.presets import ORTON
 from modules.stats import CharacterStat
-from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM
+from tests.support import FakeMemory, FakeStoryChecker, IsolatedSaveTestCase, ScriptedLLM
 
 ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
 STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
@@ -29,6 +29,8 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_summary = self.llm.query_summary
         self._original_memory = engine_module.SemanticMemory
         engine_module.SemanticMemory = FakeMemory
+        self._original_storychecker = engine_module.StoryChecker
+        engine_module.StoryChecker = FakeStoryChecker
 
         engine = GameEngine()
         engine.create_character(ORTON)
@@ -45,6 +47,7 @@ class RouteTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
         engine_module.SemanticMemory = self._original_memory
+        engine_module.StoryChecker = self._original_storychecker
         super().tearDown()
 
 

@@ -10,6 +10,7 @@ from adapters.llm import ParserReply
 from adapters.save import files
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from managers.story_check import StateQuestion
 from modules.action.types import AnyAction
 from modules.body import PART_WEIGHT, BodyPart
 from modules.entity.npc import NpcEntity
@@ -87,6 +88,22 @@ class FakeMemory:
         self.searched_for.append(query_text)
         self.searched_k.append(k)
         return list(self.next_hits)
+
+
+class FakeStoryChecker:
+    """Stands in for StoryChecker, which asks a decision model over HTTP.
+
+    `results` scripts what each call returns, in order; once spent, nothing
+    conflicts. Every call is recorded as (story, questions).
+    """
+
+    def __init__(self):
+        self.results: list[list[str]] = []
+        self.calls: list[tuple[str, list[StateQuestion]]] = []
+
+    def conflicts(self, story: str, questions: list[StateQuestion]) -> list[str]:
+        self.calls.append((story, list(questions)))
+        return self.results.pop(0) if self.results else []
 
 
 class ScriptedLLM:

@@ -27,9 +27,10 @@ logger = logging.getLogger(__name__)
 
 LM_STUDIO_URL = config.llm.base_url
 
-# LM Studio serves whatever model is loaded; this value is ignored.
 MODEL_NAME = config.llm.model_name
 
+
+EMPTY_STORY = "The world is silent."
 
 _VERB_LINE = re.compile(r"^- ([A-Z_]+)\b", re.MULTILINE)
 
@@ -391,6 +392,6 @@ def parse_narrator_response(llm_response_text: str) -> dict[str, str | list[str]
     ]
 
     return {
-        "story": story or "The world is silent.",
+        "story": story or EMPTY_STORY,
         "options": options,
     }

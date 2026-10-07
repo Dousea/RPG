@@ -24,7 +24,14 @@ from managers.game import MAX_RECENT_EVENTS
 from modules.body import BodyLocation, BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
-from tests.support import FakeMemory, IsolatedSaveTestCase, ScriptedLLM, make_dying, npc_of
+from tests.support import (
+    FakeMemory,
+    FakeStoryChecker,
+    IsolatedSaveTestCase,
+    ScriptedLLM,
+    make_dying,
+    npc_of,
+)
 
 MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
 MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
@@ -44,6 +51,8 @@ class EngineTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_summary = self.llm.query_summary
         self._original_memory = engine_module.SemanticMemory
         engine_module.SemanticMemory = FakeMemory
+        self._original_storychecker = engine_module.StoryChecker
+        engine_module.StoryChecker = FakeStoryChecker
 
         self.engine = GameEngine()
         self.engine.create_character(ORTON)
@@ -53,6 +62,7 @@ class EngineTestCase(IsolatedSaveTestCase):
         engine_module.llm.query_narrator = self._original_narrator
         engine_module.llm.query_summary = self._original_summary
         engine_module.SemanticMemory = self._original_memory
+        engine_module.StoryChecker = self._original_storychecker
         super().tearDown()
 
 
@@ -752,3 +762,149 @@ class NarratorBudgetTests(EngineTestCase):
             self.engine.play("go out")
         expected = int((8192 - 800 - BUDGET_MARGIN_TOKENS) * 2.0) - len(NARRATOR_SYSTEM_PROMPT)
         self.assertEqual(build.call_args.kwargs["max_chars"], expected)
+
+
+class SequencedNarrator(ScriptedLLM):
+    """Answers each narrator call with the next scripted reply; an LLMError instance is raised."""
+
+    def __init__(self, replies: list[str | LLMError], **kwargs):
+        super().__init__(**kwargs)
+        self.replies = replies
+
+    def query_narrator(self, prompt: str) -> str:
+        self.narrator_prompts.append(prompt)
+        reply = self.replies.pop(0)
+        if isinstance(reply, LLMError):
+            raise reply
+        return reply
+
+
+class FactCheckRetryTests(EngineTestCase):
+    """Spec 10, The fact check: one retry when the story conflicts with the engine's state."""
+
+    FIRST = "STORY:\nFirst story.\n\nOPTIONS:\n1. Go on\n2. Wait"
+    SECOND = "STORY:\nSecond story.\n\nOPTIONS:\n1. Rest\n2. Hide"
+    FACTS = ["z1 staggers back but stays on its feet.", "You are winded."]
+    CORRECTION = "The zombie is still alive at the end of this turn."
+
+    def script(self, replies: list[str | LLMError], *results: list[str]) -> FakeStoryChecker:
+        self.llm = SequencedNarrator(replies, actions=MOVE_OUT_ACTIONS)
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
+        checker = cast(FakeStoryChecker, self.engine.factcheck)
+        checker.results = [list(result) for result in results]
+        return checker
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(
+            engine_module.SimulationCore, "resolve", return_value=list(self.FACTS)
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.engine.game.world.zombies["z1"] = ZombieEntity(
+            zombie_id="z1",
+            zone_id=self.engine.game.player.current_location_id,
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.CHASING,
+            gap=3.0,
+        )
+
+    def test_the_checker_gets_the_story_and_the_alive_question(self):
+        checker = self.script([self.FIRST])
+        self.engine.play("go out")
+        ((story, questions),) = checker.calls
+        self.assertEqual(story, "First story.")
+        self.assertEqual([q.correction for q in questions], [self.CORRECTION])
+
+    def test_a_killed_zombie_hands_the_checker_the_dead_question(self):
+        checker = self.script([self.FIRST])
+        del self.engine.game.world.zombies["z1"]
+        self.engine.play("go out")
+        ((_, questions),) = checker.calls
+        self.assertEqual(
+            [q.correction for q in questions], ["The zombie is dead at the end of this turn."]
+        )
+
+    def test_a_clean_story_is_not_retried(self):
+        checker = self.script([self.FIRST], [])
+        result = self.engine.play("go out")
+        self.assertEqual(len(self.llm.narrator_prompts), 1)
+        self.assertEqual(len(checker.calls), 1)
+        self.assertEqual(result["story_text"], "First story.")
+
+    def test_the_retry_prompt_carries_a_correction_with_the_correction_facts(self):
+        checker = self.script([self.FIRST, self.SECOND], [self.CORRECTION], [])
+        self.engine.play("go out")
+        first, retry = self.llm.narrator_prompts
+        self.assertNotIn("[CORRECTION]", first)
+        correction = retry[retry.index("[CORRECTION]") :]
+        self.assertEqual(
+            correction,
+            "[CORRECTION]\nYour last story got these facts wrong. Write the story again so it "
+            "agrees with them and with every outcome:\n" + self.CORRECTION + "\n",
+        )
+        self.assertEqual([call[0] for call in checker.calls], ["First story.", "Second story."])
+
+    def test_a_retry_with_fewer_conflicts_is_used(self):
+        self.script([self.FIRST, self.SECOND], ["a fact"], [])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "Second story.")
+        self.assertEqual(result["options"], ["1. Rest", "2. Hide"])
+        self.assertEqual(self.engine.game.memory.last_story, "Second story.")
+
+    def test_a_retry_with_equal_conflicts_is_used(self):
+        self.script([self.FIRST, self.SECOND], ["a fact"], ["a fact"])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "Second story.")
+
+    def test_a_worse_retry_is_dropped_for_the_first_story(self):
+        self.script([self.FIRST, self.SECOND], ["a fact"], ["a fact", "another"])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "First story.")
+        self.assertEqual(result["options"], ["1. Go on", "2. Wait"])
+        self.assertEqual(self.engine.game.memory.last_story, "First story.")
+
+    def test_a_retry_error_keeps_the_first_story(self):
+        self.script([self.FIRST, LLMError("dropped")], ["a fact"])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "First story.")
+        self.assertEqual(len(self.llm.narrator_prompts), 2)
+
+    def test_a_retry_with_a_blank_story_keeps_the_first_story(self):
+        self.script([self.FIRST, "STORY:\n\nOPTIONS:\n1. Rest"], ["a fact"], [])
+        result = self.engine.play("go out")
+        self.assertEqual(result["story_text"], "First story.")
+
+    def test_there_is_never_a_second_retry(self):
+        self.script([self.FIRST, self.SECOND], ["a fact"], ["a fact"], ["a fact"])
+        self.engine.play("go out")
+        self.assertEqual(len(self.llm.narrator_prompts), 2)
+
+    def test_the_retry_prompt_is_rebuilt_inside_the_budget_less_the_block(self):
+        self.script([self.FIRST, self.SECOND], ["a fact"], [])
+        with mock.patch.object(
+            engine_module.ContextBuilder,
+            "build_narrator_prompt",
+            autospec=True,
+            return_value="prompt",
+        ) as build:
+            self.engine.play("go out")
+        first, retry = build.call_args_list
+        block = self.llm.narrator_prompts[1][len("prompt") :]
+        self.assertEqual(retry.kwargs["max_chars"], first.kwargs["max_chars"] - len(block))
+
+    def test_a_turn_without_questions_is_not_checked(self):
+        checker = self.script([self.FIRST])
+        with mock.patch.object(
+            engine_module.SimulationCore, "resolve", return_value=["You are winded."]
+        ):
+            self.engine.play("go out")
+        self.assertEqual(checker.calls, [])

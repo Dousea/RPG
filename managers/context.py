@@ -51,13 +51,13 @@ from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
 
-_ZOMBIE_ID = re.compile(r"\bz\d+\b")
+ZOMBIE_ID = re.compile(r"\bz\d+\b")
 
 
 def zombie_ids_to_words(fact: str) -> str:
     """The fact with every zombie id read as "the zombie", for text the narrator sees."""
-    worded = _ZOMBIE_ID.sub("the zombie", fact)
-    return "T" + worded[1:] if _ZOMBIE_ID.match(fact) else worded
+    worded = ZOMBIE_ID.sub("the zombie", fact)
+    return "T" + worded[1:] if ZOMBIE_ID.match(fact) else worded
 
 
 class ContextBuilder:

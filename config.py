@@ -34,6 +34,12 @@ _DEFAULTS: dict[str, Any] = {
         "embedding_dimension": 384,
         "default_recall": 2,
     },
+    "factcheck": {
+        "enabled": True,
+        "model_name": "togethercomputer_tev1-4b-experimental",
+        "conflict_threshold": 0.9,
+        "request_timeout": 30,
+    },
     "game": {
         "max_recent_events": 5,
         "summary_threshold": 10,
@@ -87,6 +93,7 @@ _raw = _load()
 
 llm = ConfigSection(_raw["llm"])
 memory = ConfigSection(_raw["memory"])
+factcheck = ConfigSection(_raw["factcheck"])
 game = ConfigSection(_raw["game"])
 persistence = ConfigSection(_raw["persistence"])
 server = ConfigSection(_raw["server"])

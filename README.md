@@ -27,6 +27,7 @@ Every such dependency lives in `adapters/`:
 | Module | Responsibility |
 | --- | --- |
 | `adapters/llm.py` | LM Studio chat completions, the parser/narrator system prompts, response parsing |
+| `adapters/factcheck.py` | State questions to a decision model about the narrator's story; its confident conflicts with the engine |
 | `adapters/memory.py` | FAISS semantic search over the full event log |
 | `adapters/save/codec.py` | A `GameManager` as a JSON-ready dict and back; `SCHEMA_VERSION` |
 | `adapters/save/files.py` | Save/load that dict to `gamedata/engine_state.json` |
@@ -58,6 +59,7 @@ GameEngine.play()                             [adapters/engine.py]
     +-- ContextBuilder.build_narrator_prompt() full context + [OUTCOMES] facts
     +-- llm.query_narrator()                  ask LM Studio to describe what happened
     +-- llm.parse_narrator_response()         split into STORY / OPTIONS
+    +-- StoryChecker.conflicts()              story vs the engine's zombie state; one narrator retry
     +-- build_event_entry() + record_event()  engine-written entry to short-term + full log
     +-- SemanticMemory.rebuild()              reindex
     +-- llm.query_summary()                   fold old events into a summary
@@ -219,6 +221,12 @@ first to skip that download:
 uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 mise run install
 ```
+
+A second, small decision model checks the narrator's story against the engine's
+state: load the Tev1-4B GGUF (about 2.8 GB at Q4_K_M) in LM Studio beside the
+narrator, under the key in `factcheck.model_name`. Set `factcheck.enabled: false` in
+`config.yml` to skip the check; if the model is not loaded the check logs a warning
+and the game plays on.
 
 `.venv` is gitignored.
 

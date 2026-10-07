@@ -405,6 +405,27 @@ the narrator echoes back (`[OUTCOMES]` and the lines under it) is dropped up to 
 next header. A header written in brackets (`[OPTIONS]`) counts as the header, and an
 option that reads `NONE`, bulleted or not, is no option.
 
+### The fact check
+
+After the narrator replies, the engine builds state questions from the turn's raw
+outcome facts and asks a small decision model (`adapters/factcheck.py`, the `factcheck:`
+config section; it must be loaded in LM Studio beside the narrator) one per question.
+For now a turn whose facts name exactly one zombie gets one question, "At the end of the
+story, what state is the zombie in?", with the options standing, down, dead and unclear;
+none or several zombies mean no question. The engine's truth decides which answers are
+allowed: a zombie no longer in the world was killed this turn, so only dead and unclear
+are allowed; otherwise it is alive, so standing, down and unclear are. The model answers
+with one option letter, and the probability of each option is read from its token
+probabilities. The story conflicts when the most probable answer is not allowed and its
+probability is at or above `factcheck.conflict_threshold` (0.9). "Unclear" never
+conflicts. On a conflict the engine asks the narrator once more with the same prompt
+and a `[CORRECTION]` block stating the true state of the zombie in words, and keeps the
+retry unless it conflicts on more questions than the first story. There is never a
+second retry, and a failed retry keeps the first story. The check only picks which
+prose is shown; it never changes a fact. A turn with no question is not checked.
+A request that fails or returns no usable answer logs a warning and counts as no
+conflict; the checker stays on. `factcheck.enabled: false` turns it off.
+
 ## Memory
 
 - The engine writes each event-log entry from the turn, never from narrator text:
@@ -446,6 +467,7 @@ option that reads `NONE`, bulleted or not, is no option.
 | Parser call errors or times out | No state change, no time; a system error is shown |
 | A line is malformed or uses a removed verb | `ParseFailure`, refused as a fact in words: "Refused: Orton tried to talk, but it wasn't clear how." (or, when the verb is unknown or the reply unreadable, "Refused: Orton's attempt isn't something he can do here."); the raw line and the grammar reason go to the log only, never into the fact; the rest of the plan runs |
 | The validator refuses an action | Refused as a fact in words, 0 minutes: "Refused: Orton can't bandage the left hand: The left hand isn't hurt." No class name, no verb syntax |
+| The story gives a confident answer the engine's state does not allow | One narrator retry with a correction block; the better story is shown |
 | Narrator call errors after the engine acted | The same event entry is recorded and saved; a system error is shown |
 | The summarizer fails | Skipped; retried next turn |
 

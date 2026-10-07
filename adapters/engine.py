@@ -12,6 +12,7 @@ from typing import Any
 
 import config
 from adapters import llm
+from adapters.factcheck import StoryChecker
 from adapters.memory import DEFAULT_RECALL, SemanticMemory
 from adapters.save import codec, files
 from data.items import item_condition_word, wetness_word
@@ -30,6 +31,7 @@ from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.simulation import SimulationCore
 from managers.skills import skill_progress
 from managers.stats.status_effects import active_status_effects
+from managers.story_check import build_questions
 from managers.zombies import threat_views
 from modules.action.words import refusal_in_words
 from modules.character.build import CharacterBuild
@@ -41,6 +43,11 @@ from modules.item import MedicalItem, MeleeWeaponItem
 from modules.quest import QuestStatus
 
 logger = logging.getLogger(__name__)
+
+CORRECTION_BLOCK = (
+    "\n\n[CORRECTION]\nYour last story got these facts wrong. "
+    "Write the story again so it agrees with them and with every outcome:\n{facts}\n"
+)
 
 
 class GameEngine:
@@ -54,6 +61,7 @@ class GameEngine:
     def __init__(self):
         self._lock = threading.Lock()
         self.memory = SemanticMemory()
+        self.factcheck = StoryChecker()
         self.manager: GameManager | None = files.load()
         self.memory.rebuild(self.manager.memory.full_event_log if self.manager else [])
 
@@ -130,7 +138,8 @@ class GameEngine:
                 outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
 
             # 4. Ask the narrator to describe what already happened.
-            narrator_prompt = ContextBuilder(manager).build_narrator_prompt(
+            context = ContextBuilder(manager)
+            narrator_prompt = context.build_narrator_prompt(
                 player_input, outcome_facts, deep_memories, max_chars=self._narrator_budget()
             )
             try:
@@ -149,6 +158,7 @@ class GameEngine:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
             parsed = llm.parse_narrator_response(raw_response)
+            parsed = self._fact_checked(parsed, context, player_input, outcome_facts, deep_memories)
             story_text = str(parsed["story"])
             options = list(parsed["options"])
             entry = build_event_entry(manager, stamp, player_input, outcome_facts)
@@ -163,6 +173,47 @@ class GameEngine:
 
             files.save(manager)
             return self._snapshot(story_text=story_text, options=options)
+
+    def _fact_checked(
+        self,
+        parsed: dict[str, Any],
+        context: ContextBuilder,
+        player_input: str,
+        outcome_facts: list[str],
+        deep_memories: list[str],
+    ) -> dict[str, Any]:
+        """The narrator's reply, or its one retry when the story conflicts with the engine's state.
+
+        The retry replaces the first reply only if it conflicts on no more
+        questions; the facts themselves never change.
+        """
+        questions = build_questions(context.manager, outcome_facts)
+        if not questions:
+            return parsed
+        conflicts = self.factcheck.conflicts(str(parsed["story"]), questions)
+        if not conflicts:
+            return parsed
+        logger.warning(f"Story conflicts with the engine: {conflicts}")
+        block = CORRECTION_BLOCK.format(facts="\n".join(conflicts))
+        retry_prompt = (
+            context.build_narrator_prompt(
+                player_input,
+                outcome_facts,
+                deep_memories,
+                max_chars=self._narrator_budget() - len(block),
+            )
+            + block
+        )
+        try:
+            retry = llm.parse_narrator_response(llm.query_narrator(retry_prompt))
+        except llm.LLMError as exc:
+            logger.warning(f"Narrator retry failed, keeping the first story: {exc}")
+            return parsed
+        if retry["story"] == llm.EMPTY_STORY:
+            logger.warning("Narrator retry has no story, keeping the first story.")
+            return parsed
+        retry_conflicts = self.factcheck.conflicts(str(retry["story"]), questions)
+        return retry if len(retry_conflicts) <= len(conflicts) else parsed
 
     def _run_summarization(self, manager: GameManager) -> None:
         """Fold the oldest unsummarized events into a narrative paragraph."""

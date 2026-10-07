@@ -33,6 +33,8 @@
        ↓
 14. NARRATOR LLM
        ↓
+14b. STATE CHECK (one retry if the story confidently conflicts with the engine's state)
+       ↓
 15. PLAYER OUTPUT
 ```
 

@@ -4,8 +4,9 @@
 llm:
   # LM Studio (or any OpenAI-compatible server)'s chat completions endpoint.
   base_url: "http://localhost:1234/v1/chat/completions"
-  # LM Studio serves whatever model is loaded locally; this value is mostly
-  # ignored by LM Studio but is required by the API shape.
+  # The narrator's model key in LM Studio. With one model loaded LM Studio
+  # ignores it; with several (the narrator and the factcheck model) it must
+  # name the narrator's loaded model.
   model_name: "local-model"
   # Seconds to wait for a response before giving up.
   request_timeout: 300
@@ -29,6 +30,19 @@ memory:
   embedding_dimension: 384
   # Number of past events recalled per turn via semantic search.
   default_recall: 2
+
+factcheck:
+  # Check the narrator's story with a small decision model asked a state question
+  # (is the zombie standing, down or dead?); false skips the check and its requests.
+  enabled: true
+  # The decision model's key in LM Studio, served from the llm section's base_url.
+  # Load it in LM Studio next to the narrator (Tev1-4B GGUF, about 2.8 GB at Q4_K_M).
+  model_name: "togethercomputer_tev1-4b-experimental"
+  # A confident answer that conflicts with the engine counts at or above this
+  # probability. "Unclear" never conflicts.
+  conflict_threshold: 0.9
+  # Seconds to wait for the one-letter answer before the check is skipped.
+  request_timeout: 30
 
 game:
   # Number of recent events kept in the prompt as short-term memory.
