@@ -1,4 +1,4 @@
-"""Spec 08: gaining XP, levels, loss timers, trait swaps and Fitness effects."""
+"""skills: gaining XP, levels, loss timers, trait swaps and Fitness effects."""
 
 import unittest
 
@@ -22,7 +22,7 @@ def make_player(**kwargs) -> PlayerEntity:
 
 
 class GainingXpTests(unittest.TestCase):
-    """Spec 08, Gaining XP."""
+    """skills: Gaining XP."""
 
     def setUp(self):
         self.engine = SkillEngine()
@@ -165,7 +165,7 @@ def build(occupation: str, traits: tuple[str, ...] = ()) -> CharacterBuild:
 
 
 class TraitsFollowTheLevelTests(unittest.TestCase):
-    """Spec 08, Traits that follow the level."""
+    """skills: Traits that follow the level."""
 
     def trait_at(self, skill: str, level: int, family: set[str]) -> set[str]:
         player = make_player()
@@ -241,7 +241,7 @@ class TraitsFollowTheLevelTests(unittest.TestCase):
 
 
 class LossTimerTests(unittest.TestCase):
-    """Spec 08, Losing them when you stop training."""
+    """skills: Losing them when you stop training."""
 
     def trained(self, timer: float, step: int, level: int = 5) -> PlayerEntity:
         player = make_player()
@@ -303,7 +303,7 @@ class LossTimerTests(unittest.TestCase):
 
 
 class ExhaustionXpTests(unittest.TestCase):
-    """Spec 08, Where XP comes from: exhausted and not walking."""
+    """skills: Where XP comes from: exhausted and not walking."""
 
     def tick_at(self, endurance: float, *, walking: bool = False) -> PlayerEntity:
         player = make_player()
@@ -325,7 +325,7 @@ class ExhaustionXpTests(unittest.TestCase):
 
 
 class RecoveryByFitnessTests(unittest.TestCase):
-    """Spec 08, Effects wired now."""
+    """skills: Effects wired now."""
 
     def regen(self, fitness: int, **ctx) -> float:
         player = make_player()
@@ -365,7 +365,7 @@ class RecoveryByFitnessTests(unittest.TestCase):
 
 
 class FitnessStatTests(unittest.TestCase):
-    """Spec 08, Effects wired now: the Fitness stat in the heat balance."""
+    """skills: Effects wired now: the Fitness stat in the heat balance."""
 
     def stat(self, level: int) -> float:
         player = make_player()
@@ -380,7 +380,7 @@ class FitnessStatTests(unittest.TestCase):
 
 
 class LevelWordTests(unittest.TestCase):
-    """Spec 08, What the narrator and the player see."""
+    """skills: What the narrator and the player see."""
 
     def test_words_by_level(self):
         expected = {
@@ -396,7 +396,7 @@ class LevelWordTests(unittest.TestCase):
 
 
 class HitXpCapTests(unittest.TestCase):
-    """Spec 08, Where XP comes from: the hit XP cap."""
+    """skills: Where XP comes from: the hit XP cap."""
 
     def category_xp(self, split: float) -> float:
         from data.items import ITEMS
@@ -416,7 +416,7 @@ class HitXpCapTests(unittest.TestCase):
 
 
 class LossTimerOnlyGainsDropTests(unittest.TestCase):
-    """Spec 08, Losing them when you stop training: only gains lower the timer."""
+    """skills: Losing them when you stop training: only gains lower the timer."""
 
     def test_a_loss_leaves_the_timer_and_a_gain_drops_it_by_three_thousand(self):
         player = make_player()

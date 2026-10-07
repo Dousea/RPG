@@ -1,4 +1,4 @@
-"""Spec 14, Corpse sickness: standing among many bodies makes the player sick."""
+"""zombie-lifecycle: Corpse sickness: standing among many bodies makes the player sick."""
 
 import unittest
 
@@ -44,7 +44,7 @@ def add_bodies(gm: GameManager, zone_id: str, count: int, *, skeletons: int = 0)
 
 
 class RateTests(unittest.TestCase):
-    """Spec 14, Corpse sickness: the rate per game hour."""
+    """zombie-lifecycle: Corpse sickness: the rate per game hour."""
 
     def gained(self, corpses: int, **ctx) -> float:
         p = player()
@@ -100,7 +100,7 @@ class RateTests(unittest.TestCase):
 
 
 class CountTests(unittest.TestCase):
-    """Spec 14, Corpse sickness: the count the player stands in."""
+    """zombie-lifecycle: Corpse sickness: the count the player stands in."""
 
     def test_the_apartment_and_the_hallway_share_one_count(self):
         gm = GameManager()
@@ -133,7 +133,7 @@ class CountTests(unittest.TestCase):
 
 
 class DefenceTests(unittest.TestCase):
-    """Spec 14, Corpse sickness: the best defence among worn items."""
+    """zombie-lifecycle: Corpse sickness: the best defence among worn items."""
 
     def test_the_best_corpse_sickness_defence_of_the_worn_items(self):
         p = player()
@@ -147,7 +147,7 @@ class DefenceTests(unittest.TestCase):
 
 
 class SmellTests(unittest.TestCase):
-    """Spec 14, Corpse sickness: the fact when the count first passes five."""
+    """zombie-lifecycle: Corpse sickness: the fact when the count first passes five."""
 
     SMELL = "The smell of the dead hangs thick here."
 

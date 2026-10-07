@@ -1,4 +1,4 @@
-"""Spec 14, The player who rises: an infected death leaves a zombie."""
+"""zombie-lifecycle: The player who rises: an infected death leaves a zombie."""
 
 import random
 import unittest
@@ -32,7 +32,7 @@ def die(gm: GameManager) -> list[str]:
 
 
 class RisingPlayerTests(unittest.TestCase):
-    """Spec 14, The player who rises."""
+    """zombie-lifecycle: The player who rises."""
 
     def test_an_infected_death_leaves_a_zombie_in_the_zone_of_death(self):
         gm = infected_dying_game()

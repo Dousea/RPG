@@ -24,8 +24,8 @@ Never commit, never push, never stage.
 ## Build
 
 - Work test-first, one behaviour at a time:
-  1. Write the test. A test for a mechanic in `docs/mechanics/NN-*.md`
-     names "Spec NN, <section>" in its class docstring and asserts the
+  1. Write the test. A test for a mechanic in `docs/mechanics/<id>.md`
+     names "<id>: <section>" in its class docstring and asserts the
      doc's numbers. Tests stay offline: stub the LLM and the embedding
      model (`tests/support.py`).
   2. Run only that test module and see it fail for the expected reason:

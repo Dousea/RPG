@@ -1,4 +1,4 @@
-"""Trait definitions and the trait factors the survival drivers read (spec 07).
+"""Trait definitions and the trait factors the survival drivers read (character-creation).
 
 Costs follow the point pool: positive for a good trait, negative for a bad one.
 """
@@ -932,47 +932,51 @@ _ROWS = [
 
 TRAITS: dict[str, TraitDefinition] = {row.id: row for row in _ROWS}
 
-HEARTY_APPETITE_ID = "heartyappetite"  # spec 07
-LIGHT_EATER_ID = "lighteater"  # spec 07
-HIGH_THIRST_ID = "highthirst"  # spec 07
-LOW_THIRST_ID = "lowthirst"  # spec 07
-WAKEFUL_ID = "needslesssleep"  # spec 07
-SLEEPYHEAD_ID = "needsmoresleep"  # spec 07
-RESTLESS_SLEEPER_ID = "insomniac"  # spec 07
-NIGHT_OWL_ID = "nightowl"  # spec 07
-COWARDLY_ID = "cowardly"  # spec 07
-BRAVE_ID = "brave"  # spec 07
-DESENSITIZED_ID = "desensitized"  # spec 07
-PRONE_TO_ILLNESS_ID = "pronetoillness"  # spec 07
-RESILIENT_ID = "resilient"  # spec 07
-FAST_HEALER_ID = "fasthealer"  # spec 07
-SLOW_HEALER_ID = "slowhealer"  # spec 07
-FEAR_OF_BLOOD_ID = "hemophobic"  # spec 07
-OUTDOORSMAN_ID = "outdoorsman"  # spec 07
+HEARTY_APPETITE_ID = "heartyappetite"  # character-creation
+LIGHT_EATER_ID = "lighteater"  # character-creation
+HIGH_THIRST_ID = "highthirst"  # character-creation
+LOW_THIRST_ID = "lowthirst"  # character-creation
+WAKEFUL_ID = "needslesssleep"  # character-creation
+SLEEPYHEAD_ID = "needsmoresleep"  # character-creation
+RESTLESS_SLEEPER_ID = "insomniac"  # character-creation
+NIGHT_OWL_ID = "nightowl"  # character-creation
+COWARDLY_ID = "cowardly"  # character-creation
+BRAVE_ID = "brave"  # character-creation
+DESENSITIZED_ID = "desensitized"  # character-creation
+PRONE_TO_ILLNESS_ID = "pronetoillness"  # character-creation
+RESILIENT_ID = "resilient"  # character-creation
+FAST_HEALER_ID = "fasthealer"  # character-creation
+SLOW_HEALER_ID = "slowhealer"  # character-creation
+FEAR_OF_BLOOD_ID = "hemophobic"  # character-creation
+OUTDOORSMAN_ID = "outdoorsman"  # character-creation
 
-APPETITE_TRAIT_MULT = {HEARTY_APPETITE_ID: 1.5, LIGHT_EATER_ID: 0.75}  # spec 07
-THIRST_TRAIT_MULT = {HIGH_THIRST_ID: 2.0, LOW_THIRST_ID: 0.5}  # spec 07
-FATIGUE_GAIN_TRAIT_MULT = {WAKEFUL_ID: 0.7, SLEEPYHEAD_ID: 1.3}  # spec 07
-SLEEP_HOURS_TRAIT_MULT = {WAKEFUL_ID: 0.75, SLEEPYHEAD_ID: 1.18}  # spec 07
-SLEEP_RECOVERY_TRAIT_MULT = {RESTLESS_SLEEPER_ID: 0.5, NIGHT_OWL_ID: 1.4}  # spec 07
-PANIC_GAIN_TRAIT_MULT = {COWARDLY_ID: 2.0, BRAVE_ID: 0.3, DESENSITIZED_ID: 0.15}  # spec 07
+APPETITE_TRAIT_MULT = {HEARTY_APPETITE_ID: 1.5, LIGHT_EATER_ID: 0.75}  # character-creation
+THIRST_TRAIT_MULT = {HIGH_THIRST_ID: 2.0, LOW_THIRST_ID: 0.5}  # character-creation
+FATIGUE_GAIN_TRAIT_MULT = {WAKEFUL_ID: 0.7, SLEEPYHEAD_ID: 1.3}  # character-creation
+SLEEP_HOURS_TRAIT_MULT = {WAKEFUL_ID: 0.75, SLEEPYHEAD_ID: 1.18}  # character-creation
+SLEEP_RECOVERY_TRAIT_MULT = {RESTLESS_SLEEPER_ID: 0.5, NIGHT_OWL_ID: 1.4}  # character-creation
+PANIC_GAIN_TRAIT_MULT = {
+    COWARDLY_ID: 2.0,
+    BRAVE_ID: 0.3,
+    DESENSITIZED_ID: 0.15,
+}  # character-creation
 
-CATCH_COLD_TRAIT_MULT = {  # spec 07
+CATCH_COLD_TRAIT_MULT = {  # character-creation
     PRONE_TO_ILLNESS_ID: 1.7,
     RESILIENT_ID: 0.45,
     OUTDOORSMAN_ID: 0.25,
 }
-COLD_RECOVERY_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 0.5, RESILIENT_ID: 1.5}  # spec 07
-COLD_WORSENING_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 1.2, RESILIENT_ID: 0.8}  # spec 07
-GRACEFUL_ID = "graceful"  # spec 09
-CLUMSY_ID = "clumsy"  # spec 09
-INCONSPICUOUS_ID = "inconspicuous"  # spec 09
-CONSPICUOUS_ID = "conspicuous"  # spec 09
-THICK_SKINNED_ID = "thickskinned"  # spec 09
-THIN_SKINNED_ID = "thinskinned"  # spec 09
-KEEN_HEARING_ID = "keenhearing"  # spec 09
-HARD_OF_HEARING_ID = "hardofhearing"  # spec 09
-DEAF_ID = "deaf"  # spec 09
-JOGGER_ID = "jogger"  # spec 13
-HANDY_ID = "handy"  # spec 13
-ASTHMATIC_ID = "asthmatic"  # spec 11
+COLD_RECOVERY_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 0.5, RESILIENT_ID: 1.5}  # character-creation
+COLD_WORSENING_TRAIT_MULT = {PRONE_TO_ILLNESS_ID: 1.2, RESILIENT_ID: 0.8}  # character-creation
+GRACEFUL_ID = "graceful"  # zombies
+CLUMSY_ID = "clumsy"  # zombies
+INCONSPICUOUS_ID = "inconspicuous"  # zombies
+CONSPICUOUS_ID = "conspicuous"  # zombies
+THICK_SKINNED_ID = "thickskinned"  # zombies
+THIN_SKINNED_ID = "thinskinned"  # zombies
+KEEN_HEARING_ID = "keenhearing"  # zombies
+HARD_OF_HEARING_ID = "hardofhearing"  # zombies
+DEAF_ID = "deaf"  # zombies
+JOGGER_ID = "jogger"  # doors
+HANDY_ID = "handy"  # doors
+ASTHMATIC_ID = "asthmatic"  # melee

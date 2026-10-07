@@ -1,4 +1,4 @@
-"""Spec 10, Memory: the engine writes the event entry from the turn, not from narrator text."""
+"""llm-contract: Memory: the engine writes the event entry from the turn, not from narrator text."""
 
 import unittest
 

@@ -1,18 +1,18 @@
-"""Conversion of per-frame and per-day rates to per-game-hour rates (spec 02).
+"""Conversion of per-frame and per-day rates to per-game-hour rates (survival-stats).
 
 Three rules cover every rate in the mechanics: day-scaled rates, frame rates
 and real-time frame rates. The factors assume the pinned day length of 90 real
 minutes per game day.
 """
 
-DAY_SCALED_PER_HOUR = 3600  # spec 02
-FRAME_RATE_PER_HOUR = 10800  # spec 02
-REAL_TIME_PER_HOUR = 6750  # spec 02
+DAY_SCALED_PER_HOUR = 3600  # survival-stats
+FRAME_RATE_PER_HOUR = 10800  # survival-stats
+REAL_TIME_PER_HOUR = 6750  # survival-stats
 
 
 MINUTES_PER_HOUR = 60
-TIMED_ACTION_FRAMES_PER_MINUTE = 180  # spec 12
-MINUTE_ROUND_UP_AT = 1.5  # spec 13: a timed action under a minute and a half takes 1 minute
+TIMED_ACTION_FRAMES_PER_MINUTE = 180  # health
+MINUTE_ROUND_UP_AT = 1.5  # doors: a timed action under a minute and a half takes 1 minute
 
 
 def per_minute_from_frame(rate: float) -> float:

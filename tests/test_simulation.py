@@ -136,7 +136,7 @@ class PlayerDeathResolutionTests(unittest.TestCase):
 
 
 class RefusalWordingTests(unittest.TestCase):
-    """Spec 10, Failures: a refusal reads as a sentence, never a class name."""
+    """llm-contract: Failures: a refusal reads as a sentence, never a class name."""
 
     def test_a_refused_action_names_what_orton_could_not_do_and_why(self):
         facts = simulate(GameManager(), BandageAction(part_name="left hand"))
@@ -147,7 +147,7 @@ class RefusalWordingTests(unittest.TestCase):
 
 
 class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):
-    """docs/01-engine-authority.md: outcome facts describe HP, damage and
+    """docs/architecture/engine-authority.md: outcome facts describe HP, damage and
     relationship scores in words, never as numbers."""
 
     def setUp(self):
@@ -186,7 +186,7 @@ class OutcomeFactsCarryNoNumbersTests(unittest.TestCase):
 
 
 class WeatherWiringTests(unittest.TestCase):
-    """Spec 04, Components: the simulation core feeds each chunk its weather."""
+    """weather: Components: the simulation core feeds each chunk its weather."""
 
     def test_each_chunk_gets_the_weather_at_its_midpoint_and_the_zone_shelter(self):
         gm = GameManager()
@@ -236,7 +236,7 @@ class WeatherWiringTests(unittest.TestCase):
 
 
 class WearTimeMultiplierTests(unittest.TestCase):
-    """Spec 01, Time costs: the action-time multiplier scales WEAR and TAKE_OFF."""
+    """clock: Time costs: the action-time multiplier scales WEAR and TAKE_OFF."""
 
     def test_wear_and_take_off_are_multiplied_actions(self):
         from data.time_costs import MULTIPLIED_ACTIONS
@@ -257,7 +257,7 @@ class WearTimeMultiplierTests(unittest.TestCase):
 
 
 class WearResolutionTests(unittest.TestCase):
-    """Spec 05, Actions: WEAR and TAKE_OFF cost 1 minute each."""
+    """clothing: Actions: WEAR and TAKE_OFF cost 1 minute each."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -298,7 +298,7 @@ class WearResolutionTests(unittest.TestCase):
 
 
 class TakeClothingFactTests(unittest.TestCase):
-    """Spec 05, Actions: taking a garment carries it; only WEAR puts it on."""
+    """clothing: Actions: taking a garment carries it; only WEAR puts it on."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -319,7 +319,7 @@ class TakeClothingFactTests(unittest.TestCase):
 
 
 class BoundaryTickWiringTests(unittest.TestCase):
-    """Spec 08, Regularity and stiffness over time: the clock drives the ticks."""
+    """skills: Regularity and stiffness over time: the clock drives the ticks."""
 
     def test_regularity_decays_by_two_thousandths_after_a_day_idle(self):
         gm = GameManager()
@@ -341,7 +341,7 @@ class BoundaryTickWiringTests(unittest.TestCase):
 
 
 class DeathBeforeTicksTests(unittest.TestCase):
-    """Spec 08, Where XP comes from: a lethal chunk is judged before the ticks run."""
+    """skills: Where XP comes from: a lethal chunk is judged before the ticks run."""
 
     def test_a_starvation_death_in_a_levelling_chunk_ends_the_game(self):
         gm = GameManager()
@@ -368,7 +368,7 @@ def _crowbar_game() -> GameManager:
 
 
 class MeleeHitXpTests(unittest.TestCase):
-    """Spec 08, Where XP comes from: a melee hit against an NPC."""
+    """skills: Where XP comes from: a melee hit against an NPC."""
 
     def test_a_crowbar_hit_on_an_npc_trains_fitness_and_strength_only(self):
         gm = _crowbar_game()
@@ -411,7 +411,7 @@ class MeleeHitXpTests(unittest.TestCase):
 
 
 class TickWiringTests(unittest.TestCase):
-    """Spec 08, Losing them when you stop training: the 10-minute boundary."""
+    """skills: Losing them when you stop training: the 10-minute boundary."""
 
     def test_ten_minutes_run_the_timers_once(self):
         gm = GameManager()
@@ -465,7 +465,7 @@ if __name__ == "__main__":
 def zombie_game(zone_id: str = "zone_street") -> GameManager:
     """A game after the outbreak, with no zombies yet, the player standing in `zone_id`.
 
-    Every door stands open, so the zombie rules of spec 09 are tested without them.
+    Every door stands open, so the zombie rules of zombies are tested without them.
     """
     gm = GameManager()
     for barrier in gm.world.barriers.values():
@@ -522,7 +522,7 @@ def add_zombie(
 
 
 class ZombieMinuteLoopTests(unittest.TestCase):
-    """Spec 09, The minute loop and Interruptions."""
+    """zombies: The minute loop and Interruptions."""
 
     def spent(self, gm: GameManager, *actions) -> tuple[int, list[str]]:
         before = gm.narrative.minutes
@@ -647,7 +647,7 @@ class ZombieMinuteLoopTests(unittest.TestCase):
         self.assertTrue(any("A zombie" in fact or "shoves" in fact for fact in facts))
 
     def test_a_wait_is_interrupted_when_a_fake_dead_body_rises(self):
-        """Spec 14, Fake-dead corpses."""
+        """zombie-lifecycle: Fake-dead corpses."""
         gm = zombie_game()
         gm.world.corpses["c1"] = CorpseEntity(
             corpse_id="c1",
@@ -666,7 +666,7 @@ class ZombieMinuteLoopTests(unittest.TestCase):
         self.assertEqual(gm.world.corpses, {})
 
     def test_a_plan_of_search_then_take_from_runs(self):
-        """Spec 14, Searching and looting."""
+        """zombie-lifecycle: Searching and looting."""
         gm = zombie_game()
         gm.world.corpses["c1"] = CorpseEntity(
             corpse_id="c1",
@@ -686,7 +686,7 @@ class ZombieMinuteLoopTests(unittest.TestCase):
         self.assertEqual(gm.player.inventory[-1].item.id, "item_jacket_police")
 
     def test_an_attack_during_the_search_cancels_the_rest_but_not_the_search(self):
-        """Spec 14, Interruptions."""
+        """zombie-lifecycle: Interruptions."""
         gm = zombie_game()
         gm.world.corpses["c1"] = CorpseEntity(
             corpse_id="c1",
@@ -774,7 +774,7 @@ def put_on_armour(gm: GameManager) -> None:
 
 
 class ZombieAttackActionTests(unittest.TestCase):
-    """Spec 09, Zombies going down: ATTACK on a zombie, approach minutes and removal."""
+    """zombies: Zombies going down: ATTACK on a zombie, approach minutes and removal."""
 
     def attack(self, gm: GameManager, target: str, seed: int = 1) -> tuple[int, list[str]]:
         if gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] is None:
@@ -861,7 +861,7 @@ class ZombieAttackActionTests(unittest.TestCase):
 
 
 class StartOutbreakTests(unittest.TestCase):
-    """Spec 09, The outbreak: the story effect that starts it."""
+    """zombies: The outbreak: the story effect that starts it."""
 
     def test_the_effect_stamps_the_minute_and_fills_the_zones(self):
         gm = GameManager()
@@ -890,7 +890,7 @@ class StartOutbreakTests(unittest.TestCase):
 
 
 class ZombieFollowUpTests(unittest.TestCase):
-    """Spec 09: Hearing, Movement, Population and What the narrator and the player see."""
+    """zombies: Hearing, Movement, Population and What the narrator and the player see."""
 
     def run_wait(self, gm: GameManager, minutes: int) -> None:
         simulate(gm, WaitAction(duration=Duration(minutes=minutes)), rng=random.Random(1))
@@ -1031,7 +1031,7 @@ class ZombieFollowUpTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
-    """Spec 10, Plans."""
+    """llm-contract: Plans."""
 
     def test_a_sixth_action_is_refused(self):
         gm = GameManager()
@@ -1109,7 +1109,7 @@ class PlanTests(unittest.TestCase):
 
 
 class ShoutTests(unittest.TestCase):
-    """Spec 10, SHOUT."""
+    """llm-contract: SHOUT."""
 
     def sounds_after(self, gm: GameManager, *actions) -> list[tuple[float, float]]:
         core = SimulationCore(gm, rng=random.Random(1))
@@ -1156,7 +1156,7 @@ class ShoutTests(unittest.TestCase):
 
 
 class WhatPainDoesTests(unittest.TestCase):
-    """Spec 12, What pain does."""
+    """health: What pain does."""
 
     def refusal(self, gm: GameManager) -> str | None:
         result = ActionValidator(gm).validate(SleepAction(duration=Duration(minutes=60)))
@@ -1227,7 +1227,7 @@ class WhatPainDoesTests(unittest.TestCase):
 
 
 class LimpWiringTests(unittest.TestCase):
-    """Spec 12, The limp."""
+    """health: The limp."""
 
     def hop_minutes(self, **wound) -> int:
         gm = GameManager()
@@ -1268,7 +1268,7 @@ class LimpWiringTests(unittest.TestCase):
 
 
 class WeakeningInterruptionTests(unittest.TestCase):
-    """Spec 12, Interruptions."""
+    """health: Interruptions."""
 
     def test_a_wait_stops_when_the_bleeding_level_rises(self):
         gm = GameManager()
@@ -1325,7 +1325,7 @@ class WeakeningInterruptionTests(unittest.TestCase):
 
 
 class WeakeningFactTests(unittest.TestCase):
-    """Spec 12, Weakening: the fact is given once per turn, however many actions spend time."""
+    """health: Weakening: the fact is given once per turn, however many actions spend time."""
 
     def test_two_moves_while_dying_of_thirst_give_one_fact(self):
         gm = GameManager()
@@ -1345,7 +1345,7 @@ class WeakeningFactTests(unittest.TestCase):
 
 
 class WeakeningComparisonTests(unittest.TestCase):
-    """Spec 12, The weakening interruption: either level rising counts."""
+    """health: The weakening interruption: either level rising counts."""
 
     def test_bleeding_rising_while_injured_falls_counts_as_worse(self):
         from managers.simulation import _got_worse
@@ -1356,7 +1356,7 @@ class WeakeningComparisonTests(unittest.TestCase):
 
 
 class WoundLandsInThePartTests(unittest.TestCase):
-    """Spec 12, Wounds: a zombie's wound goes into its part."""
+    """health: Wounds: a zombie's wound goes into its part."""
 
     def test_a_bite_lands_on_the_neck_with_its_zombie_infection_and_infection_flags(self):
         from unittest.mock import patch
@@ -1381,7 +1381,7 @@ class WoundLandsInThePartTests(unittest.TestCase):
 
 
 class RisingTests(unittest.TestCase):
-    """Spec 12, Death: rising."""
+    """health: Death: rising."""
 
     def test_a_death_while_infected_adds_and_rose_again(self):
         gm = GameManager()
@@ -1431,7 +1431,7 @@ def add_thumper(gm: GameManager, barrier_id: str, side: str, rate: float = 1.97)
 
 
 class DoorSimulationTests(unittest.TestCase):
-    """Spec 13, `MOVE_TO` through a barrier, Interruptions and Stress from sounds."""
+    """doors: `MOVE_TO` through a barrier, Interruptions and Stress from sounds."""
 
     def spent(self, gm: GameManager, *actions) -> tuple[int, list[str]]:
         before = gm.narrative.minutes
@@ -1605,7 +1605,7 @@ class DoorSimulationTests(unittest.TestCase):
 
 
 class BarrierStoryBeatTests(unittest.TestCase):
-    """Spec 13, Edge cases: a story beat does not move an NPC across planks."""
+    """doors: Edge cases: a story beat does not move an NPC across planks."""
 
     def beat_move(self, gm: GameManager, zone_id: str) -> str:
         from modules.story.beats import MoveNpc

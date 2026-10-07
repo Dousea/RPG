@@ -1,4 +1,4 @@
-"""Status effect thresholds and names (specs 02 and 03).
+"""Status effect thresholds and names (survival-stats and status-effects).
 
 A status effect level is 0 to 4. Levels compare strictly: a value above a column
 gives that level. Endurance is inverted: a value at or below a column.
@@ -20,7 +20,7 @@ class StatusEffectspec:
     strict: bool = False  # inverted levels compare with `<` instead of `<=`
 
 
-STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
+STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # status-effects
     StatusEffect.HUNGRY: StatusEffectspec(
         CharacterStat.HUNGER,
         (0.15, 0.25, 0.45, 0.70),
@@ -92,62 +92,62 @@ STATUS_EFFECT_THRESHOLDS: dict[StatusEffect, StatusEffectspec] = {  # spec 03
         (0, 1, 2, 3),
         ("Minor Bleeding", "Bleeding", "Severe Bleeding", "Massive Blood Loss"),
     ),
-    StatusEffect.WET: StatusEffectspec(  # spec 06
+    StatusEffect.WET: StatusEffectspec(  # body-temperature
         CharacterStat.WETNESS,
         (15, 40, 70, 90),
         ("Damp", "Wet", "Soaked", "Drenched"),
     ),
-    StatusEffect.HAS_A_COLD: StatusEffectspec(  # spec 06
+    StatusEffect.HAS_A_COLD: StatusEffectspec(  # body-temperature
         CharacterStat.COLD_STRENGTH,
         (20, 40, 60, 75),
         ("Sniffly", "Has a Cold", "Heavy Cold", "Bad Cold"),
     ),
-    StatusEffect.HYPOTHERMIA: StatusEffectspec(  # spec 06
+    StatusEffect.HYPOTHERMIA: StatusEffectspec(  # body-temperature
         CharacterStat.TEMPERATURE,
         (36.5, 35, 30, 25),
         ("Chilled", "Cold", "Freezing", "Hypothermia"),
         inverted=True,
         strict=True,
     ),
-    StatusEffect.HYPERTHERMIA: StatusEffectspec(  # spec 06
+    StatusEffect.HYPERTHERMIA: StatusEffectspec(  # body-temperature
         CharacterStat.TEMPERATURE,
         (37.5, 39, 40, 41),
         ("Warm", "Hot", "Overheated", "Hyperthermia"),
     ),
-    StatusEffect.WINDCHILL: StatusEffectspec(  # spec 06
+    StatusEffect.WINDCHILL: StatusEffectspec(  # body-temperature
         CharacterStat.WINDCHILL,
         (5, 10, 15, 20),
         ("Breezy", "Wind Chill", "Biting Wind", "Freezing Wind"),
     ),
-    StatusEffect.HEAVY_LOAD: StatusEffectspec(  # spec 25: carried weight / capacity
+    StatusEffect.HEAVY_LOAD: StatusEffectspec(  # carrying-and-loot: carried weight / capacity
         None,
         HEAVY_LOAD_THRESHOLDS,
         ("Weighed Down", "Overloaded", "Very Overloaded", "Extremely Overloaded"),
     ),
 }
 
-STATUS_EFFECT_MAX_LEVEL = 4  # spec 03
-HYPOTHERMIA_SUPPRESS_INTOXICATION = (30, 70)  # spec 06: level 1 and level 2
+STATUS_EFFECT_MAX_LEVEL = 4  # status-effects
+HYPOTHERMIA_SUPPRESS_INTOXICATION = (30, 70)  # body-temperature: level 1 and level 2
 
 # Our rule: how an outcome fact describes a hurt body, by Injured level 0 to 4.
 # Level 0 here still means some hit points are lost; a full body is unhurt.
 INJURY_WORDS = ("barely hurt", "a little hurt", "injured", "badly injured", "critically injured")
-BLEEDING_LEVEL_CAP = 4  # spec 03
-FOOD_EATEN_PER_HUNGER = 13000  # spec 03: timer units per 1.0 hunger
-FOOD_EATEN_COOKED_MULT = 2  # spec 03
-FOOD_EATEN_CAP = 11000  # spec 03: timer units
-FOOD_EATEN_DRAIN_per_hour = units.per_hour_from_frame(1)  # spec 03: 1 timer unit per frame
-PANIC_MELEE_PENALTY_PER_LEVEL = 0.1  # spec 03: Panic level 2 and up
-STRESS_MELEE_PENALTY_PER_LEVEL = 0.1  # spec 03: Stress level 2 and up
-MELEE_DAMAGE_FLOOR = 0.1  # spec 03
-CRIT_PENALTY_ENDURANCE = 5  # spec 03: per level
-CRIT_PENALTY_HEAVY_LOAD = 5  # spec 03: per level
-CRIT_PENALTY_PANIC = 1.3  # spec 03: per level
-DEFENCE_PENALTY_ENDURANCE = 2  # spec 03: per level
-DEFENCE_PENALTY_TIRED = 3  # spec 03: per level
-DEFENCE_PENALTY_DRUNK = 2  # spec 03: per level
-ALCOHOL_INTOXICATION_PER_UNIT = 400  # spec 03
-ALCOHOL_HUNGER_HIGH = 0.8  # spec 03: hunger after the drink
-ALCOHOL_HUNGER_HIGH_MULT = 1.1  # spec 03
-ALCOHOL_HUNGER_MID = 0.6  # spec 03: hunger after the drink
-ALCOHOL_HUNGER_MID_MULT = 1.25  # spec 03
+BLEEDING_LEVEL_CAP = 4  # status-effects
+FOOD_EATEN_PER_HUNGER = 13000  # status-effects: timer units per 1.0 hunger
+FOOD_EATEN_COOKED_MULT = 2  # status-effects
+FOOD_EATEN_CAP = 11000  # status-effects: timer units
+FOOD_EATEN_DRAIN_per_hour = units.per_hour_from_frame(1)  # status-effects: 1 timer unit per frame
+PANIC_MELEE_PENALTY_PER_LEVEL = 0.1  # status-effects: Panic level 2 and up
+STRESS_MELEE_PENALTY_PER_LEVEL = 0.1  # status-effects: Stress level 2 and up
+MELEE_DAMAGE_FLOOR = 0.1  # status-effects
+CRIT_PENALTY_ENDURANCE = 5  # status-effects: per level
+CRIT_PENALTY_HEAVY_LOAD = 5  # status-effects: per level
+CRIT_PENALTY_PANIC = 1.3  # status-effects: per level
+DEFENCE_PENALTY_ENDURANCE = 2  # status-effects: per level
+DEFENCE_PENALTY_TIRED = 3  # status-effects: per level
+DEFENCE_PENALTY_DRUNK = 2  # status-effects: per level
+ALCOHOL_INTOXICATION_PER_UNIT = 400  # status-effects
+ALCOHOL_HUNGER_HIGH = 0.8  # status-effects: hunger after the drink
+ALCOHOL_HUNGER_HIGH_MULT = 1.1  # status-effects
+ALCOHOL_HUNGER_MID = 0.6  # status-effects: hunger after the drink
+ALCOHOL_HUNGER_MID_MULT = 1.25  # status-effects

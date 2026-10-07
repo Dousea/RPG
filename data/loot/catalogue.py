@@ -1,7 +1,7 @@
-"""Which table items exist as catalogue items, and how much each kind of item drops (spec 25)."""
+"""Which table items exist as catalogue items, and how much each kind of item drops (carrying-and-loot)."""
 
 # the chance multiplier for each kind of item
-LOOT_KIND_MODIFIERS = {  # spec 25
+LOOT_KIND_MODIFIERS = {  # carrying-and-loot
     "food": 0.8,
     "other": 0.8,
     "key": 0.4,
@@ -26,7 +26,7 @@ LOOT_KIND_MODIFIERS = {  # spec 25
 }
 
 # table item name -> (catalogue id, kind of item); names with no catalogue item are skipped when rolled
-LOOT_CATALOGUE: dict[str, tuple[str, str]] = {  # spec 25
+LOOT_CATALOGUE: dict[str, tuple[str, str]] = {  # carrying-and-loot
     "alcohol_wipes": ("item_alcohol_wipes", "medical"),
     "antibiotics": ("item_antibiotics", "medical"),
     "bag_big_hiking_bag": ("item_large_hiking_bag", "container"),

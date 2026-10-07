@@ -1,4 +1,4 @@
-"""Standing among many bodies: how many count, how well the player is shielded, the smell (spec 14)."""
+"""Standing among many bodies: how many count, how well the player is shielded, the smell (zombie-lifecycle)."""
 
 from data.zombies import lore as zombie_lore
 from modules.entity.player import PlayerEntity

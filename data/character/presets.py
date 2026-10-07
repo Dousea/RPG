@@ -1,9 +1,9 @@
-"""Ready-made characters the player can pick instead of building one (spec 07)."""
+"""Ready-made characters the player can pick instead of building one (character-creation)."""
 
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
 
-ORTON_POINTS_LEFT = 7  # spec 07
+ORTON_POINTS_LEFT = 7  # character-creation
 
 ORTON = CharacterBuild(
     appearance=Appearance(

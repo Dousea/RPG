@@ -57,7 +57,7 @@ def played_game() -> GameManager:
     SimulationCore(gm).discover_flag("power_grid_stable")
     gm.player.conditions.append(CharacterCondition.PANIC)
     npc_of(gm, "Emma").status.append("frightened")
-    # Health is retired as an LLM-declarable action (docs/01-engine-authority.md);
+    # Health is retired as an LLM-declarable action (docs/architecture/engine-authority.md);
     # it only ever changes through combat or item effects. Set directly here
     # since this fixture is exercising persistence, not the action pipeline.
     set_health(gm.player, 55)
@@ -113,7 +113,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(home.entities, [])
 
     def test_character_fields_round_trip(self):
-        """Spec 07, Saves."""
+        """character-creation: Saves."""
         assert self.loaded is not None
         original, loaded = self.original.player, self.loaded.player
         self.assertEqual(loaded.traits, original.traits)
@@ -126,7 +126,7 @@ class RoundTripTests(IsolatedSaveTestCase):
         self.assertEqual(loaded.skills["fitness"].xp, 37500)
 
     def test_skill_timers_and_exercise_state_round_trip(self):
-        """Spec 08, Saves."""
+        """skills: Saves."""
         assert self.loaded is not None
         player = self.original.player
         player.loss_timers = {"fitness": 1234.0, "strength": -49000.0}
@@ -228,7 +228,7 @@ class RoundTripTests(IsolatedSaveTestCase):
 
 
 class StatsSaveTests(IsolatedSaveTestCase):
-    """Spec 02, Stats (saves)."""
+    """survival-stats: Stats (saves)."""
 
     def test_a_v5_round_trip_keeps_stats_and_asleep_exactly(self):
         gm = GameManager()
@@ -251,7 +251,7 @@ class StatsSaveTests(IsolatedSaveTestCase):
 
 
 class WellFedSaveTests(IsolatedSaveTestCase):
-    """Spec 03, Consuming (saves)."""
+    """status-effects: Consuming (saves)."""
 
     def test_the_well_fed_timer_round_trips(self):
         gm = GameManager()
@@ -272,7 +272,7 @@ class WellFedSaveTests(IsolatedSaveTestCase):
 
 
 class RoomSaveTests(IsolatedSaveTestCase):
-    """Spec 25, Saves: each container's opened flag and contents, each room's proc_spawned, current_room."""
+    """carrying-and-loot: Saves: each container's opened flag and contents, each room's proc_spawned, current_room."""
 
     def test_a_bags_pending_roll_round_trips(self):
         for pending in (True, False):
@@ -332,7 +332,7 @@ class RoomSaveTests(IsolatedSaveTestCase):
 
 
 class NewZoneSaveTests(IsolatedSaveTestCase):
-    """Spec 25, Saves: the six zones, their rooms and their barriers survive a round trip."""
+    """carrying-and-loot: Saves: the six zones, their rooms and their barriers survive a round trip."""
 
     def test_an_opened_clinic_container_and_a_broken_in_window_round_trip(self):
         gm = GameManager()
@@ -371,7 +371,7 @@ class NewZoneSaveTests(IsolatedSaveTestCase):
 
 
 class ClockSaveTests(IsolatedSaveTestCase):
-    """Spec 01, Saves."""
+    """clock: Saves."""
 
     def test_schema_version_is_24(self):
         self.assertEqual(codec.SCHEMA_VERSION, 24)
@@ -392,7 +392,7 @@ class ClockSaveTests(IsolatedSaveTestCase):
 
 
 class ThermalSaveTests(IsolatedSaveTestCase):
-    """Spec 06, Saves."""
+    """body-temperature: Saves."""
 
     def _round_trip(self, gm):
         files.save(gm, self.save_path)
@@ -454,7 +454,7 @@ class ThermalSaveTests(IsolatedSaveTestCase):
 
 
 class ClothingSaveTests(IsolatedSaveTestCase):
-    """Spec 05, Saves."""
+    """clothing: Saves."""
 
     def test_worn_items_and_wetness_round_trip(self):
         gm = GameManager()
@@ -518,7 +518,7 @@ class ClothingSaveTests(IsolatedSaveTestCase):
 
 
 class WeatherSaveTests(IsolatedSaveTestCase):
-    """Spec 04, Saves."""
+    """weather: Saves."""
 
     def _stormy_game(self) -> GameManager:
         gm = GameManager()
@@ -828,7 +828,7 @@ if __name__ == "__main__":
 
 
 class ZombieSaveTests(IsolatedSaveTestCase):
-    """Spec 09, Saves: the outbreak time, zombies, next id, redistribution time and sneaking."""
+    """zombies: Saves: the outbreak time, zombies, next id, redistribution time and sneaking."""
 
     def test_zombies_the_outbreak_and_sneaking_round_trip(self):
         gm = GameManager()
@@ -892,7 +892,7 @@ class ZombieSaveTests(IsolatedSaveTestCase):
 
 
 class LifecycleSaveTests(IsolatedSaveTestCase):
-    """Spec 14, Saves: corpses, the smell zone, crawler flags, outfits and worn items."""
+    """zombie-lifecycle: Saves: corpses, the smell zone, crawler flags, outfits and worn items."""
 
     def dressed_zombie(self) -> ZombieEntity:
         jacket = ItemEntity(item=ITEMS["item_black_jacket"])
@@ -995,7 +995,7 @@ class LifecycleSaveTests(IsolatedSaveTestCase):
 
 
 class SocialSaveTests(IsolatedSaveTestCase):
-    """Spec 10, Saves."""
+    """llm-contract: Saves."""
 
     def played(self) -> GameManager:
         gm = GameManager()
@@ -1069,7 +1069,7 @@ class SocialSaveTests(IsolatedSaveTestCase):
 
 
 class MeleeSaveTests(IsolatedSaveTestCase):
-    """Spec 11, Saves: weapon condition, hits_taken, down_until and zombie_kills."""
+    """melee: Saves: weapon condition, hits_taken, down_until and zombie_kills."""
 
     def test_weapon_condition_zombie_hits_and_kills_round_trip(self):
         gm = GameManager()
@@ -1111,7 +1111,7 @@ class MeleeSaveTests(IsolatedSaveTestCase):
 
 
 class BodySaveTests(IsolatedSaveTestCase):
-    """Spec 12, Saves."""
+    """health: Saves."""
 
     def test_the_body_zombie_infection_fields_pain_effect_and_antibiotics_round_trip(self):
         gm = GameManager()
@@ -1181,7 +1181,7 @@ class BodySaveTests(IsolatedSaveTestCase):
 
 
 class BarrierSaveTests(IsolatedSaveTestCase):
-    """Spec 13, Saves."""
+    """doors: Saves."""
 
     def test_barriers_plank_healths_and_the_players_barrier_round_trip(self):
         gm = GameManager()
@@ -1263,7 +1263,7 @@ class BarrierSaveTests(IsolatedSaveTestCase):
 
 
 class CarrySaveTests(IsolatedSaveTestCase):
-    """Spec 25, Saves: nested contents, the held and worn bags and a carried body."""
+    """carrying-and-loot: Saves: nested contents, the held and worn bags and a carried body."""
 
     def test_a_bag_with_a_bag_in_it_round_trips(self):
         gm = GameManager()

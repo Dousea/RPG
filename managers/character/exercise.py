@@ -1,4 +1,4 @@
-"""Exercise: rep timing, what a rep does, regularity and stiffness over time (spec 08)."""
+"""Exercise: rep timing, what a rep does, regularity and stiffness over time (skills)."""
 
 import math
 import random

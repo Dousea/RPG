@@ -1,4 +1,4 @@
-"""Static definitions of occupations and traits (spec 07)."""
+"""Static definitions of occupations and traits (character-creation)."""
 
 from dataclasses import dataclass, field
 

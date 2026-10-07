@@ -1,4 +1,4 @@
-"""The hand-run parser cases stay valid against the verb registry (spec 10, Checking the models)."""
+"""The hand-run parser cases stay valid against the verb registry (llm-contract: Checking the models)."""
 
 import unittest
 from pathlib import Path
@@ -37,7 +37,7 @@ class ParserCaseFileTests(unittest.TestCase):
 
 
 class SamePlanTests(unittest.TestCase):
-    """Spec 10, Checking the models: a plan is judged by what the engine makes of it."""
+    """llm-contract: Checking the models: a plan is judged by what the engine makes of it."""
 
     def setUp(self):
         from scripts.eval_parser import same_plan

@@ -49,7 +49,7 @@ def _consumable(item_id: str) -> ConsumableItem:
 
 
 class ConsumableItemFieldTests(unittest.TestCase):
-    """Spec 03, Item fields."""
+    """status-effects: Item fields."""
 
     def test_the_shipped_foods_carry_the_item_values(self):
         beans = _consumable("item_canned_beans")
@@ -80,7 +80,7 @@ class ConsumableItemFieldTests(unittest.TestCase):
 
 
 class ConsumingTests(unittest.TestCase):
-    """Spec 03, Consuming."""
+    """status-effects: Consuming."""
 
     def test_the_beans_no_longer_heal_directly(self):
         gm = GameManager()

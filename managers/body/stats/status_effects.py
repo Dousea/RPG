@@ -1,4 +1,4 @@
-"""Status effect levels read off the survival stats, their penalties, and what a drink adds (spec 03)."""
+"""Status effect levels read off the survival stats, their penalties, and what a drink adds (status-effects)."""
 
 from data.body import status_effects as status_effect_k
 from data.body.status_effects import (

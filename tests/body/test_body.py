@@ -1,4 +1,4 @@
-"""Spec 12, The body: parts, overall health and the two helpers that move it."""
+"""health: The body: parts, overall health and the two helpers that move it."""
 
 import random
 import unittest
@@ -25,7 +25,7 @@ def make_player() -> PlayerEntity:
 
 
 class PartTableTests(unittest.TestCase):
-    """Spec 12, The body."""
+    """health: The body."""
 
     def test_seventeen_parts_with_the_specs_weights_bleeding_and_pain(self):
         expected = {
@@ -60,7 +60,7 @@ class PartTableTests(unittest.TestCase):
 
 
 class OverallHealthTests(unittest.TestCase):
-    """Spec 12, Overall health."""
+    """health: Overall health."""
 
     def test_ten_damage_on_a_hand_costs_one_health(self):
         player = make_player()
@@ -94,7 +94,7 @@ class OverallHealthTests(unittest.TestCase):
 
 
 class ReduceGeneralTests(unittest.TestCase):
-    """Spec 12, Overall health: reduce_general."""
+    """health: Overall health: reduce_general."""
 
     def test_on_a_full_body_it_lowers_health_by_exactly_the_amount(self):
         player = make_player()
@@ -135,7 +135,7 @@ class ReduceGeneralTests(unittest.TestCase):
 
 
 class AddGeneralTests(unittest.TestCase):
-    """Spec 12, Overall health: add_general."""
+    """health: Overall health: add_general."""
 
     def test_it_splits_evenly_over_the_parts_below_one_hundred(self):
         player = make_player()
@@ -161,7 +161,7 @@ class AddGeneralTests(unittest.TestCase):
 
 
 class PartStateTests(unittest.TestCase):
-    """Spec 12, The body: bleeding and injured."""
+    """health: The body: bleeding and injured."""
 
     def test_a_part_bleeds_only_while_unbandaged(self):
         state = PartState(bleeding_time=3.0)
@@ -178,7 +178,7 @@ class PartStateTests(unittest.TestCase):
 
 
 class WoundLandingTests(unittest.TestCase):
-    """Spec 12, Wounds."""
+    """health: Wounds."""
 
     def land(self, kind, part, *, traits=(), seed=0, damage=5.0, zombie_infected=False):
         player = make_player()
@@ -284,7 +284,7 @@ class WoundLandingTests(unittest.TestCase):
 
 
 class PartPainTests(unittest.TestCase):
-    """Spec 12, Pain from each part."""
+    """health: Pain from each part."""
 
     def test_a_bandaged_bite_is_thirty_over_one_and_a_half(self):
         state = PartState(bite_time=60.0, bandage="item_bandage")
@@ -327,7 +327,7 @@ class PartPainTests(unittest.TestCase):
 
 
 class PainStatTests(unittest.TestCase):
-    """Spec 12, The pain stat."""
+    """health: The pain stat."""
 
     def test_a_rising_target_closes_about_a_fifth_of_the_gap_in_a_minute(self):
         self.assertAlmostEqual(next_pain(0.0, 100.0), 100 - 100 * 0.7985)
@@ -345,7 +345,7 @@ class PainStatTests(unittest.TestCase):
 
 
 class LimpTests(unittest.TestCase):
-    """Spec 12, The limp."""
+    """health: The limp."""
 
     def test_a_whole_body_does_not_limp(self):
         player = make_player()
@@ -410,7 +410,7 @@ class LimpTests(unittest.TestCase):
 
 
 class ActionTimeMultiplierTests(unittest.TestCase):
-    """Spec 12, What pain does."""
+    """health: What pain does."""
 
     def test_a_calm_sober_pain_free_player_has_no_slowdown(self):
         self.assertEqual(action_time_multiplier(make_player()), 1.0)

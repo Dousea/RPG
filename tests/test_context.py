@@ -35,7 +35,7 @@ from tests.support import adjust_regard, npc_of, resolve_actions, set_health
 
 
 class WorldFlagFirewallTests(unittest.TestCase):
-    """doc 11's actual complaint: every world flag went out unfiltered,
+    """The knowledge-firewall doc's complaint: every world flag went out unfiltered,
     whether or not anything in the story ever revealed it to the player."""
 
     def setUp(self):
@@ -188,7 +188,7 @@ class QuestVisibilityTests(unittest.TestCase):
 
 
 class ConditionBlockTests(unittest.TestCase):
-    """Spec 03, What the narrator and the player see."""
+    """status-effects: What the narrator and the player see."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -211,7 +211,7 @@ class ConditionBlockTests(unittest.TestCase):
             self.assertNotIn(raw, condition)
 
     def test_condition_lists_the_temperature_status_effects_without_numbers(self):
-        """Spec 06, What the narrator and the player see."""
+        """body-temperature: What the narrator and the player see."""
         stats = self.gm.player.stats
         stats.set(CharacterStat.WETNESS, 41.7)
         stats.set(CharacterStat.TEMPERATURE, 34.8)
@@ -243,7 +243,7 @@ class ConditionBlockTests(unittest.TestCase):
 
 
 class PartLinesTests(unittest.TestCase):
-    """Spec 12, What the narrator and the player see: `[CONDITION]` part lines."""
+    """health: What the narrator and the player see: `[CONDITION]` part lines."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -353,7 +353,7 @@ class PartLinesTests(unittest.TestCase):
 
 
 class HitPointsStayOutOfTheNarratorPromptTests(unittest.TestCase):
-    """docs/01-engine-authority.md: the narrator gets HP and item condition in
+    """docs/architecture/engine-authority.md: the narrator gets HP and item condition in
     words, never as numbers."""
 
     def setUp(self):
@@ -399,7 +399,7 @@ if __name__ == "__main__":
 
 
 class WeatherWordBandTests(unittest.TestCase):
-    """Spec 04, Word bands."""
+    """weather: Word bands."""
 
     def test_wind_bands(self):
         from managers.world.climate import wind_word
@@ -450,7 +450,7 @@ class WeatherWordBandTests(unittest.TestCase):
 
 
 class WeatherBlockTests(unittest.TestCase):
-    """Spec 04, What the narrator and the player see."""
+    """weather: What the narrator and the player see."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -497,7 +497,7 @@ class TimeLineTests(unittest.TestCase):
 
 
 class WeatherFactTests(unittest.TestCase):
-    """Spec 04, What the narrator and the player see: outcomes."""
+    """weather: What the narrator and the player see: outcomes."""
 
     def _sample(self, **changes):
         from modules.world.weather import WeatherSample
@@ -586,7 +586,7 @@ MARA = CharacterBuild(
 
 
 class CharacterBlockTests(unittest.TestCase):
-    """Spec 07, What the narrator and the parser see."""
+    """character-creation: What the narrator and the parser see."""
 
     def setUp(self):
         self.assertEqual(creation.validate(MARA), [])
@@ -633,7 +633,7 @@ class CharacterBlockTests(unittest.TestCase):
         self.assertFalse(any(char.isdigit() for char in "".join(details)))
 
     def test_the_block_lists_skills_from_level_one_in_words(self):
-        """Spec 08, What the narrator and the player see."""
+        """skills: What the narrator and the player see."""
         skills_line = next(
             line for line in self.character_block().splitlines() if line.startswith("Skills:")
         )
@@ -669,7 +669,7 @@ class CharacterBlockTests(unittest.TestCase):
 
 
 class ExerciseParserPromptTests(unittest.TestCase):
-    """Spec 08, What the narrator and the player see: the parser sees the exercise list."""
+    """skills: What the narrator and the player see: the parser sees the exercise list."""
 
     def prompt(self, *item_ids: str) -> str:
         gm = GameManager()
@@ -737,7 +737,7 @@ def in_view_block(prompt: str) -> str:
 
 
 class InViewTests(unittest.TestCase):
-    """Spec 10, What the narrator sees: [IN VIEW] repeats who and what the story must show."""
+    """llm-contract: What the narrator sees: [IN VIEW] repeats who and what the story must show."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -767,7 +767,7 @@ def corpses_block(prompt: str) -> str:
 
 
 class CorpsesContextTests(unittest.TestCase):
-    """Spec 14, What the narrator and the player see: the [CORPSES] block."""
+    """zombie-lifecycle: What the narrator and the player see: the [CORPSES] block."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -856,7 +856,7 @@ class CorpsesContextTests(unittest.TestCase):
 
 
 class CorpseSceneKeyTests(CorpsesContextTests):
-    """Spec 14, What the narrator and the player see: SEARCH and TAKE come with the bodies."""
+    """zombie-lifecycle: What the narrator and the player see: SEARCH and TAKE come with the bodies."""
 
     def setUp(self):
         super().setUp()
@@ -881,7 +881,7 @@ class CorpseSceneKeyTests(CorpsesContextTests):
 
 
 class CrawlerThreatsTests(unittest.TestCase):
-    """Spec 14, What the narrator and the player see: `[THREATS]` says crawling."""
+    """zombie-lifecycle: What the narrator and the player see: `[THREATS]` says crawling."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -904,7 +904,7 @@ class CrawlerThreatsTests(unittest.TestCase):
 
 
 class ThreatsContextTests(unittest.TestCase):
-    """Spec 09, What the narrator and the player see: the [THREATS] block."""
+    """zombies: What the narrator and the player see: the [THREATS] block."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -990,7 +990,7 @@ class ThreatsContextTests(unittest.TestCase):
 
 
 class MeleeContextTests(unittest.TestCase):
-    """Spec 11, What the narrator and the player see."""
+    """melee: What the narrator and the player see."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -1068,7 +1068,7 @@ def _positions(prompt: str, headers: list[str]) -> list[int]:
 
 
 class ParserBlockOrderTests(unittest.TestCase):
-    """Spec 10, What the parser sees."""
+    """llm-contract: What the parser sees."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -1153,7 +1153,7 @@ class ParserBlockOrderTests(unittest.TestCase):
 
 
 class NarratorBlockOrderTests(unittest.TestCase):
-    """Spec 10, What the narrator sees."""
+    """llm-contract: What the narrator sees."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -1291,7 +1291,7 @@ def listed_in_prompt(prompt: str) -> set[str]:
 
 
 class SceneKeyTests(unittest.TestCase):
-    """Spec 10, Scene filtering."""
+    """llm-contract: Scene filtering."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -1387,7 +1387,7 @@ class SceneKeyTests(unittest.TestCase):
 
 
 class ParserSystemPromptTests(unittest.TestCase):
-    """Spec 10, Scene filtering: the system prompt is fixed."""
+    """llm-contract: Scene filtering: the system prompt is fixed."""
 
     def test_the_system_prompt_lists_no_verbs(self):
         self.assertEqual(llm.listed_verbs(llm.PARSER_SYSTEM_PROMPT), [])
@@ -1446,7 +1446,7 @@ def ask_line(prompt: str) -> str:
 
 
 class NarratorBudgetTests(unittest.TestCase):
-    """Spec 10, Token budget: what the narrator prompt drops to fit."""
+    """llm-contract: Token budget: what the narrator prompt drops to fit."""
 
     DEEP = ["deepmark-1 " + "a" * 150, "deepmark-2 " + "b" * 150]
     SCENE = "scenemark " + "c" * 150 + "."
@@ -1530,7 +1530,7 @@ class NarratorBudgetTests(unittest.TestCase):
 
 
 class BarrierBlockTests(unittest.TestCase):
-    """Spec 13, What the narrator and the player see."""
+    """doors: What the narrator and the player see."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -1656,7 +1656,7 @@ def section(prompt: str, name: str) -> str:
 
 
 class CarryContextTests(unittest.TestCase):
-    """Spec 25, What the narrator and the player see: bags, the body and Heavy Load."""
+    """carrying-and-loot: What the narrator and the player see: bags, the body and Heavy Load."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -1771,7 +1771,7 @@ class CarryContextTests(unittest.TestCase):
 
 
 class RoomsContextTests(unittest.TestCase):
-    """Spec 25, What the narrator and the player see: the [ROOMS] block."""
+    """carrying-and-loot: What the narrator and the player see: the [ROOMS] block."""
 
     def setUp(self):
         self.gm = GameManager()

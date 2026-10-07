@@ -1,4 +1,4 @@
-"""The rules for doors, windows and planks: blocking, vision, damage and distance (spec 13)."""
+"""The rules for doors, windows and planks: blocking, vision, damage and distance (doors)."""
 
 import random
 from dataclasses import dataclass

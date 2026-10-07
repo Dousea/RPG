@@ -1,4 +1,4 @@
-"""Spec 06, Set point and metabolic rate; Heat per node; The core; The skin; Integration;
+"""body-temperature: Set point and metabolic rate; Heat per node; The core; The skin; Integration;
 Body multipliers; Thermal damage."""
 
 import unittest
@@ -104,7 +104,7 @@ def coat(insulation, wind=0.0, wetness=0.0, condition=None) -> ItemEntity:
 
 
 class MetabolicTests(unittest.TestCase):
-    """Spec 06, Set point and metabolic rate."""
+    """body-temperature: Set point and metabolic rate."""
 
     def test_targets_from_the_met_table(self):
         self.assertEqual(metabolic_target(Metabolic.DEFAULT, 1.0, 1.0), 1.5)
@@ -184,7 +184,7 @@ class MetabolicTests(unittest.TestCase):
 
 
 class ClothingPerNodeTests(unittest.TestCase):
-    """Spec 06, Clothing per node."""
+    """body-temperature: Clothing per node."""
 
     def test_an_uncovered_part_has_no_insulation_or_wind_resistance(self):
         self.assertEqual(part_clothing([], BodyPart.HEAD), NodeClothing())
@@ -236,7 +236,7 @@ class ClothingPerNodeTests(unittest.TestCase):
 
 
 class HeatPerNodeTests(unittest.TestCase):
-    """Spec 06, Heat per node."""
+    """body-temperature: Heat per node."""
 
     def heat(self, part=BodyPart.TORSO_UPPER, skin=30.0, primary=0.0, secondary=0.0, **inputs):
         state = ThermalState()
@@ -344,7 +344,7 @@ class HeatPerNodeTests(unittest.TestCase):
 
 
 class CoreTests(unittest.TestCase):
-    """Spec 06, The core."""
+    """body-temperature: The core."""
 
     def test_delta_is_total_heat_times_0_00025_per_frame(self):
         self.assertAlmostEqual(advance_core(37.0, 4.0, 37.0, 100), 37.0 + 0.001 * 100)
@@ -383,7 +383,7 @@ class CoreTests(unittest.TestCase):
 
 
 class SkinTests(unittest.TestCase):
-    """Spec 06, The skin."""
+    """body-temperature: The skin."""
 
     def test_primary_scales_with_distance_when_cold_and_with_its_complement_when_warm(self):
         p, s = node_responses(-0.5, 0.3)
@@ -458,7 +458,7 @@ class SkinTests(unittest.TestCase):
 
 
 class SteadyStateTests(unittest.TestCase):
-    """Spec 06, Heat per node: the settled body."""
+    """body-temperature: Heat per node: the settled body."""
 
     def test_shirt_and_jeans_at_22_settle_with_core_36_7_to_37_0_and_stay_steady(self):
         player = make_player(shirt_and_jeans())
@@ -543,7 +543,7 @@ class SteadyStateTests(unittest.TestCase):
 
 
 class IntegrationTests(unittest.TestCase):
-    """Spec 06, Integration."""
+    """body-temperature: Integration."""
 
     def reference(self, inputs: ThermalInputs, frames=13500, core=37.0, state=None):
         state = state or ThermalState()
@@ -622,7 +622,7 @@ class IntegrationTests(unittest.TestCase):
 
 
 class BodyMultiplierTests(unittest.TestCase):
-    """Spec 06, Body multipliers."""
+    """body-temperature: Body multipliers."""
 
     def test_shivering_side_energy_and_fatigue(self):
         p, s = -0.6, -0.4
@@ -703,7 +703,7 @@ class BodyMultiplierTests(unittest.TestCase):
 
 
 class ThermalDamageTests(unittest.TestCase):
-    """Spec 06, Thermal damage."""
+    """body-temperature: Thermal damage."""
 
     def freezing_state(self, stage=0.0, duration=0.0, cache=24.0) -> ThermalState:
         state = ThermalState()
@@ -836,7 +836,7 @@ class ThermalDamageTests(unittest.TestCase):
 
 
 class WiringTests(unittest.TestCase):
-    """Spec 06, Set point and metabolic rate: what the simulation hands the drivers."""
+    """body-temperature: Set point and metabolic rate: what the simulation hands the drivers."""
 
     def test_attack_metabolic_targets_by_weapon(self):
         from data.items import ITEMS

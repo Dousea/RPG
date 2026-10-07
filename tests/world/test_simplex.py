@@ -4,7 +4,7 @@ from modules.world.simplex import PERM, noise
 
 
 class SimplexPortTest(unittest.TestCase):
-    """Spec 04, What we port: the noise matches the reference algorithm."""
+    """weather: What we port: the noise matches the reference algorithm."""
 
     def test_permutation_table_is_a_doubled_permutation(self):
         self.assertEqual(len(PERM), 512)

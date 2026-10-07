@@ -1,4 +1,4 @@
-"""The sounds the player makes, and the skill modifiers that quiet them (spec 09)."""
+"""The sounds the player makes, and the skill modifiers that quiet them (zombies)."""
 
 import math
 from dataclasses import dataclass
@@ -24,7 +24,7 @@ class Sound:
 
 @dataclass(frozen=True)
 class BarrierSound:
-    """A sound a door, window or plank makes; the zombies in `ignored` stand too close to react (spec 13)."""
+    """A sound a door, window or plank makes; the zombies in `ignored` stand too close to react (doors)."""
 
     sound: Sound
     ignored: frozenset[str] = frozenset()
@@ -84,7 +84,7 @@ def cough_sound() -> Sound:
 
 
 def hammer_sound(carpentry: int) -> Sound:
-    """The one sound a plank being nailed on makes; Carpentry quiets it (spec 13)."""
+    """The one sound a plank being nailed on makes; Carpentry quiets it (doors)."""
     radius = math.ceil(round(barrier_k.HAMMER_SOUND_RADIUS_BASE * hammer_mod(carpentry), 6))
     return Sound(radius=radius, volume=radius)
 

@@ -1,4 +1,4 @@
-"""Spec 25, Rooms and containers: the room layouts, the starting kit and moving between rooms."""
+"""carrying-and-loot: Rooms and containers: the room layouts, the starting kit and moving between rooms."""
 
 import random
 import unittest
@@ -30,7 +30,7 @@ def ground_ids(gm: GameManager, zone_id: str) -> list[str]:
 
 
 class LayoutTests(unittest.TestCase):
-    """Spec 25, The rooms."""
+    """carrying-and-loot: The rooms."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -102,7 +102,7 @@ class LayoutTests(unittest.TestCase):
 
 
 class StartingKitTests(unittest.TestCase):
-    """Spec 25, The starting kit."""
+    """carrying-and-loot: The starting kit."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -192,7 +192,7 @@ class StartingKitTests(unittest.TestCase):
 
 
 class ResolveTests(unittest.TestCase):
-    """Spec 25, Names: names resolve inside the current zone; a bare kind word needs exactly one in the room."""
+    """carrying-and-loot: Names: names resolve inside the current zone; a bare kind word needs exactly one in the room."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -229,7 +229,7 @@ class ResolveTests(unittest.TestCase):
 
 
 class MoveBetweenRoomsTests(unittest.TestCase):
-    """Spec 25, Verbs: MOVE_TO a room."""
+    """carrying-and-loot: Verbs: MOVE_TO a room."""
 
     def setUp(self):
         self.gm = GameManager()

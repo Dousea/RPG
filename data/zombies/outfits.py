@@ -1,10 +1,10 @@
-"""The outfits a zombie wears (spec 14): the pool and each outfit's item references.
+"""The outfits a zombie wears (zombie-lifecycle): the pool and each outfit's item references.
 
 Generated; don't edit by hand.
 """
 
 # name, chance, sex the outfit is for
-ZOMBIE_OUTFIT_POOL: tuple[tuple[str, float, str], ...] = (  # spec 14
+ZOMBIE_OUTFIT_POOL: tuple[tuple[str, float, str], ...] = (  # zombie-lifecycle
     ("generic01", 20, "any"),
     ("generic02", 20, "any"),
     ("generic03", 20, "any"),
@@ -38,7 +38,7 @@ ZOMBIE_OUTFIT_POOL: tuple[tuple[str, float, str], ...] = (  # spec 14
 # when the item is not in the catalogue
 ZOMBIE_OUTFIT_REFERENCES: dict[
     str, dict[str, tuple[tuple[float, tuple[str | None, ...]], ...]]
-] = {  # spec 14
+] = {  # zombie-lifecycle
     "biker": {
         "male": (
             (

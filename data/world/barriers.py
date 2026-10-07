@@ -1,13 +1,13 @@
-"""Doors, windows, planks and thumping: the shipped barriers, tables and wording (spec 13)."""
+"""Doors, windows, planks and thumping: the shipped barriers, tables and wording (doors)."""
 
 from modules import units
 from modules.entity.barrier import BarrierEntity, BarrierKind
 
-DOOR_HEALTH = 500  # spec 13: health
-WINDOW_HEALTH_SINGLE = 50  # spec 13: health, fixtures only
-WINDOW_HEALTH_DOUBLE = 100  # spec 13: health, fixtures only
-MAX_PLANKS_PER_SIDE = 4  # spec 13: planks
-SIGHT_BLOCKING_PLANKS = 3  # spec 13: planks on one side
+DOOR_HEALTH = 500  # doors: health
+WINDOW_HEALTH_SINGLE = 50  # doors: health, fixtures only
+WINDOW_HEALTH_DOUBLE = 100  # doors: health, fixtures only
+MAX_PLANKS_PER_SIDE = 4  # doors: planks
+SIGHT_BLOCKING_PLANKS = 3  # doors: planks on one side
 
 APARTMENT_DOOR_ID = "door_apartment"
 LOBBY_DOOR_ID = "door_lobby"
@@ -16,7 +16,7 @@ APARTMENT_KEY_ID = "item_apartment_key"
 
 
 def _place_barriers() -> list[BarrierEntity]:
-    """The one barrier of each flat and shop; none has a key (spec 25)."""
+    """The one barrier of each flat and shop; none has a key (carrying-and-loot)."""
 
     def door(barrier_id: str, parent: str, zone: str, name: str, *, locked: bool) -> BarrierEntity:
         return BarrierEntity(
@@ -111,40 +111,40 @@ def build_starting_barriers() -> dict[str, BarrierEntity]:
     return {barrier.barrier_id: barrier for barrier in barriers}
 
 
-THUMP_STRENGTH = 3  # spec 13: damage per thump
-THUMPS_PER_MIN_DOOR_BANG = 1.5  # spec 13: per game minute
-THUMPS_PER_MIN_DOOR_CLAW = 1.40625  # spec 13: per game minute
-THUMPS_PER_MIN_DOOR = 3.0  # spec 13: per game minute
+THUMP_STRENGTH = 3  # doors: damage per thump
+THUMPS_PER_MIN_DOOR_BANG = 1.5  # doors: per game minute
+THUMPS_PER_MIN_DOOR_CLAW = 1.40625  # doors: per game minute
+THUMPS_PER_MIN_DOOR = 3.0  # doors: per game minute
 THUMP_RATES_PER_MIN = (
     THUMPS_PER_MIN_DOOR_BANG,
     THUMPS_PER_MIN_DOOR_CLAW,
     THUMPS_PER_MIN_DOOR,
 )
-THUMPERS_TO_BREAK_DOOR = 2  # spec 13: zombies
-THUMP_COOLDOWN_MIN = 2  # spec 13: minutes
-THUMP_STOP_SOUND_RADIUS = 10  # spec 13: tiles
-LUNGE_GAP = 2.0  # spec 13: tiles
+THUMPERS_TO_BREAK_DOOR = 2  # doors: zombies
+THUMP_COOLDOWN_MIN = 2  # doors: minutes
+THUMP_STOP_SOUND_RADIUS = 10  # doors: tiles
+LUNGE_GAP = 2.0  # doors: tiles
 
-THUMP_SOUND_RADIUS = 20  # spec 13: tiles
-THUMP_SOUND_VOLUME = 20  # spec 13
-BREAK_SOUND_RADIUS = 10  # spec 13: tiles
-BREAK_SOUND_VOLUME = 20  # spec 13
-BREAK_SOUND_IGNORE_TILES = 4  # spec 13: tiles
-HIT_SOUND_RADIUS = 20  # spec 13: tiles
-HIT_SOUND_VOLUME = 20  # spec 13
-HAMMER_SOUND_RADIUS_BASE = 20  # spec 13: tiles
-PRY_SOUND_RADIUS = 10  # spec 13: tiles
-PRY_SOUND_VOLUME = 1  # spec 13
-HAMMER_MOD_BY_CARPENTRY = (1.0, 1.0, 0.8, 0.6, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4)  # spec 13
+THUMP_SOUND_RADIUS = 20  # doors: tiles
+THUMP_SOUND_VOLUME = 20  # doors
+BREAK_SOUND_RADIUS = 10  # doors: tiles
+BREAK_SOUND_VOLUME = 20  # doors
+BREAK_SOUND_IGNORE_TILES = 4  # doors: tiles
+HIT_SOUND_RADIUS = 20  # doors: tiles
+HIT_SOUND_VOLUME = 20  # doors
+HAMMER_SOUND_RADIUS_BASE = 20  # doors: tiles
+PRY_SOUND_RADIUS = 10  # doors: tiles
+PRY_SOUND_VOLUME = 1  # doors
+HAMMER_MOD_BY_CARPENTRY = (1.0, 1.0, 0.8, 0.6, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4)  # doors
 
-STRESS_FROM_SOUNDS_MULTIPLIER = 0.00002  # spec 13: per real frame
-BARRIER_SOUND_STRESS_MOD = 15  # spec 13
-SOUND_LIFE_FRAMES = 16  # spec 13: real frames
+STRESS_FROM_SOUNDS_MULTIPLIER = 0.00002  # doors: per real frame
+BARRIER_SOUND_STRESS_MOD = 15  # doors
+SOUND_LIFE_FRAMES = 16  # doors: real frames
 STRESS_PER_BARRIER_SOUND = (
     SOUND_LIFE_FRAMES * BARRIER_SOUND_STRESS_MOD * STRESS_FROM_SOUNDS_MULTIPLIER
-)  # spec 13: at distance 0
+)  # doors: at distance 0
 
-BARRICADE_MOD_BY_CARPENTRY = (  # spec 13: levels 0 to 10
+BARRICADE_MOD_BY_CARPENTRY = (  # doors: levels 0 to 10
     1.0,
     1.0,
     1.1,
@@ -157,23 +157,23 @@ BARRICADE_MOD_BY_CARPENTRY = (  # spec 13: levels 0 to 10
     1.4,
     1.5,
 )
-PLANK_BASE_HEALTH = 1000  # spec 13: health at full condition
-BARRICADE_TIME_FRAMES = 200  # spec 13
-UNBARRICADE_TIME_FRAMES_BASE = 200  # spec 13
-UNBARRICADE_TIME_FRAMES_PER_CARPENTRY = 5  # spec 13
-UNBARRICADE_TIME_FRAMES_HANDY_BONUS = 20  # spec 13
-BARRICADE_XP_CARPENTRY = 10  # spec 13: XP, through the XP chain
-UNBARRICADE_XP_CARPENTRY = 2  # spec 13: XP, flat
-UNBARRICADE_XP_STRENGTH = 2  # spec 13: XP, flat
-HAMMER_WEAR_MULT = 6.0  # spec 13
-BARRICADE_MIN = units.minutes_from_timed_action_frames(BARRICADE_TIME_FRAMES)  # spec 13
-UNBARRICADE_MIN = units.minutes_from_timed_action_frames(UNBARRICADE_TIME_FRAMES_BASE)  # spec 13
+PLANK_BASE_HEALTH = 1000  # doors: health at full condition
+BARRICADE_TIME_FRAMES = 200  # doors
+UNBARRICADE_TIME_FRAMES_BASE = 200  # doors
+UNBARRICADE_TIME_FRAMES_PER_CARPENTRY = 5  # doors
+UNBARRICADE_TIME_FRAMES_HANDY_BONUS = 20  # doors
+BARRICADE_XP_CARPENTRY = 10  # doors: XP, through the XP chain
+UNBARRICADE_XP_CARPENTRY = 2  # doors: XP, flat
+UNBARRICADE_XP_STRENGTH = 2  # doors: XP, flat
+HAMMER_WEAR_MULT = 6.0  # doors
+BARRICADE_MIN = units.minutes_from_timed_action_frames(BARRICADE_TIME_FRAMES)  # doors
+UNBARRICADE_MIN = units.minutes_from_timed_action_frames(UNBARRICADE_TIME_FRAMES_BASE)  # doors
 
-DOOR_HIT_MULT = 2  # spec 13
-DOOR_HIT_EXTRA_MULT = 6  # spec 13
-DOOR_HIT_EXTRA_ONE_IN = 10  # spec 13
-BARRICADE_HIT_MULT = 5  # spec 13
-DOOR_DAMAGE_STRENGTH_MULT = (  # spec 13: m, levels 0 to 10
+DOOR_HIT_MULT = 2  # doors
+DOOR_HIT_EXTRA_MULT = 6  # doors
+DOOR_HIT_EXTRA_ONE_IN = 10  # doors
+BARRICADE_HIT_MULT = 5  # doors
+DOOR_DAMAGE_STRENGTH_MULT = (  # doors: m, levels 0 to 10
     0.5,
     0.63,
     0.76,
@@ -186,7 +186,7 @@ DOOR_DAMAGE_STRENGTH_MULT = (  # spec 13: m, levels 0 to 10
     1.45,
     1.7,
 )
-DOOR_HIT_ENDURANCE_BY_FITNESS = (  # spec 13: endurance, levels 0 to 10
+DOOR_HIT_ENDURANCE_BY_FITNESS = (  # doors: endurance, levels 0 to 10
     0.01,
     0.007,
     0.0065,
@@ -199,12 +199,12 @@ DOOR_HIT_ENDURANCE_BY_FITNESS = (  # spec 13: endurance, levels 0 to 10
     0.002,
     0.0,
 )
-JOGGER_DOOR_ENDURANCE_MULT = 0.9  # spec 13
+JOGGER_DOOR_ENDURANCE_MULT = 0.9  # doors
 
-PLAYER_AT_BARRIER_DISTANCE = 1  # spec 13: tiles
-BROKEN_DOOR_PLANKS_MIN = 1  # spec 13: planks
-BROKEN_DOOR_PLANKS_MAX = 2  # spec 13: planks
-HEARD_THUMP_INTERRUPT_RADIUS = 20  # spec 13: tiles
+PLAYER_AT_BARRIER_DISTANCE = 1  # doors: tiles
+BROKEN_DOOR_PLANKS_MIN = 1  # doors: planks
+BROKEN_DOOR_PLANKS_MAX = 2  # doors: planks
+HEARD_THUMP_INTERRUPT_RADIUS = 20  # doors: tiles
 
 PLANK_ITEM_ID = "item_plank"
 HAMMER_ITEM_ID = "item_hammer"

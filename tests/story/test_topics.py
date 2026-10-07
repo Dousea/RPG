@@ -1,4 +1,4 @@
-"""Topics: what an NPC can tell the player (spec 10, Topics)."""
+"""Topics: what an NPC can tell the player (llm-contract: Topics)."""
 
 import unittest
 
@@ -33,7 +33,7 @@ ASK_NEWS = AskAction(npc_name="Jen", request="about", argument="outbreak_news")
 
 
 class TopicRowTests(unittest.TestCase):
-    """Spec 10, Topics: the one starting topic."""
+    """llm-contract: Topics: the one starting topic."""
 
     def test_outbreak_news_is_jens_and_needs_the_outbreak_and_tentative_trust(self):
         topic = TOPICS["outbreak_news"]

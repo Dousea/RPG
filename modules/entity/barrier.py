@@ -1,4 +1,4 @@
-"""A door or window on the connection between two zones, and its planks (spec 13)."""
+"""A door or window on the connection between two zones, and its planks (doors)."""
 
 from dataclasses import dataclass, field
 from enum import StrEnum

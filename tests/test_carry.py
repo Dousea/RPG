@@ -1,4 +1,4 @@
-"""Spec 25, Carrying: capacity, weight and Heavy Load."""
+"""carrying-and-loot: Carrying: capacity, weight and Heavy Load."""
 
 import random
 import unittest
@@ -54,7 +54,7 @@ NO_EFFECTS: dict[StatusEffect, int] = {}
 
 
 class CapacityTests(unittest.TestCase):
-    """Spec 25, Capacity."""
+    """carrying-and-loot: Capacity."""
 
     def test_strength_zero_to_ten(self):
         got = [carry.max_weight(level, (), NO_EFFECTS) for level in range(11)]
@@ -98,7 +98,7 @@ class CapacityTests(unittest.TestCase):
 
 
 class WeightTests(unittest.TestCase):
-    """Spec 25, Weight."""
+    """carrying-and-loot: Weight."""
 
     def test_a_can_in_the_pack_weighs_0_8(self):
         who = player()
@@ -157,7 +157,7 @@ class WeightTests(unittest.TestCase):
 
 
 class HeavyLoadTests(unittest.TestCase):
-    """Spec 25, Heavy Load."""
+    """carrying-and-loot: Heavy Load."""
 
     def test_capacity_12_edges(self):
         got = [carry.heavy_load_level(weight, 12) for weight in (0, 12, 12.5, 15, 18, 21)]
@@ -223,7 +223,7 @@ def endurance_after(who_ctx: StatContext, start: float, minutes: float = 1.0) ->
 
 
 class HeavyLoadEnduranceTests(unittest.TestCase):
-    """Spec 25, What Heavy Load does: the endurance terms."""
+    """carrying-and-loot: What Heavy Load does: the endurance terms."""
 
     def test_the_exercising_drain_is_1_9_times_at_level_2(self):
         plain = 0.8 - endurance_after(StatContext(exercising=True), 0.8, 60)
@@ -272,7 +272,7 @@ class HeavyLoadEnduranceTests(unittest.TestCase):
 
 
 class OverloadLossTests(unittest.TestCase):
-    """Spec 25, What Heavy Load does: the overload loss."""
+    """carrying-and-loot: What Heavy Load does: the overload loss."""
 
     def lose(self, who: PlayerEntity, *, resting: bool = False) -> float:
         before = who.health
@@ -335,7 +335,7 @@ def bare_game(strength: int, *item_ids: str) -> GameManager:
 
 
 class StatContextTests(unittest.TestCase):
-    """Spec 25, What Heavy Load does: the context the drivers read."""
+    """carrying-and-loot: What Heavy Load does: the context the drivers read."""
 
     def test_the_context_has_the_ratio_and_the_level(self):
         gm = bare_game(0, "item_barbell", "item_dumbbell")
@@ -359,7 +359,7 @@ class StatContextTests(unittest.TestCase):
 
 
 class ParsingTests(unittest.TestCase):
-    """Spec 25, Verbs: the lines the parser reads."""
+    """carrying-and-loot: Verbs: the lines the parser reads."""
 
     def test_put_takes_an_item_and_a_bag(self):
         self.assertEqual(
@@ -406,7 +406,7 @@ class ParsingTests(unittest.TestCase):
 
 
 class TransferFramesTests(unittest.TestCase):
-    """Spec 25, Moving things: frames per item."""
+    """carrying-and-loot: Moving things: frames per item."""
 
     def frames(self, item_id, source, target, **kw):
         return carry.transfer_frames(entity(item_id), source, target, **kw)
@@ -504,7 +504,7 @@ def minutes_of(gm: GameManager, *actions) -> tuple[int, list[str]]:
 
 
 class BagVerbTests(unittest.TestCase):
-    """Spec 25, Bags: EQUIP, UNEQUIP, WEAR and TAKE_OFF on a bag."""
+    """carrying-and-loot: Bags: EQUIP, UNEQUIP, WEAR and TAKE_OFF on a bag."""
 
     def test_a_back_bag_goes_on_the_shoulders(self):
         gm = home()
@@ -605,7 +605,7 @@ class BagVerbTests(unittest.TestCase):
 
 
 class PutAndTakeTests(unittest.TestCase):
-    """Spec 25, Verbs: PUT, TAKE from a bag, TAKE all, DROP."""
+    """carrying-and-loot: Verbs: PUT, TAKE from a bag, TAKE all, DROP."""
 
     def test_put_moves_an_item_into_a_carried_bag(self):
         gm = home()
@@ -731,7 +731,7 @@ class PutAndTakeTests(unittest.TestCase):
 
 
 class StrengthXpTests(unittest.TestCase):
-    """Spec 25, Strength XP."""
+    """carrying-and-loot: Strength XP."""
 
     def test_a_moving_minute_is_three_or_four_checks_of_one_in_twenty(self):
         four_checks = ScriptedRandom(random=[0.5, 0.01, 0.99, 0.99, 0.01])
@@ -768,7 +768,7 @@ class StrengthXpTests(unittest.TestCase):
 
 
 class HeavyLoadFactTests(unittest.TestCase):
-    """Spec 25, What the narrator and the player see: Heavy Load rising and falling is a fact."""
+    """carrying-and-loot: What the narrator and the player see: Heavy Load rising and falling is a fact."""
 
     def test_taking_the_item_that_tips_the_load_says_so(self):
         gm = bare_game(0, "item_barbell")
@@ -792,7 +792,7 @@ class HeavyLoadFactTests(unittest.TestCase):
 
 
 class BagPlaceTests(unittest.TestCase):
-    """Spec 25, What the narrator and the player see: where a bag is, in words."""
+    """carrying-and-loot: What the narrator and the player see: where a bag is, in words."""
 
     def test_the_five_places(self):
         who = player()
@@ -814,7 +814,7 @@ class BagPlaceTests(unittest.TestCase):
 
 
 class CapacityZeroTests(unittest.TestCase):
-    """Spec 25, Edge cases: capacity 0."""
+    """carrying-and-loot: Edge cases: capacity 0."""
 
     def test_anything_carried_at_capacity_zero_is_level_four_and_a_full_ratio(self):
         gm = bare_game(0, "item_hammer")
@@ -830,7 +830,7 @@ class CapacityZeroTests(unittest.TestCase):
 
 
 class CarriedBodyBonesTests(unittest.TestCase):
-    """Spec 25, Carrying a corpse: a carried body that turns to bones weighs less."""
+    """carrying-and-loot: Carrying a corpse: a carried body that turns to bones weighs less."""
 
     def test_the_weight_follows_the_body_at_the_next_action(self):
         from tests.corpses.test_carry import carrying
@@ -845,7 +845,7 @@ class CarriedBodyBonesTests(unittest.TestCase):
 
 
 class TakeTimeTests(unittest.TestCase):
-    """Spec 25, Moving things: a single ground take is 50 frames a kilo, then traits."""
+    """carrying-and-loot: Moving things: a single ground take is 50 frames a kilo, then traits."""
 
     def test_all_thumbs_taking_a_three_kilo_plank_is_300_frames_and_two_minutes(self):
         gm = home()
@@ -856,7 +856,7 @@ class TakeTimeTests(unittest.TestCase):
 
 
 class BagEffectiveCapacityTests(unittest.TestCase):
-    """Spec 25, Containers: a bag holds the lesser of its capacity and 50 kg less its own weight."""
+    """carrying-and-loot: Containers: a bag holds the lesser of its capacity and 50 kg less its own weight."""
 
     def setUp(self):
         self.gm = home()

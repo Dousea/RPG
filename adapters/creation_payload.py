@@ -1,4 +1,4 @@
-"""The creation screen's JSON: what it offers and how a submitted build is read (spec 07)."""
+"""The creation screen's JSON: what it offers and how a submitted build is read (character-creation)."""
 
 from typing import Any
 

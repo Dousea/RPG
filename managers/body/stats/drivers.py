@@ -1,4 +1,4 @@
-"""Stat drivers: each moves some survival stats over a chunk of game time (spec 02)."""
+"""Stat drivers: each moves some survival stats over a chunk of game time (survival-stats)."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -42,7 +42,7 @@ class StatContext:
     bed_type: str = survival_k.DEFAULT_BED_TYPE
     hours_survived: float = 0.0
     new_zombies_seen: int = 0
-    sound_stress: float = 0.0  # spec 13: stress from barrier sounds over the chunk
+    sound_stress: float = 0.0  # doors: stress from barrier sounds over the chunk
     weather: WeatherSample | None = None
     body: BodyMultipliers = field(default_factory=BodyMultipliers)
     skills: Mapping[str, int] = field(default_factory=dict[str, int])
@@ -53,9 +53,9 @@ class StatContext:
     floor: int = 0
     power_on: bool = True
     metabolic: Metabolic = Metabolic.DEFAULT
-    carry_ratio: float = 0.0  # spec 25: carried weight over capacity
-    heavy_load: int = 0  # spec 25: the Heavy Load level
-    carrying_corpse: bool = False  # spec 25
+    carry_ratio: float = 0.0  # carrying-and-loot: carried weight over capacity
+    heavy_load: int = 0  # carrying-and-loot: the Heavy Load level
+    carrying_corpse: bool = False  # carrying-and-loot
     wearer: PlayerEntity | None = None
 
 
@@ -274,7 +274,7 @@ class IntoxicationDriver:
 
 
 class FoodSicknessDriver:
-    """Corpses add sickness and, while they do, the usual decay stops (spec 14)."""
+    """Corpses add sickness and, while they do, the usual decay stops (zombie-lifecycle)."""
 
     def apply(self, stats: Stats, hours: float, ctx: StatContext) -> None:
         excess = min(

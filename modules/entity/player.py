@@ -37,21 +37,21 @@ class PlayerEntity(BaseEntity):
     # specific without needing a room for every corner. LLM-authored, so it is
     # capped and rendered as text, never markup.
     current_place: str = ""
-    current_room: str | None = None  # spec 25: the id of the room they are in
+    current_room: str | None = None  # carrying-and-loot: the id of the room they are in
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     stats: Stats = field(default_factory=Stats)
     thermal: ThermalState = field(default_factory=ThermalState)
     asleep: bool = False
-    # Moving quietly: every walk is at sneak pace (spec 09).
+    # Moving quietly: every walk is at sneak pace (zombies).
     sneaking: bool = False
-    # The 17 parts and their wounds; overall health is derived from them (spec 12).
+    # The 17 parts and their wounds; overall health is derived from them (health).
     body: dict[BodyPart, PartState] = field(default_factory=new_body)
     zombie_infection_since: float | None = (
-        None  # hours survived at the first zombie-infected part (spec 12)
+        None  # hours survived at the first zombie-infected part (health)
     )
-    zombie_infection_hours: float = 0.0  # spec 12
-    pain_effect_minutes: float = 0.0  # spec 12: painkiller time left
-    reduce_infection_power: float = 0.0  # spec 12: antibiotics
+    zombie_infection_hours: float = 0.0  # health
+    pain_effect_minutes: float = 0.0  # health: painkiller time left
+    reduce_infection_power: float = 0.0  # health: antibiotics
     # Well-fed timer: counts down while the player digests; drives Food Eaten.
     food_eaten_timer: float = 0.0
     equipment: dict[AnyCharacterEquipmentSlot, ItemEntity | None] = field(
@@ -74,10 +74,10 @@ class PlayerEntity(BaseEntity):
     loss_timer_steps: dict[str, int] = field(default_factory=dict[str, int])
     exercise: ExerciseState = field(default_factory=ExerciseState)
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
-    zombie_kills: int = 0  # spec 11
-    at_barrier: str | None = None  # spec 13: the barrier the player stands at, for its distance
-    carrying_corpse: str | None = None  # spec 25: the id of the body in their arms
-    carrying_skeleton: bool = False  # spec 25: whether that body is bones, for its weight
+    zombie_kills: int = 0  # melee
+    at_barrier: str | None = None  # doors: the barrier the player stands at, for its distance
+    carrying_corpse: str | None = None  # carrying-and-loot: the id of the body in their arms
+    carrying_skeleton: bool = False  # carrying-and-loot: whether that body is bones, for its weight
 
     def __post_init__(self) -> None:
         if not self.appearance.forename:
@@ -97,12 +97,12 @@ class PlayerEntity(BaseEntity):
 
     @property
     def health(self) -> float:
-        """Overall health from the parts, 0 to 100 (spec 12)."""
+        """Overall health from the parts, 0 to 100 (health)."""
         return overall_health(self.body)
 
     @property
     def hit_points(self) -> int:
-        """Overall health rounded up, so only a body at 0 reads as dead (spec 12)."""
+        """Overall health rounded up, so only a body at 0 reads as dead (health)."""
         return math.ceil(self.health)
 
     @hit_points.setter

@@ -1,4 +1,4 @@
-"""Spec 12, Treatment: BANDAGE, REMOVE_BANDAGE, DISINFECT, painkillers and antibiotics."""
+"""health: Treatment: BANDAGE, REMOVE_BANDAGE, DISINFECT, painkillers and antibiotics."""
 
 import random
 import unittest
@@ -56,7 +56,7 @@ def set_first_aid(gm: GameManager, level: int) -> None:
 
 
 class ParseTests(unittest.TestCase):
-    """Spec 12, Treatment: the three verbs' arguments."""
+    """health: Treatment: the three verbs' arguments."""
 
     def test_bandage_with_a_part_and_an_item(self):
         self.assertEqual(
@@ -94,7 +94,7 @@ class ParseTests(unittest.TestCase):
 
 
 class BandageTests(unittest.TestCase):
-    """Spec 12, `BANDAGE`."""
+    """health: `BANDAGE`."""
 
     def bandage(self, level: int, seed: int = 0, item_id: str = "item_bandage"):
         gm = game_with(item_id)
@@ -185,7 +185,7 @@ class BandageTests(unittest.TestCase):
 
 
 class MostNeededPartTests(unittest.TestCase):
-    """Spec 12, `BANDAGE <part> [with <item>]`: no part given."""
+    """health: `BANDAGE <part> [with <item>]`: no part given."""
 
     def test_a_bleeding_part_beats_a_scratch(self):
         gm = GameManager()
@@ -218,7 +218,7 @@ class MostNeededPartTests(unittest.TestCase):
 
 
 class RemoveBandageTests(unittest.TestCase):
-    """Spec 12, `REMOVE_BANDAGE <part>`."""
+    """health: `REMOVE_BANDAGE <part>`."""
 
     def wear(self, item_id: str, life: float):
         gm = game_with()
@@ -261,7 +261,7 @@ class RemoveBandageTests(unittest.TestCase):
 
 
 class DisinfectTests(unittest.TestCase):
-    """Spec 12, `DISINFECT <part> [with <item>]`."""
+    """health: `DISINFECT <part> [with <item>]`."""
 
     def disinfect(self, level: int, item_id: str = "item_alcohol_wipes"):
         gm = game_with(item_id)
@@ -298,7 +298,7 @@ class DisinfectTests(unittest.TestCase):
 
 
 class PillTests(unittest.TestCase):
-    """Spec 12, Painkillers and Antibiotics."""
+    """health: Painkillers and Antibiotics."""
 
     def test_a_painkiller_starts_forty_eight_minutes_and_spends_a_pill(self):
         gm = game_with("item_painkillers")
@@ -330,7 +330,7 @@ class PillTests(unittest.TestCase):
 
 
 class TreatmentRefusalTests(unittest.TestCase):
-    """Spec 12, Treatment and Edge cases: every refusal costs 0 minutes."""
+    """health: Treatment and Edge cases: every refusal costs 0 minutes."""
 
     def refusal(self, gm: GameManager, action) -> str:
         result = ActionValidator(gm).validate(action)
@@ -433,7 +433,7 @@ class TreatmentRefusalTests(unittest.TestCase):
 
 
 class ItemPickTests(unittest.TestCase):
-    """Spec 12, `BANDAGE`: no item given."""
+    """health: `BANDAGE`: no item given."""
 
     def pick(self, *item_ids: str) -> str:
         gm = game_with(*item_ids)
@@ -471,7 +471,7 @@ class ItemPickTests(unittest.TestCase):
 
 
 class TreatmentResolutionTests(unittest.TestCase):
-    """Spec 12, Treatment: the verbs end to end, 1 minute each."""
+    """health: Treatment: the verbs end to end, 1 minute each."""
 
     def test_bandage_costs_one_minute_and_stops_the_bleeding(self):
         gm = game_with("item_bandage")

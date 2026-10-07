@@ -28,8 +28,8 @@ from modules.weapon import RangedWeaponType
 # rather than worn, so the narrator gets a word, never the number.
 ITEM_WORN_MIN_FRACTION = 0.5
 
-WETNESS_MAX = 100  # spec 05
-WETNESS_WORD_MIN = 15  # spec 05
+WETNESS_MAX = 100  # clothing
+WETNESS_WORD_MIN = 15  # clothing
 WETNESS_WET_MIN = 40  # our band edge; the spec gives only the 15 floor
 WETNESS_SOAKED_MIN = 75  # our band edge, as above
 
@@ -47,7 +47,7 @@ def item_condition_word(entity: ItemEntity) -> str:
     return "damaged"
 
 
-ORTON_OUTFIT_IDS = (  # spec 05
+ORTON_OUTFIT_IDS = (  # clothing
     "item_tshirt",
     "item_hoodie",
     "item_jeans",
@@ -83,14 +83,14 @@ def _medical(
     )
 
 
-DIRTY_BANDAGE_ID = "item_dirty_bandage"  # spec 12
-DIRTY_RIPPED_SHEETS_ID = "item_dirty_ripped_sheets"  # spec 12
-BANDAGE_ID = "item_bandage"  # spec 12
-ADHESIVE_BANDAGE_ID = "item_adhesive_bandage"  # spec 12
-ALCOHOL_WIPES_ID = "item_alcohol_wipes"  # spec 12
-PAINKILLERS_ID = "item_painkillers"  # spec 12
+DIRTY_BANDAGE_ID = "item_dirty_bandage"  # health
+DIRTY_RIPPED_SHEETS_ID = "item_dirty_ripped_sheets"  # health
+BANDAGE_ID = "item_bandage"  # health
+ADHESIVE_BANDAGE_ID = "item_adhesive_bandage"  # health
+ALCOHOL_WIPES_ID = "item_alcohol_wipes"  # health
+PAINKILLERS_ID = "item_painkillers"  # health
 
-MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
+MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # health
     [
         _medical(
             BANDAGE_ID,
@@ -185,7 +185,7 @@ MEDICAL_ITEMS: dict[str, MedicalItem] = dict(  # spec 12
     ]
 )
 
-BAG_HIT_POINTS = 20  # spec 25: not in the spec's rows; any bag's wear
+BAG_HIT_POINTS = 20  # carrying-and-loot: not in the spec's rows; any bag's wear
 BACK_AND_HAND: list[AnyCharacterEquipmentSlot] = [
     CharacterArmorSlot.SHOULDERS,
     CharacterHoldableSlot.LEFT_HAND,
@@ -220,9 +220,9 @@ def _bag(
     )
 
 
-SCHOOLBAG_ID = "item_schoolbag"  # spec 25
+SCHOOLBAG_ID = "item_schoolbag"  # carrying-and-loot
 
-BAGS: dict[str, ContainerItem] = dict(  # spec 25
+BAGS: dict[str, ContainerItem] = dict(  # carrying-and-loot
     [
         _bag(SCHOOLBAG_ID, "Schoolbag", "A canvas schoolbag.", 15, 70, 1.0, slots=BACK_AND_HAND),
         _bag(
@@ -314,8 +314,8 @@ ITEMS: dict[str, BaseItem] = {
         name="Crowbar",
         description="A sturdy piece of metal. Good for prying or hitting.",
         max_hit_points=50,
-        tags=["tool", "weapon", barrier_k.REMOVE_BARRICADE_TAG],  # spec 13
-        damage=5,  # spec 11: HP in a fight with an NPC
+        tags=["tool", "weapon", barrier_k.REMOVE_BARRICADE_TAG],  # doors
+        damage=5,  # melee: HP in a fight with an NPC
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
             CharacterHoldableSlot.LEFT_HAND,
@@ -340,7 +340,7 @@ ITEMS: dict[str, BaseItem] = {
         description="A sharp chef's knife. Quick, and it ends a fight if it finds the jaw.",
         max_hit_points=20,
         tags=["tool", "weapon"],
-        damage=3,  # spec 11: HP in a fight with an NPC
+        damage=3,  # melee: HP in a fight with an NPC
         slots=[CharacterHoldableSlot.RIGHT_HAND],
         is_two_handed=False,
         categories=(melee_k.CATEGORY_SMALL_BLADE,),
@@ -366,7 +366,7 @@ ITEMS: dict[str, BaseItem] = {
             "weapon",
             melee_k.TAG_REPAIRABLE_WITH_GLUE,
             melee_k.TAG_REPAIRABLE_WITH_TAPE,
-        ],  # spec 11
+        ],  # melee
         damage=melee_k.NPC_BAT_DAMAGE,
         slots=[
             CharacterHoldableSlot.RIGHT_HAND,
@@ -421,7 +421,7 @@ ITEMS: dict[str, BaseItem] = {
             melee_k.TAG_SHARPENABLE,
             melee_k.TAG_REPAIRABLE_WITH_TAPE,
             melee_k.TAG_REPAIRABLE_WITH_GLUE,
-        ],  # spec 11
+        ],  # melee
         damage=melee_k.NPC_AXE_DAMAGE,
         slots=[CharacterHoldableSlot.RIGHT_HAND],
         is_two_handed=False,
@@ -497,8 +497,8 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        hunger_change=-0.24,  # spec 03
-        unhappy_change=10,  # spec 03
+        hunger_change=-0.24,  # status-effects
+        unhappy_change=10,  # status-effects
     ),
     "item_water_bottle": ConsumableItem(
         id="item_water_bottle",
@@ -513,7 +513,7 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        thirst_change=-0.50,  # spec 03
+        thirst_change=-0.50,  # status-effects
     ),
     "item_granola_bar": ConsumableItem(
         id="item_granola_bar",
@@ -528,7 +528,7 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        hunger_change=-0.15,  # spec 03
+        hunger_change=-0.15,  # status-effects
     ),
     "item_instant_noodles": ConsumableItem(
         id="item_instant_noodles",
@@ -543,15 +543,15 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        hunger_change=-0.10,  # spec 03
-        thirst_change=0.40,  # spec 03
-        unhappy_change=20,  # spec 03
+        hunger_change=-0.10,  # status-effects
+        thirst_change=0.40,  # status-effects
+        unhappy_change=20,  # status-effects
     ),
     "item_barbell": HoldableItem(
         id="item_barbell",
         name="Barbell",
         description="A loaded steel bar for lifting.",
-        max_hit_points=15,  # spec 08
+        max_hit_points=15,  # skills
         weight=6.0,
         tags=["exercise"],
         slots=[
@@ -564,7 +564,7 @@ ITEMS: dict[str, BaseItem] = {
         id="item_dumbbell",
         name="Dumbbell",
         description="A cast-iron hand weight.",
-        max_hit_points=10,  # spec 08
+        max_hit_points=10,  # skills
         weight=5.0,
         tags=["exercise"],
         slots=[
@@ -665,7 +665,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Hammer",
         description="A claw hammer. It drives nails and pries planks off.",
         max_hit_points=20,
-        tags=["tool", "weapon", barrier_k.HAMMER_TAG, barrier_k.REMOVE_BARRICADE_TAG],  # spec 13
+        tags=["tool", "weapon", barrier_k.HAMMER_TAG, barrier_k.REMOVE_BARRICADE_TAG],  # doors
         damage=3,
         slots=[CharacterHoldableSlot.RIGHT_HAND],
         is_two_handed=False,
@@ -687,7 +687,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Plank",
         description="A rough length of wood. Nailed across a door, or swung as a club.",
         max_hit_points=10,
-        tags=["material", "weapon"],  # spec 13
+        tags=["material", "weapon"],  # doors
         damage=2,
         slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
         is_two_handed=True,
@@ -710,7 +710,7 @@ ITEMS: dict[str, BaseItem] = {
         name="Nails",
         description="A handful of nails.",
         max_hit_points=5,
-        tags=["material"],  # spec 13
+        tags=["material"],  # doors
         slots=[CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND],
         is_two_handed=False,
         uses=5,

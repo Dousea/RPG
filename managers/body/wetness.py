@@ -1,4 +1,4 @@
-"""The wetness driver: rain, sweat and drying walk through clothing once per game minute (spec 06)."""
+"""The wetness driver: rain, sweat and drying walk through clothing once per game minute (body-temperature)."""
 
 from dataclasses import dataclass
 

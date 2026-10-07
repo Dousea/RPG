@@ -1,4 +1,4 @@
-"""A zombie's attack on the player: defence, drag-down, wounds and clothing (spec 09)."""
+"""A zombie's attack on the player: defence, drag-down, wounds and clothing (zombies)."""
 
 import math
 import random
@@ -47,7 +47,7 @@ class Wound:
 
 @dataclass
 class AttackOutcome:
-    idle: bool = False  # a crawler's attack that did nothing (spec 14)
+    idle: bool = False  # a crawler's attack that did nothing (zombie-lifecycle)
     defended: bool = False
     dragged_down: bool = False
     blocked: bool = False

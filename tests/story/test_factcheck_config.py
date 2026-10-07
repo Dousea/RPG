@@ -1,4 +1,4 @@
-"""The factcheck config defaults (Spec 10, The fact check)."""
+"""The factcheck config defaults (llm-contract: The fact check)."""
 
 import os
 import subprocess
@@ -25,7 +25,7 @@ def committed_config() -> dict:
 
 
 class FactcheckConfigTests(unittest.TestCase):
-    """Spec 10, The fact check."""
+    """llm-contract: The fact check."""
 
     def test_the_defaults(self):
         self.assertEqual(

@@ -1,4 +1,4 @@
-"""The player's survival stats and the status effect kinds derived from them (spec 02)."""
+"""The player's survival stats and the status effect kinds derived from them (survival-stats)."""
 
 import logging
 from dataclasses import dataclass
@@ -47,7 +47,7 @@ class StatRange:
     default: float
 
 
-STAT_RANGES: dict[CharacterStat, StatRange] = {  # spec 02
+STAT_RANGES: dict[CharacterStat, StatRange] = {  # survival-stats
     CharacterStat.HUNGER: StatRange(0, 1, 0),
     CharacterStat.THIRST: StatRange(0, 1, 0),
     CharacterStat.FATIGUE: StatRange(0, 1, 0),
@@ -64,8 +64,8 @@ STAT_RANGES: dict[CharacterStat, StatRange] = {  # spec 02
     CharacterStat.TEMPERATURE: StatRange(20, 40, 37),
     CharacterStat.WETNESS: StatRange(0, 100, 0),
     CharacterStat.SICKNESS: StatRange(0, 1, 0),
-    CharacterStat.COLD_STRENGTH: StatRange(0, 100, 0),  # spec 06
-    CharacterStat.WINDCHILL: StatRange(0, 100, 0),  # spec 06
+    CharacterStat.COLD_STRENGTH: StatRange(0, 100, 0),  # body-temperature
+    CharacterStat.WINDCHILL: StatRange(0, 100, 0),  # body-temperature
 }
 
 

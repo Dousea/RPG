@@ -1,4 +1,4 @@
-"""Character creation rules: point pool, exclusions, starting skills, random builds (spec 07)."""
+"""Character creation rules: point pool, exclusions, starting skills, random builds (character-creation)."""
 
 import math
 import random

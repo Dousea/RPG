@@ -188,7 +188,7 @@ class HasOptionsSectionTests(unittest.TestCase):
 
 
 class PromptRuleTests(unittest.TestCase):
-    """Spec 10, What the narrator must not do and Memory."""
+    """llm-contract: What the narrator must not do and Memory."""
 
     def test_the_narrator_is_told_refused_means_it_did_not_happen(self):
         self.assertIn("Refused", NARRATOR_SYSTEM_PROMPT)
@@ -272,7 +272,7 @@ SCHEMA = {"type": "object", "properties": {"actions": {"type": "array"}}}
 
 
 class ReadParserReplyTests(unittest.TestCase):
-    """Spec 10, Plans."""
+    """llm-contract: Plans."""
 
     def test_a_structured_reply_is_read_as_a_json_plan(self):
         reply = llm.ParserReply('{"actions": [{"verb": "SHOUT"}]}', structured=True)
@@ -288,7 +288,7 @@ class ReadParserReplyTests(unittest.TestCase):
 
 
 class ParserRequestTests(unittest.TestCase):
-    """Spec 10, Plans."""
+    """llm-contract: Plans."""
 
     def ask(self, *responses: FakeResponse, schema=SCHEMA):
         with mock.patch.object(llm.requests, "post", side_effect=responses) as post:
@@ -371,7 +371,7 @@ class ParsePlanResponseTests(unittest.TestCase):
 
 
 class ReplyCapTests(unittest.TestCase):
-    """Spec 10, Token budget: reply caps."""
+    """llm-contract: Token budget: reply caps."""
 
     def sent(self, call) -> dict:
         with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
@@ -401,7 +401,7 @@ class ReplyCapTests(unittest.TestCase):
 
 
 class ReasoningTests(unittest.TestCase):
-    """Spec 10, The rule."""
+    """llm-contract: The rule."""
 
     def sent(self, call) -> dict:
         with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
@@ -447,7 +447,7 @@ class ReasoningTests(unittest.TestCase):
 
 
 class ModelPerRoleTests(unittest.TestCase):
-    """Spec 10, The rule."""
+    """llm-contract: The rule."""
 
     def model(self, call) -> str:
         with (
@@ -471,7 +471,7 @@ class ModelPerRoleTests(unittest.TestCase):
 
 
 class CharsPerTokenTests(unittest.TestCase):
-    """Spec 10, Token budget: characters per token."""
+    """llm-contract: Token budget: characters per token."""
 
     def setUp(self):
         llm.reset_chars_per_token()
@@ -613,7 +613,7 @@ THOUGHT_AND_STORY = [
 
 
 class NarratorStreamTests(unittest.TestCase):
-    """Spec 10, Streaming: the narrator's thinking and story arrive as they are written."""
+    """llm-contract: Streaming: the narrator's thinking and story arrive as they are written."""
 
     def setUp(self):
         llm.reset_chars_per_token()
@@ -663,7 +663,7 @@ class NarratorStreamTests(unittest.TestCase):
 
 
 class StoryPreviewTests(unittest.TestCase):
-    """Spec 10, Streaming: the story so far, as the player may see it while it is written."""
+    """llm-contract: Streaming: the story so far, as the player may see it while it is written."""
 
     def test_the_story_header_is_left_out(self):
         self.assertEqual(llm.story_preview("STORY:\nYou wait."), "You wait.")

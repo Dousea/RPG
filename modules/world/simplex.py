@@ -1,4 +1,4 @@
-"""Two-dimensional simplex noise (spec 04).
+"""Two-dimensional simplex noise (weather).
 
 Pure math: a straight port of the classic gradient-table algorithm, so equal
 inputs give equal values. Output lies in [-1, 1].

@@ -26,7 +26,7 @@ class QuestState:
     "defeat:npc_marcus") -- there is no LLM verb that can mark a quest
     complete directly; only the engine advances one, by noticing a matching
     action was actually validated and resolved. A full Story Director that
-    reacts to arbitrary world state (docs/07-story-architecture.md) is out of
+    reacts to arbitrary world state (docs/architecture/story.md) is out of
     scope; this only tracks completion of a fixed objective list.
     """
 
@@ -38,7 +38,7 @@ class QuestState:
     # Simulation Core can match them exactly; these are how the narrator
     # prompt (managers/context.py) shows the same objectives to a human
     # without exposing the key format. A key with no label just doesn't
-    # render -- see docs/07-story-architecture.md for why this stays this
+    # render -- see docs/architecture/story.md for why this stays this
     # thin (no branching objectives, no failure conditions).
     title: str = ""
     objective_labels: dict[str, str] = field(default_factory=dict[str, str])

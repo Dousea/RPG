@@ -1,4 +1,4 @@
-"""What the player does to doors, windows and planks: open, close, board up, pry off, break (spec 13)."""
+"""What the player does to doors, windows and planks: open, close, board up, pry off, break (doors)."""
 
 import random
 

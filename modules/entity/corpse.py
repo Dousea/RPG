@@ -1,4 +1,4 @@
-"""A dead body lying in a zone (spec 14)."""
+"""A dead body lying in a zone (zombie-lifecycle)."""
 
 from dataclasses import dataclass, field
 

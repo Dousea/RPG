@@ -1,4 +1,4 @@
-"""Spec 02, Stats; Converting rates to game hours."""
+"""survival-stats: Stats; Converting rates to game hours."""
 
 import unittest
 
@@ -41,7 +41,7 @@ RANGES = {
 
 
 class StatTableTests(unittest.TestCase):
-    """Spec 02, Stats."""
+    """survival-stats: Stats."""
 
     def test_every_stat_has_the_spec_range_and_default(self):
         self.assertEqual(set(RANGES), set(CharacterStat))
@@ -94,7 +94,7 @@ class StatTableTests(unittest.TestCase):
 
 
 class RateConversionTests(unittest.TestCase):
-    """Spec 02, Converting rates to game hours."""
+    """survival-stats: Converting rates to game hours."""
 
     def test_the_three_factors(self):
         self.assertEqual(units.per_hour_from_day_scaled(1), 3600)
@@ -134,7 +134,7 @@ class RateConversionTests(unittest.TestCase):
 
 
 class StatusEffectThresholdTests(unittest.TestCase):
-    """Spec 03, Status effects."""
+    """status-effects: Status effects."""
 
     ROWS = {
         StatusEffect.HUNGRY: (0.15, 0.25, 0.45, 0.70),
@@ -210,7 +210,7 @@ class StatusEffectThresholdTests(unittest.TestCase):
 
 
 class TemperatureStatusEffectTests(unittest.TestCase):
-    """Spec 06, Status effects added to 03."""
+    """body-temperature: Status effects added to 03."""
 
     def test_hypothermia_columns_are_strict_and_fall_with_the_core(self):
         for level, column in enumerate((36.5, 35, 30, 25), start=1):
@@ -252,7 +252,7 @@ class TemperatureStatusEffectTests(unittest.TestCase):
 
 
 class StatusEffectEffectTests(unittest.TestCase):
-    """Spec 03, What status effects do."""
+    """status-effects: What status effects do."""
 
     @staticmethod
     def _stats(panic_level: int, stress_level: int) -> Stats:

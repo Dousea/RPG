@@ -179,7 +179,7 @@ deleting, or duplicating his key (the door rebuilds `LOCKED` on every load).
 `UPDATE_CONDITION` is unaffected, since it never removes an item. `SET_FLAG`
 sets the engine's ground truth for a world fact; `DISCOVER_FLAG` separately
 marks that the player has learned it, which is what makes it visible in the
-narrator's prompt (the knowledge-firewall doc's knowledge firewall applied to world flags, not
+narrator's prompt (the knowledge firewall applied to world flags, not
 just relationship scores).
 
 Relationships are directional and stored source -> target. Everything that reads

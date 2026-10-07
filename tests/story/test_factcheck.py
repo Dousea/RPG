@@ -1,4 +1,4 @@
-"""The story checker (Spec 10, The fact check), with the HTTP post stubbed."""
+"""The story checker (llm-contract: The fact check), with the HTTP post stubbed."""
 
 import json
 import math
@@ -51,7 +51,7 @@ def checker(**kwargs) -> StoryChecker:
 
 
 class RequestTests(unittest.TestCase):
-    """Spec 10, The fact check."""
+    """llm-contract: The fact check."""
 
     def post(self, story="It falls.", questions=(DEAD,), probabilities=None):
         probabilities = probabilities or {"A": 0.97}
@@ -104,7 +104,7 @@ class RequestTests(unittest.TestCase):
 
 
 class ConflictTests(unittest.TestCase):
-    """Spec 10, The fact check."""
+    """llm-contract: The fact check."""
 
     def conflicts(self, probabilities, question=DEAD, **kwargs):
         with mock.patch.object(factcheck.requests, "post", return_value=reply(probabilities)):
@@ -148,7 +148,7 @@ class ConflictTests(unittest.TestCase):
 
 
 class QuietTests(unittest.TestCase):
-    """Spec 10, The fact check."""
+    """llm-contract: The fact check."""
 
     def test_disabled_empty_story_or_no_questions_send_nothing(self):
         with mock.patch.object(factcheck.requests, "post") as post:

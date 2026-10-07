@@ -220,7 +220,7 @@ if __name__ == "__main__":
 
 
 class PaceTests(unittest.TestCase):
-    """Spec 09, Pace: run and sneak change the hop cost; STANCE toggles sneaking."""
+    """zombies: Pace: run and sneak change the hop cost; STANCE toggles sneaking."""
 
     def minutes_for(self, gm: GameManager, *actions) -> int:
         before = gm.narrative.minutes

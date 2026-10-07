@@ -1,4 +1,4 @@
-"""Loot tables for the containers of the starting places (spec 25).
+"""Loot tables for the containers of the starting places (carrying-and-loot).
 
 Generated; don't edit by hand.
 """
@@ -32,7 +32,7 @@ class ContainerSource(NamedTuple):
     table: LootTable | None
 
 
-PROCEDURAL_TABLES: dict[str, LootTable] = {  # spec 25
+PROCEDURAL_TABLES: dict[str, LootTable] = {  # carrying-and-loot
     "bathroom_cabinet": LootTable(
         4,
         (
@@ -1043,7 +1043,7 @@ PROCEDURAL_TABLES: dict[str, LootTable] = {  # spec 25
 }
 
 # room -> container type -> what it rolls
-ROOM_TABLES: dict[str, dict[str, ContainerSource]] = {  # spec 25
+ROOM_TABLES: dict[str, dict[str, ContainerSource]] = {  # carrying-and-loot
     "all": {
         "fridge": ContainerSource((ProcedureEntry("fridge_generic", 0, 99, 100),), None),
     },
@@ -1327,7 +1327,7 @@ ROOM_TABLES: dict[str, dict[str, ContainerSource]] = {  # spec 25
 }
 
 # bag item name -> what it holds when it spawns
-BAG_TABLES: dict[str, LootTable] = {  # spec 25
+BAG_TABLES: dict[str, LootTable] = {  # carrying-and-loot
     "bag_big_hiking_bag": LootTable(
         2,
         (

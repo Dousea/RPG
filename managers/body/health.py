@@ -1,4 +1,4 @@
-"""The player's body: health helpers, wounds, pain, the limp and the zombie infection (spec 12)."""
+"""The player's body: health helpers, wounds, pain, the limp and the zombie infection (health)."""
 
 import random
 from collections import defaultdict
@@ -119,7 +119,7 @@ def land_wound(
 
 
 def heal_per_hour(levels: dict[StatusEffect, int], *, asleep: bool, fed: bool) -> float:
-    """Health the body gives back per game hour in this state (spec 12, Healing)."""
+    """Health the body gives back per game hour in this state (health: Healing)."""
     hungry = levels[StatusEffect.HUNGRY]
     thirst = levels[StatusEffect.THIRST]
     if hungry >= body_k.HEAL_NONE_LEVEL or thirst >= body_k.HEAL_NONE_LEVEL:
@@ -163,7 +163,7 @@ def _can_catch_infection(state: PartState) -> bool:
 
 
 def part_pain(state: PartState) -> float:
-    """The pain one part gives, before its pain multiplier (spec 12, Pain from each part)."""
+    """The pain one part gives, before its pain multiplier (health: Pain from each part)."""
     pain = (
         body_k.PAIN_SCRATCH_PER_UNIT * state.scratch_time
         + body_k.PAIN_CUT_PER_UNIT * state.cut_time

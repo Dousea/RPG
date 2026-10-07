@@ -1,4 +1,4 @@
-"""TALK, GIVE and ASK: what saying and handing things to an NPC is worth (spec 10).
+"""TALK, GIVE and ASK: what saying and handing things to an NPC is worth (llm-contract).
 
 Resolution only; the validator decides legality. Every score change goes through
 `RelationshipManager`, with the NPC as source and the player as target.

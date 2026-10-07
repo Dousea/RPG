@@ -1,4 +1,4 @@
-"""The player's melee swing: crits, the damage chain and what a hit does to a zombie (spec 11)."""
+"""The player's melee swing: crits, the damage chain and what a hit does to a zombie (melee)."""
 
 import logging
 import random

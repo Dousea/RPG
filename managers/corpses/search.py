@@ -1,4 +1,4 @@
-"""Corpses in the player's view, going through them and taking from them (spec 14)."""
+"""Corpses in the player's view, going through them and taking from them (zombie-lifecycle)."""
 
 import random
 from collections.abc import Iterable

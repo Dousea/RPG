@@ -33,7 +33,7 @@ def _spent(gm: GameManager, *actions) -> int:
 
 
 class TimeCostTests(unittest.TestCase):
-    """Spec 01, Time costs."""
+    """clock: Time costs."""
 
     def test_a_swing_costs_one_minute(self):
         gm = GameManager()
@@ -179,7 +179,7 @@ class TimeCostTests(unittest.TestCase):
 
 
 class ClockEdgeCaseTests(unittest.TestCase):
-    """Spec 01, Edge cases."""
+    """clock: Edge cases."""
 
     def test_wait_until_night_from_0800_lands_on_2200(self):
         gm = GameManager()
@@ -224,7 +224,7 @@ class ClockEdgeCaseTests(unittest.TestCase):
 
 
 class StatTurnTests(unittest.TestCase):
-    """Spec 02, Turn flow."""
+    """survival-stats: Turn flow."""
 
     def test_a_wait_moves_the_stats_and_reports_a_threshold_crossing(self):
         gm = GameManager()
@@ -267,7 +267,7 @@ class StatTurnTests(unittest.TestCase):
 
 
 class SleepSpanTests(unittest.TestCase):
-    """Spec 02, Waking."""
+    """survival-stats: Waking."""
 
     def test_sleep_ends_when_fatigue_reaches_zero_after_an_hour(self):
         gm = GameManager()
@@ -366,7 +366,7 @@ class SleepSpanTests(unittest.TestCase):
 
 
 class StatDeathTests(unittest.TestCase):
-    """Spec 02, Edge cases; spec 12, Death."""
+    """survival-stats: Edge cases; health: Death."""
 
     def test_death_by_thirst_ends_the_game_with_the_cause(self):
         gm = GameManager()

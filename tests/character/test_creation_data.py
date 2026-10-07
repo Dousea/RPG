@@ -1,4 +1,4 @@
-"""Spec 07, Occupations and Traits: the static data is consistent and carries the spec's rows."""
+"""character-creation: Occupations and Traits: the static data is consistent and carries the spec's rows."""
 
 import unittest
 
@@ -274,7 +274,7 @@ EXPECTED_OCCUPATIONS = {
 
 
 class RowDataTests(unittest.TestCase):
-    """Spec 07, Occupations and Traits: every row, literally."""
+    """character-creation: Occupations and Traits: every row, literally."""
 
     def test_trait_rows(self):
         self.assertEqual(set(TRAITS), set(EXPECTED_TRAITS))
@@ -314,7 +314,7 @@ class RowDataTests(unittest.TestCase):
 
 
 class OccupationDataTests(unittest.TestCase):
-    """Spec 07, Occupations."""
+    """character-creation: Occupations."""
 
     def test_there_are_25_occupations(self):
         self.assertEqual(len(OCCUPATIONS), 25)
@@ -341,7 +341,7 @@ class OccupationDataTests(unittest.TestCase):
 
 
 class TraitDataTests(unittest.TestCase):
-    """Spec 07, Traits."""
+    """character-creation: Traits."""
 
     def test_costs_the_spec_gives(self):
         self.assertEqual(TRAITS["strong"].cost, 10)
@@ -399,7 +399,7 @@ class TraitDataTests(unittest.TestCase):
 
 
 class NameAndClothingDataTests(unittest.TestCase):
-    """Spec 07, Appearance and identity and Starting outfit."""
+    """character-creation: Appearance and identity and Starting outfit."""
 
     def test_name_lists_have_30_entries_each_under_20_characters(self):
         for names in (FEMALE_FORENAMES, MALE_FORENAMES, SURNAMES):

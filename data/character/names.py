@@ -1,4 +1,4 @@
-"""Names for random characters, and the word lists the creation screen offers (spec 07)."""
+"""Names for random characters, and the word lists the creation screen offers (character-creation)."""
 
 FEMALE_FORENAMES = (
     "Alice", "Beth", "Clara", "Diane", "Elena", "Fiona", "Grace", "Hannah", "Iris", "Jenny",
@@ -22,8 +22,14 @@ SKIN_TONE_WORDS = {
     3: "olive",
     4: "brown",
     5: "dark brown",
-}  # spec 07
+}  # character-creation
 
-HAIR_STYLES = ("short", "long", "buzz cut", "ponytail", "curly", "bald")  # spec 07
-HAIR_COLOURS = ("black", "brown", "blonde", "red", "grey", "white")  # spec 07
-BEARD_STYLES = ("", "stubble", "short beard", "full beard", "moustache")  # spec 07: male only
+HAIR_STYLES = ("short", "long", "buzz cut", "ponytail", "curly", "bald")  # character-creation
+HAIR_COLOURS = ("black", "brown", "blonde", "red", "grey", "white")  # character-creation
+BEARD_STYLES = (
+    "",
+    "stubble",
+    "short beard",
+    "full beard",
+    "moustache",
+)  # character-creation: male only

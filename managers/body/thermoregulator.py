@@ -1,4 +1,4 @@
-"""The thermoregulator: heat balance, core and skin temperatures, multipliers, thermal damage (spec 06)."""
+"""The thermoregulator: heat balance, core and skin temperatures, multipliers, thermal damage (body-temperature)."""
 
 import logging
 from dataclasses import dataclass, field

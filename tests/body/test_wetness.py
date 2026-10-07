@@ -1,4 +1,4 @@
-"""Spec 06, Wetness; The layer walk; The body merge."""
+"""body-temperature: Wetness; The layer walk; The body merge."""
 
 import unittest
 
@@ -69,7 +69,7 @@ def run(player, minutes, sample, *, indoors=False, **ctx):
 
 
 class SourceTests(unittest.TestCase):
-    """Spec 06, Wetness: the source."""
+    """body-temperature: Wetness: the source."""
 
     def ctx(self, sample, indoors=False):
         return StatContext(weather=sample, indoors=indoors)
@@ -98,7 +98,7 @@ class SourceTests(unittest.TestCase):
 
 
 class LayerWalkRainTests(unittest.TestCase):
-    """Spec 06, The layer walk: pass 2, rain."""
+    """body-temperature: The layer walk: pass 2, rain."""
 
     def test_the_outer_layer_soaks_first_and_only_it(self):
         player, shirt, coat = dressed()
@@ -180,7 +180,7 @@ class LayerWalkRainTests(unittest.TestCase):
 
 
 class LayerWalkDryingTests(unittest.TestCase):
-    """Spec 06, The layer walk: pass 2, drying."""
+    """body-temperature: The layer walk: pass 2, drying."""
 
     def test_drying_at_25_degrees_takes_2_1_times_1_8_per_minute(self):
         player, _, coat = dressed(outer=50.0)
@@ -235,7 +235,7 @@ class LayerWalkDryingTests(unittest.TestCase):
 
 
 class DividerTests(unittest.TestCase):
-    """Spec 06, The layer walk: the divider."""
+    """body-temperature: The layer walk: the divider."""
 
     def stack(self, outer, middle, inner, holed=None):
         player = PlayerEntity(name="Orton", current_location_id="zone_street")
@@ -273,7 +273,7 @@ class DividerTests(unittest.TestCase):
 
 
 class SweatTests(unittest.TestCase):
-    """Spec 06, The layer walk: pass 1."""
+    """body-temperature: The layer walk: pass 1."""
 
     def sweating(self, secondary, *, body=0.0, rain=0.0, air=22.0, **layers):
         player, shirt, coat = dressed(**layers)
@@ -347,7 +347,7 @@ class SweatTests(unittest.TestCase):
 
 
 class EvaporationTests(unittest.TestCase):
-    """Spec 06, The layer walk: skin evaporation."""
+    """body-temperature: The layer walk: skin evaporation."""
 
     def evaporating(self, body, skin_c, inner=30.0):
         player, shirt, coat = dressed(inner=inner)
@@ -425,7 +425,7 @@ class EvaporationTests(unittest.TestCase):
 
 
 class BodyMergeTests(unittest.TestCase):
-    """Spec 06, The body merge."""
+    """body-temperature: The body merge."""
 
     def test_a_bare_player_in_rain_gains_0_9_times_the_mean_part_change(self):
         player = PlayerEntity(name="Orton", current_location_id="zone_street")

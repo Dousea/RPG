@@ -1,4 +1,4 @@
-"""Spec 09, Population."""
+"""zombies: Population."""
 
 import random
 import unittest
@@ -20,7 +20,7 @@ from modules.entity.zombie import ZombieState
 
 
 class PerChunkTests(unittest.TestCase):
-    """Spec 09, Population: per-chunk zombies from a 0-255 intensity."""
+    """zombies: Population: per-chunk zombies from a 0-255 intensity."""
 
     def test_per_chunk_for_listed_intensities(self):
         expected = {0: 0.06, 32: 0.8091, 64: 1.5584, 96: 2.3075, 255: 6.03}
@@ -30,7 +30,7 @@ class PerChunkTests(unittest.TestCase):
 
 
 class CurveTests(unittest.TestCase):
-    """Spec 09, Population: the curve rises from 1.0 to 1.5 over 28 days."""
+    """zombies: Population: the curve rises from 1.0 to 1.5 over 28 days."""
 
     def test_curve_values(self):
         self.assertAlmostEqual(population_curve(0), 1.0)
@@ -40,7 +40,7 @@ class CurveTests(unittest.TestCase):
 
 
 class ZoneFieldTests(unittest.TestCase):
-    """Spec 09, Zones: size, chunks and intensity per zone."""
+    """zombies: Zones: size, chunks and intensity per zone."""
 
     def test_zone_fields(self):
         zones = build_starting_locations()
@@ -67,7 +67,7 @@ class ZoneFieldTests(unittest.TestCase):
 
 
 class NewZoneTargetTests(unittest.TestCase):
-    """Spec 25, The new zones: the outbreak target of each new zone."""
+    """carrying-and-loot: The new zones: the outbreak target of each new zone."""
 
     def test_each_target_at_the_outbreak(self):
         zones = build_starting_locations()
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
 
 class OutbreakFillTests(unittest.TestCase):
-    """Spec 09, The outbreak and Population: every zone fills; zone_home starts empty."""
+    """zombies: The outbreak and Population: every zone fills; zone_home starts empty."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -150,7 +150,7 @@ class OutbreakFillTests(unittest.TestCase):
 
 
 class RedistributionTests(unittest.TestCase):
-    """Spec 09, Population: every 12 hours idle zombies move one hop toward targets."""
+    """zombies: Population: every 12 hours idle zombies move one hop toward targets."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -272,7 +272,7 @@ class RedistributionTests(unittest.TestCase):
 
 
 class NoRespawnTests(unittest.TestCase):
-    """Spec 09, Population: a killed zombie is gone for good."""
+    """zombies: Population: a killed zombie is gone for good."""
 
     def test_killing_a_zombie_leaves_its_zone_one_short(self):
         gm = GameManager()
@@ -296,7 +296,7 @@ class NoRespawnTests(unittest.TestCase):
 
 
 class RedistributionHomeTests(unittest.TestCase):
-    """Spec 09, Population: the spawn building is cleared only at the outbreak."""
+    """zombies: Population: the spawn building is cleared only at the outbreak."""
 
     def test_redistribution_can_put_zombies_in_zone_home(self):
         found = False

@@ -1,4 +1,4 @@
-"""The parser's JSON plan schema and the plan read back into actions (spec 10, Plans)."""
+"""The parser's JSON plan schema and the plan read back into actions (llm-contract: Plans)."""
 
 import re
 import unittest
@@ -469,7 +469,7 @@ class PlanReadingTests(unittest.TestCase):
 
 
 class RoomChoiceTests(unittest.TestCase):
-    """Spec 25, Verbs: SEARCH, TAKE and PUT name the rooms and containers the scene offers."""
+    """carrying-and-loot: Verbs: SEARCH, TAKE and PUT name the rooms and containers the scene offers."""
 
     def kitchen(self) -> GameManager:
         gm = GameManager()

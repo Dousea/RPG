@@ -1,4 +1,4 @@
-"""Spec 25, Verbs: SEARCH of a room or container, TAKE and PUT with containers."""
+"""carrying-and-loot: Verbs: SEARCH of a room or container, TAKE and PUT with containers."""
 
 import random
 import unittest
@@ -44,7 +44,7 @@ def in_room(room_id: str) -> GameManager:
 
 
 class SearchRoomTests(unittest.TestCase):
-    """Spec 25, `SEARCH <room>`: one minute for each unopened container, in layout order."""
+    """carrying-and-loot: `SEARCH <room>`: one minute for each unopened container, in layout order."""
 
     def test_a_room_of_three_unopened_containers_costs_three_minutes(self):
         gm = in_room("bedroom")
@@ -128,7 +128,7 @@ class SearchRoomTests(unittest.TestCase):
 
 
 class SearchContainerTests(unittest.TestCase):
-    """Spec 25, `SEARCH <container>`: opens and fills it; a reopened one is never refilled."""
+    """carrying-and-loot: `SEARCH <container>`: opens and fills it; a reopened one is never refilled."""
 
     def test_opening_a_container_costs_one_minute_and_fills_it_from_its_table(self):
         gm = in_room("kitchen")
@@ -212,7 +212,7 @@ class SearchContainerTests(unittest.TestCase):
 
 
 class TakeFromContainerTests(unittest.TestCase):
-    """Spec 25, `TAKE <item> from <container>`."""
+    """carrying-and-loot: `TAKE <item> from <container>`."""
 
     def opened_kitchen(self):
         gm = in_room("kitchen")
@@ -286,7 +286,7 @@ class TakeFromContainerTests(unittest.TestCase):
 
 
 class PutInContainerTests(unittest.TestCase):
-    """Spec 25, `PUT <item> in <container>`."""
+    """carrying-and-loot: `PUT <item> in <container>`."""
 
     def test_put_moves_a_carried_item_into_an_opened_container(self):
         gm = in_room("kitchen")
@@ -339,7 +339,7 @@ class PutInContainerTests(unittest.TestCase):
 
 
 class MoveThenSearchTests(unittest.TestCase):
-    """Spec 25: a room move and a container search work together."""
+    """carrying-and-loot: a room move and a container search work together."""
 
     def test_moving_to_the_kitchen_then_searching_the_counter_costs_two_minutes(self):
         gm = GameManager()

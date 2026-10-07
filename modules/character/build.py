@@ -1,4 +1,4 @@
-"""The choices a player makes on the creation screen (spec 07)."""
+"""The choices a player makes on the creation screen (character-creation)."""
 
 from dataclasses import dataclass
 

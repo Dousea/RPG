@@ -62,7 +62,7 @@ class MoveBlocked:
 
 @dataclass(frozen=True)
 class MoveToRoom:
-    """A room of the current zone (spec 25)."""
+    """A room of the current zone (carrying-and-loot)."""
 
     location: Location
     room: RoomEntity
@@ -88,7 +88,7 @@ class TargetZombie:
 
 @dataclass(frozen=True)
 class TargetCorpse:
-    """A corpse to search, and the minutes the player needs to walk up to it (spec 14)."""
+    """A corpse to search, and the minutes the player needs to walk up to it (zombie-lifecycle)."""
 
     corpse_id: str
     approach_minutes: int
@@ -96,7 +96,7 @@ class TargetCorpse:
 
 @dataclass(frozen=True)
 class TargetRoom:
-    """A room to go through: the unopened containers in layout order; `walk` when the player is elsewhere (spec 25)."""
+    """A room to go through: the unopened containers in layout order; `walk` when the player is elsewhere (carrying-and-loot)."""
 
     room: RoomEntity
     containers: tuple[ContainerEntity, ...]
@@ -105,7 +105,7 @@ class TargetRoom:
 
 @dataclass(frozen=True)
 class TargetContainer:
-    """A container to open, in its room; `walk` when the player is elsewhere (spec 25)."""
+    """A container to open, in its room; `walk` when the player is elsewhere (carrying-and-loot)."""
 
     room: RoomEntity
     container: ContainerEntity
@@ -114,7 +114,7 @@ class TargetContainer:
 
 @dataclass(frozen=True)
 class Transfer:
-    """Items that move from one place to another, and the timed-action frames the move takes (spec 25).
+    """Items that move from one place to another, and the timed-action frames the move takes (carrying-and-loot).
 
     `source` is the bag, corpse or container they leave (None for the ground or the pack); `target` is
     the bag or container they go into (None for the pack or the floor).
@@ -157,7 +157,7 @@ class FirstAidTarget:
 
 @dataclass(frozen=True)
 class TargetBarrier:
-    """A door or window of the player's zone; `walk` when the player must first get to it (spec 13)."""
+    """A door or window of the player's zone; `walk` when the player must first get to it (doors)."""
 
     barrier: BarrierEntity
     walk: bool
@@ -165,7 +165,7 @@ class TargetBarrier:
 
 @dataclass(frozen=True)
 class BarricadeKit:
-    """The barrier and the hammer, plank and nails that board it up (spec 13)."""
+    """The barrier and the hammer, plank and nails that board it up (doors)."""
 
     barrier: BarrierEntity
     hammer: ItemEntity
@@ -176,7 +176,7 @@ class BarricadeKit:
 
 @dataclass(frozen=True)
 class PryTarget:
-    """The barrier and the tool that pries a plank off it (spec 13)."""
+    """The barrier and the tool that pries a plank off it (doors)."""
 
     barrier: BarrierEntity
     tool: ItemEntity

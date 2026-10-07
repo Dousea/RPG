@@ -1,6 +1,6 @@
 """Context Builder: assembles what each LLM call is allowed to see.
 
-This is the knowledge-firewall boundary doc 11 describes: raw simulation
+This is the boundary the knowledge-firewall doc describes: raw simulation
 state (relationship integers, undiscovered world flags) never crosses into a
 prompt directly. Whoever reads world truth out to an LLM does it through here,
 at the same read-out boundary the relationship bands already used

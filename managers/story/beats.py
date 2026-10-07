@@ -1,4 +1,4 @@
-"""Reading story conditions against the game (spec 10, Story beats and Topics)."""
+"""Reading story conditions against the game (llm-contract: Story beats and Topics)."""
 
 from data.story.topics import TOPICS, Topic
 from managers.game import GameManager

@@ -1,4 +1,4 @@
-"""Spec 25, Rooms and containers: the loot tables, the catalogue and how containers roll them."""
+"""carrying-and-loot: Rooms and containers: the loot tables, the catalogue and how containers roll them."""
 
 import math
 import random
@@ -24,7 +24,7 @@ from tests.support import ScriptedRandom
 
 
 class KindModifierTests(unittest.TestCase):
-    """Spec 25, Filling a container: the modifier for each kind."""
+    """carrying-and-loot: Filling a container: the modifier for each kind."""
 
     def test_food_and_other_are_point_eight_key_point_four_ranged_one_point_two(self):
         self.assertEqual(LOOT_KIND_MODIFIERS["food"], 0.8)
@@ -66,7 +66,7 @@ class KindModifierTests(unittest.TestCase):
 
 
 class CatalogueTests(unittest.TestCase):
-    """Spec 25, Item mapping."""
+    """carrying-and-loot: Item mapping."""
 
     def test_the_explicit_rows(self):
         rows = {
@@ -103,7 +103,7 @@ class CatalogueTests(unittest.TestCase):
 
 
 class TableShapeTests(unittest.TestCase):
-    """Spec 25, Testing: every source resolves to a generated table and every id is snake_case."""
+    """carrying-and-loot: Testing: every source resolves to a generated table and every id is snake_case."""
 
     def test_the_tables_exist(self):
         self.assertGreater(len(PROCEDURAL_TABLES), 0)
@@ -184,7 +184,7 @@ def spawn_rate(entry: tuple[str, float], draws: int, *, junk: bool = False) -> f
 
 
 class RollChanceTests(unittest.TestCase):
-    """Spec 25, Filling a container: spawn if randrange(10000) < chance x 100 x modifier."""
+    """carrying-and-loot: Filling a container: spawn if randrange(10000) < chance x 100 x modifier."""
 
     def assert_rate(self, observed: float, expected: float, draws: int) -> None:
         sigma = math.sqrt(expected * (1 - expected) / draws)
@@ -227,7 +227,7 @@ def room_of(*entries: ProcedureEntry) -> tuple[RoomEntity, tuple[ProcedureEntry,
 
 
 class ProceduralPickTests(unittest.TestCase):
-    """Spec 25, The procedural pick."""
+    """carrying-and-loot: The procedural pick."""
 
     def test_weights_40_and_100_pick_the_first_with_probability_41_over_140(self):
         room, entries = room_of(ProcedureEntry("a", 0, 99, 40), ProcedureEntry("b", 0, 99, 100))
@@ -293,7 +293,7 @@ class ProceduralPickTests(unittest.TestCase):
 
 
 class CapacityCutoffTests(unittest.TestCase):
-    """Spec 25, The capacity cutoff."""
+    """carrying-and-loot: The capacity cutoff."""
 
     def test_when_an_item_does_not_fit_the_rest_of_the_rolls_stop(self):
         heavy_then_light = table(
@@ -333,7 +333,7 @@ class CapacityCutoffTests(unittest.TestCase):
 
 
 class AfterSpawnTests(unittest.TestCase):
-    """Spec 25, Filling a container: step 4, random condition, uses and filled bags."""
+    """carrying-and-loot: Filling a container: step 4, random condition, uses and filled bags."""
 
     def test_a_weapon_outside_a_shop_may_spawn_worn(self):
         rng = ScriptedRandom(randrange=[0, 39, 3])
@@ -411,7 +411,7 @@ def container_of(source: tuple[str, str] | None, *, capacity: float = 50.0, fixe
 
 
 class OpenContainerTests(unittest.TestCase):
-    """Spec 25, Filling a container: fills when first opened, never refills."""
+    """carrying-and-loot: Filling a container: fills when first opened, never refills."""
 
     def test_opening_fills_from_the_sources_table_and_marks_it_opened(self):
         room = RoomEntity(room_id="k", name="k", kind="kitchen")

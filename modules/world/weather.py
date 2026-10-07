@@ -1,4 +1,4 @@
-"""Weather model: samples, seasons, noise-driven values and fronts (spec 04).
+"""Weather model: samples, seasons, noise-driven values and fronts (weather).
 
 Pure: every number a formula needs is passed in, so the same seed, date and
 world age always give the same weather. Constants live in `data/climate.py`.

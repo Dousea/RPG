@@ -1,4 +1,4 @@
-"""Spec 25, Places and items: The new zones."""
+"""carrying-and-loot: Places and items: The new zones."""
 
 import unittest
 
@@ -30,7 +30,7 @@ BARRIERS = (
 
 
 class ZoneFieldTests(unittest.TestCase):
-    """Spec 25, The new zones: the table."""
+    """carrying-and-loot: The new zones: the table."""
 
     def setUp(self):
         self.locations = build_starting_locations()
@@ -76,7 +76,7 @@ class ZoneFieldTests(unittest.TestCase):
 
 
 class BarrierTests(unittest.TestCase):
-    """Spec 25, The new zones: one barrier per zone, joining it to its parent."""
+    """carrying-and-loot: The new zones: one barrier per zone, joining it to its parent."""
 
     def setUp(self):
         self.barriers = build_starting_barriers()
@@ -114,7 +114,7 @@ class BarrierTests(unittest.TestCase):
 
 
 class AliasTests(unittest.TestCase):
-    """Spec 25, The new zones: the pharmacy, supermarket and clinic aliases moved."""
+    """carrying-and-loot: The new zones: the pharmacy, supermarket and clinic aliases moved."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -276,7 +276,7 @@ ENTRY = {
 
 
 class RoomLayoutTests(unittest.TestCase):
-    """Spec 25, The rooms: the layout of each new zone and its entry room."""
+    """carrying-and-loot: The rooms: the layout of each new zone and its entry room."""
 
     def setUp(self):
         self.locations = build_starting_locations()

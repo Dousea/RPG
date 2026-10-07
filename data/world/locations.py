@@ -55,11 +55,11 @@ ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_hardware": ("hardware store", "tool store"),
 }
 
-ALLEY_CONTENTS = [PLANK_ITEM_ID, PLANK_ITEM_ID]  # spec 13
-APARTMENT_BLOCK_ID = "apartment_block"  # spec 13
-BUILDING_ZONE_IDS = ("zone_home", "zone_building")  # spec 13
-CORNER_STORE_ID = "corner_store"  # spec 13
-OWN_BUILDINGS = {  # spec 25: the zone to its own building id, so a barrier of it wakes only that place
+ALLEY_CONTENTS = [PLANK_ITEM_ID, PLANK_ITEM_ID]  # doors
+APARTMENT_BLOCK_ID = "apartment_block"  # doors
+BUILDING_ZONE_IDS = ("zone_home", "zone_building")  # doors
+CORNER_STORE_ID = "corner_store"  # doors
+OWN_BUILDINGS = {  # carrying-and-loot: the zone to its own building id, so a barrier of it wakes only that place
     "zone_flat_vacant": "flat_vacant",
     "zone_flat_tenant": "flat_tenant",
     "zone_pharmacy": "pharmacy",
@@ -67,7 +67,10 @@ OWN_BUILDINGS = {  # spec 25: the zone to its own building id, so a barrier of i
     "zone_supermarket": "supermarket",
     "zone_hardware": "hardware_store",
 }
-FLAT_ZONE_IDS = ("zone_flat_vacant", "zone_flat_tenant")  # spec 25: floor 1, like zone_home
+FLAT_ZONE_IDS = (
+    "zone_flat_vacant",
+    "zone_flat_tenant",
+)  # carrying-and-loot: floor 1, like zone_home
 
 
 def build_starting_locations() -> dict[str, Location]:
@@ -100,8 +103,8 @@ def build_starting_locations() -> dict[str, Location]:
                 "my place",
                 "my room",
             ],
-            bed_type="floor",  # spec 02
-            place_bed_types={"bedroom": "average_bed", "bed": "average_bed"},  # spec 02
+            bed_type="floor",  # survival-stats
+            place_bed_types={"bedroom": "average_bed", "bed": "average_bed"},  # survival-stats
         ),
         "zone_building": Location(
             id="zone_building",
@@ -114,8 +117,8 @@ def build_starting_locations() -> dict[str, Location]:
             connections={
                 "in": "zone_home",
                 "out": "zone_street",
-                "vacant flat": "zone_flat_vacant",  # spec 25
-                "tenant flat": "zone_flat_tenant",  # spec 25
+                "vacant flat": "zone_flat_vacant",  # carrying-and-loot
+                "tenant flat": "zone_flat_tenant",  # carrying-and-loot
             },
             # upstairs/downstairs/office/entrance are generic enough to
             # mean anywhere, so they are not global aliases -- they become a
@@ -194,10 +197,10 @@ def build_starting_locations() -> dict[str, Location]:
             ),
             connections={
                 "in": "zone_street",
-                "pharmacy": "zone_pharmacy",  # spec 25
-                "clinic": "zone_clinic",  # spec 25
-                "supermarket": "zone_supermarket",  # spec 25
-                "hardware store": "zone_hardware",  # spec 25
+                "pharmacy": "zone_pharmacy",  # carrying-and-loot
+                "clinic": "zone_clinic",  # carrying-and-loot
+                "supermarket": "zone_supermarket",  # carrying-and-loot
+                "hardware store": "zone_hardware",  # carrying-and-loot
             },
             # Bare "store" and "shop" are not aliases anywhere -- too generic
             # (any shop).
@@ -236,8 +239,8 @@ def build_starting_locations() -> dict[str, Location]:
             ),
             connections={"out": "zone_building"},
             aliases=["tenant flat"],
-            bed_type="floor",  # spec 02
-            place_bed_types={"bedroom": "average_bed", "bed": "average_bed"},  # spec 02
+            bed_type="floor",  # survival-stats
+            place_bed_types={"bedroom": "average_bed", "bed": "average_bed"},  # survival-stats
         ),
         "zone_pharmacy": Location(
             id="zone_pharmacy",
@@ -284,16 +287,16 @@ def build_starting_locations() -> dict[str, Location]:
 
     for zone_id, indoors in INDOORS_BY_ZONE.items():
         locations[zone_id].indoors = indoors
-    locations["zone_home"].floor = 1  # spec 06
+    locations["zone_home"].floor = 1  # body-temperature
     for zone_id in FLAT_ZONE_IDS:
-        locations[zone_id].floor = 1  # spec 25
+        locations[zone_id].floor = 1  # carrying-and-loot
     for zone_id, (size_tiles, chunks, intensity) in ZONE_ZOMBIE_FIELDS.items():
         locations[zone_id].size_tiles = size_tiles
         locations[zone_id].chunks = chunks
         locations[zone_id].zombie_intensity = intensity
 
     for zone_id in BUILDING_ZONE_IDS:
-        locations[zone_id].building = APARTMENT_BLOCK_ID  # spec 13
+        locations[zone_id].building = APARTMENT_BLOCK_ID  # doors
     locations["zone_bodega"].building = CORNER_STORE_ID
     for zone_id, building in OWN_BUILDINGS.items():
         locations[zone_id].building = building
@@ -303,7 +306,7 @@ def build_starting_locations() -> dict[str, Location]:
         locations[zone_id].entry_room = entry_room
 
     starting_ground_items = {
-        "zone_neighborhood": ["item_baseball_bat"],  # spec 11
+        "zone_neighborhood": ["item_baseball_bat"],  # melee
         "zone_street": ["item_crowbar", *ALLEY_CONTENTS],
     }
     for location_id, item_ids in starting_ground_items.items():

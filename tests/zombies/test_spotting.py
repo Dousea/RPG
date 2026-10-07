@@ -1,4 +1,4 @@
-"""Spec 09, Spotting: how a zombie notices the player."""
+"""zombies: Spotting: how a zombie notices the player."""
 
 import dataclasses
 import random
@@ -30,7 +30,7 @@ def sample(daylight: float = 1.0, rain: float = 0.0, fog: float = 0.0) -> Weathe
 
 
 class SpotTests(unittest.TestCase):
-    """Spec 09, Spotting: the per-frame chance and the minute chance."""
+    """zombies: Spotting: the per-frame chance and the minute chance."""
 
     def setUp(self):
         self.player = GameManager().player
@@ -174,7 +174,7 @@ class SpotTests(unittest.TestCase):
 
 
 class LightTests(unittest.TestCase):
-    """Spec 09, Spotting: light outdoors and indoors, with and without power."""
+    """zombies: Spotting: light outdoors and indoors, with and without power."""
 
     def test_outdoors_is_daylight(self):
         self.assertEqual(light_level(False, True, 0.4), 0.4)
@@ -191,7 +191,7 @@ if __name__ == "__main__":
 
 
 class DetectionRangeTests(unittest.TestCase):
-    """Spec 09, Hearing: how far the player hears a zombie."""
+    """zombies: Hearing: how far the player hears a zombie."""
 
     def setUp(self):
         self.player = GameManager().player

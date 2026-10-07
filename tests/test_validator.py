@@ -52,7 +52,7 @@ def _accepted(result: ValidationResult) -> Accepted:
 
 
 class ClockValidationTests(unittest.TestCase):
-    """Spec 01, Actions and Edge cases."""
+    """clock: Actions and Edge cases."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -282,7 +282,7 @@ class CombatValidationTests(unittest.TestCase):
 
 
 class SleepRefusalTests(unittest.TestCase):
-    """Spec 02, Waking."""
+    """survival-stats: Waking."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -318,7 +318,7 @@ class SleepRefusalTests(unittest.TestCase):
 
 
 class WearValidationTests(unittest.TestCase):
-    """Spec 05, Actions: WEAR and TAKE_OFF."""
+    """clothing: Actions: WEAR and TAKE_OFF."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -391,7 +391,7 @@ class WearValidationTests(unittest.TestCase):
 
 
 class CarryRefusalTests(unittest.TestCase):
-    """Spec 25, Verbs: the refusals of TAKE, PUT, DROP and EQUIP."""
+    """carrying-and-loot: Verbs: the refusals of TAKE, PUT, DROP and EQUIP."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -529,7 +529,7 @@ if __name__ == "__main__":
 
 
 class BarrierValidationTests(unittest.TestCase):
-    """Spec 13, Opening and closing."""
+    """doors: Opening and closing."""
 
     def setUp(self):
         self.gm = GameManager()
@@ -644,7 +644,7 @@ class BarrierValidationTests(unittest.TestCase):
 
 
 class RoomVerbTests(unittest.TestCase):
-    """Spec 25, Verbs: what the validator makes of rooms and containers."""
+    """carrying-and-loot: Verbs: what the validator makes of rooms and containers."""
 
     def setUp(self):
         self.gm = GameManager()

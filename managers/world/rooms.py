@@ -1,4 +1,4 @@
-"""Finding rooms and containers by name inside the player's zone (spec 25)."""
+"""Finding rooms and containers by name inside the player's zone (carrying-and-loot)."""
 
 from managers import carry
 from modules.entity.player import PlayerEntity

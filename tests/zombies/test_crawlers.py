@@ -1,4 +1,4 @@
-"""Spec 14, Crawlers: becoming one, what changes and what a crawler does."""
+"""zombie-lifecycle: Crawlers: becoming one, what changes and what a crawler does."""
 
 import random
 import unittest
@@ -25,7 +25,7 @@ def flagged(zombie: ZombieEntity) -> bool:
 
 
 class BecomingACrawlerTests(unittest.TestCase):
-    """Spec 14, Becoming a crawler: the roll after a hit that does not kill."""
+    """zombie-lifecycle: Becoming a crawler: the roll after a hit that does not kill."""
 
     def test_a_weapon_hit_flags_one_in_thirty(self):
         gm = street_game(weapon="item_crowbar")
@@ -104,7 +104,7 @@ class BecomingACrawlerTests(unittest.TestCase):
 
 
 class GoingDownTests(unittest.TestCase):
-    """Spec 14, Becoming a crawler: the flag takes effect on the ground."""
+    """zombie-lifecycle: Becoming a crawler: the flag takes effect on the ground."""
 
     def test_a_flagged_zombie_knocked_down_becomes_a_crawler(self):
         gm = street_game(weapon="item_crowbar")
@@ -161,7 +161,7 @@ class _CritRng(random.Random):
 
 
 class CrawlerPostureTests(unittest.TestCase):
-    """Spec 14, What changes: a crawler counts as down for swings, never gets a timer, cannot be shoved."""
+    """zombie-lifecycle: What changes: a crawler counts as down for swings, never gets a timer, cannot be shoved."""
 
     def test_a_weapon_swing_at_a_crawler_is_a_floor_attack(self):
         crawling = street_game(weapon="item_crowbar")
@@ -200,7 +200,7 @@ class CrawlerPostureTests(unittest.TestCase):
 
 
 class CrawlerMovementTests(unittest.TestCase):
-    """Spec 14, What changes: a crawler keeps moving and never thumps."""
+    """zombie-lifecycle: What changes: a crawler keeps moving and never thumps."""
 
     def test_a_crawler_at_a_closed_door_stops_and_does_not_thump(self):
         gm = game()
@@ -236,7 +236,7 @@ class CrawlerMovementTests(unittest.TestCase):
 
 
 class CrawlerAttackTests(unittest.TestCase):
-    """Spec 14, Crawler attacks."""
+    """zombie-lifecycle: Crawler attacks."""
 
     def player(self):
         return GameManager().player
@@ -284,7 +284,7 @@ class CrawlerAttackTests(unittest.TestCase):
 
 
 class CrawlersInTheMinuteTests(unittest.TestCase):
-    """Spec 14, Crawler attacks: a crawler is not counted in `attackers`."""
+    """zombie-lifecycle: Crawler attacks: a crawler is not counted in `attackers`."""
 
     def crowd(self, standing: int, crawlers: int, seed: int) -> str:
         """The death fact of one minute with this crowd on the player, or ''."""

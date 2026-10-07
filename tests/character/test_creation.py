@@ -1,4 +1,4 @@
-"""Spec 07, Character Creation: the point pool, starting skills, randomize and the Orton preset."""
+"""character-creation: Character Creation: the point pool, starting skills, randomize and the Orton preset."""
 
 import random
 import unittest
@@ -23,7 +23,7 @@ def build(occupation: str = CUSTOM, traits: tuple[str, ...] = (), **kwargs) -> C
 
 
 class PointPoolTests(unittest.TestCase):
-    """Spec 07, Point pool."""
+    """character-creation: Point pool."""
 
     def test_custom_occupation_with_strong_is_minus_two_and_refused(self):
         b = build(traits=("strong",))
@@ -67,7 +67,7 @@ class PointPoolTests(unittest.TestCase):
 
 
 class ExclusionTests(unittest.TestCase):
-    """Spec 07, Traits."""
+    """character-creation: Traits."""
 
     def test_excluded_pairs_are_refused_in_both_directions(self):
         for first, second in (("brave", "cowardly"), ("cowardly", "brave")):
@@ -98,7 +98,7 @@ class ExclusionTests(unittest.TestCase):
 
 
 class StartingSkillTests(unittest.TestCase):
-    """Spec 07, Starting skills."""
+    """character-creation: Starting skills."""
 
     def test_base_fitness_and_strength_are_five_and_the_rest_zero(self):
         resolved = creation.resolve(build())
@@ -139,7 +139,7 @@ class StartingSkillTests(unittest.TestCase):
 
 
 class FieldValidationTests(unittest.TestCase):
-    """Spec 07, Appearance and identity."""
+    """character-creation: Appearance and identity."""
 
     def test_name_lengths(self):
         self.assertNotEqual(creation.validate(build(appearance=Appearance(forename=""))), [])
@@ -183,7 +183,7 @@ class FieldValidationTests(unittest.TestCase):
 
 
 class RandomizeTests(unittest.TestCase):
-    """Spec 07, Components."""
+    """character-creation: Components."""
 
     def test_randomize_is_valid_with_zero_to_three_points_left_for_1000_seeds(self):
         for seed in range(1000):
@@ -207,7 +207,7 @@ class RandomizeTests(unittest.TestCase):
 
 
 class PresetTests(unittest.TestCase):
-    """Spec 07, Presets."""
+    """character-creation: Presets."""
 
     def test_orton_resolves_to_seven_points_left(self):
         self.assertEqual(creation.resolve(ORTON).points_left, 7)
@@ -232,7 +232,7 @@ class PresetTests(unittest.TestCase):
 
 
 class NewPlayerTests(unittest.TestCase):
-    """Spec 07, Components."""
+    """character-creation: Components."""
 
     def test_new_player_carries_the_build_and_resolved_values(self):
         b = build(
@@ -260,7 +260,7 @@ class NewPlayerTests(unittest.TestCase):
 
 
 class TraitGrantedTraitTests(unittest.TestCase):
-    """Spec 07, Traits that grant traits."""
+    """character-creation: Traits that grant traits."""
 
     def test_slow_metabolism_grants_high_weight(self):
         b = build(traits=("weightgain",))
@@ -312,7 +312,7 @@ class TraitGrantedTraitTests(unittest.TestCase):
 
 
 class FixRoundTests(unittest.TestCase):
-    """Spec 07, Point pool, Occupations, Starting skills and Starting outfit."""
+    """character-creation: Point pool, Occupations, Starting skills and Starting outfit."""
 
     def test_one_point_over_is_refused(self):
         b = build(traits=("handy", "speeddemon"))

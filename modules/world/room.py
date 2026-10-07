@@ -1,4 +1,4 @@
-"""Rooms inside a zone and the containers in them (spec 25)."""
+"""Rooms inside a zone and the containers in them (carrying-and-loot)."""
 
 from dataclasses import dataclass, field
 

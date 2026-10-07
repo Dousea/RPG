@@ -1,4 +1,4 @@
-"""The player's thermal state: node temperatures, totals and the cold (spec 06)."""
+"""The player's thermal state: node temperatures, totals and the cold (body-temperature)."""
 
 import logging
 from dataclasses import dataclass, field
@@ -8,9 +8,9 @@ from modules.body.parts import BodyPart
 
 logger = logging.getLogger(__name__)
 
-INITIAL_CORE_C = 37.0  # spec 06
-INITIAL_SKIN_C = 33.0  # spec 06
-INITIAL_METABOLIC_RATE = 1.5  # spec 06: the Default target
+INITIAL_CORE_C = 37.0  # body-temperature
+INITIAL_SKIN_C = 33.0  # body-temperature
+INITIAL_METABOLIC_RATE = 1.5  # body-temperature: the Default target
 
 _SCALAR_FIELDS = (
     "metabolic_rate",

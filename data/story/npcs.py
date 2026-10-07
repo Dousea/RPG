@@ -8,8 +8,8 @@ from modules.character.faction import CharacterFaction
 from modules.character.state import CharacterTrust
 from modules.entity.npc import NpcEntity
 
-TRUSTS_PLAYER = "trusts_player"  # spec 10: derived while trust is Solid or better
-TRUSTS_PLAYER_BANDS = (CharacterTrust.SOLID, CharacterTrust.UNWAVERING)  # spec 10
+TRUSTS_PLAYER = "trusts_player"  # llm-contract: derived while trust is Solid or better
+TRUSTS_PLAYER_BANDS = (CharacterTrust.SOLID, CharacterTrust.UNWAVERING)  # llm-contract
 
 # How each NPC feels about the player at the start, keyed by npc_id. The
 # direction matters: relationships are stored source -> target, and everything

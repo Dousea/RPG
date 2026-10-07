@@ -1,4 +1,4 @@
-"""Filling a container from its table when it is first opened (spec 25)."""
+"""Filling a container from its table when it is first opened (carrying-and-loot)."""
 
 import random
 

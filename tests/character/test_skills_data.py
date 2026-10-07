@@ -1,4 +1,4 @@
-"""Spec 08, Skills and XP and levels: the skill list and its XP tables."""
+"""skills: Skills and XP and levels: the skill list and its XP tables."""
 
 import unittest
 
@@ -8,7 +8,7 @@ from data.character.creation import SKILLS as CREATION_SKILLS
 
 
 class SkillListTests(unittest.TestCase):
-    """Spec 08, Skills."""
+    """skills: Skills."""
 
     def test_there_are_35_skills_in_six_categories(self):
         self.assertEqual(len(skill_k.SKILLS), 35)
@@ -44,7 +44,7 @@ class SkillListTests(unittest.TestCase):
 
 
 class XpTableTests(unittest.TestCase):
-    """Spec 08, XP and levels."""
+    """skills: XP and levels."""
 
     def test_normal_skill_table(self):
         self.assertEqual(
@@ -72,7 +72,7 @@ class XpTableTests(unittest.TestCase):
 
 
 class ExerciseTableTests(unittest.TestCase):
-    """Spec 08, Exercise."""
+    """skills: Exercise."""
 
     def test_seven_exercises_with_their_periods_and_mods(self):
         rows = {

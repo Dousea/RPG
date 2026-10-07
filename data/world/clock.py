@@ -1,11 +1,11 @@
-"""Clock constants and the pure arithmetic over the minute clock (spec 01)."""
+"""Clock constants and the pure arithmetic over the minute clock (clock)."""
 
-MINUTES_PER_DAY = 1440  # spec 01
-MINUTES_PER_HOUR = 60  # spec 01
-WORLD_START_MINUTE_OF_DAY = 480  # spec 01: the game starts at 08:00
+MINUTES_PER_DAY = 1440  # clock
+MINUTES_PER_HOUR = 60  # clock
+WORLD_START_MINUTE_OF_DAY = 480  # clock: the game starts at 08:00
 
 # Band starts as minutes after midnight, in ascending order; night wraps past midnight.
-TIME_OF_DAY_BANDS = (  # spec 01
+TIME_OF_DAY_BANDS = (  # clock
     ("morning", 360),
     ("afternoon", 720),
     ("evening", 1080),
@@ -14,8 +14,8 @@ TIME_OF_DAY_BANDS = (  # spec 01
 TIME_OF_DAY_START = dict(TIME_OF_DAY_BANDS)
 TIMES_OF_DAY = tuple(name for name, _ in TIME_OF_DAY_BANDS)
 
-WAIT_CAP_MIN = 1440  # spec 01: 24 h per action
-SLEEP_CAP_MIN = 960  # spec 01: 16 h per action
+WAIT_CAP_MIN = 1440  # clock: 24 h per action
+SLEEP_CAP_MIN = 960  # clock: 16 h per action
 
 
 def minute_of_day(minutes: int) -> int:

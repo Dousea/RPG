@@ -1,4 +1,4 @@
-"""Container sizes, the loot roll's numbers and the layout of the rooms (spec 25)."""
+"""Container sizes, the loot roll's numbers and the layout of the rooms (carrying-and-loot)."""
 
 from typing import NamedTuple
 
@@ -6,16 +6,16 @@ from data.items import ITEMS
 from modules.entity.item import ItemEntity
 from modules.world.room import ContainerEntity, RoomEntity
 
-ROLL_DENOMINATOR = 10000  # spec 25: a roll is a whole number below this
-JUNK_CHANCE_MULT = 1.4  # spec 25: times the chance on a junk list
-CHANCE_PERCENT_SCALE = 100  # spec 25: a table chance is a percent
-RANDOM_CONDITION_PCT = 40  # spec 25: percent of non-shop spawns with a random condition
-RANDOM_USES_PCT = 40  # spec 25: percent of non-shop spawns with random uses
-PERCENT_DENOMINATOR = 100  # spec 25: a percent draw is a whole number below this
+ROLL_DENOMINATOR = 10000  # carrying-and-loot: a roll is a whole number below this
+JUNK_CHANCE_MULT = 1.4  # carrying-and-loot: times the chance on a junk list
+CHANCE_PERCENT_SCALE = 100  # carrying-and-loot: a table chance is a percent
+RANDOM_CONDITION_PCT = 40  # carrying-and-loot: percent of non-shop spawns with a random condition
+RANDOM_USES_PCT = 40  # carrying-and-loot: percent of non-shop spawns with random uses
+PERCENT_DENOMINATOR = 100  # carrying-and-loot: a percent draw is a whole number below this
 
-DEFAULT_CONTAINER_CAPACITY = 50  # spec 25: kg
-FREEZER_CAPACITY = 15  # spec 25: kg
-CORPSE_CAPACITY = 12  # spec 25: kg
+DEFAULT_CONTAINER_CAPACITY = 50  # carrying-and-loot: kg
+FREEZER_CAPACITY = 15  # carrying-and-loot: kg
+CORPSE_CAPACITY = 12  # carrying-and-loot: kg
 
 
 class ContainerSpec(NamedTuple):
@@ -38,29 +38,29 @@ class RoomSpec(NamedTuple):
     containers: tuple[ContainerSpec, ...]
 
 
-FIRST_AID_KIT_CONTENTS = (  # spec 25: the hallway's first-aid cabinet
+FIRST_AID_KIT_CONTENTS = (  # carrying-and-loot: the hallway's first-aid cabinet
     "item_bandage",
     "item_bandage",
     "item_adhesive_bandage",
     "item_alcohol_wipes",
     "item_painkillers",
 )
-BASEMENT_STORAGE_CONTENTS = (  # spec 25: the basement's storage shelves
+BASEMENT_STORAGE_CONTENTS = (  # carrying-and-loot: the basement's storage shelves
     "item_hammer",
     "item_nails",
     "item_plank",
     "item_plank",
     "item_hand_axe",
 )
-KITCHEN_COUNTER_CONTENTS = (  # spec 25: the home kitchen counter
+KITCHEN_COUNTER_CONTENTS = (  # carrying-and-loot: the home kitchen counter
     "item_canned_beans",
     "item_water_bottle",
     "item_kitchen_knife",
     "item_frying_pan",
 )
-WARDROBE_CONTENTS = ("item_black_jacket", "item_schoolbag")  # spec 25: the home wardrobe
+WARDROBE_CONTENTS = ("item_black_jacket", "item_schoolbag")  # carrying-and-loot: the home wardrobe
 
-ROOM_LAYOUTS: dict[str, tuple[RoomSpec, ...]] = {  # spec 25
+ROOM_LAYOUTS: dict[str, tuple[RoomSpec, ...]] = {  # carrying-and-loot
     "zone_home": (
         RoomSpec(
             "kitchen",
@@ -390,7 +390,7 @@ _FRIDGE = ("fridge",)
 _CRATES = ("crates", "crate")
 _DESK = ("desk",)
 
-ROOM_LAYOUTS.update(  # spec 25: The rooms
+ROOM_LAYOUTS.update(  # carrying-and-loot: The rooms
     {
         "zone_flat_vacant": _flat_rooms("vacant", vacant=True),
         "zone_flat_tenant": _flat_rooms("tenant", vacant=False),
@@ -702,7 +702,7 @@ ROOM_LAYOUTS.update(  # spec 25: The rooms
     }
 )
 
-ENTRY_ROOMS = {  # spec 25: the room a zone is entered into
+ENTRY_ROOMS = {  # carrying-and-loot: the room a zone is entered into
     "zone_home": "living_room",
     "zone_building": "hallway",
     "zone_bodega": "shop_floor",
@@ -742,21 +742,21 @@ def build_rooms(zone_id: str) -> dict[str, RoomEntity]:
     return rooms
 
 
-ALREADY_IN_ROOM = "{name} is already in the {room}."  # spec 25
-MOVE_ROOM_FACT = "Move within {zone} to the {room}: succeeded."  # spec 25
-SEARCH_CONTAINER_FACT = "{name} goes through the {container}: {items}."  # spec 25
-SEARCH_EMPTY_FACT = "{name} goes through the {container} and finds nothing."  # spec 25
-NEVER_SEARCHES = "{name} never gets to search."  # spec 25
-GONE_THROUGH = "{name} has already been through the {target}."  # spec 25
-NOT_OPENED = "The {container} hasn't been gone through."  # spec 25
-NO_SUCH_SEARCH_TARGET = "There is no '{target}' to search here."  # spec 25
-WHICH_ONE = "Which one: {choices}?"  # spec 25
-NOT_IN_THIS_ROOM = "The {container} is in the {room}, not here."  # spec 25
-CONTAINER_FULL = "The {container} is full."  # spec 25
-NO_SUCH_IN_CONTAINER = "The {container} holds no '{item}'."  # spec 25
-NO_SUCH_CONTAINER = "There is no '{target}' here to put things in."  # spec 25
-PUT_IN_CONTAINER_FACT = "{name} puts the {item} in the {container}."  # spec 25
-TAKE_FROM_CONTAINER_FACT = "{name} takes the {item} out of the {container}."  # spec 25
+ALREADY_IN_ROOM = "{name} is already in the {room}."  # carrying-and-loot
+MOVE_ROOM_FACT = "Move within {zone} to the {room}: succeeded."  # carrying-and-loot
+SEARCH_CONTAINER_FACT = "{name} goes through the {container}: {items}."  # carrying-and-loot
+SEARCH_EMPTY_FACT = "{name} goes through the {container} and finds nothing."  # carrying-and-loot
+NEVER_SEARCHES = "{name} never gets to search."  # carrying-and-loot
+GONE_THROUGH = "{name} has already been through the {target}."  # carrying-and-loot
+NOT_OPENED = "The {container} hasn't been gone through."  # carrying-and-loot
+NO_SUCH_SEARCH_TARGET = "There is no '{target}' to search here."  # carrying-and-loot
+WHICH_ONE = "Which one: {choices}?"  # carrying-and-loot
+NOT_IN_THIS_ROOM = "The {container} is in the {room}, not here."  # carrying-and-loot
+CONTAINER_FULL = "The {container} is full."  # carrying-and-loot
+NO_SUCH_IN_CONTAINER = "The {container} holds no '{item}'."  # carrying-and-loot
+NO_SUCH_CONTAINER = "There is no '{target}' here to put things in."  # carrying-and-loot
+PUT_IN_CONTAINER_FACT = "{name} puts the {item} in the {container}."  # carrying-and-loot
+TAKE_FROM_CONTAINER_FACT = "{name} takes the {item} out of the {container}."  # carrying-and-loot
 NUMBER_WORDS = (
     "no",
     "one",
@@ -769,9 +769,9 @@ NUMBER_WORDS = (
     "eight",
     "nine",
     "ten",
-)  # spec 25
-ROOM_HERE_MARK = " (you are here)"  # spec 25
-CONTAINER_NOT_OPENED = "{name} (not opened)"  # spec 25
-CONTAINER_OPENED = "{name} (opened: {items})"  # spec 25
-EMPTY_WORD = "empty"  # spec 25
-NO_ROOMS = "None"  # spec 25
+)  # carrying-and-loot
+ROOM_HERE_MARK = " (you are here)"  # carrying-and-loot
+CONTAINER_NOT_OPENED = "{name} (not opened)"  # carrying-and-loot
+CONTAINER_OPENED = "{name} (opened: {items})"  # carrying-and-loot
+EMPTY_WORD = "empty"  # carrying-and-loot
+NO_ROOMS = "None"  # carrying-and-loot

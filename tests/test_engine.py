@@ -207,7 +207,7 @@ class TurnTests(EngineTestCase):
         self.assertIs(state["sneaking"], True)
 
     def test_snapshot_carries_the_corpses_in_view_and_a_crawlers_state_word(self):
-        """Spec 14, What the narrator and the player see."""
+        """zombie-lifecycle: What the narrator and the player see."""
         manager = self.engine.game
         manager.world.outbreak_started_at = 0
         self.assertEqual(self.engine.state()["corpses"], [])
@@ -255,7 +255,7 @@ class TurnTests(EngineTestCase):
         self.assertEqual(self.engine.state()["threats"][0]["state_word"], "crawling toward you")
 
     def test_snapshot_lists_the_rooms_with_what_an_opened_container_holds(self):
-        """Spec 25, What the narrator and the player see: `rooms`."""
+        """carrying-and-loot: What the narrator and the player see: `rooms`."""
         rooms = self.engine.state()["rooms"]
         self.assertEqual(
             [(room["name"], room["here"]) for room in rooms],
@@ -273,7 +273,7 @@ class TurnTests(EngineTestCase):
         )
 
     def test_snapshot_lists_the_rooms_of_a_new_zone(self):
-        """Spec 25, Places and items: `rooms` follows the player into the clinic."""
+        """carrying-and-loot: Places and items: `rooms` follows the player into the clinic."""
         manager = self.engine.game
         manager.player.current_location_id = "zone_clinic"
         manager.player.current_room = "exam_room"
@@ -291,7 +291,7 @@ class TurnTests(EngineTestCase):
         self.assertEqual(self.engine.state()["rooms"], [])
 
     def test_snapshot_carries_the_load_the_bags_and_heavy_load(self):
-        """Spec 25, What the narrator and the player see: `carry` and the Heavy Load effect."""
+        """carrying-and-loot: What the narrator and the player see: `carry` and the Heavy Load effect."""
         manager = self.engine.game
         player = manager.player
         player.worn.clear()
@@ -346,7 +346,7 @@ class TurnTests(EngineTestCase):
         self.assertEqual(corpse["distance_word"], "carried")
 
     def test_snapshot_carries_the_barriers_of_the_zone_in_words_and_counts(self):
-        """Spec 13, What the narrator and the player see."""
+        """doors: What the narrator and the player see."""
         manager = self.engine.game
         self.assertEqual(
             self.engine.state()["barriers"],
@@ -388,7 +388,7 @@ class TurnTests(EngineTestCase):
         self.assertEqual(self.engine.state()["barriers"][0]["state_word"], "broken")
 
     def test_snapshot_carries_the_body_in_words_and_flags(self):
-        """Spec 12, What the narrator and the player see."""
+        """health: What the narrator and the player see."""
         self.assertEqual(self.engine.state()["body"], [])
         player = self.engine.game.player
         forearm = player.body[BodyPart.FOREARM_L]
@@ -525,7 +525,7 @@ class TurnTests(EngineTestCase):
         self.assertIn("Survive", result["goals"]["short_term"])
 
     def test_refused_actions_are_surfaced_to_the_narrator_the_same_turn(self):
-        # Doc 01's inversion: a refusal is validated before any prose exists,
+        # The engine-authority doc's inversion: a refusal is validated before any prose exists,
         # so the narrator sees it as an [OUTCOMES] fact this turn, not as a
         # next-turn [CONTINUITY] correction for damage already done.
         self.llm.actions = "ACTIONS:\nTAKE Medkit"
@@ -754,7 +754,7 @@ if __name__ == "__main__":
 
 
 class MemoryFactsTests(EngineTestCase):
-    """Spec 10, Memory and Plans."""
+    """llm-contract: Memory and Plans."""
 
     def test_each_event_log_entry_is_stamp_attempt_then_the_turns_facts(self):
         self.engine.play("go out")
@@ -852,7 +852,7 @@ class MemoryFactsTests(EngineTestCase):
 
 
 class RefusalWordingTests(EngineTestCase):
-    """Spec 10, Failures."""
+    """llm-contract: Failures."""
 
     def _refusals(self) -> list[str]:
         prompt = self.llm.narrator_prompts[-1]
@@ -912,7 +912,7 @@ class RefusalWordingTests(EngineTestCase):
 
 
 class PayloadTests(EngineTestCase):
-    """Spec 10, What the player sees."""
+    """llm-contract: What the player sees."""
 
     def test_outbreak_day_is_none_before_the_outbreak(self):
         state = self.engine.state()
@@ -940,7 +940,7 @@ class PayloadTests(EngineTestCase):
 
 
 class NarratorBudgetTests(EngineTestCase):
-    """Spec 10, Token budget: the narrator prompt's character budget."""
+    """llm-contract: Token budget: the narrator prompt's character budget."""
 
     def tearDown(self):
         llm.reset_chars_per_token()
@@ -996,7 +996,7 @@ class SequencedNarrator(ScriptedLLM):
 
 
 class FactCheckRetryTests(EngineTestCase):
-    """Spec 10, The fact check: one retry when the story conflicts with the engine's state."""
+    """llm-contract: The fact check: one retry when the story conflicts with the engine's state."""
 
     FIRST = "STORY:\nFirst story.\n\nOPTIONS:\n1. Go on\n2. Wait"
     SECOND = "STORY:\nSecond story.\n\nOPTIONS:\n1. Rest\n2. Hide"
@@ -1238,7 +1238,7 @@ def stories(events: list[dict]) -> list[str]:
 
 
 class TurnEventTests(EngineTestCase):
-    """Spec 10, Streaming: a turn reports each step, the thinking and the story as it goes."""
+    """llm-contract: Streaming: a turn reports each step, the thinking and the story as it goes."""
 
     def play(self, player_input: str = "go out") -> tuple[dict, list[dict]]:
         events: list[dict] = []

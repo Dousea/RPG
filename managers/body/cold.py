@@ -1,4 +1,4 @@
-"""The cold driver: catching, worsening and recovering from a cold, and its sneezes (spec 06)."""
+"""The cold driver: catching, worsening and recovering from a cold, and its sneezes (body-temperature)."""
 
 import logging
 import random

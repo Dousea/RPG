@@ -1,8 +1,8 @@
-"""The 25 occupations (spec 07)."""
+"""The 25 occupations (character-creation)."""
 
 from modules.character.definitions import OccupationDefinition as Occ
 
-CUSTOM_OCCUPATION_ID = "unemployed"  # spec 07
+CUSTOM_OCCUPATION_ID = "unemployed"  # character-creation
 
 _ROWS = [
     Occ("unemployed", "Custom Occupation", 8),

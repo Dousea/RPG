@@ -1,4 +1,4 @@
-"""Zombies: rolling, population and the minute loop (spec 09)."""
+"""Zombies: rolling, population and the minute loop (zombies)."""
 
 import math
 import random
@@ -484,7 +484,7 @@ class PlayerMinute:
     approach_target: str | None = None
     swing_target: str | None = None
     shove: bool = False
-    idle: bool = False  # waiting or exercising: a new thump or a breaking plank stops it (spec 13)
+    idle: bool = False  # waiting or exercising: a new thump or a breaking plank stops it (doors)
 
 
 @dataclass
@@ -502,7 +502,7 @@ class MinuteReport:
 
 
 class ZombieLoop:
-    """Runs the zombie minute loop for a game (spec 09, The minute loop)."""
+    """Runs the zombie minute loop for a game (zombies: The minute loop)."""
 
     def __init__(self, manager: GameManager, rng: random.Random, skills: SkillEngine) -> None:
         self._manager = manager
@@ -1013,7 +1013,7 @@ class ThreatView:
     zombie_id: str | None
     distance_word: str
     state_word: str
-    barrier_id: str | None = None  # spec 13: the barrier a thumper pounds on
+    barrier_id: str | None = None  # doors: the barrier a thumper pounds on
 
 
 def distance_word(gap: float) -> str:

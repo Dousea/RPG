@@ -1,4 +1,4 @@
-"""Clothing the zombie outfits can produce (spec 14), one row per item.
+"""Clothing the zombie outfits can produce (zombie-lifecycle), one row per item.
 
 Generated; don't edit by hand.
 """
@@ -4872,4 +4872,6 @@ def _clothing(row: _Row) -> ClothingItem:
     )
 
 
-ZOMBIE_CLOTHING: dict[str, ClothingItem] = {row[0]: _clothing(row) for row in _ROWS}  # spec 14
+ZOMBIE_CLOTHING: dict[str, ClothingItem] = {
+    row[0]: _clothing(row) for row in _ROWS
+}  # zombie-lifecycle

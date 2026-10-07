@@ -36,7 +36,7 @@ from modules.action.types import (
 
 
 class ClockActionTests(unittest.TestCase):
-    """Spec 01, Actions."""
+    """clock: Actions."""
 
     def test_wait_parses_every_duration_form(self):
         cases = {
@@ -179,7 +179,7 @@ class ParseActionPlanTests(unittest.TestCase):
 
 
 class WearParseTests(unittest.TestCase):
-    """Spec 05, Actions: WEAR and TAKE_OFF."""
+    """clothing: Actions: WEAR and TAKE_OFF."""
 
     def test_wear(self):
         self.assertEqual(
@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
 
 class PaceParseTests(unittest.TestCase):
-    """Spec 09, Pace: MOVE_TO gains a run pace; STANCE toggles sneaking."""
+    """zombies: Pace: MOVE_TO gains a run pace; STANCE toggles sneaking."""
 
     def test_move_to_defaults_to_walking(self):
         action = parse_action_line("MOVE_TO the street")
@@ -229,7 +229,7 @@ class PaceParseTests(unittest.TestCase):
 
 
 class VerbRegistryTests(unittest.TestCase):
-    """Spec 10, Verbs: one registry of verbs."""
+    """llm-contract: Verbs: one registry of verbs."""
 
     EXPECTED = {
         "MOVE_TO",
@@ -326,7 +326,7 @@ class VerbRegistryTests(unittest.TestCase):
 
 
 class SocialParseTests(unittest.TestCase):
-    """Spec 10, Verbs: TALK, ASK and GIVE."""
+    """llm-contract: Verbs: TALK, ASK and GIVE."""
 
     def test_talk_takes_a_name_and_an_approach(self):
         self.assertEqual(
@@ -414,7 +414,7 @@ ALWAYS_LISTED = [
 
 
 class SceneFilteringTests(unittest.TestCase):
-    """Spec 10, Scene filtering."""
+    """llm-contract: Scene filtering."""
 
     def names(self, *keys: str) -> list[str]:
         return [verb.name for verb in available_verbs(frozenset(keys))]  # type: ignore[arg-type]

@@ -1,4 +1,4 @@
-"""Spec 11 through the simulation: holding a weapon and fighting zombies and NPCs."""
+"""melee through the simulation: holding a weapon and fighting zombies and NPCs."""
 
 import random
 import re
@@ -34,7 +34,7 @@ def game_with(*item_ids: str) -> GameManager:
 
 
 class EquipTests(unittest.TestCase):
-    """Spec 11, Holding a weapon: EQUIP and UNEQUIP."""
+    """melee: Holding a weapon: EQUIP and UNEQUIP."""
 
     def minutes(self, gm: GameManager, *actions) -> tuple[int, list[str]]:
         before = gm.narrative.minutes
@@ -131,7 +131,7 @@ def attacking_zombie(gm: GameManager, health: float = 100.0) -> ZombieEntity:
 
 
 class DownAndStaggeredLoopTests(unittest.TestCase):
-    """Spec 11, Knockdowns and staggers: step 6 of the minute loop."""
+    """melee: Knockdowns and staggers: step 6 of the minute loop."""
 
     def loop(self, gm: GameManager) -> ZombieLoop:
         return ZombieLoop(gm, FixedRng(), SkillEngine())
@@ -206,7 +206,7 @@ def hold_crowbar(gm: GameManager) -> ItemEntity:
 
 
 class FightingNpcTests(unittest.TestCase):
-    """Spec 11, Fighting NPCs: today's resolution, with the weapon's NPC damage."""
+    """melee: Fighting NPCs: today's resolution, with the weapon's NPC damage."""
 
     def damage(self, item_id: str | None, seed: int) -> int:
         gm = GameManager()
@@ -253,7 +253,7 @@ def fight_game() -> GameManager:
 
 
 class ZombieFightTests(unittest.TestCase):
-    """Spec 11, Kills and XP: a fight through ATTACK."""
+    """melee: Kills and XP: a fight through ATTACK."""
 
     def run_plan(self, gm: GameManager, *actions, seed: int = 1) -> tuple[int, list[str]]:
         before = gm.narrative.minutes
@@ -326,7 +326,7 @@ class ZombieFightTests(unittest.TestCase):
 
 
 class ShoveActionTests(unittest.TestCase):
-    """Spec 11, Shoves: SHOVE through the simulation."""
+    """melee: Shoves: SHOVE through the simulation."""
 
     def test_a_shove_costs_one_minute_and_staggers_a_standing_zombie(self):
         gm = fight_game()
@@ -364,7 +364,7 @@ class ShoveActionTests(unittest.TestCase):
 
 
 class FightInterruptionTests(unittest.TestCase):
-    """Spec 11, Interruptions during a fight."""
+    """melee: Interruptions during a fight."""
 
     def setup_fight(self) -> tuple[GameManager, ZombieEntity]:
         gm = zombie_game()

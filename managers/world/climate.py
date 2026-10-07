@@ -1,4 +1,4 @@
-"""Climate engine: weather for any moment, and the hourly front check (spec 04)."""
+"""Climate engine: weather for any moment, and the hourly front check (weather)."""
 
 import datetime
 import logging
@@ -147,7 +147,7 @@ class ClimateEngine:
 def felt_air_temperature(
     temperature: float, *, indoors: bool, floor: int, power_on: bool, daylight: float
 ) -> float:
-    """The air temperature a body feels (spec 06).
+    """The air temperature a body feels (body-temperature).
 
     `daylight` is the outdoor daylight (0 to 1); the night term is its complement.
     """

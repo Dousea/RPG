@@ -1,4 +1,4 @@
-"""Zombies pounding on doors and windows: starting, the minute step and letting go (spec 13)."""
+"""Zombies pounding on doors and windows: starting, the minute step and letting go (doors)."""
 
 import random
 from dataclasses import dataclass, field

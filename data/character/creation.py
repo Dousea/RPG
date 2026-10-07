@@ -1,21 +1,21 @@
-"""Rules and limits of character creation (spec 07)."""
+"""Rules and limits of character creation (character-creation)."""
 
-MIN_POINTS_TO_ACCEPT = 0  # spec 07: points
-BASE_FITNESS = 5  # spec 07: skill level
-BASE_STRENGTH = 5  # spec 07: skill level
-SKILL_LEVEL_MIN = 0  # spec 07
-SKILL_LEVEL_MAX = 10  # spec 07
-SKILL_BOOST_CAP = 3  # spec 07
-NAME_MAX_CHARS = 20  # spec 07
-JOB_TITLE_MAX_CHARS = 40  # spec 07
-BACKSTORY_MAX_CHARS = 200  # spec 07
-SKIN_TONE_MIN = 1  # spec 07
-SKIN_TONE_MAX = 5  # spec 07
-RANDOM_TRAITS_PER_SIDE_MIN = 1  # spec 07: traits, good and bad each
-RANDOM_TRAITS_PER_SIDE_MAX = 5  # spec 07
-RANDOM_ADJUST_ROUNDS_MAX = 1000  # spec 07: rounds
-RANDOM_POINTS_MIN = 0  # spec 07: points left
-RANDOM_POINTS_MAX = 3  # spec 07: points left
+MIN_POINTS_TO_ACCEPT = 0  # character-creation: points
+BASE_FITNESS = 5  # character-creation: skill level
+BASE_STRENGTH = 5  # character-creation: skill level
+SKILL_LEVEL_MIN = 0  # character-creation
+SKILL_LEVEL_MAX = 10  # character-creation
+SKILL_BOOST_CAP = 3  # character-creation
+NAME_MAX_CHARS = 20  # character-creation
+JOB_TITLE_MAX_CHARS = 40  # character-creation
+BACKSTORY_MAX_CHARS = 200  # character-creation
+SKIN_TONE_MIN = 1  # character-creation
+SKIN_TONE_MAX = 5  # character-creation
+RANDOM_TRAITS_PER_SIDE_MIN = 1  # character-creation: traits, good and bad each
+RANDOM_TRAITS_PER_SIDE_MAX = 5  # character-creation
+RANDOM_ADJUST_ROUNDS_MAX = 1000  # character-creation: rounds
+RANDOM_POINTS_MIN = 0  # character-creation: points left
+RANDOM_POINTS_MAX = 3  # character-creation: points left
 RANDOM_BEARD_CHANCE = 50  # our rule: percent of random male characters with a beard
 
 SKILLS = (
@@ -52,4 +52,4 @@ SKILLS = (
     "tracking",
     "glassmaking",
     "pottery",
-)  # spec 07: the skills occupations and traits can boost
+)  # character-creation: the skills occupations and traits can boost

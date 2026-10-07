@@ -1,4 +1,4 @@
-"""Spec 14, Corpses: where they come from, how they rot and when they are removed."""
+"""zombie-lifecycle: Corpses: where they come from, how they rot and when they are removed."""
 
 import random
 import unittest
@@ -35,7 +35,7 @@ def corpse(**fields) -> CorpseEntity:
 
 
 class KillCorpseTests(unittest.TestCase):
-    """Spec 14, Where corpses come from: a zombie the player kills."""
+    """zombie-lifecycle: Where corpses come from: a zombie the player kills."""
 
     def kill(self, rng=None, *, weapon="item_crowbar", health=0.001):
         gm = zombie_game()
@@ -99,7 +99,7 @@ class KillCorpseTests(unittest.TestCase):
 
 
 class RotAtDeathTests(unittest.TestCase):
-    """Spec 14, Where corpses come from: the rot stage a kill is rolled with."""
+    """zombie-lifecycle: Where corpses come from: the rot stage a kill is rolled with."""
 
     def stage(self, days: float, roll: int) -> int:
         return corpses.rot_stage_at_death(days, ScriptedRandom(randrange=[roll]))
@@ -133,7 +133,7 @@ class RotAtDeathTests(unittest.TestCase):
 
 
 class OutbreakCorpseTests(unittest.TestCase):
-    """Spec 14, Where corpses come from: the bodies lying around when the outbreak starts."""
+    """zombie-lifecycle: Where corpses come from: the bodies lying around when the outbreak starts."""
 
     def test_the_chunk_chance_is_two_thirds_of_a_tenth_of_the_per_chunk_count(self):
         self.assertAlmostEqual(corpses.chunk_chance(0.8091), 2 / 3 * 0.1 * 0.8091)
@@ -236,7 +236,7 @@ class OutbreakCorpseTests(unittest.TestCase):
 
 
 class RotAndRemovalTests(unittest.TestCase):
-    """Spec 14, Rot and removal."""
+    """zombie-lifecycle: Rot and removal."""
 
     def test_the_stage_climbs_every_72_hours_to_three(self):
         body = corpse()
@@ -319,7 +319,7 @@ def fake_dead_game(gap: float = 3.0, *, crawling: bool = False, died_at: int = 0
 
 
 class RisingTests(unittest.TestCase):
-    """Spec 14, Fake-dead corpses: when a body gets up."""
+    """zombie-lifecycle: Fake-dead corpses: when a body gets up."""
 
     def test_it_rises_when_the_gap_interval_touches_2_to_4_tiles(self):
         cases = {(3, 3): True, (2, 2): True, (4, 4): True, (6, 3): True, (1, 5): True, (5, 1): True}
@@ -340,7 +340,7 @@ class RisingTests(unittest.TestCase):
 
 
 class RisingInTheLoopTests(unittest.TestCase):
-    """Spec 14, Fake-dead corpses: step 3b and the zombie that takes its place."""
+    """zombie-lifecycle: Fake-dead corpses: step 3b and the zombie that takes its place."""
 
     def minute(self, gm, now, **kwargs):
         loop = ZombieLoop(gm, random.Random(3), SkillEngine())
@@ -434,7 +434,7 @@ if __name__ == "__main__":
 
 
 class CorpseEntryGapTests(unittest.TestCase):
-    """Spec 14, Corpses: the gap is rolled again on every entry into the zone."""
+    """zombie-lifecycle: Corpses: the gap is rolled again on every entry into the zone."""
 
     def test_entering_the_zone_rolls_each_corpse_gap_in_one_to_the_zone_size(self):
         from managers.zombies.population import enter_zone
@@ -450,7 +450,7 @@ class CorpseEntryGapTests(unittest.TestCase):
 
 
 class RisenBodyKeepsItsPocketsTests(unittest.TestCase):
-    """Spec 14, Fake-dead corpses: the zombie takes the corpse's worn items and contents."""
+    """zombie-lifecycle: Fake-dead corpses: the zombie takes the corpse's worn items and contents."""
 
     def test_a_risen_zombie_carries_the_items_that_were_neither_worn_nor_the_weapon(self):
         gm, body = fake_dead_game()

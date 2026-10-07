@@ -1,4 +1,4 @@
-"""Spec 09, Zombie attacks and Wounds."""
+"""zombies: Zombie attacks and Wounds."""
 
 import dataclasses
 import random
@@ -60,7 +60,7 @@ def armour(scratch: int, bite: int, covers: set[BodyPart], neck: float = 1.0) ->
 
 
 class DefenceTests(unittest.TestCase):
-    """Spec 09, Zombie attacks: the defence formula."""
+    """zombies: Zombie attacks: the defence formula."""
 
     def test_formula_with_skills_and_status_effects(self):
         # 3*4 + 2*6 + 2*7 - 5*2 - 2*1 - 2*0 - 3*2 - 2*1
@@ -107,7 +107,7 @@ class DefenceTests(unittest.TestCase):
 
 
 class WoundOddsTests(unittest.TestCase):
-    """Spec 09, Zombie attacks: wound odds by attackers and side."""
+    """zombies: Zombie attacks: wound odds by attackers and side."""
 
     def test_front_with_one_two_and_three_attackers(self):
         self.assertEqual(wound_odds(0, 1, AttackSide.FRONT, []), WoundOdds(10, 65, 85))
@@ -133,7 +133,7 @@ class WoundOddsTests(unittest.TestCase):
 
 
 class BodyPartTests(unittest.TestCase):
-    """Spec 09, Zombie attacks: body part rolls."""
+    """zombies: Zombie attacks: body part rolls."""
 
     def test_a_head_roll_that_fails_the_check_is_redrawn_without_head_neck_or_groin(self):
         # narrow range, index 8 (head), check 99 (> 70), redraw index 3.
@@ -175,7 +175,7 @@ class BodyPartTests(unittest.TestCase):
 
 
 class DamageAndKindTests(unittest.TestCase):
-    """Spec 09, Zombie attacks: damage, kind and the infection roll."""
+    """zombies: Zombie attacks: damage, kind and the infection roll."""
 
     def test_damage_is_a_thousandth_times_ten_to_nineteen(self):
         self.assertEqual(roll_wound_damage(ScriptedRng([500, 0])), 5.0)
@@ -213,7 +213,7 @@ class DamageAndKindTests(unittest.TestCase):
 
 
 class ClothingDefenceTests(unittest.TestCase):
-    """Spec 09, Zombie attacks: clothing blocks hits and tears."""
+    """zombies: Zombie attacks: clothing blocks hits and tears."""
 
     def setUp(self):
         self.player = GameManager().player
@@ -245,7 +245,7 @@ class ClothingDefenceTests(unittest.TestCase):
 
 
 class ResolveAttackTests(unittest.TestCase):
-    """Spec 09, Zombie attacks and Wounds: a whole attack, step by step."""
+    """zombies: Zombie attacks and Wounds: a whole attack, step by step."""
 
     def setUp(self):
         self.player = GameManager().player
@@ -345,7 +345,7 @@ if __name__ == "__main__":
 
 
 class HeavyLoadDefenceTests(unittest.TestCase):
-    """Spec 25, What Heavy Load does: defence drops 2 a level against a zombie attack."""
+    """carrying-and-loot: What Heavy Load does: defence drops 2 a level against a zombie attack."""
 
     def test_two_levels_cost_four_points(self):
         gm = GameManager()

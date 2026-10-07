@@ -1,4 +1,4 @@
-"""Spec 06, Colds; Sneezes and coughs."""
+"""body-temperature: Colds; Sneezes and coughs."""
 
 import random
 import unittest
@@ -18,7 +18,7 @@ RISE_PER_MIN = 0.003 * 180
 FALL_PER_MIN = 0.175 * 112.5
 COURSE_PER_MIN = 0.0112 * 180
 
-PRONE_TO_ILLNESS_ID = "pronetoillness"  # spec 07, Traits with an effect now
+PRONE_TO_ILLNESS_ID = "pronetoillness"  # character-creation: Traits with an effect now
 RESILIENT_ID = "resilient"
 OUTDOORSMAN_ID = "outdoorsman"
 
@@ -37,7 +37,7 @@ def skin_for_torso_delta(delta: float) -> float:
 
 
 class CatchColdDeltaTests(unittest.TestCase):
-    """Spec 06, Colds: the catch-a-cold delta."""
+    """body-temperature: Colds: the catch-a-cold delta."""
 
     def test_a_cold_upper_torso_counts_sixteen_times(self):
         self.assertAlmostEqual(catch_cold_delta(chilled_state(), {}, 0), TORSO_25C)
@@ -97,7 +97,7 @@ def run(player, minutes, rng=None, **ctx):
 
 
 class CatchCounterTests(unittest.TestCase):
-    """Spec 06, Colds: catching."""
+    """body-temperature: Colds: catching."""
 
     def test_counter_rises_by_0_54_times_the_delta_per_minute(self):
         player = cold_player()
@@ -200,7 +200,7 @@ class CatchCounterTests(unittest.TestCase):
 
 
 class ColdCourseTests(unittest.TestCase):
-    """Spec 06, Colds: the course."""
+    """body-temperature: Colds: the course."""
 
     def test_indoors_rested_and_dry_the_cold_recovers_by_2_016_per_minute(self):
         player = cold_player(50.0)
@@ -276,7 +276,7 @@ class ColdCourseTests(unittest.TestCase):
 
 
 class SneezeTests(unittest.TestCase):
-    """Spec 06, Sneezes and coughs."""
+    """body-temperature: Sneezes and coughs."""
 
     def test_no_sneeze_below_has_a_cold_level_2(self):
         player = cold_player(40.0)

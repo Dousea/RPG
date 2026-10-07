@@ -1,4 +1,4 @@
-"""Talking to people: TALK, GIVE and ASK (spec 10)."""
+"""Talking to people: TALK, GIVE and ASK (llm-contract)."""
 
 import random
 import unittest
@@ -54,7 +54,7 @@ def give_item(gm: GameManager, item_id: str) -> ItemEntity:
 
 
 class ApproachTableTests(unittest.TestCase):
-    """Spec 10, Approaches: the table."""
+    """llm-contract: Approaches: the table."""
 
     def test_the_table_is_keyed_on_the_parsers_eight_labels(self):
         self.assertEqual(set(social_k.TALK_APPROACHES), set(TALK_APPROACH_LABELS))
@@ -93,7 +93,7 @@ class ApproachTableTests(unittest.TestCase):
 
 
 class RepetitionTests(unittest.TestCase):
-    """Spec 10, Approaches: the repetition rule."""
+    """llm-contract: Approaches: the repetition rule."""
 
     def test_three_chats_in_a_day_give_plus_two_one_and_nothing(self):
         gm = building_game()
@@ -161,7 +161,7 @@ class RepetitionTests(unittest.TestCase):
 
 
 class HostileTests(unittest.TestCase):
-    """Spec 10, Approaches: hostile NPCs."""
+    """llm-contract: Approaches: hostile NPCs."""
 
     def test_a_hostile_npc_halves_positive_deltas_toward_zero(self):
         gm = building_game()
@@ -198,7 +198,7 @@ class HostileTests(unittest.TestCase):
 
 
 class TalkFactsTests(unittest.TestCase):
-    """Spec 10, Approaches: the facts."""
+    """llm-contract: Approaches: the facts."""
 
     def test_the_fact_names_the_reaction_from_the_sign_of_the_change(self):
         cases = (
@@ -240,7 +240,7 @@ class TalkFactsTests(unittest.TestCase):
 
 
 class TalkValidationTests(unittest.TestCase):
-    """Spec 10, Approaches and Edge cases."""
+    """llm-contract: Approaches and Edge cases."""
 
     def test_a_second_talk_to_the_same_npc_in_one_turn_is_refused(self):
         gm = building_game()
@@ -286,7 +286,7 @@ class TalkValidationTests(unittest.TestCase):
 
 
 class TalkingMinutesTests(unittest.TestCase):
-    """Spec 10, Verbs: talking minutes feed the stats."""
+    """llm-contract: Verbs: talking minutes feed the stats."""
 
     def talking_flags(self, action) -> list[bool]:
         gm = building_game()
@@ -318,7 +318,7 @@ class TalkingMinutesTests(unittest.TestCase):
 
 
 class GiveTests(unittest.TestCase):
-    """Spec 10, Giving."""
+    """llm-contract: Giving."""
 
     def test_give_moves_the_item_into_the_npcs_inventory(self):
         gm = building_game()
@@ -395,7 +395,7 @@ class GiveTests(unittest.TestCase):
 
 
 class AskFollowTests(unittest.TestCase):
-    """Spec 10, Asking."""
+    """llm-contract: Asking."""
 
     def ask_follow(self, gm: GameManager, roll: float) -> list[str]:
         return simulate(gm, AskAction(npc_name="Emma", request="follow"), rng=FixedRandom(roll))
@@ -505,7 +505,7 @@ class AskFollowTests(unittest.TestCase):
 
 
 class AskGiveTests(unittest.TestCase):
-    """Spec 10, Asking: give."""
+    """llm-contract: Asking: give."""
 
     def setUp(self):
         self.gm = building_game()
@@ -575,7 +575,7 @@ class AskGiveTests(unittest.TestCase):
 
 
 class FollowerTests(unittest.TestCase):
-    """Spec 10, Asking: following."""
+    """llm-contract: Asking: following."""
 
     def test_a_follower_arrives_with_the_player_at_the_same_minute(self):
         gm = building_game()

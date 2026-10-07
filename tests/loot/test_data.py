@@ -1,4 +1,4 @@
-"""Spec 25, Places and items: the new foods, drinks and weapons, and the item mapping."""
+"""carrying-and-loot: Places and items: the new foods, drinks and weapons, and the item mapping."""
 
 import random
 import re
@@ -26,7 +26,7 @@ def weapon(item_id: str) -> MeleeWeaponItem:
 
 
 class NewFoodTests(unittest.TestCase):
-    """Spec 25, New items: foods and drinks."""
+    """carrying-and-loot: New items: foods and drinks."""
 
     def check(self, item_id, hunger, thirst, unhappy, weight, stress=0.0):
         item = consumable(item_id)
@@ -93,7 +93,7 @@ class NewFoodTests(unittest.TestCase):
 
 
 class NewWeaponTests(unittest.TestCase):
-    """Spec 25, New items: weapons."""
+    """carrying-and-loot: New items: weapons."""
 
     ROWS = {
         "item_rolling_pin": ("smallblunt", 1.5, 2, False),
@@ -135,7 +135,7 @@ class NewWeaponTests(unittest.TestCase):
 
 
 class ItemMappingTests(unittest.TestCase):
-    """Spec 25, Item mapping."""
+    """carrying-and-loot: Item mapping."""
 
     def test_every_mapping_resolves_to_a_catalogue_id(self):
         for name, (item_id, _kind) in LOOT_CATALOGUE.items():
@@ -174,7 +174,7 @@ class ItemMappingTests(unittest.TestCase):
 
 
 class BindingTests(unittest.TestCase):
-    """Spec 25, The rooms: every container binds to a generated table."""
+    """carrying-and-loot: The rooms: every container binds to a generated table."""
 
     SHOP_ZONES = ("zone_pharmacy", "zone_clinic", "zone_supermarket", "zone_hardware")
 

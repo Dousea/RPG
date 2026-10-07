@@ -12,7 +12,7 @@ from modules.item import ClothingItem
 
 
 class BodyPartsAndLocationsTests(unittest.TestCase):
-    """Spec 05, Body parts and locations."""
+    """clothing: Body parts and locations."""
 
     def test_seventeen_body_parts_in_order(self):
         self.assertEqual(
@@ -51,7 +51,7 @@ class BodyPartsAndLocationsTests(unittest.TestCase):
 
 
 class ExclusivityTests(unittest.TestCase):
-    """Spec 05, Body parts and locations: exclusivity rules."""
+    """clothing: Body parts and locations: exclusivity rules."""
 
     def test_skirt_excludes_pants_and_dress(self):
         blocked = EXCLUSIVE_LOCATIONS[BodyLocation.SKIRT]
@@ -91,7 +91,7 @@ class ExclusivityTests(unittest.TestCase):
 
 
 class CoverageTests(unittest.TestCase):
-    """Spec 05, Body parts and locations: coverage by blood location."""
+    """clothing: Body parts and locations: coverage by blood location."""
 
     def test_trousers_cover_legs_and_groin(self):
         self.assertEqual(
@@ -147,7 +147,7 @@ class CoverageTests(unittest.TestCase):
 
 
 class CatalogTests(unittest.TestCase):
-    """Spec 05, Items: each entry carries its stats verbatim."""
+    """clothing: Items: each entry carries its stats verbatim."""
 
     def clothing(self, item_id: str) -> ClothingItem:
         item = ITEMS[item_id]
@@ -237,7 +237,7 @@ def _worn_player(*item_ids: str) -> PlayerEntity:
 
 
 class LayersTests(unittest.TestCase):
-    """Spec 05, Model: layers for a body part, inner to outer."""
+    """clothing: Model: layers for a body part, inner to outer."""
 
     def test_torso_layers_inner_to_outer(self):
         player = _worn_player("item_black_jacket", "item_tshirt", "item_hoodie")
@@ -263,7 +263,7 @@ class LayersTests(unittest.TestCase):
 
 
 class OutfitLineTests(unittest.TestCase):
-    """Spec 05, What the narrator and the player see."""
+    """clothing: What the narrator and the player see."""
 
     def setUp(self):
         self.gm = GameManager()

@@ -1,4 +1,4 @@
-"""The body parts each kind of clothing covers (spec 05).
+"""The body parts each kind of clothing covers (clothing).
 
 Coverage that reaches the back is folded into `TORSO_UPPER`; a bag covers only
 the back, so it covers nothing here.
@@ -12,7 +12,7 @@ _SHORTS = {_P.GROIN, _P.UPPERLEG_L, _P.UPPERLEG_R}
 _SHIRT = _TORSO | {_P.UPPERARM_L, _P.UPPERARM_R}
 _LONG_SLEEVES = _SHIRT | {_P.FOREARM_L, _P.FOREARM_R}
 
-CLOTHING_COVERAGE: dict[str, frozenset[BodyPart]] = {  # spec 05
+CLOTHING_COVERAGE: dict[str, frozenset[BodyPart]] = {  # clothing
     "apron": frozenset(_TORSO | {_P.UPPERLEG_L, _P.UPPERLEG_R}),
     "shirt_no_sleeves": frozenset(_TORSO),
     "jumper_no_sleeves": frozenset(_TORSO),

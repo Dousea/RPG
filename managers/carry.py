@@ -1,4 +1,4 @@
-"""What the player carries: weight, capacity and Heavy Load (spec 25)."""
+"""What the player carries: weight, capacity and Heavy Load (carrying-and-loot)."""
 
 import random
 from collections.abc import Collection, Iterable, Mapping

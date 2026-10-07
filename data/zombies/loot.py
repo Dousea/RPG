@@ -1,4 +1,4 @@
-"""What a zombie carries and what its pockets hold (spec 14).
+"""What a zombie carries and what its pockets hold (zombie-lifecycle).
 
 Generated; don't edit by hand.
 """
@@ -10,7 +10,7 @@ from modules.body.parts import BodyPart
 LootTable = tuple[tuple[str, float], ...]
 
 # sex -> (item name, chance in percent) in table order
-DEFAULT_LOOT_TABLES: dict[str, LootTable] = {  # spec 14
+DEFAULT_LOOT_TABLES: dict[str, LootTable] = {  # zombie-lifecycle
     "male": (
         ("city_map_1", 0.01),
         ("city_map_2", 0.01),
@@ -120,7 +120,7 @@ DEFAULT_LOOT_TABLES: dict[str, LootTable] = {  # spec 14
 }
 
 # outfit -> its own table, rolled before the default one
-OUTFIT_LOOT_TABLES: dict[str, LootTable] = {  # spec 14
+OUTFIT_LOOT_TABLES: dict[str, LootTable] = {  # zombie-lifecycle
     "biker": (
         ("beer_can", 10.0),
         ("cigarette_pack", 1.0),
@@ -366,7 +366,7 @@ class StuckWeaponEntry(NamedTuple):
     weapons: tuple[str, ...]
 
 
-ATTACHED_WEAPONS: dict[str, StuckWeaponEntry] = {  # spec 14
+ATTACHED_WEAPONS: dict[str, StuckWeaponEntry] = {  # zombie-lifecycle
     "spear_stomach": StuckWeaponEntry(
         5,
         30,
@@ -1632,7 +1632,7 @@ ATTACHED_WEAPONS: dict[str, StuckWeaponEntry] = {  # spec 14
 }
 
 # outfit -> (chance in percent, how many it may carry, definitions it picks from)
-CUSTOM_OUTFIT_WEAPONS: dict[str, tuple[int, int, tuple[str, ...]]] = {  # spec 14
+CUSTOM_OUTFIT_WEAPONS: dict[str, tuple[int, int, tuple[str, ...]]] = {  # zombie-lifecycle
     "police": (40, 2, ("handgun_holster_police", "nightstick", "police_radio", "shotgun_police")),
     "police_state": (
         50,

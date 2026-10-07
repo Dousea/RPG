@@ -1,4 +1,4 @@
-"""Story beats and derived statuses (spec 10, Story beats and Derived statuses)."""
+"""Story beats and derived statuses (llm-contract: Story beats and Derived statuses)."""
 
 import random
 import unittest
@@ -38,7 +38,7 @@ SIRENS = "Sirens start up across the city and don't stop."
 
 
 class OutbreakBeatTests(unittest.TestCase):
-    """Spec 10, Story beats: the one starting beat."""
+    """llm-contract: Story beats: the one starting beat."""
 
     def test_the_beat_is_the_outbreak_at_day_three_six_in_the_morning(self):
         beat = STORY_BEATS["outbreak_begins"]
@@ -122,7 +122,7 @@ class OutbreakBeatTests(unittest.TestCase):
 
 
 class BeatEvaluationTests(unittest.TestCase):
-    """Spec 10, Story beats: conditions, effects and when they are checked."""
+    """llm-contract: Story beats: conditions, effects and when they are checked."""
 
     def test_each_condition_kind(self):
         gm = GameManager()
@@ -211,7 +211,7 @@ class BeatEvaluationTests(unittest.TestCase):
 
 
 class DerivedStatusTests(unittest.TestCase):
-    """Spec 10, Derived statuses."""
+    """llm-contract: Derived statuses."""
 
     def test_trusts_player_appears_at_solid_trust_and_completes_the_quest(self):
         gm = GameManager()

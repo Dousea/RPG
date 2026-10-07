@@ -1,4 +1,4 @@
-"""Spec 25, Carrying a corpse: CARRY, DROP corpse and what a body in the arms refuses."""
+"""carrying-and-loot: Carrying a corpse: CARRY, DROP corpse and what a body in the arms refuses."""
 
 import random
 import unittest
@@ -83,7 +83,7 @@ def entity(item_id: str) -> ItemEntity:
 
 
 class CarryTests(unittest.TestCase):
-    """Spec 25, Carrying a corpse: picking up and putting down."""
+    """carrying-and-loot: Carrying a corpse: picking up and putting down."""
 
     def test_carry_takes_a_minute_and_the_body_is_in_the_arms(self):
         gm, corpse = with_body()
@@ -183,7 +183,7 @@ class CarryTests(unittest.TestCase):
 
 
 class CarryRefusalTests(unittest.TestCase):
-    """Spec 25, Carrying a corpse: the refusals."""
+    """carrying-and-loot: Carrying a corpse: the refusals."""
 
     def reason(self, gm: GameManager, action) -> str:
         result = ActionValidator(gm).validate(action)
@@ -284,7 +284,7 @@ class CarryRefusalTests(unittest.TestCase):
 
 
 class CarryEnduranceTests(unittest.TestCase):
-    """Spec 25, Carrying a corpse: moving with a body is exercising at 8.75 times the drain."""
+    """carrying-and-loot: Carrying a corpse: moving with a body is exercising at 8.75 times the drain."""
 
     def test_a_walk_with_a_body_costs_more_endurance_than_one_without(self):
         gm, _ = carrying()

@@ -83,7 +83,7 @@ class IndexTests(RouteTestCase):
 
 
 class StatusEffectPayloadTests(RouteTestCase):
-    """Spec 03, What the narrator and the player see."""
+    """status-effects: What the narrator and the player see."""
 
     def test_play_carries_status_effects_and_no_hunger_or_thirst(self):
         stats = self.engine.game.player.stats
@@ -100,7 +100,7 @@ class StatusEffectPayloadTests(RouteTestCase):
             self.assertNotIn(gone, payload)
 
     def test_play_carries_the_temperature_status_effects_and_no_core_temperature(self):
-        """Spec 06, What the narrator and the player see."""
+        """body-temperature: What the narrator and the player see."""
         stats = self.engine.game.player.stats
         stats.set(CharacterStat.TEMPERATURE, 21.0)
         stats.set(CharacterStat.WETNESS, 95)
@@ -178,7 +178,7 @@ class PlayTests(RouteTestCase):
 
 
 class PlayStreamTests(RouteTestCase):
-    """Spec 10, Streaming: /play/stream sends a turn's events as JSON lines, then the turn."""
+    """llm-contract: Streaming: /play/stream sends a turn's events as JSON lines, then the turn."""
 
     def events(self, player_input: str = "go out") -> list[dict]:
         response = self.client.post("/play/stream", json={"input": player_input})
@@ -269,7 +269,7 @@ class SaveLoadRouteTests(RouteTestCase):
 
 class ResetTests(RouteTestCase):
     def test_reset_deletes_the_save_and_leaves_no_game(self):
-        """Spec 07, Flow and routes."""
+        """character-creation: Flow and routes."""
         self.client.post("/play", json={"input": "go out"})
         response = self.client.post("/reset")
         self.assertEqual(response.status_code, 200)
@@ -286,7 +286,7 @@ class ResetTests(RouteTestCase):
 
 
 class CreationRouteTests(RouteTestCase):
-    """Spec 07, Flow and routes."""
+    """character-creation: Flow and routes."""
 
     VALID = {
         "appearance": {
@@ -387,7 +387,7 @@ if __name__ == "__main__":
 
 
 class WeatherPayloadTests(RouteTestCase):
-    """Spec 04, What the narrator and the player see."""
+    """weather: What the narrator and the player see."""
 
     def test_state_carries_weather_summary_temperature_and_shelter(self):
         weather = self.client.get("/state").get_json()["weather"]
@@ -404,7 +404,7 @@ class WeatherPayloadTests(RouteTestCase):
 
 
 class SkillsPayloadTests(RouteTestCase):
-    """Spec 08, What the narrator and the player see: the skills payload."""
+    """skills: What the narrator and the player see: the skills payload."""
 
     def payload(self) -> dict:
         return self.client.post("/play", json={"input": "look"}).get_json()

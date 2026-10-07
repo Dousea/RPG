@@ -3,7 +3,7 @@
 Two LLM calls, not one: the parser proposes actions from player input before
 anything is decided, the engine validates and simulates them, and only then
 does the narrator describe what already happened. See
-docs/01-engine-authority.md.
+docs/architecture/engine-authority.md.
 """
 
 import logging
@@ -395,7 +395,7 @@ class GameEngine:
         narrator has been reacting to all along. NPC bands go out the same
         way `ContextBuilder._npcs_present_section` sends them to the LLM
         (disposition/trust bands, never the raw affinity integer): the
-        knowledge-firewall boundary in doc 11 applies to the player's screen
+        boundary in the knowledge-firewall doc applies to the player's screen
         exactly as much as it applies to a prompt.
 
         `options` are the narrator's suggested next moves for this turn, if

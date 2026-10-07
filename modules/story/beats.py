@@ -1,4 +1,4 @@
-"""Conditions and effects of story beats (spec 10, Story beats).
+"""Conditions and effects of story beats (llm-contract: Story beats).
 
 Plain data: `managers/story.py` evaluates conditions and `managers/simulation.py`
 applies effects, each with one `match`.
@@ -43,7 +43,7 @@ Condition = ClockAtOrPast | PlayerInZone | FlagDiscovered | OutbreakStarted | Be
 
 @dataclass(frozen=True)
 class StartOutbreak:
-    """The dead start walking at the current minute (spec 09)."""
+    """The dead start walking at the current minute (zombies)."""
 
 
 @dataclass(frozen=True)

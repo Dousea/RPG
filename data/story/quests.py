@@ -13,13 +13,13 @@ objective can never complete.
 
 `discover:` and `npc_status:` objectives are produced by the engine alone: a topic
 that discovers a flag (`data/topics.py`) and a derived status (`trusts_player`,
-spec 10), so their names must match those producers (tests/test_quests.py).
+llm-contract), so their names must match those producers (tests/test_quests.py).
 
 Quest titles and objective labels are rendered into the narrator prompt
 unconditionally, with no check for who is in the room -- unlike every other
 prompt section. Write them so they never reveal something the player hasn't
 learned yet: name roles, not people ("the building super", not "Marcus").
-See docs/11-knowledge-firewall.md.
+See docs/architecture/knowledge-firewall.md.
 """
 
 from modules.story.quest import QuestState

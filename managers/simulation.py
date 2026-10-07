@@ -419,11 +419,11 @@ class SimulationCore:
         return [*self._derive_statuses(), *self._fire_beats(clock_only=False)]
 
     def _action_time_multiplier(self) -> float:
-        """Pain, mood and cold slow timed actions (spec 12)."""
+        """Pain, mood and cold slow timed actions (health)."""
         return action_time_multiplier(self.manager.player)
 
     def _hop_minutes(self, pace: Pace) -> int:
-        """Minutes one zone hop takes at a pace, stretched by a limp (spec 12)."""
+        """Minutes one zone hop takes at a pace, stretched by a limp (health)."""
         factor = limp_factor(self.manager.player)
         return max(1, round(zone_hop_minutes(pace) / factor))
 
@@ -1194,7 +1194,7 @@ class SimulationCore:
         return " ".join([lead, *consume_facts])
 
     def _consume(self, item: ConsumableItem) -> list[str]:
-        """Apply every food field once, feed the well-fed timer and add alcohol (spec 03).
+        """Apply every food field once, feed the well-fed timer and add alcohol (status-effects).
 
         Returns the facts for status effects whose level the meal changed.
         """
@@ -1451,7 +1451,7 @@ class SimulationCore:
         """Apply one modifier directly to an entity (item effects, item-use
         trait reactions). Attribute/XP modifiers have no current producer on
         this path and are intentionally left unhandled rather than guessed
-        at; see docs/00-status.md for the note."""
+        at; see docs/status.md for the note."""
         if isinstance(modifier, ConditionsModifier):
             for condition, active in modifier.conditions.items():
                 if active and condition not in entity.conditions:

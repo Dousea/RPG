@@ -1,4 +1,4 @@
-"""Exercises and the training state a character carries (spec 08)."""
+"""Exercises and the training state a character carries (skills)."""
 
 from dataclasses import dataclass, field
 

@@ -1,4 +1,4 @@
-"""Spec 13: barrier rules, damage, vision and the stress thumps cause (pure)."""
+"""doors: barrier rules, damage, vision and the stress thumps cause (pure)."""
 
 import random
 import unittest
@@ -51,7 +51,7 @@ def weapon(item_id: str) -> MeleeWeaponItem:
 
 
 class ShippedBarrierTests(unittest.TestCase):
-    """Spec 13, The shipped barriers."""
+    """doors: The shipped barriers."""
 
     def test_the_apartment_door_is_a_locked_500_health_door_with_its_key(self):
         barrier = door()
@@ -86,7 +86,7 @@ class ShippedBarrierTests(unittest.TestCase):
 
 
 class BlockingTests(unittest.TestCase):
-    """Spec 13, What a barrier stops."""
+    """doors: What a barrier stops."""
 
     def test_a_closed_door_blocks_and_an_open_or_broken_one_does_not(self):
         barrier = door()
@@ -112,7 +112,7 @@ class BlockingTests(unittest.TestCase):
 
 
 class VisionTests(unittest.TestCase):
-    """Spec 13, What a barrier stops: vision."""
+    """doors: What a barrier stops: vision."""
 
     def test_a_closed_door_blocks_sight_and_an_open_one_does_not(self):
         barrier = door()
@@ -132,7 +132,7 @@ class VisionTests(unittest.TestCase):
 
 
 class ThumpableOrderTests(unittest.TestCase):
-    """Spec 13, Each thump: the first target that exists."""
+    """doors: Each thump: the first target that exists."""
 
     def test_a_door_is_hit_on_the_zombies_side_then_the_far_side_then_itself(self):
         barrier = door()
@@ -160,7 +160,7 @@ class ThumpableOrderTests(unittest.TestCase):
 
 
 class ThumpDamageTests(unittest.TestCase):
-    """Spec 13, Each thump."""
+    """doors: Each thump."""
 
     def test_a_door_takes_nothing_from_one_thumper_and_3_from_two(self):
         barrier = door()
@@ -210,7 +210,7 @@ class ThumpDamageTests(unittest.TestCase):
 
 
 class PlankHealthTests(unittest.TestCase):
-    """Spec 13, `BARRICADE`: plank health and removal."""
+    """doors: `BARRICADE`: plank health and removal."""
 
     def test_a_full_plank_is_1000_at_carpentry_0_and_1500_at_10(self):
         self.assertEqual(plank_health(10, 10, 0), 1000)
@@ -242,7 +242,7 @@ class PlankHealthTests(unittest.TestCase):
 
 
 class WeaponHitTests(unittest.TestCase):
-    """Spec 13, Breaking through."""
+    """doors: Breaking through."""
 
     def hit(self, item_id: str, strength: int, barrier: BarrierEntity, seed: int = 1):
         return weapon_hit(
@@ -363,7 +363,7 @@ class WeaponHitTests(unittest.TestCase):
 
 
 class StressFromSoundsTests(unittest.TestCase):
-    """Spec 13, Stress from sounds."""
+    """doors: Stress from sounds."""
 
     def test_a_thump_at_d_b_4_adds_0_00384(self):
         self.assertAlmostEqual(sound_stress(4, 20, deaf=False), 0.00384, places=6)
@@ -380,7 +380,7 @@ class StressFromSoundsTests(unittest.TestCase):
 
 
 class DistanceTests(unittest.TestCase):
-    """Spec 13, The player's distance to a barrier."""
+    """doors: The player's distance to a barrier."""
 
     def setUp(self):
         self.gm = GameManager()

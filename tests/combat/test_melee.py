@@ -1,4 +1,4 @@
-"""Spec 11: the melee swing, its crits and its damage chain."""
+"""melee: the melee swing, its crits and its damage chain."""
 
 import dataclasses
 import random
@@ -130,7 +130,7 @@ def chance(weapon: MeleeWeaponItem, **kwargs) -> int:
 
 
 class CritChanceTests(unittest.TestCase):
-    """Spec 11, Crits."""
+    """melee: Crits."""
 
     def test_a_weapon_chance_adds_skill_and_subtracts_status_effects(self):
         # 20 + 3 x 2 - 5 x 1 - 1.3 x 2 = 18.4, truncated
@@ -189,7 +189,7 @@ def stats(panic_level: int, stress_level: int) -> Stats:
 
 
 class DamageTermTests(unittest.TestCase):
-    """Spec 11, Damage."""
+    """melee: Damage."""
 
     def test_panic_two_and_stress_three_subtract_half_from_the_split(self):
         # 1.0 / (0.5 x 1) = 2.0, less 0.1 x 2 and 0.1 x 3
@@ -213,7 +213,7 @@ class DamageTermTests(unittest.TestCase):
 
 
 class OneTargetChainTests(unittest.TestCase):
-    """Spec 11, Damage: the chain for one target, in the order written."""
+    """melee: Damage: the chain for one target, in the order written."""
 
     def test_a_crowbar_hit_at_blunt_zero(self):
         # roll 0.6, Strength 5 x1.0, split 1.2, reach 1.6, not-facing none (facing 1),
@@ -283,7 +283,7 @@ class OneTargetChainTests(unittest.TestCase):
 
 
 class SeveralTargetsTests(unittest.TestCase):
-    """Spec 11, A swing: more than one zombie."""
+    """melee: A swing: more than one zombie."""
 
     def test_the_second_target_takes_the_split_of_one(self):
         gm = street_game(weapon="item_crowbar")
@@ -339,7 +339,7 @@ class SeveralTargetsTests(unittest.TestCase):
 
 
 class FloorAttackAndStompTests(unittest.TestCase):
-    """Spec 11, Floor attacks and stomps."""
+    """melee: Floor attacks and stomps."""
 
     def test_a_floor_attack_hits_the_head_times_three_and_the_floor_multiplier(self):
         # split 1.2 x3 (head), x1.6, x1.5, x0.3, x5 (floor attack): then x0.15
@@ -389,7 +389,7 @@ class FloorAttackAndStompTests(unittest.TestCase):
 
 
 class ShoveTests(unittest.TestCase):
-    """Spec 11, Shoves."""
+    """melee: Shoves."""
 
     def test_a_shove_does_no_damage_and_leaves_hits_taken(self):
         gm = street_game(weapon="item_crowbar")
@@ -421,7 +421,7 @@ class ShoveTests(unittest.TestCase):
 
 
 class KnockdownAndStaggerTests(unittest.TestCase):
-    """Spec 11, Knockdowns and staggers."""
+    """melee: Knockdowns and staggers."""
 
     def test_a_crit_knocks_the_zombie_down_for_this_minute_and_the_next(self):
         gm = street_game(weapon="item_crowbar")
@@ -479,7 +479,7 @@ class RecordingRng(FixedRng):
 
 
 class KnifeTests(unittest.TestCase):
-    """Spec 11, The knife jaw stab."""
+    """melee: The knife jaw stab."""
 
     def knife_game(self) -> GameManager:
         gm = street_game()
@@ -571,7 +571,7 @@ def endurance_spent(gm: GameManager) -> float:
 
 
 class EnduranceTests(unittest.TestCase):
-    """Spec 11, Endurance."""
+    """melee: Endurance."""
 
     def test_a_crowbar_swing_that_connects_costs_about_eleven_thousandths(self):
         # swing 2 x 0.18 x 0.012 + hit 2 x 0.28 x 0.012 (the roll at its top, so hit_mod 1), Fitness 0
@@ -644,7 +644,7 @@ class EnduranceTests(unittest.TestCase):
 
 
 class WearTests(unittest.TestCase):
-    """Spec 11, Weapon condition."""
+    """melee: Weapon condition."""
 
     def test_the_odds_use_wear_chance_maintenance_and_half_the_weapon_level(self):
         # 70 + Maintenance 4 + (Blunt 5 -> weapon level 4) // 2 = 76
@@ -723,7 +723,7 @@ class WearTests(unittest.TestCase):
 
 
 class HitXpTests(unittest.TestCase):
-    """Spec 11, XP."""
+    """melee: XP."""
 
     def xp(self, gm: GameManager, skill_id: str) -> float:
         return gm.player.skills[skill_id].xp
@@ -804,7 +804,7 @@ class HitXpTests(unittest.TestCase):
 
 
 class HitNoiseTests(unittest.TestCase):
-    """Spec 11, Noise."""
+    """melee: Noise."""
 
     def radii(self, result) -> list[tuple[float, float]]:
         return sorted((s.radius, s.volume) for s in result.sounds)
@@ -853,7 +853,7 @@ if __name__ == "__main__":
 
 
 class HeavyLoadCritTests(unittest.TestCase):
-    """Spec 25, What Heavy Load does: the crit chance reads the live level."""
+    """carrying-and-loot: What Heavy Load does: the crit chance reads the live level."""
 
     def test_two_levels_of_load_take_a_crowbar_crit_from_20_to_10(self):
         light = street_game(weapon="item_crowbar")

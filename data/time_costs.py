@@ -1,4 +1,4 @@
-"""Time cost of each action, in in-game minutes (spec 01).
+"""Time cost of each action, in in-game minutes (clock).
 
 A row is a fixed number of minutes or a function of the action and what the
 validator resolved for it, so a function never re-derives what the check
@@ -63,28 +63,28 @@ from modules.resolution import (
 )
 from modules.world.pace import Pace
 
-SWING_MIN = 1  # spec 11
-SEARCH_MIN = 1  # spec 14
-OPEN_CONTAINER_MIN = 1  # spec 25
-MOVE_ROOM_MIN = 1  # spec 25
-EQUIP_MIN = 1  # spec 01
-UNEQUIP_MIN = 1  # spec 01
-QUICK_ACTION_MIN = 1  # spec 01
-WALK_TO_BARRIER_MIN = 1  # spec 01
-WINDOW_CLIMB_MIN = 1  # spec 01
-WEAR_MINUTES = 1  # spec 01
-TAKE_OFF_MINUTES = 1  # spec 01
-FIRST_AID_MINUTES = 1  # spec 12
-ZONE_HOP_MIN = 10  # spec 01
-ZONE_HOP_RUNNING_MIN = 5  # spec 01
-ZONE_HOP_SNEAKING_MIN = 20  # spec 01
-MAX_PLAN_ACTIONS = 5  # spec 10: actions resolved per turn
-NONE_TURN_MINUTES = 1  # spec 10
+SWING_MIN = 1  # melee
+SEARCH_MIN = 1  # zombie-lifecycle
+OPEN_CONTAINER_MIN = 1  # carrying-and-loot
+MOVE_ROOM_MIN = 1  # carrying-and-loot
+EQUIP_MIN = 1  # clock
+UNEQUIP_MIN = 1  # clock
+QUICK_ACTION_MIN = 1  # clock
+WALK_TO_BARRIER_MIN = 1  # clock
+WINDOW_CLIMB_MIN = 1  # clock
+WEAR_MINUTES = 1  # clock
+TAKE_OFF_MINUTES = 1  # clock
+FIRST_AID_MINUTES = 1  # health
+ZONE_HOP_MIN = 10  # clock
+ZONE_HOP_RUNNING_MIN = 5  # clock
+ZONE_HOP_SNEAKING_MIN = 20  # clock
+MAX_PLAN_ACTIONS = 5  # llm-contract: actions resolved per turn
+NONE_TURN_MINUTES = 1  # llm-contract
 
 CostFunction = Callable[[AnyAction, Resolution], int]
 
 
-HOP_MINUTES_BY_PACE = {  # spec 09
+HOP_MINUTES_BY_PACE = {  # zombies
     Pace.WALK: ZONE_HOP_MIN,
     Pace.RUN: ZONE_HOP_RUNNING_MIN,
     Pace.SNEAK: ZONE_HOP_SNEAKING_MIN,
@@ -210,7 +210,7 @@ MULTIPLIED_ACTIONS: tuple[type, ...] = (
     DisinfectAction,
     BarricadeAction,
     UnbarricadeAction,
-)  # spec 12, 13
+)  # health: 13
 
 
 def action_minutes(action: AnyAction, resolved: Resolution) -> int:

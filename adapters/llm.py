@@ -4,7 +4,7 @@ Two roles, two calls, in place of the old single game-master call: the parser
 turns player input plus a minimal scene description into a proposed ACTIONS
 block (no prose, and no authority -- the engine validates and simulates every
 line before anything is narrated); the narrator then turns the engine's
-already-decided outcome facts into STORY prose. Per docs/01-engine-authority.md,
+already-decided outcome facts into STORY prose. Per docs/architecture/engine-authority.md,
 the LLM interprets intent and writes prose; it never decides state.
 """
 

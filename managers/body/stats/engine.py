@@ -1,4 +1,4 @@
-"""Survival stat engine: runs the stat drivers over game time (spec 02)."""
+"""Survival stat engine: runs the stat drivers over game time (survival-stats)."""
 
 import dataclasses
 import logging

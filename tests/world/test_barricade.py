@@ -1,4 +1,4 @@
-"""Spec 13: opening, closing, boarding up, prying off and breaking through."""
+"""doors: opening, closing, boarding up, prying off and breaking through."""
 
 import random
 import unittest
@@ -80,7 +80,7 @@ def count(gm: GameManager, item_id: str) -> int:
 
 
 class BarricadeTests(unittest.TestCase):
-    """Spec 13, `BARRICADE`."""
+    """doors: `BARRICADE`."""
 
     def test_it_costs_1_minute_one_plank_and_one_nail(self):
         gm = stocked_game()
@@ -229,7 +229,7 @@ class BarricadeTests(unittest.TestCase):
 
 
 class UnbarricadeTests(unittest.TestCase):
-    """Spec 13, `UNBARRICADE`."""
+    """doors: `UNBARRICADE`."""
 
     def planked(self, *planks: int) -> GameManager:
         gm = stocked_game()
@@ -297,7 +297,7 @@ class UnbarricadeTests(unittest.TestCase):
 
 
 class OpenCloseTests(unittest.TestCase):
-    """Spec 13, `OPEN <barrier>` / `CLOSE <barrier>`."""
+    """doors: `OPEN <barrier>` / `CLOSE <barrier>`."""
 
     def test_open_and_close_cost_nothing_at_the_door(self):
         gm = stocked_game()
@@ -385,7 +385,7 @@ class OpenCloseTests(unittest.TestCase):
 
 
 class HitBarrierTests(unittest.TestCase):
-    """Spec 13, Breaking through."""
+    """doors: Breaking through."""
 
     def armed(self, item_id: str = "item_crowbar") -> GameManager:
         gm = stocked_game()
@@ -500,7 +500,7 @@ if __name__ == "__main__":
 
 
 class TimedActionTests(unittest.TestCase):
-    """Spec 13, `BARRICADE` and `UNBARRICADE`: the time in frames."""
+    """doors: `BARRICADE` and `UNBARRICADE`: the time in frames."""
 
     def test_barricading_is_200_frames_so_1_minute(self):
         from data.world.barriers import BARRICADE_MIN
@@ -524,7 +524,7 @@ class TimedActionTests(unittest.TestCase):
 
 
 class OpeningIntoTheDeadTests(unittest.TestCase):
-    """Spec 13, Edge cases."""
+    """doors: Edge cases."""
 
     def test_opening_a_door_with_thumpers_behind_it_puts_them_on_the_player(self):
         from tests.zombies.test_thumping import game, thumper
@@ -539,7 +539,7 @@ class OpeningIntoTheDeadTests(unittest.TestCase):
 
 
 class WindowCrossingTests(unittest.TestCase):
-    """Spec 13, `MOVE_TO` through a barrier: windows."""
+    """doors: `MOVE_TO` through a barrier: windows."""
 
     def setUp(self):
         self.gm = GameManager()

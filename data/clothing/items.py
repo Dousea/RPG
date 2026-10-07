@@ -1,4 +1,4 @@
-"""Clothing a new character may start in (spec 07), beyond the catalog's core outfit.
+"""Clothing a new character may start in (character-creation), beyond the catalog's core outfit.
 
 Each row carries the garment's own stats: id, name, location, max hit points,
 coverage names, insulation, wind, water, weight (kg), scratch and bite defence.

@@ -1,6 +1,6 @@
 """Action Validator: precondition checks only, no state mutation.
 
-This is the piece docs/01-engine-authority.md calls the Action Validator. It
+This is the piece docs/architecture/engine-authority.md calls the Action Validator. It
 answers "is this legal" for every proposed action *before* the Simulation
 Core decides "what happens" and long before the narrator writes a word about
 it -- the inversion that makes the engine authoritative instead of the old

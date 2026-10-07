@@ -1,35 +1,35 @@
-"""Climate configuration: seasons, noise, weather stages and word bands (spec 04)."""
+"""Climate configuration: seasons, noise, weather stages and word bands (weather)."""
 
 from modules.world.weather import SeasonModel, StageTemplate
 
-LATITUDE = 38  # spec 04
-TEMP_MAX_C = 25  # spec 04
-TEMP_MIN_C = 0  # spec 04
-TEMP_DIFF = 7  # spec 04
-SEASON_LAG_DAYS = 31  # spec 04
-HIGH_NOON_HOUR = 12.5  # spec 04
-SEASON_NOISE_SEEDS = (64, 128, 255)  # spec 04
-MONTHLY_RAIN = (0.39, 0.35, 0.39, 0.40, 0.35, 0.37, 0.29, 0.26, 0.23, 0.23, 0.30, 0.32)  # spec 04
-AIR_MASS_NOISE_FREQUENCY = 166  # spec 04
-RAIN_TIME_MULTIPLIER = 1.0  # spec 04
-FOG_SEED = 1984  # spec 04
-FOG_BASE = 0.2  # spec 04
-FOG_DAY_SCALE = 0.8  # spec 04
-SIMPLEX_OFFSET_MAX = 8000  # spec 04
-WIND_TO_KMH = 120  # spec 04
-SNOW_BELOW_C = 0  # spec 04
+LATITUDE = 38  # weather
+TEMP_MAX_C = 25  # weather
+TEMP_MIN_C = 0  # weather
+TEMP_DIFF = 7  # weather
+SEASON_LAG_DAYS = 31  # weather
+HIGH_NOON_HOUR = 12.5  # weather
+SEASON_NOISE_SEEDS = (64, 128, 255)  # weather
+MONTHLY_RAIN = (0.39, 0.35, 0.39, 0.40, 0.35, 0.37, 0.29, 0.26, 0.23, 0.23, 0.30, 0.32)  # weather
+AIR_MASS_NOISE_FREQUENCY = 166  # weather
+RAIN_TIME_MULTIPLIER = 1.0  # weather
+FOG_SEED = 1984  # weather
+FOG_BASE = 0.2  # weather
+FOG_DAY_SCALE = 0.8  # weather
+SIMPLEX_OFFSET_MAX = 8000  # weather
+WIND_TO_KMH = 120  # weather
+SNOW_BELOW_C = 0  # weather
 
-INDOOR_POWERED_C = 22  # spec 06
-INDOOR_PULL_BASE = 0.4  # spec 06
-INDOOR_PULL_DAYLIGHT = 0.2  # spec 06
-UPPER_FLOOR_DIFF_MULT = 0.85  # spec 06
-UPPER_FLOOR_NIGHT_TERM = 0.2  # spec 06
-WINDCHILL_TERMS = (13.12, 0.6215, 11.37, 0.16, 0.3965)  # spec 06: wind in km/h
+INDOOR_POWERED_C = 22  # body-temperature
+INDOOR_PULL_BASE = 0.4  # body-temperature
+INDOOR_PULL_DAYLIGHT = 0.2  # body-temperature
+UPPER_FLOOR_DIFF_MULT = 0.85  # body-temperature
+UPPER_FLOOR_NIGHT_TERM = 0.2  # body-temperature
+WINDCHILL_TERMS = (13.12, 0.6215, 11.37, 0.16, 0.3965)  # body-temperature: wind in km/h
 
 # Our own tuning; the spec gives no values.
 AXIAL_TILT_DEGREES = 23.44
 EQUINOX_DAY = 80
-DAILY_HIGH_AFTER_NOON_HOURS = 4  # spec 04: the daily high lags high noon
+DAILY_HIGH_AFTER_NOON_HOURS = 4  # weather: the daily high lags high noon
 STAGE_HUMIDITY_FLOOR = 0.9
 SEASON_NOISE_AMPLITUDE_C = 0.6
 SEASON_NOISE_DAYS = 45
@@ -92,18 +92,18 @@ SEASON_MODEL = SeasonModel(
     high_lag_hours=DAILY_HIGH_AFTER_NOON_HOURS,
 )
 
-INDOORS_BY_ZONE = {  # spec 04
+INDOORS_BY_ZONE = {  # weather
     "zone_home": True,
     "zone_building": True,
     "zone_street": False,
     "zone_bodega": True,
     "zone_neighborhood": False,
-    "zone_flat_vacant": True,  # spec 25
-    "zone_flat_tenant": True,  # spec 25
-    "zone_pharmacy": True,  # spec 25
-    "zone_clinic": True,  # spec 25
-    "zone_supermarket": True,  # spec 25
-    "zone_hardware": True,  # spec 25
+    "zone_flat_vacant": True,  # carrying-and-loot
+    "zone_flat_tenant": True,  # carrying-and-loot
+    "zone_pharmacy": True,  # carrying-and-loot
+    "zone_clinic": True,  # carrying-and-loot
+    "zone_supermarket": True,  # carrying-and-loot
+    "zone_hardware": True,  # carrying-and-loot
 }
 
 # Lower bounds are exclusive; the last band whose bound the value exceeds wins.

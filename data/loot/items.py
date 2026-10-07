@@ -1,4 +1,4 @@
-"""Foods, drinks and melee weapons that loot tables can drop (spec 25)."""
+"""Foods, drinks and melee weapons that loot tables can drop (carrying-and-loot)."""
 
 from typing import NamedTuple
 
@@ -7,8 +7,8 @@ from data.world import barriers as barrier_k
 from modules.character.equipment import CharacterHoldableSlot
 from modules.item import BaseItem, ConsumableItem, MeleeWeaponItem
 
-FOOD_HIT_POINTS = 5  # spec 25: not in the spec's rows; any food's wear
-WEAPON_HIT_POINTS = 20  # spec 25: not in the spec's rows; any new weapon's wear
+FOOD_HIT_POINTS = 5  # carrying-and-loot: not in the spec's rows; any food's wear
+WEAPON_HIT_POINTS = 20  # carrying-and-loot: not in the spec's rows; any new weapon's wear
 BOTH_HANDS = [CharacterHoldableSlot.RIGHT_HAND, CharacterHoldableSlot.LEFT_HAND]
 ONE_HAND = [CharacterHoldableSlot.RIGHT_HAND]
 
@@ -25,7 +25,7 @@ class FoodRow(NamedTuple):
     drink: bool = False
 
 
-FOOD_ROWS = (  # spec 25: New items
+FOOD_ROWS = (  # carrying-and-loot: New items
     FoodRow("item_canned_soup", "Canned Soup", "A tin of vegetable soup.", 0.8, -0.25, -0.04, 0),
     FoodRow("item_canned_tuna", "Canned Tuna", "A small tin of tuna.", 0.3, -0.18, 0, 0),
     FoodRow("item_canned_corn", "Canned Corn", "A tin of sweetcorn.", 0.8, -0.16, -0.04, 0),
@@ -137,18 +137,18 @@ def _food(row: FoodRow) -> ConsumableItem:
     )
 
 
-NPC_ROLLING_PIN_DAMAGE = 2  # spec 25: max(1, round(5 x mean / 0.875))
-NPC_CLEAVER_DAMAGE = 3  # spec 25
-NPC_SCREWDRIVER_DAMAGE = 3  # spec 25
-NPC_WRENCH_DAMAGE = 4  # spec 25
-NPC_PIPE_WRENCH_DAMAGE = 4  # spec 25
-NPC_TIRE_IRON_DAMAGE = 4  # spec 25
-NPC_SHOVEL_DAMAGE = 8  # spec 25
-NPC_SLEDGEHAMMER_DAMAGE = 14  # spec 25
+NPC_ROLLING_PIN_DAMAGE = 2  # carrying-and-loot: max(1, round(5 x mean / 0.875))
+NPC_CLEAVER_DAMAGE = 3  # carrying-and-loot
+NPC_SCREWDRIVER_DAMAGE = 3  # carrying-and-loot
+NPC_WRENCH_DAMAGE = 4  # carrying-and-loot
+NPC_PIPE_WRENCH_DAMAGE = 4  # carrying-and-loot
+NPC_TIRE_IRON_DAMAGE = 4  # carrying-and-loot
+NPC_SHOVEL_DAMAGE = 8  # carrying-and-loot
+NPC_SLEDGEHAMMER_DAMAGE = 14  # carrying-and-loot
 
 _GLUE_AND_TAPE = [melee_k.TAG_REPAIRABLE_WITH_GLUE, melee_k.TAG_REPAIRABLE_WITH_TAPE]
 
-WEAPONS: dict[str, MeleeWeaponItem] = {  # spec 25: New items
+WEAPONS: dict[str, MeleeWeaponItem] = {  # carrying-and-loot: New items
     "item_rolling_pin": MeleeWeaponItem(
         id="item_rolling_pin",
         name="Rolling Pin",

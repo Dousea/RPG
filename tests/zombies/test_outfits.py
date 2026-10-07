@@ -1,4 +1,4 @@
-"""Spec 14, Outfits and Attached weapons: what a zombie wears and carries."""
+"""zombie-lifecycle: Outfits and Attached weapons: what a zombie wears and carries."""
 
 import random
 import unittest
@@ -45,7 +45,7 @@ def bare_zombie(outfit: str = "generic01", female: bool = False) -> ZombieEntity
 
 
 class OutfitPoolTests(unittest.TestCase):
-    """Spec 14, Outfits: the pool of 27 and its chances."""
+    """zombie-lifecycle: Outfits: the pool of 27 and its chances."""
 
     def test_the_pool_is_the_27_outfits_with_their_chances(self):
         pool = {name: (chance, sex) for name, chance, sex in zombie_outfits.ZOMBIE_OUTFIT_POOL}
@@ -96,7 +96,7 @@ class OutfitPoolTests(unittest.TestCase):
 
 
 class OutfitItemTests(unittest.TestCase):
-    """Spec 14, Outfits: a reference's probability and its choices."""
+    """zombie-lifecycle: Outfits: a reference's probability and its choices."""
 
     def dress(self, references, rolls):
         with mock.patch.dict(
@@ -141,7 +141,7 @@ class OutfitItemTests(unittest.TestCase):
 
 
 class OutfitBagTests(unittest.TestCase):
-    """Spec 25, New items: bags in outfits resolve, and a bag on a corpse fills when searched."""
+    """carrying-and-loot: New items: bags in outfits resolve, and a bag on a corpse fills when searched."""
 
     BAGS = {"item_schoolbag", "item_duffel_bag", "item_satchel", "item_fanny_pack"}
 
@@ -287,7 +287,7 @@ class OutfitBagTests(unittest.TestCase):
 
 
 class ZombieClothingTests(unittest.TestCase):
-    """Spec 14, Outfits: the catalogue holds every item the outfits can produce."""
+    """zombie-lifecycle: Outfits: the catalogue holds every item the outfits can produce."""
 
     def test_the_catalogue_gained_about_270_clothing_items(self):
         used = {
@@ -321,7 +321,7 @@ class ZombieClothingTests(unittest.TestCase):
 
 
 class DressingTests(unittest.TestCase):
-    """Spec 14, What a zombie gains: every zombie is dressed when it is made."""
+    """zombie-lifecycle: What a zombie gains: every zombie is dressed when it is made."""
 
     def test_a_rolled_zombie_has_a_sex_an_outfit_and_clothes(self):
         rng = random.Random(8)
@@ -344,7 +344,7 @@ class DressingTests(unittest.TestCase):
 
 
 class AttachedWeaponTests(unittest.TestCase):
-    """Spec 14, Attached weapons."""
+    """zombie-lifecycle: Attached weapons."""
 
     def test_six_percent_of_zombies_roll_a_weapon(self):
         rng = random.Random(21)
@@ -458,7 +458,7 @@ def dressed(*item_ids: str, holes: dict[str, set[BodyPart]] | None = None) -> Zo
 
 
 class ZombieDefenceTests(unittest.TestCase):
-    """Spec 14, Armour against melee: the defence of a part."""
+    """zombie-lifecycle: Armour against melee: the defence of a part."""
 
     def test_defence_is_scratch_half_plus_bite_doubled(self):
         # police jacket: scratch 30, bite 20 -> (30 x 0.5 + 20) x 2
@@ -501,7 +501,7 @@ class ZombieDefenceTests(unittest.TestCase):
 
 
 class HitPartTests(unittest.TestCase):
-    """Spec 14, Armour against melee: which part a swing lands on."""
+    """zombie-lifecycle: Armour against melee: which part a swing lands on."""
 
     def test_a_standing_target_is_hit_on_one_of_ten_parts_uniformly(self):
         rng = random.Random(3)
@@ -531,7 +531,7 @@ class HitPartTests(unittest.TestCase):
 
 
 class ArmourInTheChainTests(unittest.TestCase):
-    """Spec 14, Armour against melee: `split` takes the defence after the head and before the ramp."""
+    """zombie-lifecycle: Armour against melee: `split` takes the defence after the head and before the ramp."""
 
     def hit(self, zombie: ZombieEntity, *, down: bool = False, by_size=None, shove=False):
         gm = street_game(weapon="item_crowbar")

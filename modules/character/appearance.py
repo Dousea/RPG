@@ -1,4 +1,4 @@
-"""A character's name and looks (spec 07)."""
+"""A character's name and looks (character-creation)."""
 
 from dataclasses import dataclass
 from enum import StrEnum

@@ -1,4 +1,4 @@
-"""Spec 12, The body minute: bleeding, healing, wound infection, zombie infection and stress."""
+"""health: The body minute: bleeding, healing, wound infection, zombie infection and stress."""
 
 import random
 import unittest
@@ -54,7 +54,7 @@ def bandage(player: PlayerEntity, part: BodyPart, life: float = 5.0, alcoholic: 
 
 
 class BleedingTests(unittest.TestCase):
-    """Spec 12, Bleeding."""
+    """health: Bleeding."""
 
     def test_an_unbandaged_neck_bite_kills_in_six_to_ten_minutes(self):
         for seed in range(20):
@@ -165,7 +165,7 @@ class BleedingTests(unittest.TestCase):
 
 
 class WoundDamageTests(unittest.TestCase):
-    """Spec 12, Wound damage."""
+    """health: Wound damage."""
 
     def minute_loss(self, part, **fields):
         player = make_player()
@@ -202,7 +202,7 @@ class WoundDamageTests(unittest.TestCase):
 
 
 class WoundTimerTests(unittest.TestCase):
-    """Spec 12, Wound times."""
+    """health: Wound times."""
 
     def hour(self, bandaged: bool, **fields):
         player = make_player()
@@ -300,7 +300,7 @@ class WoundTimerTests(unittest.TestCase):
 
 
 class BandageWearTests(unittest.TestCase):
-    """Spec 12, Bandage wear."""
+    """health: Bandage wear."""
 
     def hour(self, **fields):
         player = make_player()
@@ -345,7 +345,7 @@ class BandageWearTests(unittest.TestCase):
 
 
 class HealingTests(unittest.TestCase):
-    """Spec 12, Healing."""
+    """health: Healing."""
 
     def levels(self, hungry=0, thirst=0, sick=0):
         levels = {status_effect: 0 for status_effect in StatusEffect}
@@ -407,7 +407,7 @@ class HealingTests(unittest.TestCase):
 
 
 class StatusEffectDamageTests(unittest.TestCase):
-    """Spec 12, The body minute: status effect damage moved from spec 02."""
+    """health: The body minute: status effect damage moved from survival-stats."""
 
     def hour(self, stat, value, minutes=60):
         player = make_player()
@@ -461,7 +461,7 @@ class StatusEffectDamageTests(unittest.TestCase):
 
 
 class DeathCauseTests(unittest.TestCase):
-    """Spec 12, Death."""
+    """health: Death."""
 
     def test_wound_damage_names_the_wounds(self):
         player = make_player()
@@ -483,7 +483,7 @@ class DeathCauseTests(unittest.TestCase):
 
 
 class PainMinuteTests(unittest.TestCase):
-    """Spec 12, Pain."""
+    """health: Pain."""
 
     def test_the_pain_stat_climbs_toward_the_target_over_minutes(self):
         player = make_player()
@@ -567,7 +567,7 @@ class PainMinuteTests(unittest.TestCase):
 
 
 class WoundInfectionTests(unittest.TestCase):
-    """Spec 12, Wound infection."""
+    """health: Wound infection."""
 
     def per_hour(self, **fields) -> float:
         return infection_chance(PartState(**fields)) * 60
@@ -763,7 +763,7 @@ class WoundInfectionTests(unittest.TestCase):
 
 
 class StressTests(unittest.TestCase):
-    """Spec 12, Stress."""
+    """health: Stress."""
 
     def stress_after_hour(self, player) -> float:
         run(player, 60)
@@ -811,7 +811,7 @@ class StressTests(unittest.TestCase):
 
 
 class ZombieInfectionTests(unittest.TestCase):
-    """Spec 12, Zombie Infection."""
+    """health: Zombie Infection."""
 
     def infect(self, traits=(), seed=0, at_hours=10.0) -> PlayerEntity:
         player = make_player(traits)
@@ -912,7 +912,7 @@ class ZombieInfectionTests(unittest.TestCase):
 
 
 class ThermalCapTests(unittest.TestCase):
-    """Spec 12, The body minute: step 0."""
+    """health: The body minute: step 0."""
 
     def test_a_stage_of_point_four_caps_health_at_sixty(self):
         player = make_player()

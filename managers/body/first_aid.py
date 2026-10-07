@@ -1,4 +1,4 @@
-"""Treatment: bandages, disinfectant, painkillers and antibiotics (spec 12)."""
+"""Treatment: bandages, disinfectant, painkillers and antibiotics (health)."""
 
 import random
 

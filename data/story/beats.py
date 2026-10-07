@@ -1,10 +1,10 @@
-"""Story beats: things the engine makes happen once, when their condition first holds (spec 10)."""
+"""Story beats: things the engine makes happen once, when their condition first holds (llm-contract)."""
 
 from dataclasses import dataclass
 
 from modules.story.beats import ClockAtOrPast, Condition, Effect, StartOutbreak
 
-OUTBREAK_BEGINS_MINUTE = 2760  # spec 10: game minutes, day 3 at 06:00
+OUTBREAK_BEGINS_MINUTE = 2760  # llm-contract: game minutes, day 3 at 06:00
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class Beat:
     interrupts: bool
 
 
-STORY_BEATS: dict[str, Beat] = {  # spec 10
+STORY_BEATS: dict[str, Beat] = {  # llm-contract
     "outbreak_begins": Beat(
         beat_id="outbreak_begins",
         when=ClockAtOrPast(OUTBREAK_BEGINS_MINUTE),

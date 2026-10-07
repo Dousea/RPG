@@ -1,4 +1,4 @@
-"""Spec 09, A zombie: how one zombie is rolled."""
+"""zombies: A zombie: how one zombie is rolled."""
 
 import random
 import unittest
@@ -9,7 +9,7 @@ ROLLS = 10000
 
 
 class RollZombieTests(unittest.TestCase):
-    """Spec 09, A zombie: health, speed, senses, memory and strength."""
+    """zombies: A zombie: health, speed, senses, memory and strength."""
 
     @classmethod
     def setUpClass(cls):

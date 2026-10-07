@@ -1,4 +1,4 @@
-"""Which clothes a new character may start in (spec 07).
+"""Which clothes a new character may start in (character-creation).
 
 Each list maps a body location to the items offered there. `chance` (percent)
 is used only when a character is dressed at random. A list with only a female
@@ -110,9 +110,9 @@ DEFAULT_CLOTHING: GenderedClothing = {
         BodyLocation.SHOES: ClothingChoice(100, ("item_everyday_shoes", "item_trainers")),
         BodyLocation.NECKLACE: ClothingChoice(0, ("item_crucifix_necklace",)),
     },
-}  # spec 07
+}  # character-creation
 
-OCCUPATION_CLOTHING: dict[str, GenderedClothing] = {  # spec 07
+OCCUPATION_CLOTHING: dict[str, GenderedClothing] = {  # character-creation
     "fireofficer": {
         Gender.FEMALE: {
             BodyLocation.HAT: ClothingChoice(10, ("item_fire_dept_cap",)),
@@ -329,7 +329,7 @@ OCCUPATION_CLOTHING: dict[str, GenderedClothing] = {  # spec 07
     },
 }
 
-TRAIT_CLOTHING: dict[str, GenderedClothing] = {  # spec 07
+TRAIT_CLOTHING: dict[str, GenderedClothing] = {  # character-creation
     "gardener": {
         Gender.FEMALE: {
             BodyLocation.HAT: ClothingChoice(10, ("item_sun_hat", "item_flower_sun_hat")),

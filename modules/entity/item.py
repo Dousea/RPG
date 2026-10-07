@@ -8,14 +8,16 @@ from modules.item import BaseItem, MedicalItem, MeleeWeaponItem, StackItem
 @dataclass
 class ItemEntity(BaseEntity):
     item: BaseItem
-    wetness: float = 0.0  # 0-100, spec 05
-    holes: set[BodyPart] = field(default_factory=set[BodyPart])  # spec 05, written from spec 09
-    condition: int = -1  # a melee weapon's wear: -1 until set to full, 0 is broken; spec 11
-    uses: int = -1  # a medical item's or stack's uses left: -1 until set to full; spec 12, 13
+    wetness: float = 0.0  # 0-100, clothing
+    holes: set[BodyPart] = field(default_factory=set[BodyPart])  # clothing: written from zombies
+    condition: int = -1  # a melee weapon's wear: -1 until set to full, 0 is broken; melee
+    uses: int = -1  # a medical item's or stack's uses left: -1 until set to full; health: 13
     contents: list["ItemEntity"] = field(
         default_factory=list["ItemEntity"]
-    )  # a bag's items; spec 25
-    loot_pending: bool = False  # a bag from an outfit that has not rolled its table yet; spec 25
+    )  # a bag's items; carrying-and-loot
+    loot_pending: bool = (
+        False  # a bag from an outfit that has not rolled its table yet; carrying-and-loot
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -33,7 +35,7 @@ class ItemEntity(BaseEntity):
 
     @property
     def weight(self) -> float:
-        """What it weighs lying loose: its own weight and everything inside, in full (spec 25)."""
+        """What it weighs lying loose: its own weight and everything inside, in full (carrying-and-loot)."""
         return self.actual_weight + sum(entity.weight for entity in self.contents)
 
     @property

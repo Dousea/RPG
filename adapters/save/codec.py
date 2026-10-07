@@ -61,7 +61,7 @@ from modules.world.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 24  # spec 25
+SCHEMA_VERSION = 24  # carrying-and-loot
 
 MAX_ID_LENGTH = 40
 

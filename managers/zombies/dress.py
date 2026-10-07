@@ -1,4 +1,4 @@
-"""Dressing a zombie: its sex, outfit, worn items and the weapon stuck in it (spec 14)."""
+"""Dressing a zombie: its sex, outfit, worn items and the weapon stuck in it (zombie-lifecycle)."""
 
 import random
 

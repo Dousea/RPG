@@ -1,4 +1,4 @@
-"""What has been said and asked today, and which topics have been told (spec 10)."""
+"""What has been said and asked today, and which topics have been told (llm-contract)."""
 
 from dataclasses import dataclass, field
 

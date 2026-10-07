@@ -1,4 +1,4 @@
-"""Body parts, body locations (spec 05) and the health of each part (spec 12)."""
+"""Body parts, body locations (clothing) and the health of each part (health)."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -146,7 +146,7 @@ class BodyLocation(StrEnum):
 LAYER_ORDER: dict[BodyLocation, int] = {location: i for i, location in enumerate(BodyLocation)}
 
 
-PART_WEIGHT: dict[BodyPart, float] = {  # spec 12: overall health lost per point of part damage
+PART_WEIGHT: dict[BodyPart, float] = {  # health: overall health lost per point of part damage
     BodyPart.HAND_L: 0.1,
     BodyPart.HAND_R: 0.1,
     BodyPart.FOREARM_L: 0.2,
@@ -165,15 +165,15 @@ PART_WEIGHT: dict[BodyPart, float] = {  # spec 12: overall health lost per point
     BodyPart.FOOT_L: 0.2,
     BodyPart.FOOT_R: 0.2,
 }
-PART_HEALTH_MAX = 100.0  # spec 12
-OVERALL_DAMAGE_CAP = 100.0  # spec 12
-GENERAL_INFECTION_PER_LEVEL = 10  # spec 12
-GENERAL_INFECTION_CAP = 100.0  # spec 12
+PART_HEALTH_MAX = 100.0  # health
+OVERALL_DAMAGE_CAP = 100.0  # health
+GENERAL_INFECTION_PER_LEVEL = 10  # health
+GENERAL_INFECTION_CAP = 100.0  # health
 
 
 @dataclass
 class PartState:
-    """One body part: its health, open wounds, bandage and infection (spec 12)."""
+    """One body part: its health, open wounds, bandage and infection (health)."""
 
     health: float = PART_HEALTH_MAX
     scratch_time: float = 0.0

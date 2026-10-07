@@ -474,7 +474,7 @@ main {
 .goal-group li + li { margin-top: 0.2rem; }
 .goal-group li::marker { color: var(--ash); }
 
-/* === Screen sizes (docs/25-ui-layout.md): wide 1200px+, medium 861-1199px, narrow 860px and below === */
+/* === Screen sizes (docs/architecture/ui-layout.md): wide 1200px+, medium 861-1199px, narrow 860px and below === */
 .btn.menu, #sheet-button, .sheet-handle { display: none; }
 
 @media (max-width: 1199px) {

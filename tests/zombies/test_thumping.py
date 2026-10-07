@@ -1,4 +1,4 @@
-"""Spec 13: zombies pounding on doors and windows."""
+"""doors: zombies pounding on doors and windows."""
 
 import random
 import statistics
@@ -86,7 +86,7 @@ def minute(loop: ZombieLoop, gm: GameManager, **kwargs):
 
 
 class StartingTests(unittest.TestCase):
-    """Spec 13, Starting: the three animations and the rate."""
+    """doors: Starting: the three animations and the rate."""
 
     def test_the_three_rates_are_1_5_1_40625_and_3_per_minute(self):
         gm = game()
@@ -239,7 +239,7 @@ class StartingTests(unittest.TestCase):
 
 
 class ShutBehindTests(unittest.TestCase):
-    """Spec 13, `MOVE_TO` through a barrier: chasers behind a door the player shut."""
+    """doors: `MOVE_TO` through a barrier: chasers behind a door the player shut."""
 
     def test_every_hunter_left_behind_thumps_whatever_its_gap(self):
         gm = game()
@@ -265,7 +265,7 @@ class ShutBehindTests(unittest.TestCase):
 
 
 class EachThumpTests(unittest.TestCase):
-    """Spec 13, Each thump."""
+    """doors: Each thump."""
 
     def breaking_minute(self, rates: list[float]) -> int | None:
         gm = game()
@@ -373,7 +373,7 @@ class EachThumpTests(unittest.TestCase):
 
 
 class ReleaseTests(unittest.TestCase):
-    """Spec 13, When the way opens."""
+    """doors: When the way opens."""
 
     def test_when_the_door_breaks_with_the_player_at_it_the_thumpers_lunge_at_gap_2(self):
         gm = game()
@@ -431,7 +431,7 @@ class ReleaseTests(unittest.TestCase):
 
 
 class StoppingTests(unittest.TestCase):
-    """Spec 13, Stopping."""
+    """doors: Stopping."""
 
     def test_a_player_sound_from_the_zombies_side_stops_it(self):
         gm = game(BUILDING)
@@ -460,7 +460,7 @@ class StoppingTests(unittest.TestCase):
 
 
 class SoundTests(unittest.TestCase):
-    """Spec 13, Sounds."""
+    """doors: Sounds."""
 
     def test_thumps_make_no_sound_for_the_zombies(self):
         gm = game(HOME)
@@ -497,7 +497,7 @@ class SoundTests(unittest.TestCase):
 
 
 class StressTests(unittest.TestCase):
-    """Spec 13, Stress from sounds."""
+    """doors: Stress from sounds."""
 
     def test_a_thump_at_d_b_4_adds_0_00384_to_the_minutes_stress(self):
         gm = game(HOME)
@@ -525,7 +525,7 @@ class StressTests(unittest.TestCase):
 
 
 class CutOffTests(unittest.TestCase):
-    """Spec 13, Thumping: a zone whose every connection is blocked gains no zombies."""
+    """doors: Thumping: a zone whose every connection is blocked gains no zombies."""
 
     def counts(self, gm: GameManager) -> dict[str, int]:
         counts = {zone_id: 0 for zone_id in gm.world.locations}
@@ -573,7 +573,7 @@ class CutOffTests(unittest.TestCase):
 
 
 class SightTests(unittest.TestCase):
-    """Spec 13, Stopping: a thumper rolls spotting only through glass."""
+    """doors: Stopping: a thumper rolls spotting only through glass."""
 
     def test_behind_a_closed_door_it_cannot_spot_the_player(self):
         gm = game(HOME)

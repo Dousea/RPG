@@ -1,4 +1,4 @@
-"""Spec 10, Memory: the last story goes to the narrator, the last turn to the parser."""
+"""llm-contract: Memory: the last story goes to the narrator, the last turn to the parser."""
 
 import unittest
 

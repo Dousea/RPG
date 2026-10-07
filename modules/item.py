@@ -5,13 +5,13 @@ from modules.character.equipment import AnyCharacterEquipmentSlot, CharacterHold
 from modules.events.modifier import AnyModifier
 from modules.weapon import RangedWeaponType
 
-DEFAULT_EAT_MINUTES = 5  # spec 03
-SCRATCH_DEFENSE_DEFAULT = 0  # spec 05
-BITE_DEFENSE_DEFAULT = 0  # spec 05
-NECK_PROTECTION_DEFAULT = 1.0  # spec 05
-STOMP_POWER_DEFAULT = 1.0  # spec 05
-HEARING_MODIFIER_DEFAULT = 1.0  # spec 05
-CORPSE_SICKNESS_DEFENSE_DEFAULT = 0  # spec 05
+DEFAULT_EAT_MINUTES = 5  # status-effects
+SCRATCH_DEFENSE_DEFAULT = 0  # clothing
+BITE_DEFENSE_DEFAULT = 0  # clothing
+NECK_PROTECTION_DEFAULT = 1.0  # clothing
+STOMP_POWER_DEFAULT = 1.0  # clothing
+HEARING_MODIFIER_DEFAULT = 1.0  # clothing
+CORPSE_SICKNESS_DEFENSE_DEFAULT = 0  # clothing
 
 
 @dataclass
@@ -21,7 +21,7 @@ class BaseItem:
     description: str
     max_hit_points: int
     tags: list[str]
-    weight: float = field(kw_only=True)  # kg, spec 25
+    weight: float = field(kw_only=True)  # kg, carrying-and-loot
 
 
 @dataclass
@@ -35,7 +35,7 @@ class EquippableItem(BaseItem):
 
 @dataclass
 class ContainerItem(EquippableItem):
-    """A bag (spec 25): `capacity` kg of contents, shaved by `weight_reduction` percent while worn or held.
+    """A bag (carrying-and-loot): `capacity` kg of contents, shaved by `weight_reduction` percent while worn or held.
 
     `slots` are the places it can be carried (the shoulders, the left hand); a bag worn at the
     body has a `body_location` instead.
@@ -104,7 +104,7 @@ class AppliableItem(HoldableItem):
 
 @dataclass
 class MedicalItem(HoldableItem):
-    """A bandage, disinfectant, painkiller or antibiotic (spec 12).
+    """A bandage, disinfectant, painkiller or antibiotic (health).
 
     `dirty_version` is the id of the item a spent bandage becomes; `uses` is how
     many times the item can be used before it is gone.
@@ -123,17 +123,17 @@ class MedicalItem(HoldableItem):
 
 @dataclass
 class StackItem(HoldableItem):
-    """A stack of small things such as nails; `uses` is how many a full stack holds (spec 13)."""
+    """A stack of small things such as nails; `uses` is how many a full stack holds (doors)."""
 
     uses: int = 1
-    unit_weight: float = 0.0  # kg of one use (spec 25)
+    unit_weight: float = 0.0  # kg of one use (carrying-and-loot)
 
 
 @dataclass
 class MeleeWeaponItem(HoldableItem):
     """A melee weapon's stats; the runtime `condition` lives on its `ItemEntity`."""
 
-    damage: int  # HP in a fight with an NPC (spec 11)
+    damage: int  # HP in a fight with an NPC (melee)
     min_damage: float
     max_damage: float
     max_range: float

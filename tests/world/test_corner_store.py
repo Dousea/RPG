@@ -1,4 +1,4 @@
-"""The corner store and its shop-front window (spec 13, The shipped barriers; spec 09, Zones)."""
+"""The corner store and its shop-front window (doors: The shipped barriers; zombies: Zones)."""
 
 import json
 import os
@@ -33,7 +33,7 @@ def on_the_street() -> GameManager:
 
 
 class CornerStoreZoneTests(unittest.TestCase):
-    """Spec 09, Zones: the corner store row."""
+    """zombies: Zones: the corner store row."""
 
     def test_the_store_is_an_indoor_one_chunk_zone_reached_only_from_the_street(self):
         store = GameManager().world.locations[STORE]
@@ -45,7 +45,7 @@ class CornerStoreZoneTests(unittest.TestCase):
         self.assertEqual(GameManager().world.locations[STREET].connections["store"], STORE)
 
     def test_the_store_has_no_ground_stock_and_its_shelves_roll_the_shop_tables(self):
-        """Spec 25, The starting kit: the stand-in stock is gone."""
+        """carrying-and-loot: The starting kit: the stand-in stock is gone."""
         gm = GameManager()
         store = gm.world.locations[STORE]
         self.assertEqual([e for e in store.entities if isinstance(e, ItemEntity)], [])
@@ -92,7 +92,7 @@ class CornerStoreZoneTests(unittest.TestCase):
 
 
 class ShopWindowTests(unittest.TestCase):
-    """Spec 13, The shipped barriers: the shop window."""
+    """doors: The shipped barriers: the shop window."""
 
     def test_it_is_a_closed_locked_single_pane_window_between_street_and_store(self):
         barrier = GameManager().world.barriers[WINDOW]

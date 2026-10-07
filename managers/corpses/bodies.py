@@ -1,4 +1,4 @@
-"""Corpses: the dead the outbreak leaves, what a kill leaves, and how bodies rot away (spec 14)."""
+"""Corpses: the dead the outbreak leaves, what a kill leaves, and how bodies rot away (zombie-lifecycle)."""
 
 import logging
 import math

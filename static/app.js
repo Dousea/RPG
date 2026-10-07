@@ -59,7 +59,7 @@ function emptyNote(text) {
     return el('p', 'empty-note', text);
 }
 
-// === Screens and tabs (docs/25-ui-layout.md, Screen sizes) ===
+// === Screens and tabs (docs/architecture/ui-layout.md, Screen sizes) ===
 // A screen shows once the snapshot carries any of its fields, so a screen
 // whose mechanic hasn't landed stays hidden without a code change here.
 const SCREEN_FIELDS = {

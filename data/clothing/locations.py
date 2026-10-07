@@ -1,4 +1,4 @@
-"""Which body locations cannot be worn together (spec 05).
+"""Which body locations cannot be worn together (clothing).
 
 The locations and their layer order are `modules.body.BodyLocation`.
 """
@@ -515,4 +515,4 @@ def _symmetric(
     return {location: frozenset(others) for location, others in both.items()}
 
 
-EXCLUSIVE_LOCATIONS = _symmetric(_EXCLUSIVE_PAIRS)  # spec 05
+EXCLUSIVE_LOCATIONS = _symmetric(_EXCLUSIVE_PAIRS)  # clothing

@@ -18,7 +18,7 @@ from tests.support import adjust_regard, npc_of, resolve_actions
 
 
 class WorldSeedTests(unittest.TestCase):
-    """Spec 04, The world seed: tests get one fixed seed, so weather is reproducible."""
+    """weather: The world seed: tests get one fixed seed, so weather is reproducible."""
 
     def test_every_test_game_has_the_same_seed(self):
         self.assertEqual(GameManager().world.seed, GameManager().world.seed)
@@ -34,7 +34,7 @@ def _at(day: int, hour: int, minute: int) -> GameManager:
 
 
 class ClockTests(unittest.TestCase):
-    """Spec 01, The clock."""
+    """clock: The clock."""
 
     def test_minutes_zero_is_day_one_0800(self):
         gm = GameManager()

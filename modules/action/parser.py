@@ -356,7 +356,7 @@ TALK_APPROACH_LABELS = (
 )
 ASK_REQUEST_LABELS = ("follow", "stay", "give", "about")
 GOAL_HORIZON_LABELS = ("short_term", "long_term")
-TALK_TURN_MINUTES = 5  # spec 10: one cost per turn, shared by TALK, ASK and GIVE
+TALK_TURN_MINUTES = 5  # llm-contract: one cost per turn, shared by TALK, ASK and GIVE
 
 
 def _parse_talk(args: str) -> TalkAction:

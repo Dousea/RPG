@@ -25,9 +25,9 @@ class StanceAction:
 
 @dataclass
 class TakeAction:
-    """Pick an item up off the ground, or take it from a searched corpse (spec 14) or a carried bag.
+    """Pick an item up off the ground, or take it from a searched corpse (zombie-lifecycle) or a carried bag.
 
-    `all_items` takes everything the source holds as one action (spec 25).
+    `all_items` takes everything the source holds as one action (carrying-and-loot).
     """
 
     verb: ClassVar[str] = "TAKE"
@@ -38,7 +38,7 @@ class TakeAction:
 
 @dataclass
 class PutAction:
-    """Move a carried item into a carried bag (spec 25)."""
+    """Move a carried item into a carried bag (carrying-and-loot)."""
 
     verb: ClassVar[str] = "PUT"
     item_name: str
@@ -47,7 +47,7 @@ class PutAction:
 
 @dataclass
 class CarryAction:
-    """Pick up a body and carry it (spec 25)."""
+    """Pick up a body and carry it (carrying-and-loot)."""
 
     verb: ClassVar[str] = "CARRY"
     corpse_name: str
@@ -55,7 +55,7 @@ class CarryAction:
 
 @dataclass
 class SearchAction:
-    """Go through a corpse's pockets and clothes (spec 14)."""
+    """Go through a corpse's pockets and clothes (zombie-lifecycle)."""
 
     verb: ClassVar[str] = "SEARCH"
     target_name: str
@@ -63,7 +63,7 @@ class SearchAction:
 
 @dataclass
 class DropAction:
-    """Put a carried item on the ground, or the body in the player's arms when `corpse` (spec 25)."""
+    """Put a carried item on the ground, or the body in the player's arms when `corpse` (carrying-and-loot)."""
 
     verb: ClassVar[str] = "DROP"
     item_name: str
@@ -90,7 +90,7 @@ class AttackAction:
 
 @dataclass
 class ShoveAction:
-    """One shove at a zombie, bare-handed whatever is held (spec 11)."""
+    """One shove at a zombie, bare-handed whatever is held (melee)."""
 
     verb: ClassVar[str] = "SHOVE"
     target_name: str
@@ -98,7 +98,7 @@ class ShoveAction:
 
 @dataclass
 class OpenAction:
-    """Open a door or window of the player's zone (spec 13)."""
+    """Open a door or window of the player's zone (doors)."""
 
     verb: ClassVar[str] = "OPEN"
     barrier_name: str
@@ -112,7 +112,7 @@ class CloseAction:
 
 @dataclass
 class BarricadeAction:
-    """Nail one plank across a door or window on the player's side (spec 13)."""
+    """Nail one plank across a door or window on the player's side (doors)."""
 
     verb: ClassVar[str] = "BARRICADE"
     barrier_name: str
@@ -120,7 +120,7 @@ class BarricadeAction:
 
 @dataclass
 class UnbarricadeAction:
-    """Pry the outermost plank off the player's side (spec 13)."""
+    """Pry the outermost plank off the player's side (doors)."""
 
     verb: ClassVar[str] = "UNBARRICADE"
     barrier_name: str

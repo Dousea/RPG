@@ -1,4 +1,4 @@
-"""Spec 09, Noise and Hearing."""
+"""zombies: Noise and Hearing."""
 
 import random
 import unittest
@@ -32,7 +32,7 @@ def sample(rain: float = 0.0, fog: float = 0.0) -> WeatherSample:
 
 
 class FootstepTests(unittest.TestCase):
-    """Spec 09, Noise: footstep radius and volume for a default character."""
+    """zombies: Noise: footstep radius and volume for a default character."""
 
     def setUp(self):
         self.player = GameManager().player
@@ -92,7 +92,7 @@ class FootstepTests(unittest.TestCase):
 
 
 class HearingTests(unittest.TestCase):
-    """Spec 09, Hearing: radius, weather, zones and the poor-hearing factor."""
+    """zombies: Hearing: radius, weather, zones and the poor-hearing factor."""
 
     def setUp(self):
         rng = random.Random(0)

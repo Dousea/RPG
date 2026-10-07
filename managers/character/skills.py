@@ -1,4 +1,4 @@
-"""Skill XP: gains and losses, levels, the loss timers and the trait swap (spec 08)."""
+"""Skill XP: gains and losses, levels, the loss timers and the trait swap (skills)."""
 
 import math
 from collections.abc import Mapping

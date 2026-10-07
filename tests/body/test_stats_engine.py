@@ -1,4 +1,4 @@
-"""Spec 02, Drivers while awake, Sleep, Health loss from status effects, Layout."""
+"""survival-stats: Drivers while awake, Sleep, Health loss from status effects, Layout."""
 
 import unittest
 
@@ -21,7 +21,7 @@ def run(player, minutes, **ctx_fields):
 
 
 class StatusEffectLevelTests(unittest.TestCase):
-    """Spec 03, Status effects (the level function the engine reads)."""
+    """status-effects: Status effects (the level function the engine reads)."""
 
     def test_thresholds_are_strict(self):
         self.assertEqual(status_effect_level(StatusEffect.HUNGRY, 0.15), 0)
@@ -35,7 +35,7 @@ class StatusEffectLevelTests(unittest.TestCase):
 
 
 class AwakeDriverTests(unittest.TestCase):
-    """Spec 02, Drivers while awake: one hand-computed hour per driver."""
+    """survival-stats: Drivers while awake: one hand-computed hour per driver."""
 
     def test_hunger_fasted(self):
         player = make_player()
@@ -256,7 +256,7 @@ class AwakeDriverTests(unittest.TestCase):
 
 
 class ScenarioTests(unittest.TestCase):
-    """Spec 02, Testing: the success criteria."""
+    """survival-stats: Testing: the success criteria."""
 
     def _first_level(self, player, status_effect, minutes_limit, ctx, level=1):
         engine = StatsEngine(default_drivers())
@@ -284,7 +284,7 @@ class ScenarioTests(unittest.TestCase):
 
 
 class SleepTests(unittest.TestCase):
-    """Spec 02, Sleep."""
+    """survival-stats: Sleep."""
 
     def test_the_bed_table(self):
         self.assertEqual(
@@ -355,7 +355,7 @@ class SleepTests(unittest.TestCase):
 
 
 class EngineTests(unittest.TestCase):
-    """Spec 02, Layout; spec 03, Status effects (level-change facts, the well-fed timer)."""
+    """survival-stats: Layout; status-effects: Status effects (level-change facts, the well-fed timer)."""
 
     def test_advance_600_matches_ten_advance_60(self):
         one, many = make_player(), make_player()
@@ -428,7 +428,7 @@ if __name__ == "__main__":
 
 
 class TraitFactorTests(unittest.TestCase):
-    """Spec 07, Traits with an effect now."""
+    """character-creation: Traits with an effect now."""
 
     @staticmethod
     def after(setup, minutes, traits, **ctx):

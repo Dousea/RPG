@@ -1,4 +1,4 @@
-"""Things an NPC can tell the player when asked (spec 10, Topics)."""
+"""Things an NPC can tell the player when asked (llm-contract: Topics)."""
 
 from dataclasses import dataclass
 
@@ -19,7 +19,7 @@ class Topic:
     discovers: str | None
 
 
-TOPICS: dict[str, Topic] = {  # spec 10
+TOPICS: dict[str, Topic] = {  # llm-contract
     "outbreak_news": Topic(
         topic_id="outbreak_news",
         npc_id="npc_jen",

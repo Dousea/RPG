@@ -13,7 +13,7 @@ def _date(day_offset: int) -> datetime.date:
 
 
 class SeasonModelTest(unittest.TestCase):
-    """Spec 04, Configuration: seasonal curves."""
+    """weather: Configuration: seasonal curves."""
 
     def setUp(self):
         self.season = SEASON_MODEL
@@ -48,7 +48,7 @@ class SeasonModelTest(unittest.TestCase):
 
 
 class SeasonValuesTest(unittest.TestCase):
-    """Spec 04, Configuration: pinned numbers."""
+    """weather: Configuration: pinned numbers."""
 
     def test_monthly_rain_table(self):
         from data.world.climate import MONTHLY_RAIN
@@ -91,7 +91,7 @@ class SeasonValuesTest(unittest.TestCase):
 
 
 class PeriodSeedTest(unittest.TestCase):
-    """Spec 04, The world seed."""
+    """weather: The world seed."""
 
     def test_one_october_2023(self):
         seed = period_seed(2023, 9, 1, 100, 300)
@@ -112,7 +112,7 @@ def _first_flip_hour(engine: ClimateEngine) -> int:
 
 
 class SamplingTest(unittest.TestCase):
-    """Spec 04, Components: pure sampling from seed and clock."""
+    """weather: Components: pure sampling from seed and clock."""
 
     def test_same_seed_and_clock_give_identical_samples(self):
         a, b = _engine(7), _engine(7)
@@ -150,7 +150,7 @@ class SamplingTest(unittest.TestCase):
 
 
 class FrontTest(unittest.TestCase):
-    """Spec 04, Components: the hourly front check."""
+    """weather: Components: the hourly front check."""
 
     def test_sign_flip_starts_exactly_one_period(self):
         engine = _engine()
@@ -207,7 +207,7 @@ class FrontTest(unittest.TestCase):
 
 
 class SnowTest(unittest.TestCase):
-    """Spec 04, Edge cases: snow follows the air temperature alone."""
+    """weather: Edge cases: snow follows the air temperature alone."""
 
     def _sample_at(self, celsius: float, raining: bool):
         from unittest import mock
@@ -241,7 +241,7 @@ class SnowTest(unittest.TestCase):
 
 
 class RainShareTest(unittest.TestCase):
-    """Spec 04, Configuration: rainy hours per month track the monthly table."""
+    """weather: Configuration: rainy hours per month track the monthly table."""
 
     def test_monthly_rainy_share_tracks_the_table(self):
         table = (0.39, 0.35, 0.39, 0.40, 0.35, 0.37, 0.29, 0.26, 0.23, 0.23, 0.30, 0.32)
@@ -261,7 +261,7 @@ class RainShareTest(unittest.TestCase):
 
 
 class NoiseValuesTest(unittest.TestCase):
-    """Spec 04, Components: which offset and scale feeds which value."""
+    """weather: Components: which offset and scale feeds which value."""
 
     def setUp(self):
         from modules.world import simplex
@@ -299,7 +299,7 @@ class NoiseValuesTest(unittest.TestCase):
 
 
 class StageSamplingTest(unittest.TestCase):
-    """Spec 04, Components: a stage's values reach the sample."""
+    """weather: Components: a stage's values reach the sample."""
 
     def test_stage_boundaries(self):
         period = _engine().start_period(10, 0.5)
@@ -341,7 +341,7 @@ class StageSamplingTest(unittest.TestCase):
 
 
 class ExactSamplingTest(unittest.TestCase):
-    """Spec 04, Components: stage jitter, fog by date, the wind floor and front strength."""
+    """weather: Components: stage jitter, fog by date, the wind floor and front strength."""
 
     def test_jitter_scales_precipitation_and_wind_below_the_template(self):
         period = _engine().start_period(5, 0.5)
@@ -389,7 +389,7 @@ class ExactSamplingTest(unittest.TestCase):
 
 
 class FrontStrengthTest(unittest.TestCase):
-    """Spec 04, Components: front strength and stage tiers."""
+    """weather: Components: front strength and stage tiers."""
 
     def test_strength_is_the_air_mass_slope_times_eighty(self):
         engine = _engine()
@@ -430,7 +430,7 @@ class FrontStrengthTest(unittest.TestCase):
 
 
 class FogAndDaylightTest(unittest.TestCase):
-    """Spec 04, Configuration: fog and daylight shapes."""
+    """weather: Configuration: fog and daylight shapes."""
 
     def setUp(self):
         self.values = _engine().values
@@ -464,7 +464,7 @@ class FogAndDaylightTest(unittest.TestCase):
 
 
 class IndoorsTest(unittest.TestCase):
-    """Spec 04, Indoors and outdoors."""
+    """weather: Indoors and outdoors."""
 
     def test_zones_match_the_table(self):
         from data.world.locations import build_starting_locations
@@ -489,7 +489,7 @@ class IndoorsTest(unittest.TestCase):
 
 
 class WorldSeedTest(unittest.TestCase):
-    """Spec 04, The world seed."""
+    """weather: The world seed."""
 
     def test_new_game_draws_a_seed_and_builds_its_climate(self):
         from managers.game import GameManager, fresh_world_seed
@@ -518,7 +518,7 @@ class WorldSeedTest(unittest.TestCase):
 
 
 class FeltAirTest(unittest.TestCase):
-    """Spec 06, Air temperature felt."""
+    """body-temperature: Air temperature felt."""
 
     def felt(self, temperature, *, indoors=True, floor=0, power_on=False, daylight=0.0):
         from managers.world.climate import felt_air_temperature

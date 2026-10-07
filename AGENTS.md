@@ -30,19 +30,22 @@ not the contract.
 
 ## Mechanics and domains
 
-A rule's tracked definition is `docs/mechanics/NN-*.md`; "spec NN" in code and
-tests means that file, and its numbers win over code comments.
+A game rule's definition is `docs/mechanics/<id>.md`, and its numbers win
+over code comments. Code cites a mechanic by its id (`ROT_HOURS = 72  #
+zombie-lifecycle`), never by a number. How the system is built is in
+`docs/architecture/`; `docs/design/` is intent that is not built. A fact lives
+in one doc; the others point to it.
 
 | Domain | Mechanics | Logic |
 | --- | --- | --- |
-| world | 01 clock, 04 weather, 13 doors, 25 rooms | `managers/world/` |
-| body | 02 stats, 03 status effects, 06 temperature, 12 health | `managers/body/` |
-| clothing | 05 | `data/clothing/`, `managers/simulation.py` |
-| character | 07 creation, 08 skills | `managers/character/` |
-| zombies, corpses | 09 zombies, 14 lifecycle | `managers/zombies/`, `managers/corpses/` |
-| combat | 11 melee | `managers/combat/` |
-| loot, carry | 25 | `managers/world/containers.py`, `managers/carry.py` |
-| story | 10 LLM contract | `managers/story/`, `adapters/llm.py` |
+| world | `clock`, `weather`, `doors`, `carrying-and-loot` (rooms) | `managers/world/` |
+| body | `survival-stats`, `status-effects`, `body-temperature`, `health` | `managers/body/` |
+| clothing | `clothing` | `data/clothing/`, `managers/simulation.py` |
+| character | `character-creation`, `skills` | `managers/character/` |
+| zombies, corpses | `zombies`, `zombie-lifecycle` | `managers/zombies/`, `managers/corpses/` |
+| combat | `melee` | `managers/combat/` |
+| loot, carry | `carrying-and-loot` | `managers/world/containers.py`, `managers/carry.py` |
+| story | `llm-contract` | `managers/story/`, `adapters/llm.py` |
 
 `data/zombies/{clothing,outfits,loot}.py` and `data/loot/tables.py` are
 generated: change the generator's output, not the file by hand.
@@ -107,9 +110,9 @@ never contain numbers (HP, damage, odds). See `docs/architecture/engine-authorit
   repaired data. Ruff bans `print`.
 - **Saves:** no save migration: a change to saved state bumps
   `SCHEMA_VERSION` (`adapters/save/codec.py`) and old saves are discarded.
-- **Tests:** a test for a spec'd mechanic names the spec and section in its
-  class docstring (`"""`arm-injuries`, The arm pain divisor."""`) and asserts the
-  spec's numbers. Tests stay offline: the LLM and the embedding model
+- **Tests:** a test for a mechanic names its id and section in the class
+  docstring (`"""arm-injuries: The arm pain divisor."""`) and asserts the
+  mechanic's numbers. Tests stay offline: the LLM and the embedding model
   are stubbed (`tests/support.py`). Tests ignore `config.yml`
   (`tests/__init__.py` points `RPG_CONFIG` at `/dev/null`) and fix the world
   seed to 1. `mise run test` runs each test module in its own process, so no

@@ -1,4 +1,4 @@
-"""Spec 07, Starting outfit: the default, occupation and trait clothing lists, row by row."""
+"""character-creation: Starting outfit: the default, occupation and trait clothing lists, row by row."""
 
 import random
 import unittest
@@ -392,7 +392,7 @@ def _plain(clothing):
 
 
 class ClothingListRowTests(unittest.TestCase):
-    """Spec 07, Starting outfit."""
+    """character-creation: Starting outfit."""
 
     def test_default_lists(self):
         self.assertEqual(_plain(DEFAULT_CLOTHING), EXPECTED_DEFAULT)
@@ -444,7 +444,7 @@ class ClothingListRowTests(unittest.TestCase):
 
 
 class ClothingStatRowTests(unittest.TestCase):
-    """Spec 07, Starting outfit: new clothes carry their own stats (spec 05)."""
+    """character-creation: Starting outfit: new clothes carry their own stats (clothing)."""
 
     def _stats(self, item_id):
         item = ITEMS[item_id]
@@ -494,7 +494,7 @@ STARTING_LOCATION = {
 
 
 class RandomOutfitRollTests(unittest.TestCase):
-    """Spec 07, Starting outfit: random dressing rolls each list in turn, later wins."""
+    """character-creation: Starting outfit: random dressing rolls each list in turn, later wins."""
 
     def test_occupation_list_at_100_always_replaces_the_default_pick(self):
         firefighter_tops = set(

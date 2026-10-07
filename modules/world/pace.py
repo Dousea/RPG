@@ -1,4 +1,4 @@
-"""How fast the player is moving (spec 09)."""
+"""How fast the player is moving (zombies)."""
 
 from enum import StrEnum
 

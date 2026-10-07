@@ -1,4 +1,4 @@
-"""The state questions built from a turn's facts (Spec 10, The fact check)."""
+"""The state questions built from a turn's facts (llm-contract: The fact check)."""
 
 import logging
 import unittest
@@ -27,7 +27,7 @@ def zombie(zombie_id: str) -> ZombieEntity:
 
 
 class BuildQuestionsTests(unittest.TestCase):
-    """Spec 10, The fact check."""
+    """llm-contract: The fact check."""
 
     def setUp(self):
         self.manager = GameManager()

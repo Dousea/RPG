@@ -1,4 +1,4 @@
-"""Spec 11, Weapons and spec 12, Items: the catalogue's stats."""
+"""melee: Weapons and health: Items: the catalogue's stats."""
 
 import unittest
 
@@ -29,7 +29,7 @@ def ground_ids(zone_id: str) -> list[str]:
 
 
 class WeaponCatalogueTests(unittest.TestCase):
-    """Spec 11, Weapons: the catalogue and its per-weapon fields."""
+    """melee: Weapons: the catalogue and its per-weapon fields."""
 
     def test_the_crowbar(self):
         crowbar = weapon("item_crowbar")
@@ -157,7 +157,7 @@ def medical(item_id: str) -> MedicalItem:
 
 
 class MedicalCatalogueTests(unittest.TestCase):
-    """Spec 12, Items."""
+    """health: Items."""
 
     def test_there_are_eleven_medical_items(self):
         self.assertEqual(sum(isinstance(item, MedicalItem) for item in ITEMS.values()), 11)
@@ -217,7 +217,7 @@ class MedicalCatalogueTests(unittest.TestCase):
 
 
 class BarrierItemTests(unittest.TestCase):
-    """Spec 13, Items."""
+    """doors: Items."""
 
     def test_the_hammer_has_its_catalogue_stats(self):
         hammer = ITEMS["item_hammer"]
@@ -273,7 +273,7 @@ class BarrierItemTests(unittest.TestCase):
 
 
 class CarryWeightTests(unittest.TestCase):
-    """Spec 25, Weight: every item has its script weight."""
+    """carrying-and-loot: Weight: every item has its script weight."""
 
     def test_the_existing_items_weigh_what_the_spec_lists(self):
         expected = {
@@ -324,7 +324,7 @@ class CarryWeightTests(unittest.TestCase):
 
 
 class BagCatalogueTests(unittest.TestCase):
-    """Spec 25, Bags: the bag rows."""
+    """carrying-and-loot: Bags: the bag rows."""
 
     ROWS = {
         "item_schoolbag": (15, 70, 1.0, None),

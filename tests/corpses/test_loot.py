@@ -1,4 +1,4 @@
-"""Spec 14, Searching and looting: SEARCH, TAKE ... from a corpse and the pocket tables."""
+"""zombie-lifecycle: Searching and looting: SEARCH, TAKE ... from a corpse and the pocket tables."""
 
 import random
 import unittest
@@ -55,7 +55,7 @@ def minutes_of(gm: GameManager, *actions, rng=None) -> tuple[int, list[str]]:
 
 
 class ParsingTests(unittest.TestCase):
-    """Spec 14, Searching and looting: the verbs."""
+    """zombie-lifecycle: Searching and looting: the verbs."""
 
     def test_search_takes_a_corpse(self):
         self.assertEqual(parse_action_line("SEARCH c3"), SearchAction(target_name="c3"))
@@ -77,7 +77,7 @@ class ParsingTests(unittest.TestCase):
 
 
 class PocketChanceTests(unittest.TestCase):
-    """Spec 14, Zombie loot (p = chance x modifier / 100); spec 25, Rooms (a corpse container holds 12 kg)."""
+    """zombie-lifecycle: Zombie loot (p = chance x modifier / 100); carrying-and-loot: Rooms (a corpse container holds 12 kg)."""
 
     def test_the_chance_is_the_table_chance_times_the_modifier_over_a_hundred(self):
         cases = {
@@ -176,7 +176,7 @@ class PocketChanceTests(unittest.TestCase):
 
 
 class SearchTests(unittest.TestCase):
-    """Spec 14, `SEARCH <corpse>`."""
+    """zombie-lifecycle: `SEARCH <corpse>`."""
 
     def test_a_search_costs_a_minute_and_names_what_the_body_holds(self):
         gm, corpse = with_body("item_jacket_police", "item_kitchen_knife")
@@ -249,7 +249,7 @@ class SearchTests(unittest.TestCase):
 
 
 class TakeFromTests(unittest.TestCase):
-    """Spec 14, `TAKE <item> from <corpse>`."""
+    """zombie-lifecycle: `TAKE <item> from <corpse>`."""
 
     def searched(self, *item_ids: str) -> tuple[GameManager, CorpseEntity]:
         gm, corpse = with_body(*item_ids, searched=True)

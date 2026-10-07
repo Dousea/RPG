@@ -30,14 +30,14 @@ class NpcEntity(BaseEntity):
     # Orton could plausibly infer from behavior.
     goals: list[str] = field(default_factory=list[str])
     # Fact-ids/topics this NPC currently knows. Deliberately never rendered
-    # into a prompt wholesale -- doc 11's knowledge firewall means this exists
+    # into a prompt wholesale -- the knowledge firewall means this exists
     # to gate what an NPC can truthfully say (a future dialogue system's
     # job), not to be read out directly.
     knowledge: set[str] = field(default_factory=set[str])
     conditions: list[CharacterCondition] = field(default_factory=list[CharacterCondition])
     inventory: list[ItemEntity] = field(default_factory=list[ItemEntity])
     base_max_hit_points: int = 100
-    # Walks with the player: arrives with them whenever they change zone (spec 10).
+    # Walks with the player: arrives with them whenever they change zone (llm-contract).
     following: bool = False
 
     @property

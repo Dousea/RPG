@@ -1,4 +1,4 @@
-"""Skills: what a skill is and the XP and level a character holds in it (spec 08)."""
+"""Skills: what a skill is and the XP and level a character holds in it (skills)."""
 
 from dataclasses import dataclass
 

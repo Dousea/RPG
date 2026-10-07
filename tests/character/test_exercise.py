@@ -1,4 +1,4 @@
-"""Spec 08, Exercise: reps, regularity, stiffness, refusals and the starting regularity."""
+"""skills: Exercise: reps, regularity, stiffness, refusals and the starting regularity."""
 
 import random
 import unittest
@@ -39,7 +39,7 @@ def make_player(**kwargs) -> PlayerEntity:
 
 
 class TimingTests(unittest.TestCase):
-    """Spec 08, Timing."""
+    """skills: Timing."""
 
     def test_speed_at_fitness_five_is_a_tenth_below_one_over_one_point_one(self):
         self.assertAlmostEqual(rep_speed(5, 0), 0.9090909, places=6)
@@ -62,7 +62,7 @@ class TimingTests(unittest.TestCase):
 
 
 class HeavyLoadRepTests(unittest.TestCase):
-    """Spec 25, What Heavy Load does: a rep costs x(1 + level / 3) endurance, integer division."""
+    """carrying-and-loot: What Heavy Load does: a rep costs x(1 + level / 3) endurance, integer division."""
 
     def cost(self, *item_ids: str) -> float:
         player = make_player()
@@ -81,7 +81,7 @@ class HeavyLoadRepTests(unittest.TestCase):
 
 
 class EachRepTests(unittest.TestCase):
-    """Spec 08, Each rep."""
+    """skills: Each rep."""
 
     def setUp(self):
         self.engine = ExerciseEngine(SkillEngine())
@@ -209,7 +209,7 @@ def game_with(*item_ids: str) -> GameManager:
 
 
 class ExerciseVerbTests(unittest.TestCase):
-    """Spec 08, Exercise: the verb and its minutes."""
+    """skills: Exercise: the verb and its minutes."""
 
     def test_the_parser_reads_a_name_and_minutes(self):
         self.assertEqual(
@@ -280,7 +280,7 @@ class ExerciseVerbTests(unittest.TestCase):
 
 
 class ExerciseRunTests(unittest.TestCase):
-    """Spec 08, Stopping and refusing, and Each rep, through the simulation."""
+    """skills: Stopping and refusing, and Each rep, through the simulation."""
 
     def run_exercise(self, gm: GameManager, name: str, minutes: int) -> list[str]:
         return simulate(gm, ExerciseAction(exercise_name=name, minutes=minutes))
@@ -342,7 +342,7 @@ class ExerciseRunTests(unittest.TestCase):
 
 
 class OverTimeTests(unittest.TestCase):
-    """Spec 08, Regularity and stiffness over time."""
+    """skills: Regularity and stiffness over time."""
 
     def setUp(self):
         self.engine = ExerciseEngine(SkillEngine())
@@ -431,7 +431,7 @@ class OverTimeTests(unittest.TestCase):
 
 
 class StartingRegularityTests(unittest.TestCase):
-    """Spec 08, Regularity and stiffness over time: starting regularity."""
+    """skills: Regularity and stiffness over time: starting regularity."""
 
     def test_most_occupations_start_at_zero_for_every_exercise(self):
         regularity = starting_regularity("unemployed", 123)
@@ -484,7 +484,7 @@ class StartingRegularityTests(unittest.TestCase):
 
 
 class ExerciseTimeCostTests(unittest.TestCase):
-    """Spec 08, Exercise: the EXERCISE time cost row is the chosen or the run minutes."""
+    """skills: Exercise: the EXERCISE time cost row is the chosen or the run minutes."""
 
     def test_the_row_exists(self):
         self.assertIn(ExerciseAction, time_cost_k.TIME_COSTS)
