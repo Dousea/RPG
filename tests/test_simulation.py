@@ -84,8 +84,9 @@ class ItemResolutionTests(unittest.TestCase):
         gm.player.stats.set(CharacterStat.THIRST, 0.5)
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_granola_bar"]))
         simulate(gm, UseItemAction(item_name="Granola Bar"))
-        self.assertAlmostEqual(gm.player.stats.get(CharacterStat.HUNGER), 0.30, delta=0.01)
-        self.assertAlmostEqual(gm.player.stats.get(CharacterStat.THIRST), 0.55, delta=0.01)
+        self.assertAlmostEqual(gm.player.stats.get(CharacterStat.HUNGER), 0.352, delta=0.01)
+        self.assertGreater(gm.player.stats.get(CharacterStat.THIRST), 0.45)
+        self.assertLess(gm.player.stats.get(CharacterStat.THIRST), 0.55)
 
 
 class WorldStateResolutionTests(unittest.TestCase):

@@ -197,15 +197,8 @@ def level_change_fact_texts(name: str) -> frozenset[str]:
 
 
 def alcohol_intoxication(item: ConsumableItem, hunger: float) -> float:
-    """Intoxication one alcoholic item adds when drunk at the given hunger."""
-    portion = (
-        status_effects.ALCOHOL_WHOLE_ITEM_PORTION
-        if item.hunger_change
-        else status_effects.ALCOHOL_PARTIAL_PORTION
-    )
-    amount = status_effects.ALCOHOL_INTOXICATION_PER_PORTION * portion
-    if item.low_alcohol:
-        amount *= status_effects.ALCOHOL_LOW_MULT
+    """Intoxication a drink adds, given hunger after the drink's own hunger change."""
+    amount = status_effects.ALCOHOL_INTOXICATION_PER_UNIT * item.alcohol
     if hunger > status_effects.ALCOHOL_HUNGER_HIGH:
         amount *= status_effects.ALCOHOL_HUNGER_HIGH_MULT
     elif hunger > status_effects.ALCOHOL_HUNGER_MID:

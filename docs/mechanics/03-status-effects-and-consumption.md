@@ -91,21 +91,20 @@ portions are not modelled.
 | `unhappy_change` | points | added to unhappiness |
 | `boredom_change` | points | added to boredom |
 | `stress_change` | stress (0-1 scale) | added to stress |
-| `alcoholic` | bool | adds intoxication |
-| `low_alcohol` | bool | weak drink, quarter strength |
+| `alcohol` | float | alcohol strength of the drink times its litres; 0 for none |
 | `cooked` | bool | doubles the well-fed gain |
 | `eat_minutes` | minutes | time cost, default 5 |
 
-Shipped items:
+### Item values
 
-| Item | hunger_change | thirst_change |
-| --- | --- | --- |
-| Canned Beans | −0.35 | −0.05 |
-| Water Bottle | 0 | −0.45 |
-| Granola Bar | −0.20 | +0.05 |
-| Instant Noodles | −0.40 | +0.10 |
+| Item | hunger_change | thirst_change | unhappy_change |
+| --- | --- | --- | --- |
+| Canned Beans | −0.24 | 0 | +10 |
+| Water Bottle (a litre) | 0 | −0.50 | 0 |
+| Granola Bar | −0.15 | 0 | 0 |
+| Instant Noodles | −0.10 | +0.40 | +20 |
 
-None is alcoholic or cooked. Eating takes 5 minutes each.
+The noodles make the player thirstier. None has alcohol or is cooked. Eating takes 5 minutes each.
 
 ### Consuming
 
@@ -116,19 +115,22 @@ range.
 - **No instant healing.** Food does not restore HP. The canned beans have no
   HP modifier, and no item heals directly; health comes back only through the
   [body](12-health-and-infection.md#healing).
-- **Well-fed timer** (`player.food_eaten_timer`): gains
-  `|hunger_change| × 13000`, doubled if cooked, capped at 11000. It drains at
-  10800 per game hour while time passes, including while eating. It drives the
-  Food Eaten status effect and switches the hunger driver to its well-fed branch. An
-  apple (−0.16) adds 2080. Eating while well fed stacks up to the cap.
-- **Alcohol:** intoxication rises by `400 × portion`. The portion is 2 for a
-  whole item with a hunger change and 1 for one without. A `low_alcohol` item
-  counts a quarter. It counts ×1.25 if hunger is above 0.8, otherwise ×1.1 if
-  hunger is above 0.6 (hunger as it was before the meal). A whole item at hunger
-  above 0.8 adds 1000 and one with no hunger change adds 500, before intoxication
-  clamps at 100.
+- **Well-fed timer** (`player.food_eaten_timer`):
+  - Food: only when hunger is 0 after the item's hunger change, it gains
+    `|hunger_change| × 13000`, doubled if cooked, capped at 11000. Eating while
+    still hungry adds nothing. Beans eaten at hunger 0.2 add 3120.
+  - Drinks (items tagged `drink`): add `|hunger_change| × 13000` every time,
+    with no hunger test and no cap.
+  - It drains at 10800 per game hour while time passes, including while eating.
+    It drives the Food Eaten status effect and switches the hunger driver to
+    its well-fed branch.
+- **Alcohol:** see [Alcohol](#alcohol).
 - **Time:** the action costs the item's `eat_minutes`.
 - **Water** is a drink with a `thirst_change` only.
+
+### Alcohol
+
+Intoxication rises by `400 × alcohol × m`, clamped to 100. Hunger is read after the drink's own hunger change. `m` is 1.1 if hunger is above 0.8, otherwise 1.25 if hunger is above 0.6, otherwise 1. A drink with `alcohol` 0.015 and hunger −0.03 adds 6.0 at hunger 0.5 after the drink, 7.5 at 0.7 and 6.6 at 0.9. No shipped item has alcohol.
 
 ## What the narrator and the player see
 
@@ -153,7 +155,7 @@ range.
 
 ## Saves
 
-`SCHEMA_VERSION` is 6. The player saves `food_eaten_timer`. Older saves are
+`SCHEMA_VERSION` is 18. The player saves `food_eaten_timer`. Older saves are
 discarded.
 
 ## Testing

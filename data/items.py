@@ -263,13 +263,13 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        hunger_change=-0.35,
-        thirst_change=-0.05,
+        hunger_change=-0.24,  # spec 03
+        unhappy_change=10,  # spec 03
     ),
     "item_water_bottle": ConsumableItem(
         id="item_water_bottle",
         name="Water Bottle",
-        description="Half a litre of tap water in a scratched plastic bottle.",
+        description="A litre of tap water in a scratched plastic bottle.",
         max_hit_points=5,
         tags=["drink", "consumable", "water"],
         slots=[
@@ -278,7 +278,7 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        thirst_change=-0.45,
+        thirst_change=-0.50,  # spec 03
     ),
     "item_granola_bar": ConsumableItem(
         id="item_granola_bar",
@@ -292,9 +292,7 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        hunger_change=-0.20,
-        # Dry food costs water: it makes the water bottle worth carrying.
-        thirst_change=0.05,
+        hunger_change=-0.15,  # spec 03
     ),
     "item_instant_noodles": ConsumableItem(
         id="item_instant_noodles",
@@ -308,8 +306,9 @@ ITEMS: dict[str, BaseItem] = {
         ],
         is_two_handed=False,
         modifiers=[],
-        hunger_change=-0.40,
-        thirst_change=0.10,
+        hunger_change=-0.10,  # spec 03
+        thirst_change=0.40,  # spec 03
+        unhappy_change=20,  # spec 03
     ),
     "item_barbell": HoldableItem(
         id="item_barbell",

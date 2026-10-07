@@ -892,27 +892,32 @@ class SimulationCore:
         return " ".join([lead, *consume_facts])
 
     def _consume(self, item: ConsumableItem) -> list[str]:
-        """Apply every food field once, feed the well-fed timer and add alcohol.
+        """Apply every food field once, feed the well-fed timer and add alcohol (spec 03).
 
         Returns the facts for status effects whose level the meal changed.
         """
         player = self.manager.player
         stats = player.stats
         before = player_status_effect_levels(player)
-        if item.alcoholic:
-            stats.add(
-                CharacterStat.INTOXICATION,
-                alcohol_intoxication(item, stats.get(CharacterStat.HUNGER)),
-            )
         stats.add(CharacterStat.HUNGER, item.hunger_change)
         stats.add(CharacterStat.THIRST, item.thirst_change)
         stats.add(CharacterStat.UNHAPPINESS, item.unhappy_change)
         stats.add(CharacterStat.BOREDOM, item.boredom_change)
         stats.add(CharacterStat.STRESS, item.stress_change)
         fed = abs(item.hunger_change) * status_effects.FOOD_EATEN_PER_HUNGER
-        if item.cooked:
-            fed *= status_effects.FOOD_EATEN_COOKED_MULT
-        player.food_eaten_timer = min(status_effects.FOOD_EATEN_CAP, player.food_eaten_timer + fed)
+        if "drink" in item.tags:
+            player.food_eaten_timer += fed
+        elif stats.get(CharacterStat.HUNGER) == 0:
+            if item.cooked:
+                fed *= status_effects.FOOD_EATEN_COOKED_MULT
+            player.food_eaten_timer = min(
+                status_effects.FOOD_EATEN_CAP, player.food_eaten_timer + fed
+            )
+        if item.alcohol:
+            stats.add(
+                CharacterStat.INTOXICATION,
+                alcohol_intoxication(item, stats.get(CharacterStat.HUNGER)),
+            )
         return level_change_facts(self._name, before, player_status_effect_levels(player))
 
     # === Combat ===

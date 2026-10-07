@@ -73,8 +73,7 @@ class ConsumableItem(HoldableItem):
     unhappy_change: float = 0.0
     boredom_change: float = 0.0
     stress_change: float = 0.0
-    alcoholic: bool = False
-    low_alcohol: bool = False
+    alcohol: float = 0.0  # fluid alcohol x litres drunk
     cooked: bool = False
     eat_minutes: int = DEFAULT_EAT_MINUTES
 
