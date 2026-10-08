@@ -30,18 +30,18 @@
 - name: ask someone to come along
   zone: zone_building
   input: Emma, would you come with me?
-  expect: [ASK Emma follow]
+  expect: [REQUEST Emma follow]
 
 - name: ask someone to wait
   zone: zone_building
   input: Marcus, stay here
-  expect: [ASK Marcus stay]
+  expect: [REQUEST Marcus stay]
 
 - name: ask about the news
   zone: zone_neighborhood
   outbreak: true
   input: Jen, what's the news saying about all this?
-  expect: [ASK Jen about outbreak_news]
+  expect: [REQUEST Jen about outbreak_news]
 
 - name: take then leave
   zone: zone_street
@@ -104,3 +104,23 @@
   zone: zone_home
   input: grab the beans and eat them
   expect: [TAKE Canned Beans, USE_ITEM Canned Beans]
+
+- name: a question about what someone reads is talk
+  zone: zone_building
+  input: Ask Marcus what he's reading
+  expect: [TALK Marcus chat]
+
+- name: a question about an item is talk
+  zone: zone_building
+  input: ask Marcus if he has a hammer
+  expect: [TALK Marcus chat]
+
+- name: a question about how someone is is talk
+  zone: zone_building
+  input: ask Emma if she's okay
+  expect: [TALK Emma chat]
+
+- name: ask someone to come with me
+  zone: zone_building
+  input: ask Emma to come with me
+  expect: [REQUEST Emma follow]

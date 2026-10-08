@@ -1508,7 +1508,7 @@ class SceneKeyTests(unittest.TestCase):
         self.gm.current_location.entities.clear()
         self.assertEqual(self.builder.scene_keys(), frozenset({"npcs_here", "rooms"}))
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertEqual(listed, ALWAYS | {"TALK", "ASK", "GIVE", "ATTACK", "SEARCH"})
+        self.assertEqual(listed, ALWAYS | {"TALK", "REQUEST", "GIVE", "ATTACK", "SEARCH"})
 
     def test_a_perceived_zombie_gives_threats(self):
         self.gm.world.outbreak_started_at = 0
@@ -1621,7 +1621,7 @@ class ParserSystemPromptTests(unittest.TestCase):
     def test_ask_lists_only_the_requests_the_scene_offers(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_building"
-        ask = ask_line(ContextBuilder(gm).build_parser_prompt("look"))
+        ask = request_line(ContextBuilder(gm).build_parser_prompt("look"))
         self.assertIn("follow", ask)
         self.assertNotIn("give", ask)
         self.assertNotIn("about", ask)
@@ -1632,7 +1632,7 @@ class ParserSystemPromptTests(unittest.TestCase):
         gm.player.current_location_id = "zone_building"
         npc = gm.npcs_in_location("zone_building")[0]
         npc.inventory.append(ItemEntity(item=ITEMS["item_water_bottle"]))
-        ask = ask_line(ContextBuilder(gm).build_parser_prompt("look"))
+        ask = request_line(ContextBuilder(gm).build_parser_prompt("look"))
         self.assertIn("give <item>", ask)
         self.assertNotIn("about", ask)
 
@@ -1649,9 +1649,9 @@ class ParserSystemPromptTests(unittest.TestCase):
         self.assertIn("- MOVE_TO <zone> <room> -- ", actions)
 
 
-def ask_line(prompt: str) -> str:
+def request_line(prompt: str) -> str:
     actions = prompt.split("[AVAILABLE ACTIONS]")[1]
-    return next(line for line in actions.splitlines() if line.startswith("- ASK"))
+    return next(line for line in actions.splitlines() if line.startswith("- REQUEST"))
 
 
 class NarratorBudgetTests(unittest.TestCase):

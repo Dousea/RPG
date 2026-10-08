@@ -1,4 +1,4 @@
-"""TALK, GIVE and ASK: what saying and handing things to an NPC is worth (llm-contract).
+"""TALK, GIVE and REQUEST: what saying and handing things to an NPC is worth (llm-contract).
 
 Resolution only; the validator decides legality. Every score change goes through
 `RelationshipManager`, with the NPC as source and the player as target.
@@ -17,8 +17,8 @@ from modules.events.modifier import AffinityModifier
 from modules.item import ConsumableItem
 from modules.story.social import GIVE_KEY, SocialLog
 
-ASK_FOLLOW = "follow"
-ASK_GIVE = "give"
+REQUEST_FOLLOW = "follow"
+REQUEST_GIVE = "give"
 
 _GUARDED_DISPOSITIONS = (CharacterDisposition.HOSTILE, CharacterDisposition.HATED)
 
@@ -45,7 +45,7 @@ def locked_out(manager: GameManager, npc: NpcEntity, request: str) -> bool:
     refused = manager.narrative.social_log.refused_at(npc.npc_id, request)
     if refused is None:
         return False
-    return manager.narrative.minutes - refused < social_k.ASK_REFUSAL_LOCKOUT_MIN
+    return manager.narrative.minutes - refused < social_k.REQUEST_REFUSAL_LOCKOUT_MIN
 
 
 class SocialManager:
@@ -137,45 +137,46 @@ class SocialManager:
         lead = f"{self._name} gives {npc.name} the {entity.item.name}."
         return [lead, *self._apply(npc, GIVE_KEY, delta.affection, delta.trust)]
 
-    # === ASK ===
+    # === REQUEST ===
 
     def follow_chance(self, npc: NpcEntity) -> float:
         if self.disposition_of(npc) in _GUARDED_DISPOSITIONS:
             return 0.0
-        return clamp01(self.trust_of(npc) / social_k.ASK_FOLLOW_TRUST_DIVISOR)
+        return clamp01(self.trust_of(npc) / social_k.REQUEST_FOLLOW_TRUST_DIVISOR)
 
     def give_chance(self, npc: NpcEntity) -> float:
         return clamp01(
-            (self.trust_of(npc) - social_k.ASK_GIVE_TRUST_OFFSET) / social_k.ASK_GIVE_TRUST_DIVISOR
+            (self.trust_of(npc) - social_k.REQUEST_GIVE_TRUST_OFFSET)
+            / social_k.REQUEST_GIVE_TRUST_DIVISOR
         )
 
     def _refuse(self, npc: NpcEntity, request: str) -> None:
         self._log().refuse(npc.npc_id, request, self._manager.narrative.minutes)
 
-    def ask_follow(self, npc: NpcEntity) -> list[str]:
+    def request_follow(self, npc: NpcEntity) -> list[str]:
         if npc.following or self._rng.random() < self.follow_chance(npc):
             npc.following = True
             return [f"{npc.name} agrees to follow {self._name}."]
-        self._refuse(npc, ASK_FOLLOW)
+        self._refuse(npc, REQUEST_FOLLOW)
         return [f"{npc.name} refuses to follow {self._name}."]
 
-    def ask_stay(self, npc: NpcEntity) -> list[str]:
+    def request_stay(self, npc: NpcEntity) -> list[str]:
         if not npc.following:
             return [f"{npc.name} wasn't following {self._name}."]
         npc.following = False
         return [f"{npc.name} stops following {self._name}."]
 
-    def ask_about(self, npc: NpcEntity, topic: Topic) -> tuple[list[str], str | None]:
+    def request_about(self, npc: NpcEntity, topic: Topic) -> tuple[list[str], str | None]:
         """Tell the topic if trust allows; returns the facts and the flag the telling reveals."""
         if not trust_at_least(self.trust_band_of(npc), topic.min_trust):
             return [f"{npc.name} deflects the question."], None
         self._manager.narrative.social_log.told_topics.add(topic.topic_id)
         return [f"{npc.name} tells {self._name}: {topic.fact}"], topic.discovers
 
-    def ask_give(self, npc: NpcEntity, entity: ItemEntity) -> list[str]:
+    def request_give(self, npc: NpcEntity, entity: ItemEntity) -> list[str]:
         if self._rng.random() < self.give_chance(npc):
             npc.inventory.remove(entity)
             self._manager.player.inventory.append(entity)
             return [f"{npc.name} hands {self._name} the {entity.item.name}."]
-        self._refuse(npc, ASK_GIVE)
+        self._refuse(npc, REQUEST_GIVE)
         return [f"{npc.name} won't hand over the {entity.item.name}."]

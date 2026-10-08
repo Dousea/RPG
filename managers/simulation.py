@@ -96,7 +96,6 @@ from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
-    AskAction,
     AttackAction,
     BarricadeAction,
     DropAction,
@@ -104,6 +103,7 @@ from modules.action.types import (
     GiveAction,
     MoveAction,
     RemoveGoalAction,
+    RequestAction,
     ShoveAction,
     SleepAction,
     StanceAction,
@@ -186,7 +186,7 @@ def _span_words(minutes: int) -> str:
 
 logger = logging.getLogger(__name__)
 
-SOCIAL_ACTIONS = (TalkAction, AskAction, GiveAction)
+SOCIAL_ACTIONS = (TalkAction, RequestAction, GiveAction)
 TOO_MANY_ACTIONS_FACT = "Too much at once; {name} does the first five things."
 INTERRUPTED_BY_ATTACK = "attacked"
 INTERRUPTED_BY_BEAT = "story beat"
@@ -1502,20 +1502,20 @@ class SimulationCore:
         gift = accepted.expect(NpcItem)
         return self._social.give(gift.entity, gift.npc)
 
-    def _resolve_ask(self, accepted: Accepted) -> list[str]:
+    def _resolve_request(self, accepted: Accepted) -> list[str]:
         action = accepted.action
-        assert isinstance(action, AskAction)
+        assert isinstance(action, RequestAction)
         match action.request:
             case "follow":
-                return self._social.ask_follow(accepted.expect(TargetNpc).npc)
+                return self._social.request_follow(accepted.expect(TargetNpc).npc)
             case "stay":
-                return self._social.ask_stay(accepted.expect(TargetNpc).npc)
+                return self._social.request_stay(accepted.expect(TargetNpc).npc)
             case "give":
                 request = accepted.expect(NpcItem)
-                return self._social.ask_give(request.npc, request.entity)
+                return self._social.request_give(request.npc, request.entity)
             case "about":
                 asked = accepted.expect(NpcTopic)
-                facts, flag = self._social.ask_about(asked.npc, TOPICS[asked.topic_id])
+                facts, flag = self._social.request_about(asked.npc, TOPICS[asked.topic_id])
                 note = self.discover_flag(flag) if flag else ""
                 return [*facts, *([note] if note else [])]
         return [f"{self._name} asks about something, and nothing comes of it."]
@@ -1703,7 +1703,7 @@ class SimulationCore:
         "EXERCISE": _resolve_exercise,
         "SHOUT": _resolve_shout,
         "TALK": _resolve_talk,
-        "ASK": _resolve_ask,
+        "REQUEST": _resolve_request,
         "GIVE": _resolve_give,
         "ADD_GOAL": _resolve_add_goal,
         "REMOVE_GOAL": _resolve_remove_goal,

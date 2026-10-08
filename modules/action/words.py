@@ -5,7 +5,6 @@ from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
-    AskAction,
     AttackAction,
     BandageAction,
     BarricadeAction,
@@ -21,6 +20,7 @@ from modules.action.types import (
     PutAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    RequestAction,
     SearchAction,
     ShoutAction,
     ShoveAction,
@@ -124,13 +124,13 @@ def describe_action(action: AnyAction) -> str:
             return f"make a note about {name}"
         case TalkAction(npc_name=npc, approach=approach) if approach in TALK_WORDS:
             return f"{TALK_WORDS[approach]} {npc}"
-        case AskAction(npc_name=npc, request="follow"):
+        case RequestAction(npc_name=npc, request="follow"):
             return f"ask {npc} to come along"
-        case AskAction(npc_name=npc, request="stay"):
+        case RequestAction(npc_name=npc, request="stay"):
             return f"ask {npc} to stay put"
-        case AskAction(npc_name=npc, request="give", argument=item):
+        case RequestAction(npc_name=npc, request="give", argument=item):
             return f"ask {npc} for the {item}"
-        case AskAction(npc_name=npc, request="about", argument=topic):
+        case RequestAction(npc_name=npc, request="about", argument=topic):
             return f"ask {npc} about the {topic.replace('_', ' ')}"
         case GiveAction(item_name=item, npc_name=npc):
             return f"give the {item} to {npc}"

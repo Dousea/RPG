@@ -1,4 +1,4 @@
-"""Talking to people: TALK, GIVE and ASK (llm-contract)."""
+"""Talking to people: TALK, GIVE and REQUEST (llm-contract)."""
 
 import random
 import unittest
@@ -10,10 +10,10 @@ from managers.simulation import SimulationCore
 from managers.validator import ActionValidator, Rejected
 from modules.action.parser import TALK_APPROACH_LABELS
 from modules.action.types import (
-    AskAction,
     Duration,
     GiveAction,
     MoveAction,
+    RequestAction,
     TalkAction,
     WaitAction,
 )
@@ -306,7 +306,7 @@ class TalkingMinutesTests(unittest.TestCase):
     def test_talk_ask_and_give_run_the_stats_as_talking(self):
         for action in (
             TalkAction(npc_name="Emma", approach="chat"),
-            AskAction(npc_name="Emma", request="stay"),
+            RequestAction(npc_name="Emma", request="stay"),
             GiveAction(item_name="Canned Beans", npc_name="Emma"),
         ):
             with self.subTest(action=type(action).__name__):
@@ -398,50 +398,50 @@ class GiveTests(unittest.TestCase):
         self.assertEqual(trust(gm, "npc_emma"), 5 + 1)
 
 
-class AskFollowTests(unittest.TestCase):
-    """llm-contract: Asking."""
+class RequestFollowTests(unittest.TestCase):
+    """llm-contract: Requesting."""
 
-    def ask_follow(self, gm: GameManager, roll: float) -> list[str]:
-        return simulate(gm, AskAction(npc_name="Emma", request="follow"), rng=FixedRandom(roll))
+    def request_follow(self, gm: GameManager, roll: float) -> list[str]:
+        return simulate(gm, RequestAction(npc_name="Emma", request="follow"), rng=FixedRandom(roll))
 
     def test_at_trust_twenty_the_chance_is_half(self):
         gm = building_game()
         adjust_regard(gm, "npc_emma", trust=15)
-        self.ask_follow(gm, 0.49)
+        self.request_follow(gm, 0.49)
         self.assertTrue(npc_of(gm, "Emma").following)
 
     def test_a_roll_equal_to_the_chance_refuses(self):
         gm = building_game()
         adjust_regard(gm, "npc_emma", trust=15)
-        facts = self.ask_follow(gm, 0.5)
+        facts = self.request_follow(gm, 0.5)
         self.assertFalse(npc_of(gm, "Emma").following)
         self.assertIn("Emma refuses to follow Orton.", facts)
 
     def test_solid_trust_always_complies(self):
         gm = building_game()
         adjust_regard(gm, "npc_emma", trust=35)
-        facts = self.ask_follow(gm, 0.999)
+        facts = self.request_follow(gm, 0.999)
         self.assertTrue(npc_of(gm, "Emma").following)
         self.assertIn("Emma agrees to follow Orton.", facts)
 
     def test_zero_trust_never_complies(self):
         gm = building_game()
         adjust_regard(gm, "npc_emma", trust=-5)
-        self.ask_follow(gm, 0.0)
+        self.request_follow(gm, 0.0)
         self.assertFalse(npc_of(gm, "Emma").following)
 
     def test_the_chance_is_trust_over_forty(self):
         gm = building_game()
-        self.ask_follow(gm, 0.124)
+        self.request_follow(gm, 0.124)
         self.assertTrue(npc_of(gm, "Emma").following)
         gm2 = building_game()
-        self.ask_follow(gm2, 0.126)
+        self.request_follow(gm2, 0.126)
         self.assertFalse(npc_of(gm2, "Emma").following)
 
     def test_a_hostile_npc_always_refuses(self):
         gm = building_game()
         adjust_regard(gm, "npc_emma", affection=-50, trust=50)
-        self.ask_follow(gm, 0.0)
+        self.request_follow(gm, 0.0)
         self.assertFalse(npc_of(gm, "Emma").following)
 
     def test_a_follower_asked_again_complies_with_no_roll(self):
@@ -452,15 +452,15 @@ class AskFollowTests(unittest.TestCase):
             def random(self) -> float:
                 raise AssertionError("no roll expected")
 
-        facts = simulate(gm, AskAction(npc_name="Emma", request="follow"), rng=NoRolls(0))
+        facts = simulate(gm, RequestAction(npc_name="Emma", request="follow"), rng=NoRolls(0))
         self.assertTrue(npc_of(gm, "Emma").following)
         self.assertIn("Emma agrees to follow Orton.", facts)
 
     def test_a_refusal_cannot_be_asked_again_for_sixty_minutes(self):
         gm = building_game()
-        self.ask_follow(gm, 0.99)
+        self.request_follow(gm, 0.99)
         validator = ActionValidator(gm)
-        action = AskAction(npc_name="Emma", request="follow")
+        action = RequestAction(npc_name="Emma", request="follow")
         gm.advance_clock(54)
         result = validator.validate(action)
         assert isinstance(result, Rejected)
@@ -471,45 +471,45 @@ class AskFollowTests(unittest.TestCase):
 
     def test_the_lockout_is_per_npc_and_per_request(self):
         gm = building_game()
-        self.ask_follow(gm, 0.99)
+        self.request_follow(gm, 0.99)
         validator = ActionValidator(gm)
         self.assertNotIsInstance(
-            validator.validate(AskAction(npc_name="Marcus", request="follow")), Rejected
+            validator.validate(RequestAction(npc_name="Marcus", request="follow")), Rejected
         )
         self.assertNotIsInstance(
-            validator.validate(AskAction(npc_name="Emma", request="stay")), Rejected
+            validator.validate(RequestAction(npc_name="Emma", request="stay")), Rejected
         )
 
     def test_a_success_sets_no_lockout(self):
         gm = building_game()
         adjust_regard(gm, "npc_emma", trust=35)
-        self.ask_follow(gm, 0.0)
+        self.request_follow(gm, 0.0)
         npc_of(gm, "Emma").following = False
-        result = ActionValidator(gm).validate(AskAction(npc_name="Emma", request="follow"))
+        result = ActionValidator(gm).validate(RequestAction(npc_name="Emma", request="follow"))
         self.assertNotIsInstance(result, Rejected)
 
     def test_stay_always_works_and_stops_the_following(self):
         gm = building_game()
         npc_of(gm, "Emma").following = True
-        facts = simulate(gm, AskAction(npc_name="Emma", request="stay"), rng=FixedRandom(0.99))
+        facts = simulate(gm, RequestAction(npc_name="Emma", request="stay"), rng=FixedRandom(0.99))
         self.assertFalse(npc_of(gm, "Emma").following)
         self.assertIn("Emma stops following Orton.", facts)
 
     def test_asking_someone_absent_is_refused(self):
         gm = building_game()
-        result = ActionValidator(gm).validate(AskAction(npc_name="Jen", request="follow"))
+        result = ActionValidator(gm).validate(RequestAction(npc_name="Jen", request="follow"))
         self.assertIsInstance(result, Rejected)
 
     def test_a_request_costs_five_minutes_and_changes_no_score(self):
         gm = building_game()
-        self.ask_follow(gm, 0.99)
+        self.request_follow(gm, 0.99)
         self.assertEqual(gm.narrative.minutes, 5)
         self.assertEqual(affection(gm, "npc_emma"), 0)
         self.assertEqual(trust(gm, "npc_emma"), 5)
 
 
-class AskGiveTests(unittest.TestCase):
-    """llm-contract: Asking: give."""
+class RequestGiveTests(unittest.TestCase):
+    """llm-contract: Requesting: give."""
 
     def setUp(self):
         self.gm = building_game()
@@ -519,7 +519,7 @@ class AskGiveTests(unittest.TestCase):
     def ask(self, roll: float, item: str = "Water Bottle") -> list[str]:
         return simulate(
             self.gm,
-            AskAction(npc_name="Emma", request="give", argument=item),
+            RequestAction(npc_name="Emma", request="give", argument=item),
             rng=FixedRandom(roll),
         )
 
@@ -540,7 +540,7 @@ class AskGiveTests(unittest.TestCase):
         self.assertEqual(len(self.emma.inventory), 1)
         self.assertIn("Emma won't hand over the Water Bottle.", facts)
         result = ActionValidator(self.gm).validate(
-            AskAction(npc_name="Emma", request="give", argument="Water Bottle")
+            RequestAction(npc_name="Emma", request="give", argument="Water Bottle")
         )
         assert isinstance(result, Rejected)
         self.assertEqual(result.reason, "Emma has already said no.")
@@ -552,7 +552,7 @@ class AskGiveTests(unittest.TestCase):
 
     def test_an_item_the_npc_lacks_is_refused(self):
         result = ActionValidator(self.gm).validate(
-            AskAction(npc_name="Emma", request="give", argument="Crowbar")
+            RequestAction(npc_name="Emma", request="give", argument="Crowbar")
         )
         assert isinstance(result, Rejected)
         self.assertEqual(result.reason, "Emma has no Crowbar to give.")
@@ -564,7 +564,7 @@ class AskGiveTests(unittest.TestCase):
         self.assertIn("Crowbar", [e.item.name for e in self.emma.inventory])
         simulate(
             self.gm,
-            AskAction(npc_name="Emma", request="give", argument="Crowbar"),
+            RequestAction(npc_name="Emma", request="give", argument="Crowbar"),
             rng=FixedRandom(0.0),
         )
         self.assertIn("Crowbar", [e.item.name for e in self.gm.player.inventory])
@@ -573,13 +573,13 @@ class AskGiveTests(unittest.TestCase):
         adjust_regard(self.gm, "npc_emma", trust=45)
         load_pack(self.gm.player, 49.9)
         result = ActionValidator(self.gm).validate(
-            AskAction(npc_name="Emma", request="give", argument="Water Bottle")
+            RequestAction(npc_name="Emma", request="give", argument="Water Bottle")
         )
         self.assertIsInstance(result, Rejected)
 
 
 class FollowerTests(unittest.TestCase):
-    """llm-contract: Asking: following."""
+    """llm-contract: Requesting: following."""
 
     def test_a_follower_arrives_with_the_player_at_the_same_minute(self):
         gm = building_game()

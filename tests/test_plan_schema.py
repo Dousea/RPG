@@ -33,11 +33,11 @@ def branches(schema: dict) -> dict[str, dict]:
     }
 
 
-def ask_branches(schema: dict) -> list[dict]:
+def request_branches(schema: dict) -> list[dict]:
     return [
         b
         for b in schema["properties"]["actions"]["items"]["anyOf"]
-        if b["properties"]["verb"]["const"] == "ASK"
+        if b["properties"]["verb"]["const"] == "REQUEST"
     ]
 
 
@@ -124,7 +124,7 @@ class SchemaShapeTests(unittest.TestCase):
             entity for entity in gm.current_location.entities if not isinstance(entity, ItemEntity)
         ]
         names = branches(ContextBuilder(gm).build_plan_schema())
-        for verb in ("DROP", "TALK", "ASK", "GIVE", "UNEQUIP", "BANDAGE", "ATTACK", "SHOVE"):
+        for verb in ("DROP", "TALK", "REQUEST", "GIVE", "UNEQUIP", "BANDAGE", "ATTACK", "SHOVE"):
             self.assertNotIn(verb, names)
 
     def test_a_scene_with_no_verb_at_all_allows_only_an_empty_list(self):
@@ -273,15 +273,15 @@ class ClosedFieldTests(unittest.TestCase):
         )
 
     def test_ask_offers_only_the_requests_the_scene_can_fill(self):
-        asks = ask_branches(ContextBuilder(building_scene()).build_plan_schema())
+        asks = request_branches(ContextBuilder(building_scene()).build_plan_schema())
         self.assertEqual(len(asks), 1)
         self.assertEqual(enum_of(asks[0], "request"), ["follow", "stay"])
         self.assertEqual(asks[0]["required"], ["verb", "npc", "request"])
 
     def test_ask_for_an_item_or_a_topic_requires_one(self):
         choices = SceneChoices(npcs=("Emma",), npc_items=("Bandage",), topics=("the_pharmacy",))
-        ask = VERBS["ASK"]
-        asks = ask_branches(build_plan_schema([ask], choices, MAX_ACTIONS))
+        ask = VERBS["REQUEST"]
+        asks = request_branches(build_plan_schema([ask], choices, MAX_ACTIONS))
         by_request = {tuple(enum_of(b, "request")): b for b in asks}
         self.assertEqual(list(by_request), [("follow", "stay"), ("give",), ("about",)])
         self.assertEqual(by_request[("give",)]["required"], ["verb", "npc", "request", "item"])
@@ -358,11 +358,14 @@ EQUIVALENTS = [
         {"verb": "TALK", "npc": "Emma", "approach": "chat", "speech": "Hi there, how are you?"},
         "TALK Emma chat",
     ),
-    ({"verb": "ASK", "npc": "Emma", "request": "follow"}, "ASK Emma follow"),
-    ({"verb": "ASK", "npc": "Emma", "request": "give", "item": "Bandage"}, "ASK Emma give Bandage"),
+    ({"verb": "REQUEST", "npc": "Emma", "request": "follow"}, "REQUEST Emma follow"),
     (
-        {"verb": "ASK", "npc": "Emma", "request": "about", "topic": "the_pharmacy"},
-        "ASK Emma about the_pharmacy",
+        {"verb": "REQUEST", "npc": "Emma", "request": "give", "item": "Bandage"},
+        "REQUEST Emma give Bandage",
+    ),
+    (
+        {"verb": "REQUEST", "npc": "Emma", "request": "about", "topic": "the_pharmacy"},
+        "REQUEST Emma about the_pharmacy",
     ),
     ({"verb": "GIVE", "item": "Bandage", "npc": "Emma"}, "GIVE Bandage to Emma"),
     ({"verb": "SEARCH", "target": "c3"}, "SEARCH c3"),

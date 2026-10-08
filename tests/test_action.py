@@ -7,7 +7,7 @@ from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.validator import ActionValidator
 from modules.action.parser import (
-    ASK_REQUEST_LABELS,
+    REQUEST_LABELS,
     TALK_APPROACH_LABELS,
     VERBS,
     ParseFailure,
@@ -17,12 +17,12 @@ from modules.action.parser import (
 )
 from modules.action.types import (
     AddGoalAction,
-    AskAction,
     AttackAction,
     Duration,
     GiveAction,
     MoveAction,
     RemoveGoalAction,
+    RequestAction,
     ShoutAction,
     SleepAction,
     StanceAction,
@@ -113,6 +113,11 @@ class ParseActionLineTests(unittest.TestCase):
 
     def test_unknown_verb(self):
         result = parse_action_line("FROBNICATE the widget")
+        assert isinstance(result, ParseFailure)
+        self.assertIn("Unknown action verb", result.reason)
+
+    def test_ask_is_no_longer_a_verb(self):
+        result = parse_action_line("ASK Emma follow")
         assert isinstance(result, ParseFailure)
         self.assertIn("Unknown action verb", result.reason)
 
@@ -327,7 +332,7 @@ class VerbRegistryTests(unittest.TestCase):
 
 
 class SocialParseTests(unittest.TestCase):
-    """llm-contract: Verbs: TALK, ASK and GIVE."""
+    """llm-contract: Verbs: TALK, REQUEST and GIVE."""
 
     def test_talk_takes_a_name_and_an_approach(self):
         self.assertEqual(
@@ -364,23 +369,29 @@ class SocialParseTests(unittest.TestCase):
                 self.assertEqual(parse_action_line(line), expected)
 
     def test_ask_accepts_only_the_four_requests(self):
-        self.assertEqual(set(ASK_REQUEST_LABELS), {"follow", "stay", "give", "about"})
+        self.assertEqual(set(REQUEST_LABELS), {"follow", "stay", "give", "about"})
         self.assertEqual(
-            parse_action_line("ASK Emma follow"),
-            AskAction(npc_name="Emma", request="follow"),
+            parse_action_line("REQUEST Emma follow"),
+            RequestAction(npc_name="Emma", request="follow"),
         )
         self.assertEqual(
-            parse_action_line("ASK Emma stay"), AskAction(npc_name="Emma", request="stay")
+            parse_action_line("REQUEST Emma stay"), RequestAction(npc_name="Emma", request="stay")
         )
         self.assertEqual(
-            parse_action_line("ASK Emma give Water Bottle"),
-            AskAction(npc_name="Emma", request="give", argument="Water Bottle"),
+            parse_action_line("REQUEST Emma give Water Bottle"),
+            RequestAction(npc_name="Emma", request="give", argument="Water Bottle"),
         )
         self.assertEqual(
-            parse_action_line("ASK Jen about outbreak_news"),
-            AskAction(npc_name="Jen", request="about", argument="outbreak_news"),
+            parse_action_line("REQUEST Jen about outbreak_news"),
+            RequestAction(npc_name="Jen", request="about", argument="outbreak_news"),
         )
-        for line in ("ASK Emma dance", "ASK Emma give", "ASK Jen about", "ASK Emma", "ASK"):
+        for line in (
+            "REQUEST Emma dance",
+            "REQUEST Emma give",
+            "REQUEST Jen about",
+            "REQUEST Emma",
+            "REQUEST",
+        ):
             with self.subTest(line=line):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 
@@ -398,7 +409,7 @@ class SocialParseTests(unittest.TestCase):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 
     def test_the_social_verbs_cost_five_minutes_in_the_registry(self):
-        for name in ("TALK", "ASK", "GIVE"):
+        for name in ("TALK", "REQUEST", "GIVE"):
             self.assertEqual(VERBS[name].minutes, 5)
 
 
@@ -434,7 +445,7 @@ class SceneFilteringTests(unittest.TestCase):
             "held": ["UNEQUIP"],
             "wearable": ["WEAR"],
             "worn": ["TAKE_OFF"],
-            "npcs_here": ["ATTACK", "TALK", "ASK", "GIVE"],
+            "npcs_here": ["ATTACK", "TALK", "REQUEST", "GIVE"],
             "threats": ["ATTACK", "SHOVE"],
         }
         for key, added in expected.items():
@@ -476,13 +487,15 @@ class SocialActionWordsTests(unittest.TestCase):
                 self.assertEqual(describe_action(TalkAction("Emma", approach)), expected)
 
     def test_each_ask_request_says_what_is_asked(self):
-        self.assertEqual(describe_action(AskAction("Marcus", "follow")), "ask Marcus to come along")
-        self.assertEqual(describe_action(AskAction("Marcus", "stay")), "ask Marcus to stay put")
         self.assertEqual(
-            describe_action(AskAction("Marcus", "give", "Hammer")), "ask Marcus for the Hammer"
+            describe_action(RequestAction("Marcus", "follow")), "ask Marcus to come along"
+        )
+        self.assertEqual(describe_action(RequestAction("Marcus", "stay")), "ask Marcus to stay put")
+        self.assertEqual(
+            describe_action(RequestAction("Marcus", "give", "Hammer")), "ask Marcus for the Hammer"
         )
         self.assertEqual(
-            describe_action(AskAction("Jen", "about", "outbreak_news")),
+            describe_action(RequestAction("Jen", "about", "outbreak_news")),
             "ask Jen about the outbreak news",
         )
 

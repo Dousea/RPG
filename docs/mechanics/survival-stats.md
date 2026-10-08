@@ -48,7 +48,7 @@ take is not part of it: it runs in the body minute ([health](health.md#the-body-
 | `resting` | the action is `WAIT` |
 | `exercising` | the action is `ATTACK` or `SHOVE`, a zombie attacked this chunk, or the player ran |
 | `walking` | the action is `MOVE_TO` |
-| `talking` | the action is `TALK`, `ASK` or `GIVE` |
+| `talking` | the action is `TALK`, `REQUEST` or `GIVE` |
 | `sneaking` | the player is sneaking |
 | `indoors`, `floor`, `bed_type` | from the zone and the player's spot ([Sleep](#sleep)) |
 | `power_on` | whether the world still has power |

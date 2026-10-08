@@ -16,17 +16,17 @@ parser.
 | Piece | File |
 | --- | --- |
 | `Verb`, `VERBS`, the closed label sets, the removed verbs | `modules/action/parser.py` |
-| `TalkAction`, `AskAction`, `GiveAction`, `ShoutAction` | `modules/action/types.py` |
+| `TalkAction`, `RequestAction`, `GiveAction`, `ShoutAction` | `modules/action/types.py` |
 | Words for an action that never ran | `modules/action/words.py` |
 | `NpcEntity.following`, `World.fired_beats` | `modules/entity/npc.py`, `modules/world/location.py` |
 | Beat conditions and effects | `modules/story/beats.py` |
 | `SocialLog` | `modules/story/social.py` |
-| The approach table, `GIVE` deltas, `ASK` odds | `data/story/social.py` |
+| The approach table, `GIVE` deltas, `REQUEST` odds | `data/story/social.py` |
 | Topics | `data/story/topics.py` |
 | Story beats | `data/story/beats.py` |
 | `MAX_PLAN_ACTIONS`, `TALK_TURN_MINUTES`, `NONE_TURN_MINUTES` | `data/time_costs.py` |
 | Shout sizes | `data/zombies/lore.py` |
-| `TALK`, `GIVE`, `ASK` resolution | `managers/story/social.py` |
+| `TALK`, `GIVE`, `REQUEST` resolution | `managers/story/social.py` |
 | Reading beat conditions, visible topics | `managers/story/beats.py` |
 | Validators and resolvers keyed by verb name, beats, derived statuses | `managers/validator.py`, `managers/simulation.py` |
 | `GameManager.move_npc`, `outbreak_day`, `NarrativeState.social_log` | `managers/game.py` |
@@ -66,7 +66,7 @@ The model may choose:
 - a verb from the verb list;
 - a target from a list the prompt gave it (an item, a zone, an NPC, a zombie id, a
   topic);
-- a label from a closed list (a pace, a stance, a `TALK` approach, an `ASK`
+- a label from a closed list (a pace, a stance, a `TALK` approach, an `REQUEST`
   request);
 - free text that nothing mechanical reads (goal text, the player's notes on an NPC,
   and all prose).
@@ -109,7 +109,7 @@ drift apart.
 | `DISINFECT` | body part, optional `with` item | 1 |
 | `SHOUT` | none | 0 |
 | `TALK` | NPC, approach | 5 per turn |
-| `ASK` | NPC, request | 5 per turn |
+| `REQUEST` | NPC, request | 5 per turn |
 | `GIVE` | item, NPC | 5 per turn |
 | `ADD_GOAL` / `REMOVE_GOAL` | horizon, free text | 0 |
 | `ADD_RELATIONSHIP_NOTE` | NPC, free text | 0 |
@@ -117,7 +117,7 @@ drift apart.
 A verb of a later mechanic is absent from `VERBS` until that mechanic lands. A line
 that uses one is a `ParseFailure`.
 
-`TALK`, `ASK` and `GIVE` share one 5-minute cost per turn. Those minutes count as
+`TALK`, `REQUEST` and `GIVE` share one 5-minute cost per turn. Those minutes count as
 talking for the survival stats, so they lower boredom.
 
 **Removed verbs.** Each is refused as "not an available action", before validation.
@@ -126,12 +126,12 @@ talking for the survival stats, so they lower boredom.
 | --- | --- |
 | `TIME_ADVANCE` | `WAIT` and `SLEEP` |
 | `UPDATE_CONDITION` | the survival stats and status effects |
-| `UPDATE_RELATIONSHIP` | `TALK`, `ASK` and `GIVE` |
+| `UPDATE_RELATIONSHIP` | `TALK`, `REQUEST` and `GIVE` |
 | `SET_FLAG` / `DISCOVER_FLAG` | story beats and topics |
-| `NPC_MOVE` | `ASK ... follow` and story beats |
+| `NPC_MOVE` | `REQUEST ... follow` and story beats |
 | `NPC_STATUS` | derived statuses and story beats |
 | `STATUS_ADD` / `STATUS_REMOVE` | status effects, `asleep`, `sneaking` |
-| `UPDATE_INVENTORY` | `TAKE`, `DROP`, `USE_ITEM`, `GIVE` and `ASK ... give` |
+| `UPDATE_INVENTORY` | `TAKE`, `DROP`, `USE_ITEM`, `GIVE` and `REQUEST ... give` |
 
 With them go the story vocabulary lists, `narrative.player_status` and the
 incapacitated-status check. `player.conditions` stays, written only by item effects.
@@ -185,7 +185,7 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `DROP`, `USE_ITEM` | `carried` | an item is carried or lies here, so `TAKE` then `USE_ITEM` can be planned |
 | `WEAR` | `wearable` | clothing is carried or lies here, so `TAKE` then `WEAR` can be planned |
 | `TAKE_OFF` | `worn` | something is worn or in hand |
-| `TALK`, `ASK`, `GIVE` | `npcs_here` | someone is here |
+| `TALK`, `REQUEST`, `GIVE` | `npcs_here` | someone is here |
 | `ATTACK` | `npcs_here`, `threats`, `barriers` | someone is here, a zombie is perceived, or a door or window is here |
 | `OPEN`, `CLOSE`, `BARRICADE`, `UNBARRICADE` | `barriers` | the zone has a door or window ([doors](doors.md)) |
 | `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](health.md)) |
@@ -208,9 +208,9 @@ empty list is `NONE`.
   and optionally a carried bandage or alcohol item, `REMOVE_BANDAGE` a bandaged part,
   `ATTACK` an NPC here, a seen zombie's id or `zombie` (offered only while a zombie is
   seen), `SHOVE` a seen zombie's id, `TALK` an NPC here with the closed
-  approach labels, `ASK` an NPC here to follow or stay, and, only when there is one to
+  approach labels, `REQUEST` an NPC here to follow or stay, and, only when there is one to
   name, for an item an NPC here carries (`give`) or about a topic one of them can
-  discuss (`about`); those two requests require the item or the topic. The `ASK` line in
+  discuss (`about`); those two requests require the item or the topic. The `REQUEST` line in
   `[AVAILABLE ACTIONS]` lists the same requests and sends any other question to `TALK`
   `chat`. `WAIT` and `SLEEP` take a duration string the duration
   grammar accepts. `MOVE_TO` takes any destination text and an optional `run`. A verb
@@ -287,9 +287,9 @@ refused. Food and drink are worth +4 affection and +3 trust, anything else +2 an
 +2. Gives to one NPC count as one approach (`give`) whatever the item, with the same
 day window, divisor and Hostile rule; both deltas are divided.
 
-### Asking
+### Requesting
 
-`ASK <npc> <request>` rolls with the simulation's random source.
+`REQUEST <npc> <request>` rolls with the simulation's random source.
 
 | Request | Complies when |
 | --- | --- |
@@ -313,7 +313,7 @@ has an id, an NPC, a gloss (the line the parser sees), an optional condition it
 requires (it isn't listed until it holds), a minimum trust band, the fact the NPC
 says, and the flag it reveals.
 
-`ASK Jen about outbreak_news`:
+`REQUEST Jen about outbreak_news`:
 
 - **At or above the minimum trust band:** `[OUTCOMES]` gets "Jen tells Orton: <fact>".
   The flag it reveals is marked discovered, which completes any `discover:`
@@ -580,10 +580,10 @@ model changes.
 
 ## Hooks into other mechanics
 
-- **Game clock:** the time-cost table's talking row is `TALK`/`ASK`/`GIVE`, and a
+- **Game clock:** the time-cost table's talking row is `TALK`/`REQUEST`/`GIVE`, and a
   `NONE` turn costs 1 minute.
 - **Survival stats:** `UPDATE_CONDITION` is gone, morale and infection risk
-  included. Talking means the minutes of `TALK`, `ASK` or `GIVE`.
+  included. Talking means the minutes of `TALK`, `REQUEST` or `GIVE`.
 - **Character creation:** the parser and narrator blocks sit in the orders above.
 - **Zombies:** `outbreak_begins` starts the outbreak. `SHOUT` is a noise source. An
   interruption cancels the rest of the plan. The narrator may not describe a zombie
@@ -619,7 +619,7 @@ characters on load and emptied when the narrator fails. Older saves are discarde
 - **Talking to a zombie.** `TALK z3 ...` is refused: "z3 isn't listening." Shouting
   at it is `SHOUT`.
 - **Talking to someone absent.** Refused; there are no phone calls.
-- **`ASK follow` from a follower** complies with no roll.
+- **`REQUEST follow` from a follower** complies with no roll.
 - **A topic that needs the outbreak** isn't listed before it. Proposed anyway, it is
   refused as unknown.
 - **A beat and an action in the same minute.** The action resolves first, then the
@@ -665,15 +665,6 @@ entry says what goes wrong and how to fix it.
   the [duration grammar](clock.md#actions) read a bare time of day or `HH:MM` as
   `until` it, so the schema's pattern no longer has to hold. A time already past
   today lands tomorrow, as `WAIT until <time>` does ([edge cases](clock.md#edge-cases)).
-- **Questions to an NPC become requests.** "Ask Marcus what he's reading" and
-  "ask Marcus if he has a hammer" parsed as `ASK follow`; "ask Emma if she's okay"
-  as `ASK stay`. The [plan check](#the-plan-check) now rules these out, so the
-  question goes unasked instead of becoming a request. The verb's name is the trap:
-  the model maps the player's word "ask" onto the `ASK` branch. *Fix:* rename the
-  branch to `REQUEST`, so "ask" no longer points at it, and keep a parser rule with
-  an example sending a question to `TALK` `chat` with its `speech` (a rule plus
-  example fixed the absent-NPC misparse), with eval cases in
-  `evals/parser_cases.yaml`.
 - **When no verb fits, the schema forces a wrong one.** The schema has no way to
   say "the player asked for something the engine can't do", so the model picks the
   nearest branch: "lock the door" became `BARRICADE`, "drink from the tap" became
@@ -722,12 +713,12 @@ entry says what goes wrong and how to fix it.
 ## Testing
 
 - `tests/test_action.py`: every verb parses, every removed verb is a `ParseFailure`,
-  `TALK` accepts only the eight approaches and `ASK` only the four requests, the
+  `TALK` accepts only the eight approaches and `REQUEST` only the four requests, the
   parser prompt lists exactly the registry, every verb has a validator and a resolver.
 - `tests/test_simulation.py`: the five-action cap, an interrupted plan, a `NONE` turn
   and an all-refused turn, `SHOUT` at 30 and 6 tiles.
 - `tests/story/test_social.py`: each approach's deltas, repetition and reset, the Hostile
-  halving, band-change facts, `ASK` odds and lockout, followers, `GIVE`.
+  halving, band-change facts, `REQUEST` odds and lockout, followers, `GIVE`.
 - `tests/story/test_topics.py`: deflecting, telling, the quest through the topic, a topic
   hidden before the outbreak.
 - `tests/story/test_story_beats.py`: the outbreak beat at minute 2760 in the middle of a

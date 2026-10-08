@@ -69,7 +69,6 @@ from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
-    AskAction,
     AttackAction,
     BandageAction,
     BarricadeAction,
@@ -86,6 +85,7 @@ from modules.action.types import (
     PutAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    RequestAction,
     SearchAction,
     ShoutAction,
     ShoveAction,
@@ -1125,7 +1125,7 @@ class ActionValidator:
             return Rejected(action, self._keeps_keys())
         return Accepted(action, NpcItem(npc, entity))
 
-    def _validate_ask(self, action: AskAction) -> ValidationResult:
+    def _validate_request(self, action: RequestAction) -> ValidationResult:
         npc = self._npc_here(action.npc_name)
         if isinstance(npc, str):
             return Rejected(action, npc)
@@ -1182,7 +1182,7 @@ class ActionValidator:
         "EXERCISE": _validate_exercise,
         "SHOUT": _validate_shout,
         "TALK": _validate_talk,
-        "ASK": _validate_ask,
+        "REQUEST": _validate_request,
         "GIVE": _validate_give,
         "ADD_GOAL": _validate_add_goal,
         "REMOVE_GOAL": _validate_remove_goal,

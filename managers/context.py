@@ -599,14 +599,14 @@ Traits: {_lines(trait_lines) or "None"}
         lines: list[str] = []
         for verb in available_verbs(self.scene_keys()):
             kinds = "".join(f" <{kind}>" for kind in verb.target_kinds)
-            gloss = self._ask_gloss() if verb.name == "ASK" else verb.gloss
+            gloss = self._request_gloss() if verb.name == "REQUEST" else verb.gloss
             lines.append(f"- {verb.name}{kinds} -- {gloss}")
             if verb.name == "TALK":
                 lines.extend(f"  {label}: {row.gloss}" for label, row in TALK_APPROACHES.items())
         return "\n".join(lines)
 
-    def _ask_gloss(self) -> str:
-        """The ASK requests this scene can fill, so the model never picks one it can't complete."""
+    def _request_gloss(self) -> str:
+        """The REQUEST requests this scene can fill, so the model never picks one it can't complete."""
         choices = self.scene_choices()
         requests = ["follow", "stay"]
         if choices.npc_items:

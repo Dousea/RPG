@@ -223,10 +223,10 @@ class TalkAction:
 
 
 @dataclass
-class AskAction:
+class RequestAction:
     """A request of an NPC; `argument` is the item for `give`, the topic for `about`."""
 
-    verb: ClassVar[str] = "ASK"
+    verb: ClassVar[str] = "REQUEST"
     npc_name: str
     request: str
     argument: str = ""
@@ -287,7 +287,7 @@ AnyAction = (
     | ExerciseAction
     | ShoutAction
     | TalkAction
-    | AskAction
+    | RequestAction
     | GiveAction
     | AddGoalAction
     | RemoveGoalAction

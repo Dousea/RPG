@@ -61,7 +61,7 @@ would *rely* on them. The narrative layer moves them independently, which is the
 point: a survivor can be fond of Orton and still not hand him the keys, or
 depend on him professionally while resenting him.
 
-The model no longer chooses either value. `TALK`, `GIVE` and `ASK` move them, by
+The model no longer chooses either value. `TALK`, `GIVE` and `REQUEST` move them, by
 amounts the engine owns: see [Talking to people](../mechanics/llm-contract.md#talking-to-people).
 Affection goes through an `AffinityModifier` (so it shares the path used by the
 trait/perk pipeline, see [the traits-and-modifiers doc](traits-and-modifiers.md)); trust goes

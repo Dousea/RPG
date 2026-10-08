@@ -15,7 +15,6 @@ from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
-    AskAction,
     AttackAction,
     BandageAction,
     BarricadeAction,
@@ -32,6 +31,7 @@ from modules.action.types import (
     PutAction,
     RemoveBandageAction,
     RemoveGoalAction,
+    RequestAction,
     SearchAction,
     ShoutAction,
     ShoveAction,
@@ -354,9 +354,9 @@ TALK_APPROACH_LABELS = (
     "insult",
     "threaten",
 )
-ASK_REQUEST_LABELS = ("follow", "stay", "give", "about")
+REQUEST_LABELS = ("follow", "stay", "give", "about")
 GOAL_HORIZON_LABELS = ("short_term", "long_term")
-TALK_TURN_MINUTES = 5  # llm-contract: one cost per turn, shared by TALK, ASK and GIVE
+TALK_TURN_MINUTES = 5  # llm-contract: one cost per turn, shared by TALK, REQUEST and GIVE
 
 
 def _parse_talk(args: str) -> TalkAction:
@@ -377,15 +377,15 @@ def _parse_talk(args: str) -> TalkAction:
     return TalkAction(npc_name=" ".join(words[:index]), approach=normalize_key(words[index]))
 
 
-def _parse_ask(args: str) -> AskAction:
+def _parse_request(args: str) -> RequestAction:
     words = args.split()
     index = next(
-        (i for i, word in enumerate(words) if i > 0 and normalize_key(word) in ASK_REQUEST_LABELS),
+        (i for i, word in enumerate(words) if i > 0 and normalize_key(word) in REQUEST_LABELS),
         None,
     )
     if index is None:
         raise _ActionParseError(
-            f"ASK needs an NPC name and one of: {', '.join(ASK_REQUEST_LABELS)}."
+            f"REQUEST needs an NPC name and one of: {', '.join(REQUEST_LABELS)}."
         )
     request = normalize_key(words[index])
     argument = " ".join(words[index + 1 :]).strip(" .,;")
@@ -393,11 +393,11 @@ def _parse_ask(args: str) -> AskAction:
         argument = normalize_key(argument)
     if request in ("give", "about") and not argument:
         raise _ActionParseError(
-            f"ASK ... {request} needs an {'item' if request == 'give' else 'topic'}."
+            f"REQUEST ... {request} needs an {'item' if request == 'give' else 'topic'}."
         )
     if request in ("follow", "stay"):
         argument = ""
-    return AskAction(npc_name=" ".join(words[:index]), request=request, argument=argument)
+    return RequestAction(npc_name=" ".join(words[:index]), request=request, argument=argument)
 
 
 _GIVE_SEPARATOR = re.compile(r"(.*\S)\s+to\s+(\S.*)", re.IGNORECASE)
@@ -653,9 +653,9 @@ VERBS: dict[str, Verb] = dict(
             ("npcs_here",),
         ),
         _verb(
-            "ASK",
+            "REQUEST",
             ("npc", "request"),
-            _parse_ask,
+            _parse_request,
             "ask an NPC for something: follow, stay, give <item>, about <topic>",
             TALK_TURN_MINUTES,
             ("npcs_here",),

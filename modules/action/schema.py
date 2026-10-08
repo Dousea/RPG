@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from modules.action.parser import (
-    ASK_REQUEST_LABELS,
     GOAL_HORIZON_LABELS,
+    REQUEST_LABELS,
     TALK_APPROACH_LABELS,
     ParseFailure,
     Verb,
@@ -203,12 +203,12 @@ def _first_aid_branch(
     return _branch(name, {"body_part": _one_of(parts)}, {"item": _one_of(items)} if items else None)
 
 
-def _ask_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
+def _request_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
     """One branch per kind of request, so a request for an item or a topic must name one."""
     if not choices.npcs:
         return []
     npc = {"npc": _one_of(choices.npcs)}
-    plain = tuple(r for r in ASK_REQUEST_LABELS if r not in ("give", "about"))
+    plain = tuple(r for r in REQUEST_LABELS if r not in ("give", "about"))
     asks = [_branch(name, {**npc, "request": _one_of(plain)})]
     if choices.npc_items:
         request = {"request": _one_of(("give",))}
@@ -220,8 +220,8 @@ def _ask_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
 
 
 def _verb_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
-    if name == "ASK":
-        return _ask_branches(name, choices)
+    if name == "REQUEST":
+        return _request_branches(name, choices)
     branch = _verb_branch(name, choices)
     return [branch] if branch is not None else []
 
@@ -276,10 +276,10 @@ def _exercise_line(fields: JsonObject) -> str:
     return _line("EXERCISE", _text(fields, "exercise"), "" if minutes is None else str(minutes))
 
 
-def _ask_line(fields: JsonObject) -> str:
+def _request_line(fields: JsonObject) -> str:
     request = _text(fields, "request")
     argument = _text(fields, "topic" if request == "about" else "item")
-    return _line("ASK", _text(fields, "npc"), request, argument)
+    return _line("REQUEST", _text(fields, "npc"), request, argument)
 
 
 def _take_line(fields: JsonObject) -> str:
@@ -330,7 +330,7 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "UNBARRICADE": _target_line("UNBARRICADE"),
     "SHOUT": lambda fields: "SHOUT",
     "TALK": lambda fields: _line("TALK", _text(fields, "npc"), _text(fields, "approach")),
-    "ASK": _ask_line,
+    "REQUEST": _request_line,
     "GIVE": lambda fields: _line(
         "GIVE", _text(fields, "item"), "to" if fields.get("npc") else "", _text(fields, "npc")
     ),

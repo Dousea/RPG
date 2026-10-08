@@ -116,10 +116,12 @@ _PARSER_JSON_FORMAT = (
 _PARSER_RULES = (
     "Most inputs are one action; list more only when the player names more "
     "than one thing to do. What the character says to an NPC is one action, "
-    "never two: ASK when it asks them to follow, stay, give an item or tell "
-    "about a listed topic, and TALK for everything else. Pick the TALK approach "
-    "that fits; the engine decides what it is worth. ASK 'give <item>' names an "
-    "item the NPC holds; ASK 'about <topic>' names a topic listed under that NPC "
+    "never two: REQUEST only when it asks them to follow, stay, give an item or "
+    "tell about a listed topic, and TALK for everything else. A question to an NPC "
+    "-- what they are doing, whether they have something, how they are -- is TALK "
+    'chat, even when the player writes "ask". Pick the TALK approach '
+    "that fits; the engine decides what it is worth. REQUEST 'give <item>' names an "
+    "item the NPC holds; REQUEST 'about <topic>' names a topic listed under that NPC "
     "in [NPCS HERE]. Someone not listed in [NPCS HERE] is not here to talk "
     "to or ask: when the input asks or tells them anything, that part of the "
     "input is no action at all, not some other action with what is listed.\n\n"
@@ -134,6 +136,9 @@ PARSER_SYSTEM_PROMPT = (
     "ACTIONS:\n"
     "TAKE Water Bottle\n"
     "MOVE_TO out\n"
+    "Input: 'ask Marcus if he has a hammer'\n"
+    "ACTIONS:\n"
+    "TALK Marcus chat\n"
     "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"
     "ACTIONS:\n"
     "NONE"
@@ -144,8 +149,10 @@ PARSER_JSON_SYSTEM_PROMPT = (
     "Input: 'I grab the water bottle and head out'\n"
     '{"actions": [{"verb": "TAKE", "item": "Water Bottle"}, '
     '{"verb": "MOVE_TO", "destination": "out"}]}\n'
+    "Input: 'ask Marcus if he has a hammer'\n"
+    '{"actions": [{"verb": "TALK", "npc": "Marcus", "approach": "chat"}]}\n'
     "Input: 'Emma, will you come with me?'\n"
-    '{"actions": [{"verb": "ASK", "npc": "Emma", "request": "follow"}]}\n'
+    '{"actions": [{"verb": "REQUEST", "npc": "Emma", "request": "follow"}]}\n'
     "Input: 'Emma, what's going on downstairs?'\n"
     '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat"}]}\n'
     "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"

@@ -246,6 +246,16 @@ class PromptRuleTests(unittest.TestCase):
             self.assertIn("not listed in [NPCS HERE]", prompt)
             self.assertIn("Input: 'ask Dana to open the gate'", prompt)
 
+    def test_the_parser_sends_a_question_to_talk_chat(self):
+        for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
+            self.assertIn("question to an NPC", prompt)
+            self.assertIn('even when the player writes "ask"', prompt)
+            self.assertIn("Input: 'ask Marcus if he has a hammer'", prompt)
+        self.assertIn("TALK Marcus chat", PARSER_SYSTEM_PROMPT)
+        self.assertIn(
+            '"verb": "TALK", "npc": "Marcus", "approach": "chat"', PARSER_JSON_SYSTEM_PROMPT
+        )
+
     def test_the_summarizer_is_told_an_attempt_is_not_an_outcome(self):
         self.assertIn("only an attempt", SUMMARIZER_SYSTEM_PROMPT)
         self.assertIn("what actually happened", SUMMARIZER_SYSTEM_PROMPT)
@@ -347,7 +357,7 @@ class ParserRequestTests(unittest.TestCase):
             actions, failures = parse_plan_response(example)
             self.assertEqual(failures, [])
             verbs.append([a.verb for a in actions])
-        self.assertEqual(verbs, [["TAKE", "MOVE_TO"], ["ASK"], ["TALK"], []])
+        self.assertEqual(verbs, [["TAKE", "MOVE_TO"], ["TALK"], ["REQUEST"], ["TALK"], []])
 
     def test_a_question_with_no_listed_topic_is_shown_as_talk(self):
         self.assertIn("Input: 'Emma, what's going on downstairs?'", PARSER_JSON_SYSTEM_PROMPT)

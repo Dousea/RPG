@@ -11,7 +11,7 @@ def _key(npc_id: str, label: str) -> str:
 
 @dataclass
 class SocialLog:
-    """Per-day approach and `GIVE` counts, refused `ASK`s with their minute, told topics.
+    """Per-day approach and `GIVE` counts, refused `REQUEST`s with their minute, told topics.
 
     The counts belong to one clock day; `roll_to_day` clears them when the day changes,
     which is the 00:00 reset.
