@@ -34,7 +34,7 @@ from data.loot import containers as container_k
 from data.story.memory import LAST_SCENE_MAX_CHARS, LAST_SCENE_MAX_LINES
 from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
-from data.world.clock import TIMES_OF_DAY
+from data.world.clock import TIME_WORDS
 from managers import carry, naming
 from managers.body.first_aid import (
     bandage_items,
@@ -640,7 +640,7 @@ Traits: {_lines(trait_lines) or "None"}
             exercise_minutes=tuple(
                 range(EXERCISE_MINUTES_MIN, EXERCISE_MINUTES_MAX + 1, EXERCISE_MINUTES_STEP)
             ),
-            times_of_day=TIMES_OF_DAY,
+            times_of_day=TIME_WORDS,
         )
 
     def build_plan_schema(self) -> JsonObject:

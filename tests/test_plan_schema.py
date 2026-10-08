@@ -325,7 +325,22 @@ class DurationPatternTests(unittest.TestCase):
         return names["WAIT"]["properties"]["duration"]["pattern"]
 
     def test_the_pattern_accepts_what_the_grammar_accepts(self):
-        for text in ("10m", "2h", "1h30m", "90m", "until night", "until 14:30", "until 6:05"):
+        for text in (
+            "10m",
+            "2h",
+            "1h30m",
+            "90m",
+            "until night",
+            "until 14:30",
+            "until 6:05",
+            "until dawn",
+            "until sunrise",
+            "until noon",
+            "until midday",
+            "until dusk",
+            "until sunset",
+            "until midnight",
+        ):
             self.assertTrue(re.search(self.pattern(), text), text)
             actions, failures = parse_action_plan([f"WAIT {text}"])
             self.assertEqual((len(actions), failures), (1, []), text)

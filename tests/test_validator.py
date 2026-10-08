@@ -99,8 +99,29 @@ class ClockValidationTests(unittest.TestCase):
         assert isinstance(result, Accepted)
         self.assertEqual(result.expect(TimeSpan).minutes, 960)
 
-    def test_an_unknown_time_of_day_is_rejected(self):
-        self.assertIsInstance(self._wait(until_time_of_day="teatime"), Rejected)
+    def test_an_unknown_time_of_day_is_refused_in_plain_words(self):
+        result = self._wait(until_time_of_day="teatime")
+        assert isinstance(result, Rejected)
+        self.assertIn("teatime", result.reason)
+        self.assertNotIn("Unknown", result.reason)
+        self.assertNotIn("'", result.reason)
+
+    def test_each_time_word_waits_until_its_clock_time(self):
+        words = {
+            "dawn": 6 * 60,
+            "sunrise": 6 * 60,
+            "noon": 12 * 60,
+            "midday": 12 * 60,
+            "dusk": 18 * 60,
+            "sunset": 18 * 60,
+            "midnight": 0,
+        }
+        for start in (7 * 60, 23 * 60):
+            self.gm.narrative.minutes = start - 480
+            for word, target in words.items():
+                with self.subTest(word=word, start=start):
+                    expected = (target - start) % 1440 or 1440
+                    self.assertEqual(self._resolved(until_time_of_day=word).minutes, expected)
 
 
 class MovementValidationTests(unittest.TestCase):

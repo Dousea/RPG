@@ -12,7 +12,23 @@ TIME_OF_DAY_BANDS = (  # clock
     ("night", 1320),
 )
 TIME_OF_DAY_START = dict(TIME_OF_DAY_BANDS)
-TIMES_OF_DAY = tuple(name for name, _ in TIME_OF_DAY_BANDS)
+NOON_MINUTE_OF_DAY = 720  # clock
+MIDNIGHT_MINUTE_OF_DAY = 0  # clock
+TIME_WORD_START = {  # clock: every word a wait or sleep can target, the bands included
+    **TIME_OF_DAY_START,
+    "dawn": TIME_OF_DAY_START["morning"],
+    "sunrise": TIME_OF_DAY_START["morning"],
+    "noon": NOON_MINUTE_OF_DAY,
+    "midday": NOON_MINUTE_OF_DAY,
+    "dusk": TIME_OF_DAY_START["evening"],
+    "sunset": TIME_OF_DAY_START["evening"],
+    "midnight": MIDNIGHT_MINUTE_OF_DAY,
+}
+TIME_WORDS = tuple(TIME_WORD_START)
+UNTIL_TIME_REFUSAL = (  # clock: the reason a wait or sleep names a word that is no time
+    "{word} is not a time of day. A time of day (morning, noon, dusk, night) "
+    "or a clock time like 18:00 works."
+)
 TIME_OF_DAY_PHRASES = {  # clock: a band as an adverbial phrase for a fact
     "morning": "in the morning",
     "afternoon": "in the afternoon",

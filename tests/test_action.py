@@ -55,6 +55,8 @@ class ClockActionTests(unittest.TestCase):
             "WAIT until 14:30": Duration(until_minute_of_day=870),
             "WAIT until 6:05": Duration(until_minute_of_day=365),
             "WAIT morning": Duration(until_time_of_day="morning"),
+            "WAIT dusk": Duration(until_time_of_day="dusk"),
+            "WAIT midnight": Duration(until_time_of_day="midnight"),
             "WAIT 07:00": Duration(until_minute_of_day=420),
             "WAIT 7:05": Duration(until_minute_of_day=425),
         }

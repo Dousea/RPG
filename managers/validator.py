@@ -29,7 +29,8 @@ from data.story.topics import TOPICS
 from data.world import barriers as barrier_k
 from data.world.clock import (
     SLEEP_CAP_MIN,
-    TIME_OF_DAY_START,
+    TIME_WORD_START,
+    UNTIL_TIME_REFUSAL,
     WAIT_CAP_MIN,
     minutes_until,
 )
@@ -1189,13 +1190,13 @@ class ActionValidator:
         now = self.manager.narrative.minutes
         if duration.until_minute_of_day is not None:
             return minutes_until(now, duration.until_minute_of_day)
-        start = TIME_OF_DAY_START.get(duration.until_time_of_day or "")
+        start = TIME_WORD_START.get(duration.until_time_of_day or "")
         return None if start is None else minutes_until(now, start)
 
     def _timed(self, action: WaitAction | SleepAction, duration: Duration, cap: int):
         span = self._span(duration)
         if span is None:
-            return Rejected(action, f"Unknown time of day: '{duration.until_time_of_day}'.")
+            return Rejected(action, UNTIL_TIME_REFUSAL.format(word=duration.until_time_of_day))
         return Accepted(action, TimeSpan(min(span, cap), clamped=span > cap))
 
     def _validate_wait(self, action: WaitAction) -> ValidationResult:

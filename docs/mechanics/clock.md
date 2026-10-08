@@ -55,12 +55,14 @@ matter.
 | both | `1h30m` | 90 minutes |
 | spelled out | `18 hours`, `1 hour 30 minutes`, `45 mins` | the same, with `h`/`hr`/`hrs`/`hour`/`hours` and `m`/`min`/`mins`/`minute`/`minutes` |
 | time of day | `until night` | the next 22:00 |
+| time word | `until dawn` | the next 06:00 (`dawn` and `sunrise`), 12:00 (`noon`, `midday`), 18:00 (`dusk`, `sunset`) or 00:00 (`midnight`) |
 | clock time | `until 14:30` | the next 14:30 |
-| bare time | `morning`, `07:00`, `7:05` | the same as `until` it; the model sometimes leaves the `until` out |
+| bare time | `morning`, `dusk`, `07:00`, `7:05` | the same as `until` it; the model sometimes leaves the `until` out |
 
 A malformed duration (`soon`, `0m`, `5`, `1h30`, `until 25:00`, a missing
 duration on `WAIT`) is a `ParseFailure`, never a zero-minute wait. A time of
-day that is not one of the four bands is refused by the validator.
+day that is not a band name or a time word is refused by the validator, in
+words that name what the player asked and what works; no time passes.
 
 | Constant | Value | Unit |
 | --- | --- | --- |

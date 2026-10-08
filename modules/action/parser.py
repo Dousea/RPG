@@ -272,8 +272,20 @@ def _parse_disinfect(args: str) -> DisinfectAction:
 _SPAN_PATTERN = re.compile(r"(?:(\d+)\s*(?:h|hrs?|hours?))?\s*(?:(\d+)\s*(?:m|mins?|minutes?))?")
 _CLOCK_TIME_PATTERN = re.compile(r"(\d{1,2}):(\d{2})")
 _TIME_OF_DAY_PATTERN = re.compile(r"[a-z]+")
-# modules/ cannot import data/; these are the bands of data.world.clock.TIMES_OF_DAY.
-_TIME_OF_DAY_WORDS = ("morning", "afternoon", "evening", "night")
+# modules/ cannot import data/; these are the words of data.world.clock.TIME_WORDS.
+_TIME_OF_DAY_WORDS = (
+    "morning",
+    "afternoon",
+    "evening",
+    "night",
+    "dawn",
+    "sunrise",
+    "noon",
+    "midday",
+    "dusk",
+    "sunset",
+    "midnight",
+)
 
 
 def _parse_until(verb: str, target: str) -> Duration | None:
