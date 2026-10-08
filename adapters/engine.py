@@ -44,8 +44,9 @@ from managers.story.check import StateQuestion, build_questions, plan_questions,
 from managers.story.lore import LoreHit, record_turn, select_lore
 from managers.world import item_ids
 from managers.world.barriers import barriers_of, state_word
-from managers.world.climate import weather_summary
+from managers.world.climate import scene_weather, weather_summary
 from managers.world.rooms import current_room
+from managers.world.scenes import setting_word
 from managers.zombies.population import threat_views
 from modules.action.choices import Candidate
 from modules.action.pins import Mention, bind, pinned_ids, render_input
@@ -60,6 +61,7 @@ from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.item import MedicalItem, MeleeWeaponItem, StackItem
 from modules.story.quest import QuestStatus
+from modules.world.weather import WeatherSample
 
 logger = logging.getLogger(__name__)
 
@@ -789,6 +791,8 @@ class GameEngine:
             m.id: (m.name, label) for m, label in zip(mentioned, labels(mentioned), strict=True)
         }
 
+        weather = manager.climate.sample(narrative.minutes)
+
         return {
             "needs_creation": False,
             "story_text": story_text,
@@ -801,7 +805,8 @@ class GameEngine:
             "day": narrative.day,
             "time_of_day": narrative.time_of_day,
             "outbreak_day": manager.outbreak_day(),
-            "weather": _weather(manager),
+            "weather": _weather(manager, weather),
+            "scene": _scene(manager, weather),
             "effects": _status_effects(player),
             "body": _body(player),
             "skills": _skills(player),
@@ -1004,12 +1009,20 @@ def _skills(player: PlayerEntity) -> list[dict[str, Any]]:
     ]
 
 
-def _weather(manager: GameManager) -> dict[str, Any]:
-    weather = manager.climate.sample(manager.narrative.minutes)
+def _weather(manager: GameManager, weather: WeatherSample) -> dict[str, Any]:
     return {
         "summary": weather_summary(weather),
         "temperature_c": round(weather.air_temperature),
         "sheltered": manager.current_location.indoors,
+    }
+
+
+def _scene(manager: GameManager, weather: WeatherSample) -> dict[str, str]:
+    """What the page draws above the story: the outbreak stage, the zone's setting and the sky, in words."""
+    return {
+        "stage": manager.outbreak_stage(),
+        "setting": setting_word(manager.current_location),
+        **scene_weather(weather),
     }
 
 
@@ -1115,6 +1128,7 @@ def _npc_regard(manager: GameManager, npc: NpcEntity) -> dict[str, Any]:
     relationships = manager.relationship_manager
     player_id = manager.player.entity_id
     return {
+        "id": npc.npc_id,
         "name": npc.name,
         "disposition": relationships.get_disposition(npc.npc_id, player_id).value,
         "trust": relationships.get_trust_level(npc.npc_id, player_id).value,

@@ -2,8 +2,8 @@ import datetime
 import unittest
 
 from data.world.climate import SEASON_MODEL
-from managers.world.climate import ClimateEngine
-from modules.world.weather import period_seed
+from managers.world.climate import ClimateEngine, scene_weather
+from modules.world.weather import WeatherSample, period_seed
 
 START = datetime.date(2023, 10, 1)
 
@@ -601,6 +601,77 @@ class FeltAirTest(unittest.TestCase):
         self.assertTrue(game.world.power_on)
         self.assertEqual(game.world.locations["zone_home"].floor, 1)
         self.assertEqual(game.world.locations["zone_building"].floor, 0)
+
+
+class SceneWeatherTest(unittest.TestCase):
+    """llm-contract: The scene's weather words come from the climate's own bands."""
+
+    @staticmethod
+    def _sample(**changes) -> WeatherSample:
+        values = dict(
+            air_temperature=10.0,
+            humidity=0.5,
+            wind_intensity=0.0,
+            wind_angle=0.0,
+            cloud_intensity=0.0,
+            precipitation_intensity=0.0,
+            precipitation_is_snow=False,
+            fog_intensity=0.2,
+            daylight=1.0,
+        )
+        return WeatherSample(**{**values, **changes})
+
+    def test_dry_and_clear(self):
+        self.assertEqual(
+            scene_weather(self._sample()),
+            {"sky": "clear", "falling": "none", "falling_strength": "", "fog": "none"},
+        )
+
+    def test_clouds_pass_through_as_the_climate_words_them(self):
+        self.assertEqual(scene_weather(self._sample(cloud_intensity=0.5))["sky"], "some clouds")
+        self.assertEqual(scene_weather(self._sample(cloud_intensity=0.9))["sky"], "overcast")
+
+    def test_steady_rain(self):
+        words = scene_weather(
+            self._sample(stage="moderate", precipitation_intensity=0.5, cloud_intensity=0.9)
+        )
+        self.assertEqual((words["falling"], words["falling_strength"]), ("rain", "steady"))
+
+    def test_heavy_snow(self):
+        words = scene_weather(
+            self._sample(
+                stage="heavy_precipitation",
+                precipitation_intensity=0.75,
+                precipitation_is_snow=True,
+            )
+        )
+        self.assertEqual((words["falling"], words["falling_strength"]), ("snow", "heavy"))
+
+    def test_every_stage_maps_to_a_strength(self):
+        expected = {
+            "drizzle": "light",
+            "showers": "light",
+            "clearing": "light",
+            "intermezzo": "light",
+            "moderate": "steady",
+            "heavy_precipitation": "heavy",
+            "storm": "storm",
+            "blizzard": "storm",
+            "tropical_storm": "storm",
+        }
+        for stage, strength in expected.items():
+            with self.subTest(stage):
+                sample = self._sample(stage=stage, precipitation_intensity=0.5)
+                self.assertEqual(scene_weather(sample)["falling_strength"], strength)
+
+    def test_a_stage_with_no_precipitation_is_dry(self):
+        words = scene_weather(self._sample(stage="clearing", precipitation_intensity=0.0))
+        self.assertEqual((words["falling"], words["falling_strength"]), ("none", ""))
+
+    def test_fog_words(self):
+        for fog, word in ((0.2, "none"), (0.5, "light"), (0.9, "thick"), (1.0, "thick")):
+            with self.subTest(fog):
+                self.assertEqual(scene_weather(self._sample(fog_intensity=fog))["fog"], word)
 
 
 if __name__ == "__main__":

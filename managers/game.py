@@ -6,6 +6,14 @@ from datetime import date, timedelta
 import config
 from data.character.presets import ORTON
 from data.story.npcs import STARTING_RELATIONSHIPS, build_starting_npcs
+from data.story.outbreak import (
+    ABANDONED_FIRST_DAY,
+    COLLAPSE_FIRST_DAY,
+    STAGE_ABANDONED,
+    STAGE_COLLAPSE,
+    STAGE_NORMAL,
+    STAGE_PANIC,
+)
 from data.story.quests import build_starting_quests
 from data.world.barriers import build_starting_barriers
 from data.world.clock import (
@@ -228,6 +236,17 @@ class GameManager:
         if started is None:
             return None
         return self.narrative.day - day_number(started) + 1
+
+    def outbreak_stage(self) -> str:
+        """How far the city has fallen: normal before the outbreak, then panic, collapse, abandoned (llm-contract)."""
+        day = self.outbreak_day()
+        if day is None:
+            return STAGE_NORMAL
+        if day >= ABANDONED_FIRST_DAY:
+            return STAGE_ABANDONED
+        if day >= COLLAPSE_FIRST_DAY:
+            return STAGE_COLLAPSE
+        return STAGE_PANIC
 
     @property
     def current_location(self) -> Location:

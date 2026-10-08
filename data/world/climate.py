@@ -135,3 +135,20 @@ STAGE_PHRASES = {
     "intermezzo": ("a lull in the rain", "a lull in the snow"),
 }
 DRY_WORD = "dry"
+
+# The words the scene is drawn from, keyed by the climate's own words (llm-contract).
+SCENE_SKY_WORDS = {"clear skies": "clear", "some clouds": "some clouds", "overcast": "overcast"}
+SCENE_FOG_WORDS = {"light fog": "light", "thick fog": "thick", FOG_VERY_THICK_WORD: "thick"}
+SCENE_NO_FOG_WORD = "none"
+SCENE_NOTHING_FALLS_WORD = "none"
+SCENE_STRENGTH_WORDS = {
+    "drizzle": "light",
+    "showers": "light",
+    "clearing": "light",
+    "intermezzo": "light",
+    "moderate": "steady",
+    "heavy_precipitation": "heavy",
+    "storm": "storm",
+    "blizzard": "storm",
+    "tropical_storm": "storm",
+}

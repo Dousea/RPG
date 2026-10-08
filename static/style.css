@@ -792,3 +792,72 @@ main {
 .plan-detail { color: var(--ash); font-size: 0.875rem; }
 .plan-buttons { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
 .plan-buttons .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* === The scene strip: a picture drawn from the snapshot (docs/architecture/ui-layout.md) === */
+.scene-strip {
+    position: relative;
+    flex: none;
+    height: 180px;
+    margin-bottom: 1.1rem;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #000;
+}
+.scene-strip .scene-art, .scene-strip svg { display: block; width: 100%; height: 100%; }
+.scene-strip .scene-hide, .scene-strip .scene-blood {
+    position: absolute;
+    top: 6px;
+    height: 24px;
+    border: 0;
+    border-radius: 3px;
+    background: rgb(0 0 0 / 0.45);
+    color: var(--bone);
+    font-size: 0.75rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+}
+.scene-strip .scene-hide { right: 6px; width: 24px; font-size: 14px; }
+.scene-strip .scene-blood { right: 36px; padding: 0 0.5rem; }
+.scene-strip .scene-hide:hover, .scene-strip .scene-blood:hover,
+.scene-strip .scene-hide:focus-visible, .scene-strip .scene-blood:focus-visible { opacity: 1; outline: 2px solid var(--yellow); }
+
+.scene-strip.collapsed { height: 30px; background: none; }
+.scene-strip.collapsed .scene-art, .scene-strip.collapsed .scene-blood { visibility: hidden; }
+.scene-strip.collapsed .scene-hide { background: var(--slab-raised); }
+
+@media (max-width: 860px) {
+    .scene-strip { height: 120px; margin-bottom: 0.75rem; }
+    .scene-strip.collapsed { height: 30px; }
+}
+
+.scene-strip.dead svg { filter: grayscale(1) brightness(0.62) contrast(1.1) !important; }
+.scene-strip.dead * { animation-play-state: paused !important; }
+
+@keyframes scene-sway { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2deg) translateY(1px); } }
+@keyframes scene-lunge { 0%, 100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(4deg) translateY(-2px); } }
+@keyframes scene-drag { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+@keyframes scene-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.008); } }
+@keyframes scene-tremble { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(0.6px); } }
+@keyframes scene-twitch { 0%, 80%, 100% { transform: translateX(0); } 85% { transform: translateX(1.5px); } 92% { transform: translateX(-1px); } }
+@keyframes scene-fall { from { transform: translate(0, -120px); } to { transform: translate(0, 0); } }
+@keyframes scene-drift { from { transform: translateX(-60px); } to { transform: translateX(60px); } }
+@keyframes scene-rise { from { transform: translateY(0) scaleX(1); opacity: 0.35; } to { transform: translateY(-14px) scaleX(1.15); opacity: 0.2; } }
+@keyframes scene-flash { 0%, 92% { opacity: 0; } 93% { opacity: 0.75; } 94% { opacity: 0; } 95.5% { opacity: 0.45; } 97%, 100% { opacity: 0; } }
+@keyframes scene-shake { 0%, 70%, 100% { transform: translateX(0); } 74% { transform: translateX(-2px); } 78% { transform: translateX(2px); } 82% { transform: translateX(-1px); } 86% { transform: translateX(1px); } }
+@keyframes scene-grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-7px, 4px); } 50% { transform: translate(5px, -6px); } 75% { transform: translate(-3px, -2px); } 100% { transform: translate(0, 0); } }
+
+.scene-strip .fig { transform-box: fill-box; transform-origin: 50% 100%; animation: scene-sway 3.4s ease-in-out infinite; }
+.scene-strip .fig.hurry { animation: scene-lunge 1.6s ease-in-out infinite; }
+.scene-strip .fig.fast { animation: scene-lunge 0.9s ease-in-out infinite; }
+.scene-strip .fig.crawl { animation: scene-drag 2.2s ease-in-out infinite; }
+.scene-strip .person { transform-box: fill-box; transform-origin: 50% 100%; animation: scene-breathe 4s ease-in-out infinite; }
+.scene-strip .person.scared { animation: scene-tremble 0.25s linear infinite; }
+.scene-strip .twitch { animation: scene-twitch 2.6s linear infinite; }
+.scene-strip .rain { animation: scene-fall var(--rain-speed, 0.5s) linear infinite; }
+.scene-strip .snow { animation: scene-fall var(--snow-speed, 7s) linear infinite; }
+.scene-strip .fog { animation: scene-drift 18s ease-in-out infinite alternate; }
+.scene-strip .smoke { transform-box: fill-box; transform-origin: 50% 100%; animation: scene-rise 6s ease-in-out infinite alternate; }
+.scene-strip .lightning { animation: scene-flash 7s linear infinite; }
+.scene-strip .thump { transform-box: fill-box; animation: scene-shake 1.4s linear infinite; }
+.scene-strip .grain { animation: scene-grain 0.5s steps(4) infinite; }

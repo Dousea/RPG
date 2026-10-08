@@ -1342,6 +1342,43 @@ class PayloadTests(EngineTestCase):
         self.assertIs(by_name["Emma"]["following"], True)
         self.assertIs(by_name["Marcus"]["following"], False)
 
+    def test_each_npc_carries_its_id(self):
+        manager = self.engine.game
+        manager.player.current_location_id = "zone_building"
+        ids = {npc["name"]: npc["id"] for npc in self.engine.state()["npcs"]}
+        self.assertEqual(ids["Emma"], npc_of(manager, "Emma").npc_id)
+
+    def test_the_scene_is_in_the_snapshot_after_a_turn_and_from_state(self):
+        for snapshot in (self.engine.play("go out"), self.engine.state()):
+            scene = snapshot["scene"]
+            self.assertEqual(
+                set(scene), {"stage", "setting", "sky", "falling", "falling_strength", "fog"}
+            )
+            self.assertEqual(scene["stage"], "normal")
+            self.assertEqual(scene["setting"], "hallway")
+
+    def test_the_scene_follows_the_outbreak_and_the_zone(self):
+        manager = self.engine.game
+        manager.world.outbreak_started_at = 0
+        manager.advance_clock(2 * 1440)
+        manager.player.current_location_id = "zone_street"
+        scene = self.engine.state()["scene"]
+        self.assertEqual((scene["stage"], scene["setting"]), ("collapse", "street"))
+
+    def test_the_climate_is_sampled_once_for_a_snapshot(self):
+        climate = self.engine.game.climate
+        with mock.patch.object(climate, "sample", wraps=climate.sample) as sample:
+            self.engine.state()
+        self.assertEqual(sample.call_count, 1)
+
+    def test_the_scene_holds_words_and_no_number(self):
+        def numbers(value: object) -> list[object]:
+            if isinstance(value, dict):
+                return [n for v in value.values() for n in numbers(v)]
+            return [value] if isinstance(value, int | float) else []
+
+        self.assertEqual(numbers(self.engine.state()["scene"]), [])
+
     def test_the_payload_drops_the_player_status_list(self):
         self.assertNotIn("status_effects", self.engine.state())
 

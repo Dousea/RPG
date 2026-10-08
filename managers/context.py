@@ -34,6 +34,7 @@ from data.items import ITEMS, item_condition_word, wetness_word
 from data.loot import containers as container_k
 from data.story import check as story_check_k
 from data.story.memory import LAST_SCENE_MAX_CHARS, LAST_SCENE_MAX_LINES
+from data.story.outbreak import STAGE_LINES
 from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
 from data.world.clock import TIME_WORDS
@@ -747,6 +748,10 @@ Sheltered: {"yes" if manager.current_location.indoors else "no"}
         day = self.manager.outbreak_day()
         return "before the outbreak" if day is None else f"outbreak day {day}"
 
+    def _outbreak_stage_line(self) -> str:
+        line = STAGE_LINES.get(self.manager.outbreak_stage())
+        return f"{line}\n" if line else ""
+
     def _time_and_weather_section(self) -> str:
         manager = self.manager
         narrative = manager.narrative
@@ -754,7 +759,7 @@ Sheltered: {"yes" if manager.current_location.indoors else "no"}
         weekday = date.fromisoformat(manager.world.date).strftime("%A")
         return f"""Day {narrative.day}, {narrative.time_of_day.capitalize()} -- {manager.world.time}, {weekday} {manager.world.date}
 It is {self._outbreak_line()}.
-(The weather outside, in words. When {self._name} is sheltered, rain and wind do not
+{self._outbreak_stage_line()}(The weather outside, in words. When {self._name} is sheltered, rain and wind do not
 reach {looks.object}, though {looks.subject} can still hear them.)
 {self._weather_section()}"""
 

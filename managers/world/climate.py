@@ -260,6 +260,22 @@ def describe_weather(sample: WeatherSample, indoors: bool) -> str:
     return "\n".join(lines)
 
 
+def scene_weather(sample: WeatherSample) -> dict[str, str]:
+    """The sky, falling weather and fog as the scene's words (llm-contract); never a number."""
+    fog = fog_word(sample.fog_intensity)
+    falling = climate_k.SCENE_NOTHING_FALLS_WORD
+    strength = ""
+    if sample.stage is not None and sample.precipitation_intensity > 0:
+        falling = "snow" if sample.precipitation_is_snow else "rain"
+        strength = climate_k.SCENE_STRENGTH_WORDS[sample.stage]
+    return {
+        "sky": climate_k.SCENE_SKY_WORDS[cloud_word(sample.cloud_intensity)],
+        "falling": falling,
+        "falling_strength": strength,
+        "fog": climate_k.SCENE_FOG_WORDS[fog] if fog else climate_k.SCENE_NO_FOG_WORD,
+    }
+
+
 def weather_summary(sample: WeatherSample) -> str:
     """One short line for the player's panel."""
     parts = [precipitation_phrase(sample.stage, sample.precipitation_is_snow)]

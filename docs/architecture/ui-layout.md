@@ -1,6 +1,6 @@
 # UI Layout
 
-> **Status: Implemented.** `templates/index.html`, `static/app.js`, `static/style.css`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts, all eight screens and the creation screen exist; fields of mechanics not built yet arrive with those mechanics. See [Implementation Status](../status.md).
+> **Status: Implemented.** `templates/index.html`, `static/app.js`, `static/style.css`, `static/scene.js`, `adapters/engine.py` `_snapshot`, `adapters/creation_payload.py`. The page, its three layouts, all eight screens and the creation screen exist; fields of mechanics not built yet arrive with those mechanics. See [Implementation Status](../status.md).
 
 The browser page is one HTML template with its script and stylesheet, and it
 renders the snapshot the engine returns.
@@ -55,6 +55,7 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 │ Location name                          │ Status Health ...      │
 │ place                                  │ ────────────────────── │
 │ description                            │ panel                  │
+│ scene strip                            │                        │
 │ death banner (only after death)        │                        │
 │                                        │                        │
 │ ▎player input                          │                        │
@@ -68,6 +69,7 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 | Region | Shows | Fields |
 | --- | --- | --- |
 | Header chips | when and what the sky is doing | `day`, `time_of_day`, `weather`, `outbreak_day` (`llm-contract`) |
+| Scene strip | a picture of where the player stands, the sky, who is with them and what is coming; decorative | `scene`, `time_of_day`, `barriers`, `threats`, `npcs`, `corpses`, `game_over` ([The scene](#the-scene)) |
 | Death banner | the character's death and its cause | `game_over`, `death_cause`, `character.name` |
 | Story log | each turn's input echo and prose, appended; on load, the last scene's prose with no echo and no options (the options aren't saved) | `story_text` |
 | Location | where the player stands | `current_location`, `current_place`, `location_description` |
@@ -86,6 +88,51 @@ game; a new game shows nothing.
 
 Once `game_over` is set the input and option buttons are disabled; only reset
 and load bring the page back.
+
+## The scene
+
+A strip under the location heading and above the story log, the column's full width
+and about 180 px tall (120 px on the narrow layout), with the story scrolling beneath
+it. It is drawn by `static/scene.js` from the snapshot alone: a fixed set of
+hand-made SVG pieces, picked and placed by words. There is no LLM, no image model and
+nothing to download.
+
+The strip keeps four rules:
+
+- **Decorative.** The picture is `aria-hidden`; every fact in it is already on a
+  screen in words.
+- **Drawn from the snapshot only.** The engine chose each fact and sent it as a word.
+  The strip can't show what the snapshot doesn't hold, and the narrator's prose never
+  reaches it.
+- **Words only.** `scene` holds no number. A word the page has no drawing for draws the
+  table's default and logs a console warning once. The defaults: afternoon, a clear sky, no
+  fog, no falling weather, a steady fall, a person standing with hands in pockets.
+- **Local damage comes from state only.** Doors, windows and planks come from
+  `barriers`, bodies and their blood from `corpses`, and zombie wounds from the zombie.
+  The outbreak stage draws only generic background and never an event the engine owns.
+
+| Layer | Drawn from |
+| --- | --- |
+| Sky and light | `time_of_day` (a palette for each; indoors the window shows it, and a night room is dim, never black) |
+| Cloud, falling weather, fog | `scene.sky`, `scene.falling` and `falling_strength`, `scene.fog` |
+| Setting | `scene.setting`: apartment, hallway, street, neighborhood, store or clinic, dressed by `scene.stage` |
+| Scenery by stage | `scene.stage` ([Outbreak stages](../mechanics/llm-contract.md#outbreak-stages)): grime and film grain from the panic stage on, and a colour grade that loses colour as the city falls |
+| Doors, windows | `barriers`: drawn by `state_word`, planks nailed across, a thumping one shakes. A setting has a few fixed spots, so a thumping barrier takes a spot first, then a broken, smashed or planked one, then the rest, ties broken by the barrier's id. The hallway has four door spots, a store one window or door spot (a door when the worst-off barrier is a door), and the street and the neighborhood put them, shrunk, on their buildings' own doors and windows in the middle of the frame |
+| Zombies | `threats`: one figure per visible zombie, its look fixed by its id, size and height by `distance_word`, posture by `state_word`; a heard-only threat draws no figure and closes the strip's edges in with a dark red tint; a zombie behind a barrier draws none |
+| People | `npcs`: a plain silhouette fixed by the NPC's `id`, stance by the disposition band; a follower stands larger at the frame's edge |
+| Bodies | `corpses`: at most three |
+| Game over | `game_over`: the strip turns grey and its motion stops |
+
+Everyone is drawn in one depth order, far zombies first and the one on you last, at
+most eight zombies. The strip is a 1000 by 200 view scaled to cover, so a phone shows
+about x 200 to 800; whatever carries a fact sits in that band. Motion is slow and
+small and stops under `prefers-reduced-motion`.
+
+Two view-only controls sit in the strip's corner: one hides the strip, and one sets
+blood to `full` or `reduced` (reduced drops blood smears, the handprint, pools,
+running blood, ribs, bone, teeth and gore trails; eyes keep their red). Both choices
+are kept in `localStorage` and change the drawing only: no game state, no request, no
+narrator change. They are the only state the page keeps for the scene.
 
 ## The colour code
 
@@ -246,6 +293,10 @@ A mechanic that adds or changes a snapshot field:
 4. lists the field under its screen in the page's `SCREEN_FIELDS`, which is
    what un-hides a screen;
 5. updates the table's *Exists* column.
+
+The scene reads `scene` (`stage`, `setting`, `sky`, `falling`, `falling_strength`,
+`fog`) and the `id` of each `npcs` entry; both are computed per snapshot and never
+saved. A new zone needs a row in `data/world/scenes.py`.
 
 --- | --- |
 | Header shows the outbreak stage | now `outbreak_day` (`llm-contract`): "Before the outbreak" or "Outbreak day N" |

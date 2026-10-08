@@ -8,6 +8,7 @@ from unittest import mock
 
 from adapters import llm
 from data.items import ITEMS
+from data.story.outbreak import STAGE_LINES
 from data.zombies.lore import CRAWLER_STATE_WORDS, STATE_WORD_DOWN
 from managers.character import creation
 from managers.context import ContextBuilder
@@ -1427,6 +1428,22 @@ class NarratorBlockOrderTests(unittest.TestCase):
         self.gm.advance_clock(1440)
         block = self.builder.build_narrator_prompt("look").split("[TIME AND WEATHER]")[1]
         self.assertIn("outbreak day 2", block.split("[CURRENT LOCATION]")[0])
+
+    def test_time_and_weather_describes_the_city_by_stage_and_not_before_the_outbreak(self):
+        def block() -> str:
+            prompt = self.builder.build_narrator_prompt("look")
+            return prompt.split("[TIME AND WEATHER]")[1].split("[CURRENT LOCATION]")[0]
+
+        for line in STAGE_LINES.values():
+            self.assertNotIn(line, block())
+        self.gm.world.outbreak_started_at = 0
+        for day, stage in ((1, "panic"), (3, "collapse"), (14, "abandoned")):
+            self.gm.narrative.minutes = (day - 1) * 1440
+            with self.subTest(stage):
+                self.assertIn(STAGE_LINES[stage], block())
+                for other, line in STAGE_LINES.items():
+                    if other != stage:
+                        self.assertNotIn(line, block())
 
     def test_the_old_apocalypse_line_is_gone(self):
         self.assertNotIn("Apocalypse", self.builder.build_narrator_prompt("look"))

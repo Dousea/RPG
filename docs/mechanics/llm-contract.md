@@ -422,6 +422,25 @@ The five stage beats and `trial_files` are in [world-lore](world-lore.md); none 
 The narrator's time block says "before the outbreak" or "outbreak day N" from the
 world's outbreak start.
 
+### Outbreak stages
+
+The city falls in four stages the engine works out from the outbreak day
+(`GameManager.outbreak_stage()`, bounds in `data/story/outbreak.py`; our own rule).
+The page draws the scenery by the stage ([UI Layout](../architecture/ui-layout.md#the-scene)),
+and the narrator is told the same city.
+
+| Stage | When | The narrator's line |
+| --- | --- | --- |
+| `normal` | before the outbreak | none |
+| `panic` | outbreak days 1 to 2 | smoke, fires at dusk, cars left open, a few broken windows, litter, thinning shelves |
+| `collapse` | outbreak days 3 to 13 | a thin smoke on the skyline, boarded and broken windows, wrecked cars, snapped streetlights, trash, crosses on doors, spilled stock, blood smears and handprints |
+| `abandoned` | outbreak day 14 on | the same, faded: grass, vines, rust, dust and cobwebs, no smoke |
+
+The line follows the outbreak line in `[TIME AND WEATHER]`. Lit lamps and
+streetlights follow the stage until a mechanic owns the power supply; then they follow
+that mechanic. Doors, windows, planks, bodies and wounds are never part of the stage:
+they come from the engine's state for the zone.
+
 ## Derived statuses
 
 A status the engine can compute is never stored by hand. It's recomputed after each
@@ -454,7 +473,7 @@ found. Naming a non-event would put the words to avoid last in the prompt.
 | `[CHARACTER]` | name, pronouns, occupation, appearance, backstory, skills in words, goals, inventory, equipment, the outfit line, traits |
 | `[DEEP MEMORY]` / `[SUMMARY OF PAST EVENTS]` / `[RECENT EVENTS]` | memory |
 | `[LAST SCENE]` | the lines spoken in the story the player last read, one per line with the speaker when the sentence names one, with a note that the outcomes and current blocks win; omitted when nobody spoke |
-| `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
+| `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N" and, from the outbreak on, the city's stage in one line ([Outbreak stages](#outbreak-stages)), the weather in words |
 | `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, and `[WORLD]` ([world-lore](world-lore.md)) |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
 | `[DOORS AND WINDOWS]` | as the parser sees it |
@@ -697,6 +716,15 @@ model changes. The plan check's reason pick has its own cases, `evals/plan_check
   `following`. The header chip reads "Before the outbreak" or "Outbreak day N". The
   People list shows "following you" beside a follower. Bands are shown as before;
   scores never are.
+- **Scene:** the payload gains `scene` (`stage`, `setting`, `sky`, `falling`,
+  `falling_strength`, `fog`, all words) and each NPC gains `id`, which fixes its look and
+  place and is never shown. The page draws a strip from them ([UI Layout](../architecture/ui-layout.md#the-scene)).
+  A zone's `setting` is in `data/world/scenes.py`; a zone missing from it is drawn as a
+  street outdoors or an apartment indoors. The weather words come from the climate's own
+  bands: `sky` is `clear`, `some clouds` or `overcast`; `fog` is `none`, `light` or
+  `thick` (very thick is thick); `falling` is `none`, `rain` or `snow`; `falling_strength`
+  is `light` (drizzle, showers, clearing, lull), `steady`, `heavy` or `storm` (storm,
+  blizzard, tropical storm), empty when nothing falls.
 - **Options:** unchanged. They are suggestions, always alongside free text.
 - **Plan screen:** a plan with an open choice comes back in place of a story: each step in
   words, a picker with every candidate's name and description under each step that waits

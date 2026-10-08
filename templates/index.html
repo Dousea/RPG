@@ -33,6 +33,12 @@
                 <p id="location-description"></p>
             </div>
 
+            <div class="scene-strip" id="scene-strip">
+                <div class="scene-art" aria-hidden="true"></div>
+                <button type="button" class="scene-blood" aria-label="Blood in the scene"></button>
+                <button type="button" class="scene-hide" aria-label="Hide the scene">&ndash;</button>
+            </div>
+
             <p id="death-banner" role="alert" hidden></p>
 
             <div id="story-display" aria-live="polite"></div>
@@ -245,6 +251,7 @@
     </form>
 </section>
 
+<script src="{{ url_for('static', filename='scene.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 
 </body>

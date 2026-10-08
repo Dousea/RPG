@@ -605,6 +605,7 @@ function updatePanel(data) {
     locationPlace.textContent = capitalised(data.current_place);
     locationPlace.hidden = !data.current_place;
     locationDescription.textContent = data.location_description || '';
+    drawScene(data);
     renderMetaChips(data);
     renderCondition(data);
     renderGoals(data);

@@ -33,6 +33,32 @@ def _at(day: int, hour: int, minute: int) -> GameManager:
     return gm
 
 
+class OutbreakStageTests(unittest.TestCase):
+    """llm-contract: The outbreak stage follows the outbreak day."""
+
+    def stage_on(self, outbreak_day: int | None) -> str:
+        gm = GameManager()
+        if outbreak_day is not None:
+            gm.world.outbreak_started_at = 0
+            gm.narrative.minutes = (outbreak_day - 1) * 1440
+        return gm.outbreak_stage()
+
+    def test_before_the_outbreak_is_normal(self):
+        self.assertEqual(self.stage_on(None), "normal")
+
+    def test_each_stage_holds_from_its_first_day_to_its_last(self):
+        for day, stage in (
+            (1, "panic"),
+            (2, "panic"),
+            (3, "collapse"),
+            (13, "collapse"),
+            (14, "abandoned"),
+            (60, "abandoned"),
+        ):
+            with self.subTest(day):
+                self.assertEqual(self.stage_on(day), stage)
+
+
 class ClockTests(unittest.TestCase):
     """clock: The clock."""
 
