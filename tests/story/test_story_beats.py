@@ -221,7 +221,7 @@ class DerivedStatusTests(unittest.TestCase):
         self.assertIn("trusts_player", npc_of(gm, "Marcus").status)
         self.assertEqual(gm.quests["quest_marcus_trust"].status, QuestStatus.COMPLETED)
         self.assertIn("Marcus's trust in Orton is now solid.", facts)
-        self.assertIn("Quest 'quest_marcus_trust' completed!", " ".join(facts))
+        self.assertIn('Quest "Earn the Super\'s Trust" completed.', " ".join(facts))
 
     def test_it_is_absent_below_solid(self):
         gm = GameManager()

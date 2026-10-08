@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from data import time_costs as time_cost_k
 from data.items import ITEMS
+from data.world.clock import MINUTES_PER_DAY, TIME_OF_DAY_PHRASES, WORLD_START_MINUTE_OF_DAY
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.zombies.population import MinuteReport
@@ -325,11 +326,23 @@ class SleepSpanTests(unittest.TestCase):
         gm.player.current_place = "the bedroom"
         gm.player.stats.set(CharacterStat.FATIGUE, 0.2)
         facts = simulate(gm, SleepAction())
-        self.assertIn("Orton wakes fully rested.", facts)
+        wake = next(fact for fact in facts if "wakes fully rested" in fact)
+        self.assertEqual(
+            wake, f"Orton wakes fully rested {TIME_OF_DAY_PHRASES[gm.narrative.time_of_day]}."
+        )
+        self.assertFalse(any(ch.isdigit() for ch in wake))
         self.assertEqual(gm.player.stats.get(CharacterStat.FATIGUE), 0)
         self.assertGreaterEqual(gm.narrative.minutes, 60)
         self.assertLess(gm.narrative.minutes, 6 * 60)
         self.assertFalse(gm.player.asleep)
+
+    def test_the_wake_fact_names_the_middle_of_the_night(self):
+        gm = GameManager()
+        gm.player.current_place = "the bedroom"
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.2)
+        gm.narrative.minutes = MINUTES_PER_DAY + 60 - WORLD_START_MINUTE_OF_DAY
+        facts = simulate(gm, SleepAction())
+        self.assertIn("Orton wakes fully rested in the middle of the night.", facts)
 
     def test_a_rested_sleeper_still_sleeps_the_first_hour(self):
         gm = GameManager()

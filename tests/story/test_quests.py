@@ -143,3 +143,25 @@ class StartingQuestContentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuestFactTests(unittest.TestCase):
+    """llm-contract: Outcome facts name a quest by its title, never its id."""
+
+    def test_an_objective_fact_names_the_title_and_label(self):
+        gm = GameManager()
+        facts = resolve_actions(
+            gm,
+            MoveAction(destination="out"),
+            MoveAction(destination="out"),
+            TakeAction(item_name="Crowbar"),
+        )
+        self.assertIn(
+            'Quest "Make a Supply Run": done -- Find something to defend yourself with.',
+            " ".join(facts),
+        )
+
+    def test_a_completion_fact_names_the_title(self):
+        gm = GameManager()
+        note = SimulationCore(gm).discover_flag("apocalypse_cause")
+        self.assertIn('Quest "Understand What\'s Happening" completed.', note)

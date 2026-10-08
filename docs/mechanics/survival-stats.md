@@ -258,7 +258,7 @@ The sleep runs chunk by chunk and ends at the first of these.
 | the requested time is up | "Orton sleeps 2 hours." |
 | open `SLEEP` at night reaches 09:00 | the time spent |
 | open `SLEEP` reaches the 16 hour cap | the time spent |
-| fatigue is 0 after at least 1 hour asleep | "Orton wakes fully rested." |
+| fatigue is 0 after at least 1 hour asleep | "Orton wakes fully rested in the middle of the night." (the phrase follows the time of day) |
 | a zombie interrupts (none can yet) | "A zombie wakes Orton in a panic." Panic rises by a random 30 to 60 from the injected `rng`. |
 | Hunger or Thirst reaches level 4 | "Hunger wakes Orton." or "Thirst wakes Orton." |
 
@@ -310,16 +310,6 @@ are gone. A save of any other version is discarded.
   end of the first chunk, so a sleeper is never killed in one `SLEEP`.
 - Death mid-span stops the clock at the minute where it happened.
 - Drivers use no randomness. The only random value is the interruption panic.
-
-## Known limitations
-
-Found in the 2026-10-08 playtest.
-
-- **"Sleep until morning" wakes in the night.** Waking fully rested ends the
-  sleep before its target, so the player woke at 03:20 and 02:00, and the narrator,
-  told only "Orton wakes fully rested.", wrote morning light both times. The rule is
-  sound; the fact hides the time. *Fix:* the wake fact says when ("Orton wakes
-  fully rested in the middle of the night."), from the clock's time-of-day word.
 
 ## Testing
 

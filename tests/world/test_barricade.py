@@ -500,6 +500,16 @@ class LockTests(unittest.TestCase):
         self.assertTrue(door.locked)
         self.assertIn("locked", " ".join(facts))
 
+    def test_a_move_stopped_by_planks_says_barricaded_not_locked(self):
+        gm, door = self.inside()
+        door.locked = False
+        door.barricades[door.inside_zone] = [100]
+        gm.player.current_location_id = BUILDING
+        facts, _ = run(gm, MoveAction(destination="Your Apartment"))
+        self.assertEqual(gm.player.current_location_id, BUILDING)
+        self.assertIn("the door to Your Apartment is barricaded", " ".join(facts))
+        self.assertNotIn("no key", " ".join(facts))
+
     def test_a_door_locked_by_the_verb_unlocks_when_opened_from_inside(self):
         gm, door = self.inside()
         run(gm, LockAction(barrier_name="apartment door"))

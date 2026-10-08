@@ -691,19 +691,6 @@ entry says what goes wrong and how to fix it.
   and give the narrator a fact that the rest was not attempted. That stops actions
   aimed at the wrong zone's things, and the player repeats the rest at the
   destination.
-- **The server ignores `pattern`.** LM Studio accepted `"morning"` and `"07:00"`
-  for a duration, and the grammar refused both ("it wasn't clear how"). *Fix:* let
-  the [duration grammar](clock.md#actions) read a bare time of day or `HH:MM` as
-  `until` it, so the schema's pattern no longer has to hold. A time already past
-  today lands tomorrow, as `WAIT until <time>` does ([edge cases](clock.md#edge-cases)).
-
-### Narrator
-
-- **Outcome facts leak internal ids.** A quest fact reads "Quest
-  'quest_supply_run' objective complete: take:item_crowbar." *Fix:* render it from
-  the quest's title and the objective's text in `data/story/quests.py`, and add a
-  test that no outcome fact holds a snake_case id (`item_…`, `quest_…`), so the
-  next leak fails a test instead of a playtest.
 
 ### People
 

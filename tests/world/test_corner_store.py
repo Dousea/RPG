@@ -167,3 +167,20 @@ class CornerStoreSaveTests(unittest.TestCase):
         with open(self.path, "w", encoding="utf-8") as handle:
             json.dump(data, handle)
         self.assertIsNone(files.load(self.path))
+
+
+class BlockedMoveWordTests(unittest.TestCase):
+    """doors: A blocked move names the barrier's kind."""
+
+    def test_a_blocked_move_at_the_window_says_window(self):
+        gm = on_the_street()
+        facts, _ = run(gm, MoveAction(destination="The Corner Store"))
+        self.assertIn("blocked -- the window to The Corner Store is locked", facts[0])
+
+    def test_a_blocked_move_at_a_door_says_door(self):
+        gm = GameManager()
+        gm.player.inventory.clear()
+        simulate(gm, MoveAction(destination="zone_street"))
+        gm.world.barriers["door_apartment"].locked = True
+        facts = simulate(gm, MoveAction(destination="Your Apartment"))
+        self.assertIn("blocked -- the door to Your Apartment is locked", facts[0])

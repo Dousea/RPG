@@ -46,7 +46,7 @@ from data.time_costs import (
     zone_hop_minutes,
 )
 from data.world import barriers as barrier_k
-from data.world.clock import MINUTES_PER_DAY
+from data.world.clock import MINUTES_PER_DAY, TIME_OF_DAY_PHRASES
 from data.zombies import lore as zombie_lore
 from managers import carry
 from managers.body.first_aid import FirstAid
@@ -943,9 +943,16 @@ class SimulationCore:
                 f"Move to {resolved.location.name}{where}: succeeded.",
                 f"reach:{resolved.location.id}",
             )
+        barrier = resolved.barrier
+        kind = barrier.kind.value if barrier else BarrierKind.DOOR.value
+        why = (
+            "barricaded"
+            if barrier and barrier.total_planks
+            else f"locked and {self._name} has no key"
+        )
         fact = (
-            f"Move to {resolved.target.name}: blocked -- the door to {resolved.target.name} is "
-            f"locked and {self._name} has no key. {self._name} is in {here.name}, {resolved.place}."
+            f"Move to {resolved.target.name}: blocked -- the {kind} to {resolved.target.name} is "
+            f"{why}. {self._name} is in {here.name}, {resolved.place}."
         )
         return self._with_quest_note(fact, f"reach:{here.id}") if changed else fact
 
@@ -1535,10 +1542,12 @@ class SimulationCore:
             if objective_key in quest.completed_objectives:
                 continue
             quest.completed_objectives.append(objective_key)
-            notes.append(f"Quest '{quest.quest_id}' objective complete: {objective_key}.")
+            title = quest.title or quest.quest_id
+            label = quest.objective_labels.get(objective_key, objective_key)
+            notes.append(f'Quest "{title}": done -- {label}.')
             if quest.is_complete():
                 quest.status = QuestStatus.COMPLETED
-                notes.append(f"Quest '{quest.quest_id}' completed!")
+                notes.append(f'Quest "{title}" completed.')
         return " ".join(notes)
 
     def _apply_relationship_modifiers(self, modifiers) -> None:
@@ -1746,7 +1755,8 @@ class SimulationCore:
             stats.get(CharacterStat.FATIGUE) <= 0
             and slept_minutes >= survival_k.SLEEP_FATIGUE_WAKE_MIN_HOURS * 60
         ):
-            return f"{self._name} wakes fully rested."
+            phrase = TIME_OF_DAY_PHRASES[self.manager.narrative.time_of_day]
+            return f"{self._name} wakes fully rested {phrase}."
         return ""
 
     _RESOLVERS: dict[

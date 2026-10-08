@@ -75,7 +75,7 @@ class RequestAboutTests(unittest.TestCase):
         facts = simulate(gm, REQUEST_NEWS)
         quest = gm.quests["quest_understand_the_crisis"]
         self.assertEqual(quest.status, QuestStatus.COMPLETED)
-        self.assertIn("Quest 'quest_understand_the_crisis' completed!", " ".join(facts))
+        self.assertIn('Quest "Understand What\'s Happening" completed.', " ".join(facts))
 
     def test_a_topic_needing_the_outbreak_is_refused_before_it(self):
         gm = jen_game(outbreak=False)

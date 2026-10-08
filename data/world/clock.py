@@ -13,6 +13,12 @@ TIME_OF_DAY_BANDS = (  # clock
 )
 TIME_OF_DAY_START = dict(TIME_OF_DAY_BANDS)
 TIMES_OF_DAY = tuple(name for name, _ in TIME_OF_DAY_BANDS)
+TIME_OF_DAY_PHRASES = {  # clock: a band as an adverbial phrase for a fact
+    "morning": "in the morning",
+    "afternoon": "in the afternoon",
+    "evening": "in the evening",
+    "night": "in the middle of the night",
+}
 
 WAIT_CAP_MIN = 1440  # clock: 24 h per action
 SLEEP_CAP_MIN = 960  # clock: 16 h per action

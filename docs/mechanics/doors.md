@@ -571,9 +571,6 @@ from the data. Saves of other versions are discarded and a new game starts.
 
 Found in the 2026-10-08 playtest.
 
-- **A blocked move names a door for a window.** "Move to The Corner Store:
-  blocked -- the door to The Corner Store is locked" when the barrier is the shop
-  window. *Fix:* use the barrier's kind word in the fact.
 - **Smashing glass by hand is free.** A bare-handed window smash breaks the glass
   with no injury. *Set aside:* the hand cut from smashing glass, the cuts from
   climbing through a smashed window and glass left on the floor are planned

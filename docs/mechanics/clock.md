@@ -56,6 +56,7 @@ matter.
 | spelled out | `18 hours`, `1 hour 30 minutes`, `45 mins` | the same, with `h`/`hr`/`hrs`/`hour`/`hours` and `m`/`min`/`mins`/`minute`/`minutes` |
 | time of day | `until night` | the next 22:00 |
 | clock time | `until 14:30` | the next 14:30 |
+| bare time | `morning`, `07:00`, `7:05` | the same as `until` it; the model sometimes leaves the `until` out |
 
 A malformed duration (`soon`, `0m`, `5`, `1h30`, `until 25:00`, a missing
 duration on `WAIT`) is a `ParseFailure`, never a zero-minute wait. A time of

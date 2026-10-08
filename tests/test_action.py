@@ -54,6 +54,9 @@ class ClockActionTests(unittest.TestCase):
             "WAIT until Morning.": Duration(until_time_of_day="morning"),
             "WAIT until 14:30": Duration(until_minute_of_day=870),
             "WAIT until 6:05": Duration(until_minute_of_day=365),
+            "WAIT morning": Duration(until_time_of_day="morning"),
+            "WAIT 07:00": Duration(until_minute_of_day=420),
+            "WAIT 7:05": Duration(until_minute_of_day=425),
         }
         for line, duration in cases.items():
             with self.subTest(line=line):
@@ -92,6 +95,8 @@ class ClockActionTests(unittest.TestCase):
             "WAIT 1h30",
             "WAIT until",
             "WAIT until 25:00",
+            "WAIT 25:00",
+            "WAIT 7:60",
             "WAIT until 12:60",
             "WAIT until 12:3",
             "SLEEP lots",

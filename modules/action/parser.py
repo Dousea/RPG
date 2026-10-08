@@ -272,6 +272,19 @@ def _parse_disinfect(args: str) -> DisinfectAction:
 _SPAN_PATTERN = re.compile(r"(?:(\d+)\s*(?:h|hrs?|hours?))?\s*(?:(\d+)\s*(?:m|mins?|minutes?))?")
 _CLOCK_TIME_PATTERN = re.compile(r"(\d{1,2}):(\d{2})")
 _TIME_OF_DAY_PATTERN = re.compile(r"[a-z]+")
+# modules/ cannot import data/; these are the bands of data.world.clock.TIMES_OF_DAY.
+_TIME_OF_DAY_WORDS = ("morning", "afternoon", "evening", "night")
+
+
+def _parse_until(verb: str, target: str) -> Duration | None:
+    """The clock-time duration for 'HH:MM', or None when `target` is not a clock time."""
+    clock = _CLOCK_TIME_PATTERN.fullmatch(target)
+    if clock is None:
+        return None
+    hour, minute = int(clock.group(1)), int(clock.group(2))
+    if hour > 23 or minute > 59:
+        raise _ActionParseError(f"{verb} has no such clock time: '{target}'.")
+    return Duration(until_minute_of_day=hour * 60 + minute)
 
 
 def _parse_duration(verb: str, args: str) -> Duration:
@@ -279,15 +292,17 @@ def _parse_duration(verb: str, args: str) -> Duration:
     text = args.strip().strip(".,;").casefold()
     if text.startswith("until "):
         target = text[len("until ") :].strip()
-        clock = _CLOCK_TIME_PATTERN.fullmatch(target)
-        if clock:
-            hour, minute = int(clock.group(1)), int(clock.group(2))
-            if hour > 23 or minute > 59:
-                raise _ActionParseError(f"{verb} has no such clock time: '{target}'.")
-            return Duration(until_minute_of_day=hour * 60 + minute)
+        until = _parse_until(verb, target)
+        if until is not None:
+            return until
         if _TIME_OF_DAY_PATTERN.fullmatch(target):
             return Duration(until_time_of_day=target)
         raise _ActionParseError(f"{verb} needs 'until <time of day>' or 'until HH:MM'.")
+    if text in _TIME_OF_DAY_WORDS or _CLOCK_TIME_PATTERN.fullmatch(text):
+        until = _parse_until(verb, text)
+        if until is not None:
+            return until
+        return Duration(until_time_of_day=text)
     span = _SPAN_PATTERN.fullmatch(text)
     if span is None or not (span.group(1) or span.group(2)):
         raise _ActionParseError(f"{verb} needs a duration like 10m, 2h, 1h30m or until night.")
