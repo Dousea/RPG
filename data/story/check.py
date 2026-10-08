@@ -43,3 +43,6 @@ PLAN_NOT_UNDERSTOOD_FACT = (
     "Refused: {name}'s request wasn't understood as an action; the player can rephrase it."
 )
 PLAN_REFUSED_FACT = "Refused: {name} can't do that here, and does not {action}."
+SEEN_BY_LOOKS = "{noun} ({looks})"
+ZOMBIE_NOUN = "the zombie"
+CORPSE_NOUN = "the body"

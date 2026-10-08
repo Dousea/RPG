@@ -26,7 +26,7 @@ from managers.world.barriers import barriers_of, blocks, state_word
 from managers.world.rooms import current_room, room_holding
 from managers.zombies.population import threat_views
 from modules.action.choices import Candidate
-from modules.action.pins import Mention
+from modules.action.pins import Mention, MentionKind
 from modules.entity.item import ItemEntity
 from modules.world.location import Location
 from modules.world.room import ContainerEntity, RoomEntity
@@ -91,6 +91,11 @@ def _corpses(manager: GameManager) -> list[Mention]:
             for view in corpse_views(manager)
         ],
     )
+
+
+def seen_by_looks(manager: GameManager) -> dict[str, tuple[MentionKind, str]]:
+    """The seen zombies and perceived bodies by id: (kind, looks), the words the `@` list shows."""
+    return {m.id: (m.kind, m.name) for m in [*_zombies(manager), *_corpses(manager)]}
 
 
 def _npcs(manager: GameManager) -> list[Mention]:

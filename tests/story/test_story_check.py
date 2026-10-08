@@ -6,9 +6,19 @@ import unittest
 
 from data.story import check as story_check_k
 from managers.game import GameManager
+from managers.mentions import seen_by_looks
 from managers.story.check import StateQuestion, build_questions, plan_questions
-from modules.action.types import ShoveAction, TalkAction, UnsupportedAction, UseItemAction
+from modules.action.types import (
+    AttackAction,
+    SearchAction,
+    ShoveAction,
+    TalkAction,
+    UnsupportedAction,
+    UseItemAction,
+)
+from modules.entity.corpse import CorpseEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
+from tests.test_simulation import add_zombie, zombie_game
 
 
 def zombie(zombie_id: str) -> ZombieEntity:
@@ -235,6 +245,38 @@ class PlanQuestionsTests(unittest.TestCase):
             question.correction,
             "Refused: Orton can't do that here, and does not use the Frying Pan.",
         )
+
+    def test_a_seen_zombie_is_named_by_its_looks_and_no_id_is_left(self):
+        manager = zombie_game()
+        seen = add_zombie(manager, gap=2, state=ZombieState.CHASING).zombie_id
+        looks = seen_by_looks(manager)[seen][1]
+        (question,) = plan_questions(manager, [AttackAction(target_name=seen)])
+        self.assertIn(f"attack the zombie ({looks})", question.text)
+        self.assertIn(f"attack the zombie ({looks})", question.correction)
+        self.assertNotRegex(question.text + question.correction, r"\bz\d+\b")
+
+    def test_a_perceived_body_is_named_by_its_looks_and_no_id_is_left(self):
+        corpse = CorpseEntity(
+            corpse_id="c4",
+            zone_id=self.manager.player.current_location_id,
+            gap=1.0,
+            female=True,
+            outfit="",
+            died_at=0,
+            rot_at_death=1,
+        )
+        self.manager.world.corpses["c4"] = corpse
+        looks = seen_by_looks(self.manager)["c4"][1]
+        (question,) = plan_questions(self.manager, [SearchAction(target_name="c4")])
+        self.assertIn(f"the body ({looks})", question.text)
+        self.assertNotRegex(question.text + question.correction, r"\bc\d+\b")
+
+    def test_an_id_with_nothing_behind_it_reads_as_before(self):
+        gone, body = plan_questions(
+            self.manager, [AttackAction(target_name="z9"), SearchAction(target_name="c9")]
+        )
+        self.assertIn('"attack the zombie"', gone.text)
+        self.assertIn('"search the body"', body.text)
 
     def test_a_zombie_is_named_in_words(self):
         (question,) = plan_questions(self.manager, [ShoveAction(target_name="z3")])

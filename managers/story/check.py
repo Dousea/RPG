@@ -1,12 +1,14 @@
 """State questions about the end of the story, built from the engine's truth."""
 
 import logging
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from data.story import check as story_check_k
-from managers.context import ZOMBIE_ID, zombie_ids_to_words
+from managers.context import CORPSE_ID, ZOMBIE_ID, zombie_ids_to_words
 from managers.game import GameManager
+from managers.mentions import seen_by_looks
 from modules.action.types import AnyAction, UnsupportedAction
 from modules.action.words import describe_action
 
@@ -96,7 +98,7 @@ def plan_questions(
     name = manager.player.appearance.forename
     questions = []
     for action in actions:
-        words = zombie_ids_to_words(describe_action(action))
+        words = _action_words(manager, action)
         if isinstance(action, UnsupportedAction):
             questions.append(
                 StateQuestion(
@@ -116,3 +118,21 @@ def plan_questions(
             )
         )
     return questions
+
+
+def _action_words(manager: GameManager, action: AnyAction) -> str:
+    """The action in words with each zombie or body the player can see told by its looks, never by id.
+
+    An id with nothing behind it any more reads as "the zombie" or "the body".
+    """
+    seen = seen_by_looks(manager)
+    nouns = {"zombie": story_check_k.ZOMBIE_NOUN, "corpse": story_check_k.CORPSE_NOUN}
+
+    def by_looks(match: re.Match[str]) -> str:
+        if (found := seen.get(match.group())) is None:
+            return match.group()
+        kind, looks = found
+        return story_check_k.SEEN_BY_LOOKS.format(noun=nouns[kind], looks=looks)
+
+    text = CORPSE_ID.sub(by_looks, ZOMBIE_ID.sub(by_looks, describe_action(action)))
+    return zombie_ids_to_words(text)

@@ -2,11 +2,13 @@
 
 import json
 import re
+from typing import cast
 from unittest import mock
 
 from data.items import ITEMS
 from managers.combat import weapons
 from managers.game import GameManager
+from managers.mentions import seen_by_looks
 from managers.simulation import SimulationCore
 from managers.validator import Accepted, ActionValidator, Rejected
 from managers.world import item_ids
@@ -16,6 +18,7 @@ from modules.body.parts import BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
 from modules.resolution import TargetBarrier, TargetContainer, TargetZombie
+from tests.support import FakeFactChecker
 from tests.test_engine import EngineTestCase
 from tests.test_simulation import add_zombie, zombie_game
 
@@ -89,6 +92,31 @@ class MentionTurnTests(EngineTestCase):
         seen = self.accepted()
         self.engine.play(f"hit {MENTION_MARK}", mentions=[far.zombie_id])
         self.assertEqual(seen[-1].expect(TargetZombie).zombie_id, far.zombie_id)
+
+    def test_the_plan_check_names_a_pinned_zombie_by_its_looks_and_the_attack_runs(self):
+        gm = self.stage()
+        add_zombie(gm, gap=2, state=ZombieState.CHASING)
+        far = add_zombie(gm, gap=6, state=ZombieState.CHASING)
+        looks = seen_by_looks(gm)[far.zombie_id][1]
+        self.script("ATTACK zombie")
+        seen = self.accepted()
+        self.engine.play(f"hit {MENTION_MARK}", mentions=[far.zombie_id])
+        (_, questions) = cast(FakeFactChecker, self.engine.factcheck).plan_calls[0]
+        self.assertIn(f"the zombie ({looks})", questions[0].text)
+        self.assertNotRegex(questions[0].text, ZOMBIE_ID)
+        self.assertEqual(seen[-1].expect(TargetZombie).zombie_id, far.zombie_id)
+
+    def test_a_pin_does_not_exempt_the_other_actions_of_the_turn(self):
+        gm = self.stage()
+        far = add_zombie(gm, gap=6, state=ZombieState.CHASING)
+        self.script("ATTACK zombie\nSHOUT")
+        checker = cast(FakeFactChecker, self.engine.factcheck)
+        checker.plan_results = [[1]]
+        seen = self.accepted()
+        self.engine.play(f"hit {MENTION_MARK} and shout", mentions=[far.zombie_id])
+        (_, questions) = checker.plan_calls[0]
+        self.assertEqual(len(questions), 2)
+        self.assertEqual({a.action.verb for a in seen}, {"ATTACK"})
 
     def test_a_parsed_target_that_differs_from_the_pin_is_overridden(self):
         gm = self.stage()

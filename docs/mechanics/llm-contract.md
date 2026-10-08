@@ -508,6 +508,12 @@ step needed for it), no (something else, which does not lead there) and unclear;
 and unclear are allowed. Each action is put in words the way refusal facts word it
 ("chat with Emma", "ask Marcus to come along", "ask Jen about the outbreak news"), so
 the model sees what the action does and to whom.
+A zombie or body the player can see is told by its looks, as the `@` list words it
+("attack the zombie (woman in a knee-length skirt)"), so a pick, which reaches the
+model by that name in the input, matches; no id reaches the model. An id with nothing
+behind it any more reads "the zombie" or "the body". A pinned target is asked about
+like any other: the pin is the player's own choice of target, and the question still
+tests the verb.
 
 An action answered no, at or above `factcheck.conflict_threshold`, is never validated
 or resolved. It becomes a refusal fact after the turn's other facts: "Refused: Orton
