@@ -44,11 +44,13 @@ memory:
   default_recall: 2
 
 factcheck:
-  # Check the narrator's story with a small decision model asked a state question
-  # (is the zombie standing, down or dead?); false skips the check and its requests.
+  # Check the narrator's story with a decision model asked yes/no state questions
+  # (was the zombie killed? did a refused action happen? was a search with finds
+  # called bare?); false skips the check and its requests.
   enabled: true
-  # The decision model's key in LM Studio, served from the llm section's base_url.
-  # Load it in LM Studio next to the narrator (Tev1-4B GGUF, about 2.8 GB at Q4_K_M).
+  # The decision model's key in LM Studio, served from the llm section's base_url:
+  # a small one loaded next to the narrator (Tev1-4B GGUF, about 2.8 GB at Q4_K_M),
+  # or the narrator's own llm.model_name when there is no room for a second model.
   model_name: "togethercomputer_tev1-4b-experimental"
   # A confident answer that conflicts with the engine counts at or above this
   # probability. "Unclear" never conflicts.
