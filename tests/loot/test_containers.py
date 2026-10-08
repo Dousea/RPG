@@ -152,13 +152,14 @@ class SearchContainerTests(unittest.TestCase):
         self.assertTrue(named(gm, "zone_home", "bathroom counter").opened)
         self.assertFalse(named(gm, "zone_home", "kitchen counter").opened)
 
-    def test_an_ambiguous_bare_word_is_refused_and_lists_the_choices(self):
+    def test_an_ambiguous_bare_word_pauses_the_plan_to_ask_which_one(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_bodega"
         gm.player.current_room = "shop_floor"
         minutes, facts = elapsed(gm, SearchAction(target_name="shelves"))
         self.assertEqual(minutes, 0)
-        self.assertTrue(refused(facts, "Which one: snack shelves or drinks shelves?"))
+        self.assertEqual(len(facts), 1)
+        self.assertIn("hasn't yet: search shelves", facts[0])
 
     def test_a_container_already_gone_through_is_refused(self):
         gm = in_room("kitchen")

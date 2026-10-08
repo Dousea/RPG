@@ -1,6 +1,6 @@
 # Full Turn Loop and Failure Handling
 
-> **Status: Partial.** Before the parser runs, `GameEngine.play` checks each `@` pick the player made against what is in reach; one that is not refuses the turn with a reason, with no LLM call and no game time ([Mentions](entity-resolution.md#mentions)). `GameEngine.play` now makes two LLM calls, not one — steps 2-3 are a real parser call and typed action plan (`modules/action/parser.py`), steps 5-7 are `ActionValidator`/`SimulationCore`, and narration happens after, not before, with a refusal surfaced the *same* turn via `[OUTCOMES]` rather than next turn's `[CONTINUITY]`. Step 4 (entity resolution) is folded into the validator rather than a separate stage; there is still no distinct world/story/NPC/faction rules layer beyond quest advancement. See [Implementation Status](../status.md).
+> **Status: Partial.** Before the parser runs, `GameEngine.play` checks each `@` pick the player made against what is in reach; one that is not refuses the turn with a reason, with no LLM call and no game time ([Mentions](entity-resolution.md#mentions)). After the parse and before anything runs, the engine asks the validator about each action's targets up to the plan's first zone change; a target that fits several things stops the turn on a plan screen with no time spent and no narrator call, and Go runs the kept plan with the answers bound ([Which one](entity-resolution.md#which-one)). A choice that appears only while the plan runs pauses it there, with the same screen. `GameEngine.play` now makes two LLM calls, not one — steps 2-3 are a real parser call and typed action plan (`modules/action/parser.py`), steps 5-7 are `ActionValidator`/`SimulationCore`, and narration happens after, not before, with a refusal surfaced the *same* turn via `[OUTCOMES]` rather than next turn's `[CONTINUITY]`. Step 4 (entity resolution) is folded into the validator rather than a separate stage; there is still no distinct world/story/NPC/faction rules layer beyond quest advancement. See [Implementation Status](../status.md).
 
 ## Full Turn Loop
 
@@ -56,6 +56,8 @@ LLM systems need explicit failure states.
 ```
 
 ### Ambiguity
+
+The validator's `Asked` refusal carries the candidates, and the engine puts them to the player on a plan screen before the plan runs (see [Which one](entity-resolution.md#which-one)):
 
 ```json
 {

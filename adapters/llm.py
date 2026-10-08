@@ -125,6 +125,8 @@ _PARSER_RULES = (
     "in [NPCS HERE]. Someone not listed in [NPCS HERE] is not here to talk "
     "to or ask: when the input asks or tells them anything, that part of the "
     "input is no action at all, not some other action with what is listed.\n\n"
+    "When the player's words for a place fit more than one zone in [ZONES], write "
+    "their own words as the MOVE_TO destination, not the name of a zone you picked.\n\n"
     "When the player asks for something no listed verb does, use UNSUPPORTED "
     "with what they asked for as a short verb phrase ('light a fire'), never "
     "the nearest verb on an "

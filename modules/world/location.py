@@ -19,6 +19,8 @@ class Location:
     # Other names the game master calls this place. A zone stands in for many
     # rooms, so "hallway", "lobby" and "stairwell" all resolve to the building.
     aliases: list[str] = field(default_factory=list[str])
+    # Kinds of place this zone is ("apartment", "store"); a kind word finds every zone of the kind.
+    kinds: list[str] = field(default_factory=list[str])
     # What the player sleeps on here, and the spots inside the zone that
     # override it: a word in `current_place` selects its bed type (survival-stats).
     bed_type: str = "floor"

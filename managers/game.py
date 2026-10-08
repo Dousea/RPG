@@ -245,8 +245,14 @@ class GameManager:
                 return npc
         return None
 
-    def resolve_location(self, name: str) -> Location | None:
+    def resolve_places(self, name: str) -> Location | list[Location] | None:
+        """The zone `name` means, or every zone it fits equally well when it fits several."""
         return locations.resolve_location(name, self.current_location, self.world.locations)
+
+    def resolve_location(self, name: str) -> Location | None:
+        """The one zone `name` means; None when it means no zone or several (`resolve_places` tells which)."""
+        found = self.resolve_places(name)
+        return None if isinstance(found, list) else found
 
     def resolve_zone_exact(self, name: str) -> Location | None:
         return locations.resolve_zone_exact(name, self.world.locations)

@@ -1,10 +1,13 @@
 """Action Validator: precondition checks only, no state mutation."""
 
 import unittest
+from dataclasses import replace
 
 from data.items import ITEMS
+from data.world.locations import ZONE_KIND_NAMES
 from managers.game import GameManager
-from managers.validator import Accepted, ActionValidator, Rejected, ValidationResult
+from managers.validator import Accepted, ActionValidator, Asked, Rejected, ValidationResult
+from modules.action.choices import Question
 from modules.action.types import (
     AttackAction,
     CloseAction,
@@ -761,3 +764,73 @@ class RoomVerbTests(unittest.TestCase):
             self.reason(PutAction(item_name="Hammer", target_name="kitchen counter")),
             "The kitchen counter hasn't been gone through.",
         )
+
+
+class AskedValidationTests(unittest.TestCase):
+    """llm-contract: A name that fits several things is refused as a question that carries its candidates and the field they answer."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        self.validator = ActionValidator(self.gm)
+
+    def asked(self, action) -> Asked:
+        result = self.validator.validate(action)
+        assert isinstance(result, Asked), result
+        return result
+
+    def test_two_differing_items_ask_with_their_qualified_names(self):
+        bat = ITEMS["item_baseball_bat"]
+        self.gm.current_location.entities.extend(
+            [ItemEntity(item=bat, condition=0), ItemEntity(item=bat)]
+        )
+        asked = self.asked(TakeAction(item_name="Baseball Bat"))
+        self.assertEqual(asked.attr, "item_name")
+        self.assertEqual(
+            [(c.kind, c.id) for c in asked.candidates],
+            [("item", "broken Baseball Bat"), ("item", "good Baseball Bat")],
+        )
+        fixed = replace(asked.action, item_name=asked.candidates[0].written())
+        self.assertIsInstance(self.validator.validate(fixed), Accepted)
+
+    def test_two_containers_of_a_kind_ask_and_a_pick_of_one_answers(self):
+        self.gm.player.current_room = None
+        asked = self.asked(SearchAction(target_name="counter"))
+        self.assertEqual(asked.attr, "target_name")
+        self.assertEqual({c.id for c in asked.candidates}, {"kitchen_counter", "bathroom_counter"})
+        chosen = next(c for c in asked.candidates if c.id == "bathroom_counter")
+        result = self.validator.validate(SearchAction(target_name=chosen.written()))
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.expect(TargetContainer).container.container_id, chosen.id)
+
+    def test_a_kind_word_for_a_move_asks_with_the_zones(self):
+        asked = self.asked(MoveAction(destination="the apartment"))
+        self.assertEqual(asked.attr, "destination")
+        self.assertEqual(
+            {c.id for c in asked.candidates},
+            {"zone_home", "zone_building", "zone_flat_vacant", "zone_flat_tenant"},
+        )
+        chosen = next(c for c in asked.candidates if c.id == "zone_building")
+        result = self.validator.validate(MoveAction(destination=chosen.written()))
+        assert isinstance(result, Accepted)
+        self.assertEqual(result.expect(MoveToZone).location.id, "zone_building")
+
+    def test_a_kind_word_is_asked_with_what_made_each_zone_fit(self):
+        self.gm.player.current_location_id = "zone_building"
+        asked = self.asked(MoveAction(destination="the apartment"))
+        names = {c.id: c.name for c in asked.candidates}
+        self.assertEqual(names["zone_building"], ZONE_KIND_NAMES["zone_building"])
+        self.assertEqual(names["zone_home"], self.gm.world.locations["zone_home"].name)
+        chosen = next(c for c in asked.candidates if c.id == "zone_building")
+        result = self.validator.validate(MoveAction(destination=chosen.written()))
+        self.assertIsInstance(result, Accepted)
+
+    def test_a_question_about_no_field_of_the_action_is_a_refusal_in_words(self):
+        question = Question("Which one?", "nothing like this", ())
+        result = ActionValidator._asked_result(TakeAction(item_name="Baseball Bat"), question)  # pyright: ignore[reportPrivateUsage]
+        self.assertNotIsInstance(result, Asked)
+        self.assertEqual(result.reason, "Which one?")
+
+    def test_a_refusal_that_is_not_a_question_is_not_asked(self):
+        result = self.validator.validate(TakeAction(item_name="Nothing Like This"))
+        assert isinstance(result, Rejected)
+        self.assertNotIsInstance(result, Asked)

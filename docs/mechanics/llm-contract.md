@@ -91,7 +91,7 @@ drift apart.
 
 | Verb | Arguments | Minutes |
 | --- | --- | --- |
-| `MOVE_TO` | zone, alias, `in`/`out` or a spot; optional `run` | per hop |
+| `MOVE_TO` | zone, alias, kind word ("the apartment"), `in`/`out` or a spot; optional `run` | per hop |
 | `STANCE` | `sneak` or `stand` | 0 |
 | `WAIT` | duration | as spent |
 | `SLEEP` | optional duration | as spent |
@@ -214,6 +214,10 @@ With nothing present, the block lists the nine always-listed verbs. Filtering de
 
 An item name is a closed label. When several listed items share a name and do not all look the same (their condition or wetness words differ), the name is offered bare and in each qualified form ("Baseball Bat", "broken Baseball Bat", "good Baseball Bat"); unique names and duplicates that look the same stay bare. A qualified name that the validator finds ambiguous is refused with "Which one: ...?" ([carrying and loot](carrying-and-loot.md)).
 
+### Place words
+
+A `MOVE_TO` destination is read in this order: a connection direction of the current zone, a zone's id, name or alias, an exit phrase ("leave the building"), a **kind word** and, last, the zone whose name or alias appears earliest in the phrase as whole words (the longer name wins a tie, so "the street outside my apartment" is the street). A kind word ("apartment" and "flat", which are one kind every home has, "store", "shop"; `ZONE_KINDS`) names every zone of that kind that `zone_path` reaches, the current one included. One reachable zone is the answer; several, and several zones tied in the whole-word match, are a question: the plan screen asks which one before anything runs ([entity resolution](../architecture/entity-resolution.md#which-one)). The parser's rule is to write the player's own words as the destination when they fit more than one zone, not the name of a zone it picked; the engine knows the player was unclear only when it sees those words. A phrase that names nothing is a spot in the current zone.
+
 ### Plans
 
 The parser returns a plan, resolved in order. It is a JSON object, `{"actions": [...]}`,
@@ -254,6 +258,12 @@ empty list is `NONE`.
   does the first five things."
 - **A refused action doesn't stop the plan.** The next one is judged on the state as
   it stands.
+- **A which-one question does.** An action whose target fits several things (an item that
+  looks different from another of its name, a container, a zone) is not refused: the plan
+  ends there, the actions from it on are not tried, and the narrator is told what is not
+  done yet. The engine asks the same questions of every action up to the first zone change
+  before the plan runs, and a plan with an open choice runs nothing until the player
+  answers ([entity resolution](../architecture/entity-resolution.md#which-one)).
 - **An interrupted action stops the plan.** The actions after it are cancelled with
   one fact: "Orton never gets to: take the knife, drop the bag." A story beat that
   interrupts does the same.
@@ -655,6 +665,12 @@ model changes.
   People list shows "following you" beside a follower. Bands are shown as before;
   scores never are.
 - **Options:** unchanged. They are suggestions, always alongside free text.
+- **Plan screen:** a plan with an open choice comes back in place of a story: each step in
+  words, a picker with every candidate's name and description under each step that waits
+  on an answer, a step with a default target showing which one it is, and Go and Cancel.
+  Go is enabled once every picker has a choice. Typing another turn or Cancel drops the
+  plan. A plan that meets a question while it runs comes back the same way with the done
+  steps ticked. It is held in memory and never saved.
 - **Turn status:** while a turn runs, a line under the story names its step (Parsing…,
   Thinking…, Narrating…, Fact checking…, Rewriting…, Writing options…, Saving…) with
   the seconds spent on it, the story appears as it is written, and a collapsed

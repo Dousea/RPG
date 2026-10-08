@@ -1221,6 +1221,28 @@ class PlanTests(unittest.TestCase):
         facts = simulate(gm, MoveAction(destination="out"))
         self.assertFalse(any("hasn't yet" in fact for fact in facts))
 
+    def test_a_question_ends_the_plan_there_and_keeps_what_is_left(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        bat = ITEMS["item_baseball_bat"]
+        gm.player.inventory.append(ItemEntity(item=bat, condition=0))
+        gm.current_location.entities.append(ItemEntity(item=bat))
+        drop = DropAction(item_name="broken Baseball Bat")
+        take = TakeAction(item_name="Baseball Bat")
+        goal = AddGoalAction(horizon="short_term", goal_text="Find water")
+        core = SimulationCore(gm, rng=random.Random(1))
+
+        facts = core.resolve([drop, take, goal])
+
+        self.assertEqual(core.done_actions, [drop])
+        assert core.asked is not None
+        self.assertEqual(core.asked.attr, "item_name")
+        self.assertEqual(core.pending, [take, goal])
+        self.assertEqual(gm.narrative.goals["short_term"], [])
+        self.assertTrue(any("hasn't yet" in f and "take the Baseball Bat" in f for f in facts))
+        self.assertEqual(core.refused_actions, [])
+        self.assertEqual(sum("Refused" in fact for fact in facts), 0)
+
     def test_a_none_turn_costs_one_minute(self):
         gm = GameManager()
         facts = simulate(gm)

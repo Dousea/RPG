@@ -9,14 +9,14 @@ import json
 import logging
 import queue
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
 
 import config
 from adapters.creation_payload import build_from_payload, creation_screen
-from adapters.engine import GameEngine
+from adapters.engine import GameEngine, TurnListener
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -73,23 +73,17 @@ def play():
     return jsonify(get_engine().play(player_input, mentions=mentions))
 
 
-@app.route("/play/stream", methods=["POST"])
-def play_stream():
-    """Runs a turn and sends its events as JSON lines as they happen, then {"type": "done", "turn": ...}.
+def _streamed(turn: Callable[[TurnListener], dict[str, Any]]) -> Response:
+    """Runs `turn` and sends its events as JSON lines as they happen, then {"type": "done", "turn": ...}.
 
     The turn runs on its own thread, so a player who closes the page mid-turn
     still gets the turn decided, recorded and saved.
     """
-    player_input, mentions, error = _turn_input()
-    if error:
-        return error
-    engine = get_engine()
     events: queue.Queue[dict[str, Any] | None] = queue.Queue()
 
     def run() -> None:
         try:
-            turn = engine.play(player_input, on_event=events.put, mentions=mentions)
-            events.put({"type": "done", "turn": turn})
+            events.put({"type": "done", "turn": turn(events.put)})
         except Exception as exc:
             logger.exception("Streamed turn failed")
             events.put({"type": "error", "message": str(exc)})
@@ -105,6 +99,34 @@ def play_stream():
         mimetype="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/play/stream", methods=["POST"])
+def play_stream():
+    """Runs a turn and streams its events."""
+    player_input, mentions, error = _turn_input()
+    if error:
+        return error
+    engine = get_engine()
+    return _streamed(lambda emit: engine.play(player_input, on_event=emit, mentions=mentions))
+
+
+@app.route("/plan/go/stream", methods=["POST"])
+def plan_go_stream():
+    """Runs the plan that waits for an answer with the player's `choices`, one candidate id per open choice, and streams its events."""
+    engine = get_engine()
+    if not engine.has_game:
+        return jsonify({"error": "Create a character first.", "needs_creation": True}), 409
+    payload = request.get_json(silent=True) or {}
+    choices = payload.get("choices")
+    answers = [c for c in choices if isinstance(c, str)] if isinstance(choices, list) else []
+    return _streamed(lambda emit: engine.go(answers, on_event=emit))
+
+
+@app.route("/plan/cancel", methods=["POST"])
+def plan_cancel():
+    """Drops the plan that waits for an answer."""
+    return jsonify(get_engine().cancel_plan())
 
 
 @app.route("/reset", methods=["POST"])

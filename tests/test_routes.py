@@ -265,6 +265,39 @@ class MentionRouteTests(RouteTestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class PlanRouteTests(RouteTestCase):
+    """llm-contract: The plan screen over HTTP: a plan with an open choice is sent, answered by Go or dropped by Cancel."""
+
+    def ask(self):
+        self.llm.actions = "ACTIONS:\nMOVE_TO the apartment"
+        response = self.client.post("/play/stream", json={"input": "go to the apartment"})
+        return json.loads(response.get_data(as_text=True).splitlines()[-1])["turn"]
+
+    def test_the_turn_carries_the_plan_and_state_shows_it_again(self):
+        turn = self.ask()
+        self.assertEqual(len(turn["plan"]["choices"][0]["candidates"]), 4)
+        self.assertEqual(self.client.get("/state").get_json()["plan"], turn["plan"])
+
+    def test_go_streams_the_run_of_the_kept_plan(self):
+        self.ask()
+        response = self.client.post("/plan/go/stream", json={"choices": ["zone_home"]})
+        events = [json.loads(line) for line in response.get_data(as_text=True).splitlines()]
+        self.assertEqual(events[-1]["type"], "done")
+        self.assertIsNone(events[-1]["turn"]["plan"])
+        self.assertEqual(events[-1]["turn"]["story_text"], "You walk out into the building.")
+        self.assertEqual(len(self.llm.prompts), 1)
+
+    def test_cancel_drops_the_plan(self):
+        self.ask()
+        self.assertIsNone(self.client.post("/plan/cancel").get_json()["plan"])
+        self.assertIsNone(self.client.get("/state").get_json()["plan"])
+
+    def test_go_with_no_game_is_rejected(self):
+        self.engine.reset()
+        response = self.client.post("/plan/go/stream", json={"choices": []})
+        self.assertEqual(response.status_code, 409)
+
+
 class SaveLoadRouteTests(RouteTestCase):
     def test_export_downloads_a_save_file(self):
         response = self.client.get("/save/export")

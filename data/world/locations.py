@@ -55,6 +55,26 @@ ZONE_EXIT_NOUNS: dict[str, tuple[str, ...]] = {
     "zone_hardware": ("hardware store", "tool store"),
 }
 
+# Words that name a kind of place several zones share ("the apartment", "the
+# store"), kept apart from `aliases` the way container kind words are: a kind
+# word finds every zone of the kind the player can reach and asks which one.
+ZONE_KINDS: dict[str, tuple[str, ...]] = {  # llm-contract
+    "zone_home": ("apartment", "flat"),
+    "zone_building": ("apartment", "flat"),
+    "zone_flat_vacant": ("apartment", "flat"),
+    "zone_flat_tenant": ("apartment", "flat"),
+    "zone_bodega": ("store", "shop"),
+    "zone_pharmacy": ("store", "shop"),
+    "zone_supermarket": ("store", "shop"),
+    "zone_hardware": ("store", "shop"),
+}
+
+# How a zone reads in a which-one list when its kind comes from a place inside
+# it rather than from its own name.
+ZONE_KIND_NAMES: dict[str, str] = {  # llm-contract
+    "zone_building": "Emma's apartment, in Your Building",
+}
+
 ALLEY_CONTENTS = [PLANK_ITEM_ID, PLANK_ITEM_ID]  # doors
 APARTMENT_BLOCK_ID = "apartment_block"  # doors
 BUILDING_ZONE_IDS = ("zone_home", "zone_building")  # doors
@@ -287,6 +307,8 @@ def build_starting_locations() -> dict[str, Location]:
 
     for zone_id, indoors in INDOORS_BY_ZONE.items():
         locations[zone_id].indoors = indoors
+    for zone_id, kinds in ZONE_KINDS.items():
+        locations[zone_id].kinds = list(kinds)
     locations["zone_home"].floor = 1  # body-temperature
     for zone_id in FLAT_ZONE_IDS:
         locations[zone_id].floor = 1  # carrying-and-loot

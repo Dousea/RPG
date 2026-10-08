@@ -78,7 +78,7 @@ from managers.events.pipeline import broadcast_event
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
 from managers.story.beats import clock_minutes, holds
 from managers.story.social import SocialManager
-from managers.validator import Accepted, ActionValidator, Rejected
+from managers.validator import Accepted, ActionValidator, Asked, Rejected
 from managers.world.barrier_use import BarrierActions, unbarricade_minutes
 from managers.world.barriers import barriers_between, thumpable_for
 from managers.world.climate import weather_change_facts
@@ -259,6 +259,10 @@ class SimulationCore:
         self.found_items = False
         self.refused_plan: list[AnyAction] = []
         self.finds: list[str] = []
+        self.done_actions: list[AnyAction] = []
+        self.tried: list[AnyAction] = []
+        self.asked: Asked | None = None
+        self.pending: list[AnyAction] = []
         self._social = SocialManager(manager, self._rng)
         self._body = BodyEngine(self._rng)
         self._first_aid = FirstAid(self._rng, self.skill_engine)
@@ -298,6 +302,10 @@ class SimulationCore:
         resolves in the same turn under what is left of `MAX_PLAN_ACTIONS`, and
         the not-yet-done fact is dropped; on None it stays.
 
+        An action whose target fits several things (`Asked`) ends the plan there, as a zone
+        change does: `asked` is the question and `pending` the actions from it on, none of
+        them tried. `done_actions` and `tried` hold what resolved and what was attempted.
+
         Afterwards `refused_actions` holds each action the validator refused and
         no later action of the turn did, in words with the reason, and `found_items` says
         whether a search turned anything up; the fact check asks about both. `refused_plan` holds
@@ -323,7 +331,11 @@ class SimulationCore:
             facts.extend(stat_facts)
         attempted = 0
         done_words: list[str] = []
-        tried: list[AnyAction] = []
+        self.tried = []
+        tried = self.tried
+        self.done_actions = []
+        self.asked = None
+        self.pending = []
         plan = actions
         while True:
             budget = MAX_PLAN_ACTIONS - attempted
@@ -335,6 +347,17 @@ class SimulationCore:
                 tried.append(action)
                 self._release_vanished_body()
                 result = self.validator.validate(action)
+
+                if isinstance(result, Asked):
+                    self.asked = result
+                    self.pending = plan[index:budget]
+                    unattempted = [describe_action(a) for a in self.pending]
+                    facts.append(
+                        f"{self._name} can't tell which one is meant, so {self._subject} "
+                        f"hasn't yet: {', '.join(unattempted)}."
+                    )
+                    break
+
                 if isinstance(result, Rejected):
                     rejected.append((describe_action(result.action), result.reason))
                     rejected_actions.append(result.action)
@@ -342,6 +365,7 @@ class SimulationCore:
                     continue
                 done.add(describe_action(action))
                 done_words.append(describe_action(action))
+                self.done_actions.append(action)
                 self._interruption = ""
                 zone_before = self.manager.player.current_location_id
                 action_facts, minutes = self._resolve_one(result)

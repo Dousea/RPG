@@ -34,7 +34,7 @@ def scene(case: dict) -> GameManager:
 
 
 def _reached(manager: GameManager, action: AnyAction) -> object:
-    """A move as the zone it reaches, so "In" and an alias match; a talk by whether words came with it; other actions as they are."""
+    """A move as the zone it reaches (or the zones its words fit), so "In" and an alias match; a talk by whether words came with it; other actions as they are."""
     if isinstance(action, TalkAction):
         return (TalkAction.verb, action.npc_name, action.approach, bool(action.speech))
     if isinstance(action, UnsupportedAction):
@@ -44,8 +44,12 @@ def _reached(manager: GameManager, action: AnyAction) -> object:
     folded = action.destination.casefold()
     current = manager.current_location
     target = connection_target(folded, current, manager.world.locations)
-    target = target or manager.resolve_location(action.destination)
-    return (MoveAction.verb, target.id if target else folded, action.run)
+    target = target or manager.resolve_places(action.destination)
+    if isinstance(target, list):
+        reached = tuple(zone.id for zone in target)
+    else:
+        reached = target.id if target else folded
+    return (MoveAction.verb, reached, action.run)
 
 
 def same_plan(manager: GameManager, got: list[AnyAction], want: list[AnyAction]) -> bool:

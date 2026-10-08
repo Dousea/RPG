@@ -47,6 +47,7 @@ BARE_DIRECTIONS = frozenset(
 MIN_WHOLE_WORD_NAME_LENGTH = 4
 
 _WORD = re.compile(r"[a-z0-9']+")
+_ARTICLES = frozenset({"the", "a", "an", "this", "that"})
 _EXIT_PHRASE = re.compile(
     r"^(?:outside(?: of)?|out of|leaving|leave|exiting|exit)\s+"
     r"(?:(?:the|my|your|this|orton's)\s+)?(.+)$"
@@ -67,10 +68,11 @@ def connection_target(
 
 def resolve_location(
     phrase: str, current: Location, locations: dict[str, Location]
-) -> Location | None:
+) -> Location | list[Location] | None:
     """Resolve a zone by connection direction, id, name, alias, exit phrase
-    ("leave the building") or a name inside a longer phrase ("back to my
-    apartment"), in that order. None when nothing matches.
+    ("leave the building"), kind word ("the apartment") or a name inside a
+    longer phrase ("back to my apartment"), in that order. None when nothing
+    matches, and a list when the phrase fits several zones equally well.
 
     Adjacency is not checked: this says which zone a phrase means, and
     `ActionValidator._validate_move` decides whether the player gets there.
@@ -87,7 +89,7 @@ def resolve_location(
         named = _exit_noun_prefix(words)
         if named is not None:
             return _walk_out(named, words, current, locations)
-    return _match_whole_words(needle, current, locations)
+    return _match_kind(needle, current, locations) or _match_whole_words(needle, locations)
 
 
 def resolve_zone_exact(phrase: str, locations: dict[str, Location]) -> Location | None:
@@ -141,7 +143,7 @@ def _match_exact(needle: str, locations: dict[str, Location]) -> Location | None
 
 def _walk_out(
     named: tuple[str, int], words: list[str], current: Location, locations: dict[str, Location]
-) -> Location | None:
+) -> Location | list[Location] | None:
     """Where an exit phrase whose object starts with a zone's exit noun goes.
 
     Only the current zone's noun walks out of it; "outside the bus stop" names
@@ -176,36 +178,70 @@ def _exit_noun_prefix(words: list[str]) -> tuple[str, int] | None:
     return best
 
 
-def _match_whole_words(
+def kind_word(needle: str) -> str:
+    """`needle` without its leading articles: the word that may name a kind of place."""
+    words = _WORD.findall(needle)
+    while words and words[0] in _ARTICLES:
+        words = words[1:]
+    return " ".join(words)
+
+
+def _match_kind(
     needle: str, current: Location, locations: dict[str, Location]
-) -> Location | None:
+) -> Location | list[Location] | None:
+    """The zones of the kind `needle` names ("the apartment") that `zone_path` reaches from `current`, the current zone included."""
+    kind = kind_word(needle)
+    zones = [
+        zone
+        for zone in locations.values()
+        if kind in zone.kinds and zone_path(locations, current.id, zone.id) is not None
+    ]
+    if not zones:
+        return None
+    return zones[0] if len(zones) == 1 else zones
+
+
+def _match_whole_words(
+    needle: str, locations: dict[str, Location]
+) -> Location | list[Location] | None:
     """The zone whose name or alias appears earliest in `needle` as a run of
-    whole words; ties go to the longer name, then to the current zone.
+    whole words; ties go to the longer name, and zones still tied are all
+    returned for the player to choose from.
 
     Earliest wins because the head of the phrase is the destination: "the
     street outside my apartment" is the street. A leading "the" on a name
     is ignored, or every name starting with "the" would match at word 0.
     """
     phrase_words = _words(needle)
-    best: tuple[tuple[int, int, int], Location] | None = None
+    best: tuple[int, int] | None = None
+    tied: list[Location] = []
+
     for location in locations.values():
         for candidate in (location.name, *location.aliases):
             folded = candidate.casefold()
             if len(folded) < MIN_WHOLE_WORD_NAME_LENGTH:
                 continue
+
             candidate_words = _words(folded)
             if candidate_words[:1] == ["the"]:
                 candidate_words = candidate_words[1:]
             if not candidate_words:
                 continue
+
             position = _first_contiguous_match(phrase_words, candidate_words)
             if position is None:
                 continue
-            is_current_zone = 0 if location.id == current.id else 1
-            score = (position, -len(candidate_words), is_current_zone)
-            if best is None or score < best[0]:
-                best = (score, location)
-    return best[1] if best is not None else None
+
+            score = (position, -len(candidate_words))
+            if best is None or score < best:
+                best, tied = score, [location]
+            elif score == best and location not in tied:
+                tied.append(location)
+
+    if not tied:
+        return None
+
+    return tied[0] if len(tied) == 1 else tied
 
 
 def _words(text: str) -> list[str]:

@@ -5,6 +5,7 @@ from collections.abc import Collection, Iterable
 
 from data.items import DESCRIBING_WORDS, item_condition_word, wetness_word
 from data.loot import containers as container_k
+from modules.action.choices import Candidate
 from modules.entity.item import ItemEntity
 
 BRACKETED_WORD = re.compile(r"(.+?)\s*\(([^()]+)\)")
@@ -126,6 +127,17 @@ def qualified_names(entities: Iterable[ItemEntity]) -> list[str]:
     looks = _distinct_looks(entities)
     labels = _labels(list(looks))
     return [f"{labels[look]} {entity.item.name}" for look, entity in looks.items()]
+
+
+def item_candidates(entities: Iterable[ItemEntity]) -> tuple[Candidate, ...]:
+    """Each distinct look of `entities` once, as a candidate: the qualified name, and the look in words."""
+    looks = _distinct_looks(entities)
+    labels = _labels(list(looks))
+    return tuple(
+        Candidate("item", qualified, entity.item.name, ", ".join(look))
+        for look, entity in looks.items()
+        for qualified in [f"{labels[look]} {entity.item.name}"]
+    )
 
 
 def which_one(candidates: Iterable[ItemEntity]) -> str:

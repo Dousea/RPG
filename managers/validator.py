@@ -15,7 +15,7 @@ re-derive the reason something was legal.
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from data import carry as carry_k
 from data.body import health as body_k
@@ -48,6 +48,7 @@ from managers.character.exercise import endurance_level
 from managers.combat import weapons
 from managers.corpses.search import find_content, perceived_corpses, with_article
 from managers.game import MAX_PLACE_LENGTH, GameManager
+from managers.mentions import container_candidate, zone_candidate
 from managers.story.beats import visible_topics
 from managers.story.social import locked_out
 from managers.world.barriers import (
@@ -57,7 +58,7 @@ from managers.world.barriers import (
     thumpable_for,
 )
 from managers.world.containers import has_room_for, unopened
-from managers.world.locations import BARE_DIRECTIONS, connection_target
+from managers.world.locations import BARE_DIRECTIONS, connection_target, kind_word
 from managers.world.rooms import (
     container_by_name,
     current_room,
@@ -66,6 +67,7 @@ from managers.world.rooms import (
     room_holding,
 )
 from managers.zombies.population import approach_minutes, perceived_now
+from modules.action.choices import Candidate, Question
 from modules.action.parser import CORPSE_WORDS, GOAL_HORIZON_LABELS, TALK_APPROACH_LABELS
 from modules.action.pins import Pinned, pin_of
 from modules.action.types import (
@@ -181,6 +183,14 @@ class Rejected:
     reason: str
 
 
+@dataclass
+class Asked(Rejected):
+    """A refusal that asks which one: `attr` is the field of the action whose name fit several things, `candidates` what it could mean."""
+
+    attr: str
+    candidates: tuple[Candidate, ...]
+
+
 ValidationResult = Accepted | Rejected
 
 
@@ -218,7 +228,29 @@ class ActionValidator:
             and self.manager.player.carrying_corpse is not None
         ):
             return Rejected(action, carry_k.BODY_IN_ARMS.format(name=self._name))
-        return handler(self, action)
+        result = handler(self, action)
+
+        if isinstance(result, Rejected) and isinstance(result.reason, Question):
+            return self._asked_result(action, result.reason)
+        return result
+
+    @staticmethod
+    def _asked_result(action: AnyAction, question: Question) -> Asked | Rejected:
+        """`question` as a refusal naming the field of `action` it asks about; a plain refusal in its words when it asks about none."""
+        asked = naming.clean_name(question.asked)
+        attr = next(
+            (
+                field.name
+                for field in fields(action)
+                if isinstance(value := getattr(action, field.name), str)
+                and naming.clean_name(value) == asked
+            ),
+            None,
+        )
+        if attr is None:
+            return Rejected(action, str(question))
+
+        return Asked(action, question, attr, question.candidates)
 
     # === Movement ===
 
@@ -269,8 +301,15 @@ class ActionValidator:
         if target is None:
             if folded in BARE_DIRECTIONS:
                 return Accepted(action, ShuffleInZone(current, raw))
-            target = manager.resolve_location(raw)
+            target = manager.resolve_places(raw)
 
+        if isinstance(target, list):
+            names = " or ".join(zone.name for zone in target)
+            kind = kind_word(raw)
+            options = tuple(zone_candidate(manager, zone, kind in zone.kinds) for zone in target)
+            return Rejected(
+                action, Question(container_k.WHICH_ONE.format(choices=names), raw, options)
+            )
         if target is None:
             return Accepted(action, MoveToSpot(current, raw[:MAX_PLACE_LENGTH]))
 
@@ -372,15 +411,21 @@ class ActionValidator:
         return None
 
     @staticmethod
-    def _asked(found: ItemEntity | list[ItemEntity] | None) -> ItemEntity | str | None:
+    def _asked(
+        found: ItemEntity | list[ItemEntity] | None, name: str
+    ) -> ItemEntity | Question | None:
         """A lookup's result with the which-one question in place of several candidates."""
-        return naming.which_one(found) if isinstance(found, list) else found
+        if isinstance(found, list):
+            return Question(naming.which_one(found), name, naming.item_candidates(found))
+        return found
 
-    def _item_named(self, entities: Iterable[ItemEntity], name: str) -> ItemEntity | str | None:
+    def _item_named(
+        self, entities: Iterable[ItemEntity], name: str
+    ) -> ItemEntity | Question | None:
         """The item `name` points at among `entities`; the question to ask when several look different, None when none match."""
-        return self._asked(naming.find_named(entities, name))
+        return self._asked(naming.find_named(entities, name), name)
 
-    def _carried(self, name: str) -> ItemEntity | str | None:
+    def _carried(self, name: str) -> ItemEntity | Question | None:
         """The item `name` points at among what the player carries, bags included."""
         return self._item_named(carry.carried_items(self.manager.player), name)
 
@@ -468,14 +513,16 @@ class ActionValidator:
                 return container
         return None
 
-    def _container_named(self, name: str) -> ContainerEntity | str | None:
+    def _container_named(self, name: str) -> ContainerEntity | Question | None:
         """The container `name` points at in this zone; the question to ask when several match, None when none do."""
         manager = self.manager
         if pin := pin_of(name):
             return self._pinned_container(pin)
         found = resolve_container(manager.current_location, manager.player.current_room, name)
         if isinstance(found, list):
-            return container_k.WHICH_ONE.format(choices=" or ".join(c.name for c in found))
+            names = " or ".join(c.name for c in found)
+            options = tuple(container_candidate(manager, c) for c in found)
+            return Question(container_k.WHICH_ONE.format(choices=names), name, options)
         return found
 
     def _pinned_container(self, pin: Pinned) -> ContainerEntity | None:
@@ -568,7 +615,7 @@ class ActionValidator:
                 return Rejected(action, self._cant_carry())
             frames = self._frames(entities, carry.Place.WORLD, carry.Place.PACK)
             return Accepted(action, Transfer(entities, frames, source=corpse))
-        entity = self._asked(find_content(corpse, action.item_name))
+        entity = self._asked(find_content(corpse, action.item_name), action.item_name)
         if isinstance(entity, str):
             return Rejected(action, entity)
         if entity is None:

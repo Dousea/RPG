@@ -216,7 +216,8 @@ describing words are kept, so "intact T-shirt" takes the dry shirt over a wet
 intact one. When the items a name matches look the same, the first is taken.
 When they differ, the action is refused with the choices, each look once as a
 qualified name ("Which one: broken Baseball Bat or good Baseball Bat?"): the one
-word no other look has, else all the look's words ("good wet Baseball Bat"). This holds for the pack, the floor, a bag, an opened
+word no other look has, else all the look's words ("good wet Baseball Bat"). The
+player answers on the plan screen ([entity resolution](../architecture/entity-resolution.md#which-one)). This holds for the pack, the floor, a bag, an opened
 container and a searched body.
 
 ### Moving things
@@ -298,8 +299,9 @@ The street and the neighbourhood have no rooms.
 - **Names.** A container's name is unique in its zone. A full name finds its
   container from any room of the zone. A bare kind word ("counter", "shelves")
   finds a container only in the room the player is in, and only when exactly one
-  there has it; with several, the action is refused and the choices are listed
-  ("Which one: snack shelves or drinks shelves?"). Generic words such as "box"
+  there has it; with several, the action asks which one ("Which one: snack shelves
+  or drinks shelves?"): the plan stops at the question and the player answers it on
+  the plan screen ([entity resolution](../architecture/entity-resolution.md#which-one)). Generic words such as "box"
   or "room" are never names. A name only ever resolves inside the current zone.
 - **Capacity.** A container holds 50 kg, the freezer 15 kg, and a body 12 kg.
 - **Fixed contents.** A container with a fixed list holds those items and is
@@ -401,7 +403,9 @@ room.
   clinic`, `hardware store` and `tool store`. `hospital`, `coffee shop`, `park`
   and the others stay with the neighbourhood. "Emma's apartment" stays an alias of
   the building. No new alias is a bare generic word (`flat`, `shop`, `store`,
-  `door`): "the shop" and "the store" name no zone.
+  `door`). Those words are zone **kind words** instead: "the shop" or "the store"
+  finds every store the player can reach (the corner store, pharmacy, supermarket and
+  hardware store) and asks which one ([entity resolution](../architecture/entity-resolution.md#which-one)).
 - **Leaving.** "Leave the pharmacy" from the pharmacy goes out to the
   neighbourhood, as "leave the apartment" does from home. Naming another zone in
   an exit phrase walks out of nothing.

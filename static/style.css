@@ -747,3 +747,45 @@ main {
         transition: none !important;
     }
 }
+
+
+/* === The plan screen: steps in words, one picker under each step that waits on an answer === */
+.plan-screen {
+    flex: none;
+    max-height: 45vh;
+    overflow-y: auto;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--slab);
+    border-left: 3px solid var(--yellow);
+    font-family: var(--sans);
+}
+
+.plan-screen[hidden] { display: none; }
+.plan-lead { margin: 0 0 0.5rem; color: var(--ash); font-size: 0.875rem; }
+.plan-steps { margin: 0; padding: 0; list-style: none; }
+.plan-step { padding: 0.25rem 0; }
+.plan-step.done { color: var(--ash); }
+.plan-mark { display: inline-block; width: 1.25rem; color: var(--green); }
+.plan-text { font-weight: 600; }
+.plan-default { margin-left: 0.5rem; color: var(--ash); }
+.plan-default::before { content: "\2014\00a0"; }
+
+.plan-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.plan-picker { margin: 0.35rem 0 0.35rem 1.25rem; padding: 0; border: 0; }
+.plan-legend { padding: 0; color: var(--ash); font-size: 0.8125rem; }
+.plan-option { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.2rem 0; cursor: pointer; }
+.plan-option:has(input:focus-visible) { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.plan-words { display: flex; flex-direction: column; }
+.plan-name { font-weight: 600; }
+.plan-detail { color: var(--ash); font-size: 0.875rem; }
+.plan-buttons { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.plan-buttons .btn:disabled { opacity: 0.4; cursor: not-allowed; }

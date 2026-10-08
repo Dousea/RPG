@@ -256,6 +256,11 @@ class PromptRuleTests(unittest.TestCase):
             '{"verb": "UNSUPPORTED", "text": "drink from the tap"}', PARSER_JSON_SYSTEM_PROMPT
         )
 
+    def test_the_parser_copies_place_words_that_fit_several_zones(self):
+        for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
+            self.assertIn("more than one zone", prompt)
+            self.assertIn("their own words as the MOVE_TO destination", prompt)
+
     def test_the_parser_sends_a_question_to_talk_chat(self):
         for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
             self.assertIn("question to an NPC", prompt)

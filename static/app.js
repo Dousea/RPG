@@ -37,6 +37,10 @@ const turnStep = document.getElementById('turn-step');
 const turnTimer = document.getElementById('turn-timer');
 const thoughts = document.getElementById('thoughts');
 const thoughtsText = document.getElementById('thoughts-text');
+const planScreen = document.getElementById('plan-screen');
+const planSteps = document.getElementById('plan-steps');
+const planGo = document.getElementById('plan-go');
+const planCancel = document.getElementById('plan-cancel');
 
 // Tracked outside applyGameOverState so handleTurn's `finally` block
 // (which otherwise unconditionally re-enables input after every turn)
@@ -617,6 +621,7 @@ function updatePanel(data) {
     renderBarriers(data);
     renderQuests(data);
     renderChoiceOptions(data);
+    renderPlan(data);
     setMentions(data);
     applyGameOverState(data);
     updateLiveScreens(data);
@@ -627,7 +632,100 @@ function updateUI(data, playerText) {
         appendStory(playerText, data.story_text);
     }
     updatePanel(data);
+    if (data.plan) focusPlan();
 }
+
+// === The plan screen ===
+// A plan whose targets fit more than one thing comes back in place of a story:
+// each step in words, a picker (radio group) under each step that waits on an
+// answer, and Go / Cancel. Go sends one candidate id per picker, in order. All
+// text is the engine's words, set as text, never HTML.
+
+function planPicker(choice, number, stepText) {
+    const group = el('fieldset', 'plan-picker');
+    group.appendChild(el('legend', 'plan-legend', `Which one: ${stepText}`));
+
+    choice.candidates.forEach(candidate => {
+        const label = el('label', 'plan-option');
+
+        const radio = el('input');
+        radio.type = 'radio';
+        radio.name = `plan-choice-${number}`;
+        radio.value = candidate.id;
+        radio.addEventListener('change', updatePlanGo);
+        label.appendChild(radio);
+
+        const words = el('span', 'plan-words');
+        words.appendChild(el('span', 'plan-name', candidate.name));
+        if (candidate.description) words.appendChild(el('span', 'plan-detail', candidate.description));
+        label.appendChild(words);
+
+        group.appendChild(label);
+    });
+
+    return group;
+}
+
+function planStep(step, plan) {
+    const item = el('li', step.done ? 'plan-step done' : 'plan-step');
+    item.appendChild(el('span', 'plan-sr', step.done ? 'Done: ' : 'To do: '));
+    const mark = el('span', 'plan-mark', step.done ? '✓' : '·');
+    mark.setAttribute('aria-hidden', 'true');
+    item.appendChild(mark);
+    item.appendChild(el('span', 'plan-text', step.text));
+    if (step.default) item.appendChild(el('span', 'plan-default', step.default));
+    if (step.choice !== null) item.appendChild(planPicker(plan.choices[step.choice], step.choice, step.text));
+    return item;
+}
+
+function planAnswers() {
+    const groups = planSteps.querySelectorAll('.plan-picker');
+    return Array.from(groups, group => {
+        const checked = group.querySelector('input:checked');
+        return checked ? checked.value : null;
+    });
+}
+
+function updatePlanGo() {
+    planGo.disabled = planAnswers().some(answer => answer === null);
+}
+
+function renderPlan(data) {
+    const plan = data.plan;
+    planScreen.hidden = !plan;
+    clearAndFill(planSteps, plan ? plan.steps.map(step => planStep(step, plan)) : []);
+    updatePlanGo();
+}
+
+// Puts the keyboard on the first question, or on Go when there is none to answer.
+function focusPlan() {
+    const first = planSteps.querySelector('input[type="radio"]');
+    (first || planGo).focus();
+}
+
+async function handlePlanCancel() {
+    try {
+        const response = await fetch('/plan/cancel', { method: 'POST' });
+        if (response.ok) updatePanel(await response.json());
+    } catch (error) {
+        console.error('Could not cancel the plan:', error);
+    }
+    playerInput.focus();
+}
+
+async function handlePlanGo() {
+    if (planGo.disabled) return;
+    await runTurn('/plan/go/stream', { choices: planAnswers() }, 'Go', false);
+}
+
+planGo.addEventListener('click', handlePlanGo);
+planCancel.addEventListener('click', handlePlanCancel);
+planScreen.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        handlePlanCancel();
+    }
+});
 
 function showSystemError(message) {
     storyDisplay.appendChild(el('p', 'beat system-error', `The turn didn't go through (${message}). Try the action again.`));
@@ -920,8 +1018,12 @@ async function handleTurn(event) {
     event.preventDefault();
     const sent = pinnedInput();
     if (!sent.input) return;
-    const inputText = playerInput.textContent.trim();
+    await runTurn('/play/stream', sent, playerInput.textContent.trim(), true);
+}
 
+// Sends a turn to a streaming route and shows it; `typed` turns also clear the input they came from.
+async function runTurn(url, sent, inputText, typed) {
+    planScreen.hidden = true;
     setInputEnabled(false);
     submitButton.disabled = true;
     submitButton.textContent = 'Wait…';
@@ -929,7 +1031,7 @@ async function handleTurn(event) {
     startTurnStatus(inputText);
 
     try {
-        const response = await fetch('/play/stream', {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(sent)
@@ -948,14 +1050,17 @@ async function handleTurn(event) {
         stopTurnStatus();
         showSystemError(error.message);
     } finally {
-        playerInput.textContent = '';
-        closeMentions();
+        if (typed) {
+            playerInput.textContent = '';
+            closeMentions();
+        }
         submitButton.textContent = 'Act';
         // A dead game stays locked down -- updateUI already applied that
         // via applyGameOverState, so this must not undo it.
         if (!isGameOver) {
             setInputEnabled(true);
-            playerInput.focus();
+            if (planScreen.hidden) playerInput.focus();
+            else focusPlan();
             submitButton.disabled = false;
             // On success updateUI already re-rendered fresh (enabled)
             // option buttons; on failure the stale ones from before the

@@ -89,3 +89,24 @@ class SamePlanTests(unittest.TestCase):
         got, _ = parse_action_plan(["TAKE Crowbar"])
         want, _ = parse_action_plan(["TAKE Water Bottle"])
         self.assertFalse(self.same_plan(self.manager, got, want))
+
+
+class KindWordCaseTests(unittest.TestCase):
+    """llm-contract: Checking the models: a place word that fits several zones is judged as the words copied."""
+
+    def setUp(self):
+        from scripts.eval_parser import same_plan
+
+        self.same_plan = same_plan
+        self.manager = GameManager()
+        self.manager.player.current_location_id = "zone_street"
+
+    def test_a_picked_zone_is_not_the_players_words(self):
+        copied, _ = parse_action_plan(["MOVE_TO the apartment"])
+        picked, _ = parse_action_plan(["MOVE_TO Your Building"])
+        self.assertTrue(self.same_plan(self.manager, copied, copied))
+        self.assertFalse(self.same_plan(self.manager, picked, copied))
+
+    def test_the_kind_word_cases_are_in_the_file(self):
+        inputs = {case["input"] for case in CASES}
+        self.assertIn("run to the apartment and hit the zombie", inputs)

@@ -86,9 +86,17 @@ class CornerStoreZoneTests(unittest.TestCase):
         for zone in (STREET, "zone_neighborhood"):
             gm = GameManager()
             gm.player.current_location_id = zone
-            for phrase in ("the shop", "the shop window", "a pet shop", "the gun shop"):
+            for phrase in ("the shop window", "a pet shop", "the gun shop"):
                 found = gm.resolve_location(phrase)
                 self.assertNotEqual(found and found.id, STORE, (zone, phrase))
+
+    def test_the_shop_by_itself_asks_which_shop(self):
+        for zone in (STREET, "zone_neighborhood"):
+            gm = GameManager()
+            gm.player.current_location_id = zone
+            found = gm.resolve_places("the shop")
+            assert isinstance(found, list)
+            self.assertIn(STORE, [each.id for each in found])
 
 
 class ShopWindowTests(unittest.TestCase):

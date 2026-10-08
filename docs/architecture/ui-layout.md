@@ -72,6 +72,7 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 | Story log | each turn's input echo and prose, appended | `story_text` |
 | Location | where the player stands | `current_location`, `current_place`, `location_description` |
 | Tabs | the screens below | everything else |
+| Plan screen | in place of a story when a plan has an open choice: each step in words (done ones ticked), a picker with each candidate's name and description under a step that waits on an answer, a default target beside a step that has one (a step after a zone change says its target is decided on arrival instead), Go (enabled once every picker has a choice) and Cancel | `plan` ([Which one](entity-resolution.md#which-one)) |
 | Input | suggestions, then the free-text input; `@` opens a list of what is in reach, grouped by kind and filtered as the player types, and a pick stays in the text as a chip, one unit that deletes whole | `options`, `mentions` ([Mentions](entity-resolution.md#mentions)) |
 
 The story column holds the scene: where the player stands, what happened and

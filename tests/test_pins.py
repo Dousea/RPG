@@ -127,7 +127,7 @@ class ResolveTests(unittest.TestCase):
         for barrier in gm.world.barriers.values():
             barrier.open = True
         (action,) = bind([MoveAction("somewhere else")], [pick(gm, "zone", "zone_neighborhood")])
-        with mock.patch.object(GameManager, "resolve_location") as resolve:
+        with mock.patch.object(GameManager, "resolve_places") as resolve:
             result = self.validate(gm, action)
         resolve.assert_not_called()
         assert isinstance(result, Accepted)

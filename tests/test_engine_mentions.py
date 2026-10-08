@@ -83,8 +83,7 @@ class MentionTurnTests(EngineTestCase):
         self.script("ATTACK zombie")
         seen = self.accepted()
         self.engine.play(f"hit {MENTION_MARK}", mentions=[far.zombie_id])
-        (attack,) = seen
-        self.assertEqual(attack.expect(TargetZombie).zombie_id, far.zombie_id)
+        self.assertEqual(seen[-1].expect(TargetZombie).zombie_id, far.zombie_id)
 
     def test_a_parsed_target_that_differs_from_the_pin_is_overridden(self):
         gm = self.stage()
@@ -161,7 +160,7 @@ class MentionTurnTests(EngineTestCase):
     def test_a_pinned_zone_is_the_destination_without_phrase_matching(self):
         gm = self.stage("zone_street")
         self.script("MOVE_TO somewhere unheard of")
-        with mock.patch.object(GameManager, "resolve_location") as resolve:
+        with mock.patch.object(GameManager, "resolve_places") as resolve:
             self.engine.play(f"go to {MENTION_MARK}", mentions=["zone_building"])
         resolve.assert_not_called()
         self.assertEqual(gm.player.current_location_id, "zone_building")

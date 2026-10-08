@@ -1,4 +1,4 @@
-"""Words for the `@` list and the refusals of a mention that no longer holds (llm-contract)."""
+"""Words for the `@` list, the refusals of a mention that no longer holds and of a plan answer that no longer fits (llm-contract)."""
 
 ROOM_HERE = "you are here"
 ROOM_ELSEWHERE = "not where you are"
@@ -7,9 +7,12 @@ CONTAINER_OPENED = "opened"
 CONTAINER_CLOSED = "not opened"
 BARRIER_BETWEEN = "{state}, between {a} and {b}"
 ZONE_VIA = "via {zone}"
+DECIDED_ON_ARRIVAL = "its target is decided on arrival"
 ZONE_BLOCKED = "{way}, blocked by the {barrier} ({state})"
 NPC_HERE = "here"
 NPC_FOLLOWING = "following you"
 
 NO_LONGER_IN_REACH = "What you pointed at is no longer within reach."
 OUT_OF_REACH = "{name} is out of reach."
+NO_PLAN_WAITING = "No plan is waiting for an answer."
+ANSWER_NOT_ON_OFFER = "That answer is no longer on offer; say what you want to do again."

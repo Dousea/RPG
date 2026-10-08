@@ -10,15 +10,19 @@ from collections.abc import Sequence
 from typing import Literal
 
 from data.story import mentions as mention_k
+from data.world.locations import ZONE_KIND_NAMES
 from data.zombies import lore as zombie_lore
 from managers.body.first_aid import part_state_words, part_word
 from managers.corpses.search import corpse_person, corpse_views, looks_words, person_word
 from managers.game import GameManager
 from managers.world.barriers import barriers_of, blocks, state_word
-from managers.world.rooms import current_room
+from managers.world.rooms import current_room, room_holding
 from managers.zombies.population import threat_views
+from modules.action.choices import Candidate
 from modules.action.pins import Mention
 from modules.entity.item import ItemEntity
+from modules.world.location import Location
+from modules.world.room import ContainerEntity, RoomEntity
 
 
 def _named_by_looks(
@@ -118,11 +122,14 @@ def _rooms(manager: GameManager) -> list[Mention]:
         words = mention_k.ROOM_HERE if room is here else mention_k.ROOM_ELSEWHERE
         mentions.append(Mention("room", room.room_id, room.name, words))
     for room in zone.rooms.values():
-        for container in room.containers:
-            state = mention_k.CONTAINER_OPENED if container.opened else mention_k.CONTAINER_CLOSED
-            words = mention_k.CONTAINER_IN_ROOM.format(room=room.name, state=state)
-            mentions.append(Mention("container", container.container_id, container.name, words))
+        mentions.extend(_container_mention(room, container) for container in room.containers)
     return mentions
+
+
+def _container_mention(room: RoomEntity, container: ContainerEntity) -> Mention:
+    state = mention_k.CONTAINER_OPENED if container.opened else mention_k.CONTAINER_CLOSED
+    words = mention_k.CONTAINER_IN_ROOM.format(room=room.name, state=state)
+    return Mention("container", container.container_id, container.name, words)
 
 
 def _zone_words(manager: GameManager, path: list[str]) -> str:
@@ -147,14 +154,32 @@ def _zone_words(manager: GameManager, path: list[str]) -> str:
 
 def _zones(manager: GameManager) -> list[Mention]:
     here = manager.player.current_location_id
-    mentions: list[Mention] = []
-    for zone in manager.world.locations.values():
-        if zone.id == here:
-            continue
-        path = manager.zone_path(here, zone.id)
-        if path:
-            mentions.append(Mention("zone", zone.id, zone.name, _zone_words(manager, path)))
-    return mentions
+    return [
+        _zone_mention(manager, zone)
+        for zone in manager.world.locations.values()
+        if zone.id != here and manager.zone_path(here, zone.id)
+    ]
+
+
+def _zone_mention(manager: GameManager, zone: Location) -> Mention:
+    path = manager.zone_path(manager.player.current_location_id, zone.id)
+    words = _zone_words(manager, path) if path else mention_k.ROOM_HERE
+    return Mention("zone", zone.id, zone.name, words)
+
+
+def zone_candidate(manager: GameManager, zone: Location, by_kind: bool = False) -> Candidate:
+    """`zone` as an answer to a which-one question, with how it connects to here; found through a kind word, it is named by what made it fit."""
+    mention = _zone_mention(manager, zone)
+    name = ZONE_KIND_NAMES.get(zone.id, mention.name) if by_kind else mention.name
+    return Candidate("zone", mention.id, name, mention.description, pinned_as=mention.name)
+
+
+def container_candidate(manager: GameManager, container: ContainerEntity) -> Candidate:
+    """`container` of this zone as an answer to a which-one question, with its room and state."""
+    room = room_holding(manager.current_location, container)
+    assert room is not None, "a container to choose from belongs to a room of this zone"
+    mention = _container_mention(room, container)
+    return Candidate("container", mention.id, mention.name, mention.description)
 
 
 def _body_parts(manager: GameManager) -> list[Mention]:
