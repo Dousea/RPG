@@ -1659,7 +1659,7 @@ class NarratorBudgetTests(unittest.TestCase):
     """llm-contract: Token budget: what the narrator prompt drops to fit."""
 
     DEEP = ["deepmark-1 " + "a" * 150, "deepmark-2 " + "b" * 150]
-    SCENE = "scenemark " + "c" * 150 + "."
+    SCENE = 'Emma says, "scenemark ' + "c" * 150 + '."'
 
     def setUp(self):
         self.gm = GameManager()

@@ -31,7 +31,7 @@ from data.character.skills import SKILLS
 from data.character.traits import TRAITS
 from data.items import ITEMS, item_condition_word, wetness_word
 from data.loot import containers as container_k
-from data.story.memory import LAST_SCENE_MAX_CHARS
+from data.story.memory import LAST_SCENE_MAX_CHARS, LAST_SCENE_MAX_LINES
 from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
 from data.world.clock import TIMES_OF_DAY
@@ -45,6 +45,7 @@ from managers.corpses.search import corpse_views, perceived_corpses
 from managers.game import GameManager
 from managers.story import in_view
 from managers.story.beats import visible_topics
+from managers.story.spoken import spoken_lines
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import describe_weather
 from managers.world.rooms import current_room
@@ -191,24 +192,28 @@ class ContextBuilder:
         return "\n".join(f" - {event}" for event in reversed(events_newest_first))
 
     def _last_scene_section(self) -> str:
-        """The stored story's last paragraph, cut to the limit on a line or sentence boundary.
+        """The newest lines spoken in the stored story, cut to the limit; empty without any.
 
-        Empty without a story. Only the last paragraph, because a narrator handed the
-        whole story copies it, contradictions included, instead of narrating this turn.
+        Only the words, never the prose: a narrator copies the prose it is shown.
         """
-        story = self.manager.memory.last_story.strip().split("\n\n")[-1].strip()
-        if len(story) > LAST_SCENE_MAX_CHARS:
-            window = story[: LAST_SCENE_MAX_CHARS + 1]
-            ends = [m.end() for m in re.finditer(r"[.!?][\"')]*(?=\s)", window)]
-            ends += [i for i, char in enumerate(window) if char == "\n"]
-            story = story[: max(ends, default=LAST_SCENE_MAX_CHARS)].rstrip()
-        if not story:
+        manager = self.manager
+        spoken = spoken_lines(
+            manager.memory.last_story, (npc.name for npc in manager.npcs.values()), self._name
+        )[-LAST_SCENE_MAX_LINES:]
+        rendered = [
+            f'- {line.speaker}: "{line.text}"' if line.speaker else f'- "{line.text}"'
+            for line in spoken
+        ]
+        while rendered and len("\n".join(rendered)) > LAST_SCENE_MAX_CHARS:
+            rendered.pop(0)
+        if not rendered:
             return ""
         return (
             "[LAST SCENE]\n"
-            "(Where the story the player last read left off. The outcomes and the current "
-            "blocks win where it disagrees.)\n\n"
-            f"{story}\n\n"
+            "(The words spoken in the scene the player last read, so the story can follow on "
+            "from them. The outcomes and the current blocks win where they disagree.)\n\n"
+            + "\n".join(rendered)
+            + "\n\n"
         )
 
     def _last_turn_section(self) -> str:

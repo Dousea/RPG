@@ -57,6 +57,7 @@ keeps the temperature above, or LM Studio's default for the others; any other ke
 is dropped with a warning. Each call also sends its role's `reasoning_effort`
 (`none`, `low`, `medium` or `high`; default `none`). The hidden reasoning counts
 against the reply cap, so a thinking role needs a higher cap or it can return nothing.
+A repetition sampler beyond `repeat_penalty` (DRY) is untried, and whether LM Studio offers one is unchecked.
 
 **The test for a lever:** could a player get a different result by rewording the
 same action? If so, the model is deciding an outcome, and the verb has to change.
@@ -406,7 +407,7 @@ found. Naming a non-event would put the words to avoid last in the prompt.
 | --- | --- |
 | `[CHARACTER]` | name, pronouns, occupation, appearance, backstory, skills in words, goals, inventory, equipment, the outfit line, traits |
 | `[DEEP MEMORY]` / `[SUMMARY OF PAST EVENTS]` / `[RECENT EVENTS]` | memory |
-| `[LAST SCENE]` | the last paragraph of the story the player last read, with a note that the facts and current blocks win; omitted when there is none |
+| `[LAST SCENE]` | the lines spoken in the story the player last read, one per line with the speaker when the sentence names one, with a note that the outcomes and current blocks win; omitted when nobody spoke |
 | `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
 | `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, discovered flags |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
@@ -566,10 +567,13 @@ it decided and saved.
   looks wider than the recall count, drops the recent entries and keeps the first 2.
 - The save keeps the last story: the prose shown after a narrated turn, replacing the
   previous one. A turn whose narrator call failed clears it, and a new game has none.
-- `[LAST SCENE]` renders its last paragraph between memory and state, cut to 1600
-  characters on a line or sentence boundary. Only the last paragraph: given the whole
-  story, a narrator copied it, a wrongly killed zombie included, instead of narrating
-  the new turn.
+- `[LAST SCENE]` renders between memory and state the double-quoted lines of the whole
+  stored story, in order, as `- Emma: "We can't stay here."`. The speaker is the NPC
+  whose name is in the quote's sentence (the one before the quote first, else the one
+  after), or the character's forename when that sentence says "you"; otherwise none.
+  Only the last 8 lines are kept, then the oldest are dropped until the block fits
+  1600 characters. A story with no dialogue gives no block. No prose reaches it:
+  a narrator copies the prose it is shown.
 - The parser gets the latest event-log entry as `[LAST TURN]`, never any narrator prose;
   memory proper (`[DEEP MEMORY]`, summaries, recent events) goes to the narrator only.
 - In the narrator's prompt, memory blocks come before state blocks, and the system
@@ -692,15 +696,6 @@ entry says what goes wrong and how to fix it.
 
 ### Narrator
 
-- **Paragraphs repeat across turns.** Four combat turns in a row reused Emma's
-  "silent scream" and Marcus's "wide, unblinking eyes" nearly word for word.
-  `[LAST SCENE]` hands the narrator its own last paragraph word for word, and a
-  model copies prose it is shown; a rule against repeating it is weak, since models
-  are poor at spotting their own repetition. *Fix:* give `[LAST SCENE]` as a short
-  summary of where things stand at its end (who is where, what was just said), not
-  the prose, so the continuity it exists for stays and there is nothing to copy. A
-  repetition sampler (DRY) would help as well, but the game's samplers stop at
-  `repeat_penalty`, and whether LM Studio offers one is unchecked.
 - **Outcome facts leak internal ids.** A quest fact reads "Quest
   'quest_supply_run' objective complete: take:item_crowbar." *Fix:* render it from
   the quest's title and the objective's text in `data/story/quests.py`, and add a
