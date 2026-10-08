@@ -150,11 +150,13 @@ PARSER_JSON_SYSTEM_PROMPT = (
     '{"actions": [{"verb": "TAKE", "item": "Water Bottle"}, '
     '{"verb": "MOVE_TO", "destination": "out"}]}\n'
     "Input: 'ask Marcus if he has a hammer'\n"
-    '{"actions": [{"verb": "TALK", "npc": "Marcus", "approach": "chat"}]}\n'
+    '{"actions": [{"verb": "TALK", "npc": "Marcus", "approach": "chat", '
+    '"speech": "Do you have a hammer?"}]}\n'
     "Input: 'Emma, will you come with me?'\n"
     '{"actions": [{"verb": "REQUEST", "npc": "Emma", "request": "follow"}]}\n'
     "Input: 'Emma, what's going on downstairs?'\n"
-    '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat"}]}\n'
+    '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat", '
+    '"speech": "What\'s going on downstairs?"}]}\n'
     "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"
     '{"actions": []}'
 )

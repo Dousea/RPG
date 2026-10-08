@@ -356,11 +356,12 @@ TALK_APPROACH_LABELS = (
 )
 REQUEST_LABELS = ("follow", "stay", "give", "about")
 GOAL_HORIZON_LABELS = ("short_term", "long_term")
+TALK_SPEECH_MAX_CHARS = 300  # llm-contract: the words of a TALK that reach the narrator
 TALK_TURN_MINUTES = 5  # llm-contract: one cost per turn, shared by TALK, REQUEST and GIVE
 
 
 def _parse_talk(args: str) -> TalkAction:
-    """The approach is the first label after the name; the spoken line after it is dropped."""
+    """The approach is the first label after the name; a quoted string after it is the speech."""
     words = args.split()
     index = next(
         (
@@ -374,7 +375,12 @@ def _parse_talk(args: str) -> TalkAction:
         raise _ActionParseError(
             f"TALK needs an NPC name and one of: {', '.join(TALK_APPROACH_LABELS)}."
         )
-    return TalkAction(npc_name=" ".join(words[:index]), approach=normalize_key(words[index]))
+    spoken = " ".join(words[index + 1 :])
+    quoted = re.fullmatch(r'"(.*)"', spoken.strip(), re.DOTALL)
+    speech = quoted.group(1).strip()[:TALK_SPEECH_MAX_CHARS].strip() if quoted else ""
+    return TalkAction(
+        npc_name=" ".join(words[:index]), approach=normalize_key(words[index]), speech=speech
+    )
 
 
 def _parse_request(args: str) -> RequestAction:

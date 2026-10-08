@@ -1,6 +1,7 @@
 # Parser quality cases for scripts/eval_parser.py. Run by hand; not part of the test suite.
 # Each case: the scene (`zone`, optional `outbreak`, `sneaking`), the player's `input`,
-# and the `expect`ed ACTIONS lines in order. `[]` means NONE.
+# and the `expect`ed ACTIONS lines in order. `[]` means NONE. A TALK line is judged by
+# whether it carries words (`"words"` stands for any), not by what they are.
 - name: creep to the lobby
   zone: zone_home
   input: I creep down to the lobby
@@ -9,17 +10,17 @@
 - name: compliment an NPC
   zone: zone_building
   input: tell Emma she looks great
-  expect: [TALK Emma compliment]
+  expect: ['TALK Emma compliment "words"']
 
 - name: insult an NPC
   zone: zone_building
   input: I call Marcus a lazy idiot
-  expect: [TALK Marcus insult]
+  expect: ['TALK Marcus insult "words"']
 
 - name: flirt
   zone: zone_building
   input: I wink at Emma and ask her out for coffee
-  expect: [TALK Emma flirt]
+  expect: ['TALK Emma flirt "words"']
 
 - name: scream for help
   zone: zone_street
@@ -108,19 +109,34 @@
 - name: a question about what someone reads is talk
   zone: zone_building
   input: Ask Marcus what he's reading
-  expect: [TALK Marcus chat]
+  expect: ['TALK Marcus chat "words"']
 
 - name: a question about an item is talk
   zone: zone_building
   input: ask Marcus if he has a hammer
-  expect: [TALK Marcus chat]
+  expect: ['TALK Marcus chat "words"']
 
 - name: a question about how someone is is talk
   zone: zone_building
   input: ask Emma if she's okay
-  expect: [TALK Emma chat]
+  expect: ['TALK Emma chat "words"']
 
 - name: ask someone to come with me
   zone: zone_building
   input: ask Emma to come with me
   expect: [REQUEST Emma follow]
+
+- name: speak a quoted line
+  zone: zone_building
+  input: tell Emma "we leave at dawn"
+  expect: ['TALK Emma chat "we leave at dawn"']
+
+- name: speak a reported line
+  zone: zone_building
+  input: tell Marcus we should board up the windows
+  expect: ['TALK Marcus chat "we should board up the windows"']
+
+- name: chat with no words
+  zone: zone_building
+  input: chat with Emma
+  expect: [TALK Emma chat]

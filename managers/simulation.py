@@ -1496,7 +1496,7 @@ class SimulationCore:
         assert isinstance(action, TalkAction)
         npc = accepted.expect(TargetNpc).npc
         self.validator.note_talked(npc.npc_id)
-        return self._social.talk(npc, action.approach)
+        return self._social.talk(npc, action.approach, action.speech)
 
     def _resolve_give(self, accepted: Accepted) -> list[str]:
         gift = accepted.expect(NpcItem)

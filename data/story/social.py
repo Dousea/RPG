@@ -23,6 +23,8 @@ class Delta:
     trust: int
 
 
+SPEECH_FACT = '{name} says: "{speech}"'
+
 TALK_APPROACHES: dict[str, Approach] = {  # llm-contract
     "chat": Approach(
         "small talk, jokes, asking how they are, anything else", 2, 0, "{name} chats with {npc}."

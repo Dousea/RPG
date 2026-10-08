@@ -362,7 +362,8 @@ class ParserRequestTests(unittest.TestCase):
     def test_a_question_with_no_listed_topic_is_shown_as_talk(self):
         self.assertIn("Input: 'Emma, what's going on downstairs?'", PARSER_JSON_SYSTEM_PROMPT)
         self.assertIn(
-            '{"verb": "TALK", "npc": "Emma", "approach": "chat"}', PARSER_JSON_SYSTEM_PROMPT
+            '{"verb": "TALK", "npc": "Emma", "approach": "chat", "speech"',
+            PARSER_JSON_SYSTEM_PROMPT,
         )
 
 

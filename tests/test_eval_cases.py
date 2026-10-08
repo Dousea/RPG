@@ -29,7 +29,7 @@ class ParserCaseFileTests(unittest.TestCase):
     def test_the_cases_the_spec_names_are_present(self):
         expected = {
             ("I creep down to the lobby", ("STANCE sneak", "MOVE_TO building")),
-            ("tell Emma she looks great", ("TALK Emma compliment",)),
+            ("tell Emma she looks great", ('TALK Emma compliment "words"',)),
             ("I scream for help", ("SHOUT",)),
         }
         present = {(case["input"], tuple(case["expect"])) for case in CASES}
@@ -45,6 +45,13 @@ class SamePlanTests(unittest.TestCase):
         self.same_plan = same_plan
         self.manager = GameManager()
         self.manager.player.current_location_id = "zone_street"
+
+    def test_a_talk_matches_by_whether_it_carries_words(self):
+        said, _ = parse_action_plan(['TALK Emma chat "we leave at dawn"'])
+        other, _ = parse_action_plan(['TALK Emma chat "words"'])
+        silent, _ = parse_action_plan(["TALK Emma chat"])
+        self.assertTrue(self.same_plan(self.manager, said, other))
+        self.assertFalse(self.same_plan(self.manager, said, silent))
 
     def test_a_move_matches_by_the_zone_it_reaches(self):
         got, _ = parse_action_plan(["MOVE_TO In"])

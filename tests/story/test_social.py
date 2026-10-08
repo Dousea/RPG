@@ -92,6 +92,27 @@ class ApproachTableTests(unittest.TestCase):
         self.assertEqual(facts[-1], "About 5 minutes pass.")
 
 
+class SpeechTests(unittest.TestCase):
+    """llm-contract: Talking to people: the words the narrator renders."""
+
+    def test_the_words_are_a_fact_the_character_says(self):
+        gm = building_game()
+        facts = simulate(gm, TalkAction("Emma", "chat", "we leave at dawn"))
+        self.assertIn('Orton says: "we leave at dawn"', facts)
+
+    def test_no_words_leaves_the_fact_as_it_was(self):
+        gm = building_game()
+        facts = simulate(gm, TalkAction("Emma", "chat"))
+        self.assertFalse(any("says" in fact for fact in facts))
+
+    def test_speech_does_not_change_what_the_approach_is_worth(self):
+        plain, spoken = building_game(), building_game()
+        simulate(plain, TalkAction("Emma", "insult"))
+        simulate(spoken, TalkAction("Emma", "insult", "you are hopeless"))
+        self.assertEqual(affection(spoken, "npc_emma"), affection(plain, "npc_emma"))
+        self.assertEqual(trust(spoken, "npc_emma"), trust(plain, "npc_emma"))
+
+
 class RepetitionTests(unittest.TestCase):
     """llm-contract: Approaches: the repetition rule."""
 

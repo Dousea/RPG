@@ -121,13 +121,14 @@ class SocialManager:
 
     # === TALK and GIVE ===
 
-    def talk(self, npc: NpcEntity, approach: str) -> list[str]:
+    def talk(self, npc: NpcEntity, approach: str, speech: str = "") -> list[str]:
         row = social_k.TALK_APPROACHES[approach]
         affection = row.affection
         if approach == "flirt" and not npc.romance_eligible:
             affection = social_k.FLIRT_INELIGIBLE_AFFECTION
         lead = row.fact.format(name=self._name, npc=npc.name)
-        return [lead, *self._apply(npc, approach, affection, row.trust)]
+        said = [social_k.SPEECH_FACT.format(name=self._name, speech=speech)] if speech else []
+        return [lead, *said, *self._apply(npc, approach, affection, row.trust)]
 
     def give(self, entity: ItemEntity, npc: NpcEntity) -> list[str]:
         carry.take_out(self._manager.player, entity)

@@ -254,8 +254,10 @@ class ClosedFieldTests(unittest.TestCase):
         names = branches(ContextBuilder(gm).build_plan_schema())
         self.assertEqual(enum_of(names["TALK"], "npc"), ["Emma", "Marcus"])
         self.assertEqual(enum_of(names["TALK"], "approach"), list(TALK_APPROACH_LABELS))
-        self.assertEqual(names["TALK"]["required"], ["verb", "npc", "approach"])
-        self.assertEqual(names["TALK"]["properties"]["speech"], {"type": "string"})
+        self.assertEqual(names["TALK"]["required"], ["verb", "npc", "approach", "speech"])
+        speech = names["TALK"]["properties"]["speech"]
+        self.assertEqual(speech["type"], "string")
+        self.assertIn("words", speech["description"])
         self.assertEqual(enum_of(names["GIVE"], "npc"), ["Emma", "Marcus"])
         self.assertEqual(
             enum_of(names["GIVE"], "item"),
@@ -356,8 +358,9 @@ EQUIVALENTS = [
     ({"verb": "SHOUT"}, "SHOUT"),
     (
         {"verb": "TALK", "npc": "Emma", "approach": "chat", "speech": "Hi there, how are you?"},
-        "TALK Emma chat",
+        'TALK Emma chat "Hi there, how are you?"',
     ),
+    ({"verb": "TALK", "npc": "Emma", "approach": "chat", "speech": ""}, "TALK Emma chat"),
     ({"verb": "REQUEST", "npc": "Emma", "request": "follow"}, "REQUEST Emma follow"),
     (
         {"verb": "REQUEST", "npc": "Emma", "request": "give", "item": "Bandage"},

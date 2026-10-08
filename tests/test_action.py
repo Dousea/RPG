@@ -9,6 +9,7 @@ from managers.validator import ActionValidator
 from modules.action.parser import (
     REQUEST_LABELS,
     TALK_APPROACH_LABELS,
+    TALK_SPEECH_MAX_CHARS,
     VERBS,
     ParseFailure,
     available_verbs,
@@ -356,17 +357,26 @@ class SocialParseTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIsInstance(parse_action_line(line), ParseFailure)
 
-    def test_talk_ignores_the_spoken_line_after_the_approach(self):
+    def test_talk_carries_a_trailing_quoted_line_as_speech(self):
         cases = {
-            'TALK Emma chat "Hi, I\'m the new guy in 3B"': TalkAction("Emma", "chat"),
-            'TALK Emma compliment "Your apartment is really nice"': TalkAction(
-                "Emma", "compliment"
+            'TALK Emma chat "Hi, I\'m the new guy in 3B"': TalkAction(
+                "Emma", "chat", "Hi, I'm the new guy in 3B"
+            ),
+            'TALK Mary Ann flirt "  you look nice  "': TalkAction(
+                "Mary Ann", "flirt", "you look nice"
             ),
             "TALK Mary Ann flirt you look nice today": TalkAction("Mary Ann", "flirt"),
+            "TALK Emma chat": TalkAction("Emma", "chat"),
+            'TALK Emma chat ""': TalkAction("Emma", "chat"),
         }
         for line, expected in cases.items():
             with self.subTest(line=line):
                 self.assertEqual(parse_action_line(line), expected)
+
+    def test_talk_speech_is_capped(self):
+        action = parse_action_line(f'TALK Emma chat "{"a" * (TALK_SPEECH_MAX_CHARS + 50)}"')
+        assert isinstance(action, TalkAction)
+        self.assertEqual(len(action.speech), TALK_SPEECH_MAX_CHARS)
 
     def test_ask_accepts_only_the_four_requests(self):
         self.assertEqual(set(REQUEST_LABELS), {"follow", "stay", "give", "about"})

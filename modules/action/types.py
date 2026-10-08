@@ -215,11 +215,12 @@ class ShoutAction:
 
 @dataclass
 class TalkAction:
-    """Say something to an NPC in one of the closed `TALK` approaches."""
+    """Say something to an NPC in one of the closed `TALK` approaches; `speech` is the words, if any."""
 
     verb: ClassVar[str] = "TALK"
     npc_name: str
     approach: str
+    speech: str = ""
 
 
 @dataclass

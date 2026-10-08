@@ -62,6 +62,17 @@ def _string() -> JsonObject:
     return {"type": "string"}
 
 
+def _speech_property() -> JsonObject:
+    return {
+        "type": "string",
+        "description": (
+            "The character's words. Quote them from the input when the player quoted them; "
+            "otherwise the gist of what the player said they say, in the character's voice. "
+            "Empty only when the input gives no words at all."
+        ),
+    }
+
+
 def _one_of(names: tuple[str, ...]) -> JsonObject:
     return {"type": "string", "enum": list(dict.fromkeys(names))}
 
@@ -152,8 +163,11 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
                 return None
             return _branch(
                 name,
-                {"npc": _one_of(choices.npcs), "approach": _one_of(TALK_APPROACH_LABELS)},
-                {"speech": text},
+                {
+                    "npc": _one_of(choices.npcs),
+                    "approach": _one_of(TALK_APPROACH_LABELS),
+                    "speech": _speech_property(),
+                },
             )
         case "GIVE":
             if not choices.carried or not choices.npcs:
@@ -257,6 +271,13 @@ def _line(verb: str, *parts: str) -> str:
     return " ".join([verb, *(part for part in parts if part)])
 
 
+def _talk_line(fields: JsonObject) -> str:
+    speech = _text(fields, "speech").replace('"', "'")
+    return _line(
+        "TALK", _text(fields, "npc"), _text(fields, "approach"), f'"{speech}"' if speech else ""
+    )
+
+
 def _move_line(fields: JsonObject) -> str:
     run = fields.get("run", False)
     if not isinstance(run, bool):
@@ -329,7 +350,7 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "BARRICADE": _target_line("BARRICADE"),
     "UNBARRICADE": _target_line("UNBARRICADE"),
     "SHOUT": lambda fields: "SHOUT",
-    "TALK": lambda fields: _line("TALK", _text(fields, "npc"), _text(fields, "approach")),
+    "TALK": _talk_line,
     "REQUEST": _request_line,
     "GIVE": lambda fields: _line(
         "GIVE", _text(fields, "item"), "to" if fields.get("npc") else "", _text(fields, "npc")

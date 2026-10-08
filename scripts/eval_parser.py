@@ -16,7 +16,7 @@ from managers.context import ContextBuilder  # noqa: E402
 from managers.game import GameManager  # noqa: E402
 from managers.world.locations import connection_target  # noqa: E402
 from modules.action.parser import parse_action_plan  # noqa: E402
-from modules.action.types import AnyAction, MoveAction  # noqa: E402
+from modules.action.types import AnyAction, MoveAction, TalkAction  # noqa: E402
 
 CASES_FILE = Path(__file__).resolve().parent.parent / "evals" / "parser_cases.yaml"
 
@@ -31,7 +31,9 @@ def scene(case: dict) -> GameManager:
 
 
 def _reached(manager: GameManager, action: AnyAction) -> object:
-    """A move as the zone it reaches, so "In" and an alias match; other actions as they are."""
+    """A move as the zone it reaches, so "In" and an alias match; a talk by whether words came with it; other actions as they are."""
+    if isinstance(action, TalkAction):
+        return (TalkAction.verb, action.npc_name, action.approach, bool(action.speech))
     if not isinstance(action, MoveAction):
         return action
     folded = action.destination.casefold()

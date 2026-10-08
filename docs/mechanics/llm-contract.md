@@ -94,7 +94,7 @@ drift apart.
 | `STANCE` | `sneak` or `stand` | 0 |
 | `WAIT` | duration | as spent |
 | `SLEEP` | optional duration | as spent |
-| `TAKE` / `DROP` | item; `TAKE` also `<item> from <corpse>` | 1 |
+| `TAKE` / `DROP` | item; `TAKE` also `<item> from <corpse>`, where `from` stays optional: the validator falls back to the room's opened containers, and a required field would make the model guess one | 1 |
 | `SEARCH` | corpse | 1, after the walk up to it |
 | `USE_ITEM` | item (eating and drinking too) | 1, or the food's time |
 | `WEAR` / `TAKE_OFF` | clothing item | 1 |
@@ -108,7 +108,7 @@ drift apart.
 | `REMOVE_BANDAGE` | body part | 1 |
 | `DISINFECT` | body part, optional `with` item | 1 |
 | `SHOUT` | none | 0 |
-| `TALK` | NPC, approach | 5 per turn |
+| `TALK` | NPC, approach, speech (a string, possibly empty) | 5 per turn |
 | `REQUEST` | NPC, request | 5 per turn |
 | `GIVE` | item, NPC | 5 per turn |
 | `ADD_GOAL` / `REMOVE_GOAL` | horizon, free text | 0 |
@@ -246,8 +246,13 @@ empty list is `NONE`.
 
 Everything the player says to an NPC becomes one `TALK`, and the parser chooses the
 approach. The engine owns what it is worth. The approach is the first label after the
-NPC's name; anything after it, such as the line being said, is dropped
-(`TALK Emma chat "Hi, I'm new here"` is a `chat`).
+NPC's name. The `speech` field carries the character's words: quoted from the input
+when the player quoted them, else the gist of what the player said they say, in the
+character's voice; empty only when the input gives no words ("chat with Emma"). In
+the text form it is a trailing quoted string (`TALK Emma chat "Hi, I'm new here"`),
+and unquoted text after the approach is dropped. It is trimmed and capped at 300
+characters. The narrator gets the words as a fact of what the character says; they
+are player text and never change what the approach is worth.
 
 ### Approaches
 
@@ -653,13 +658,6 @@ entry says what goes wrong and how to fix it.
   and give the narrator a fact that the rest was not attempted. That stops actions
   aimed at the wrong zone's things, and the player repeats the rest at the
   destination.
-- **Optional fields stay empty.** The model never fills an optional field: `TAKE`'s
-  `from` (the validator now falls back to the room's opened containers) and `TALK`'s
-  `speech`, so the narrator invents what was said. *Fix:* make a field required
-  wherever the engine needs it (`speech` as a possibly empty string), and add
-  parser eval cases for quoted and reported speech. Leave `TAKE`'s `from`
-  optional: the fallback already finds the container, and a required field would
-  make the model guess one.
 - **The server ignores `pattern`.** LM Studio accepted `"morning"` and `"07:00"`
   for a duration, and the grammar refused both ("it wasn't clear how"). *Fix:* let
   the [duration grammar](clock.md#actions) read a bare time of day or `HH:MM` as
