@@ -111,9 +111,11 @@ actions, so "fight it until it drops" is up to 5 `ATTACK`s.
 
 - **More than one zombie.** A swing hits the target, then other zombies at
   `gap <= 1` in the same posture (all standing, or all down), nearest first, until
-  the weapon's `max_hit_count` is reached. It never hits a zombie on the side
-  opposite the target's (front and behind, left and right). The `n`th zombie hit
-  takes the split in [Damage](#damage).
+  the swing's hit count is reached: the weapon's `max_hit_count` for a weapon hit or
+  a floor attack, 3 for a shove with a weapon in hand, 1 for a shove with empty hands
+  and 1 for a stomp. It never hits a zombie on the side opposite the target's (front
+  and behind, left and right). The `n`th zombie hit takes the split in
+  [Damage](#damage).
 - **An idle or alerted target** that is hit starts chasing and faces the player.
   So does every other zombie the swing hits and does not kill.
 
@@ -223,7 +225,8 @@ A swing at a down zombie lands on the head or the neck (see zombie armour in `zo
 - **With a weapon:** x the larger of 5 and the crit multiplier on top, and a crit
   is rolled as usual.
 - **Bare-handed, a stomp:** the split is the stomp term, crits use the shove
-  chance, and there is no x5. A stomp costs double the hit's endurance.
+  chance, and there is no x5. A stomp costs double the hit's endurance. It hits
+  the one zombie on the floor and no other.
 
 Either one keeps the zombie down.
 
@@ -233,8 +236,8 @@ Either one keeps the zombie down.
 `ATTACK`). It is what bare-handed `ATTACK` on a standing zombie already is,
 available with a weapon in hand too.
 
-- Bare hands for everything (reach, hit count 3, endurance), whatever is held. The
-  held weapon takes no wear.
+- Bare hands for reach and endurance, whatever is held. The held weapon takes no
+  wear. It moves 3 zombies with a weapon in hand and 1 with empty hands.
 - No damage, and `hits_taken` does not increase.
 - Rolls the shove crit chance. A crit knocks the zombie down, otherwise it is
   staggered.

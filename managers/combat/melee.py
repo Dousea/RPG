@@ -206,7 +206,7 @@ class MeleeEngine:
         held_melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
         weapon = held_melee or melee_k.BARE_HANDS
         kind = self._kind(shove, target.on_floor(now), held_melee is not None)
-        targets = self._targets(world, player, target, weapon, now)
+        targets = self.reach(world, player, target, shove=shove, now=now)
         levels = skill_levels(player)
         status_effects = player_status_effect_levels(player)
         close_kill = weapon.is_stab and _hunters(world, player) <= melee_k.CLOSE_KILL_MAX_HUNTERS
@@ -291,14 +291,37 @@ class MeleeEngine:
         return SwingKind.HIT
 
     @staticmethod
-    def _targets(
+    def reach(
         world: World,
         player: PlayerEntity,
         target: ZombieEntity,
-        weapon: MeleeWeaponItem,
+        *,
+        shove: bool,
         now: int,
     ) -> list[ZombieEntity]:
-        """The target, then the nearest others in reach and in its posture, up to the hit count."""
+        """The zombies a swing at `target` hits, rolling nothing: the target, then the nearest others in reach and in its posture, up to the swing's hit count."""
+        held = weapons.equipped_weapon(player)
+        melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
+        kind = MeleeEngine._kind(shove, target.on_floor(now), melee is not None)
+        if kind == SwingKind.SHOVE:
+            limit = (
+                melee_k.SHOVE_HIT_COUNT_UNARMED if held is None else melee_k.SHOVE_HIT_COUNT_ARMED
+            )
+        elif kind == SwingKind.STOMP:
+            limit = melee_k.STOMP_HIT_COUNT
+        else:
+            assert melee is not None
+            limit = melee.max_hit_count
+        return MeleeEngine._nearby(world, player, target, now)[:limit]
+
+    @staticmethod
+    def _nearby(
+        world: World,
+        player: PlayerEntity,
+        target: ZombieEntity,
+        now: int,
+    ) -> list[ZombieEntity]:
+        """The target, then every other zombie in reach and in its posture, nearest first."""
         others = sorted(
             (
                 z
@@ -315,7 +338,7 @@ class MeleeEngine:
             ),
             key=lambda z: (z.gap, int(z.zombie_id[1:])),
         )
-        return [target, *others][: weapon.max_hit_count]
+        return [target, *others]
 
     def _roll_crit(
         self,

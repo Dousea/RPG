@@ -5,6 +5,7 @@ import unittest
 from dataclasses import replace
 
 from data.items import ITEMS
+from data.melee import DOWN_TARGET
 from data.story.mentions import DECIDED_ON_ARRIVAL
 from managers.game import GameManager
 from managers.mentions import mentionables
@@ -17,12 +18,14 @@ from modules.action.types import (
     CarryAction,
     MoveAction,
     SearchAction,
+    ShoveAction,
     TakeAction,
 )
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
 from modules.resolution import TargetCorpse, Transfer
+from tests.support import hold
 from tests.test_simulation import add_zombie, zombie_game
 
 BAT = ITEMS["item_baseball_bat"]
@@ -233,6 +236,33 @@ class StepTests(unittest.TestCase):
         self.assertIn("nearest zombie", step.text)
         self.assertEqual(step.default, "man, close, coming at you")
         self.assertIsNone(step.choice)
+
+    def test_a_swing_that_reaches_several_says_so_without_a_count(self):
+        gm = zombie_game("zone_street")
+        hold(gm, "item_crowbar")
+        for _ in range(3):
+            add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        (step,) = steps_of(gm, [], [ShoveAction(target_name="zombie")], [])
+        self.assertIn("nearest zombie and the ones beside it", step.text)
+        self.assertIsNone(re.search(r"\d", step.text))
+
+        gm = zombie_game("zone_street")
+        hold(gm, "item_crowbar")
+        add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        add_zombie(gm, gap=5, state=ZombieState.CHASING)
+        (step,) = steps_of(gm, [], [ShoveAction(target_name="zombie")], [])
+        self.assertNotIn("beside", step.text)
+
+    def test_a_floor_attack_names_the_nearest_down_zombie_and_those_beside_it(self):
+        gm = zombie_game("zone_street")
+        hold(gm, "item_crowbar")
+        add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        for _ in range(2):
+            down = add_zombie(gm, gap=1, state=ZombieState.CHASING)
+            down.down_until = gm.narrative.minutes + 5
+        (step,) = steps_of(gm, [], [AttackAction(target_name=DOWN_TARGET)], [])
+        self.assertIn("nearest zombie and the ones beside it", step.text)
+        self.assertIsNotNone(step.default)
 
     def test_a_zombie_named_by_id_reads_as_its_looks(self):
         gm = zombie_game("zone_street")

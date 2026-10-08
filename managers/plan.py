@@ -12,11 +12,12 @@ from dataclasses import dataclass, replace
 from data.story import mentions as mention_k
 from data.time_costs import MAX_PLAN_ACTIONS
 from managers import naming
+from managers.combat.aim import is_down_target, is_plain_zombie
+from managers.combat.melee import MeleeEngine
 from managers.game import GameManager
 from managers.mentions import body_candidates, body_named, mentionables, zone_candidate
 from managers.validator import (
     CORPSE_ID_PATTERN,
-    ZOMBIE_WORDS,
     Accepted,
     ActionValidator,
     Asked,
@@ -167,9 +168,8 @@ def _words(action: AnyAction, looks: Mapping[str, tuple[str, str]]) -> str:
 
 
 def _is_plain_zombie_target(action: AnyAction) -> bool:
-    return (
-        isinstance(action, AttackAction | ShoveAction)
-        and action.target_name.strip().casefold() in ZOMBIE_WORDS
+    return isinstance(action, AttackAction | ShoveAction) and (
+        is_plain_zombie(action.target_name) or is_down_target(action.target_name)
     )
 
 
@@ -181,6 +181,18 @@ def _nearest_zombie(manager: GameManager, action: AnyAction) -> str | None:
     if isinstance(result, Accepted) and isinstance(result.resolved, TargetZombie):
         return result.resolved.zombie_id
     return None
+
+
+def _reaches_several(manager: GameManager, action: AnyAction, zombie_id: str) -> bool:
+    """Whether the swing of `action` at `zombie_id` would hit more than that zombie."""
+    hit = MeleeEngine.reach(
+        manager.world,
+        manager.player,
+        manager.world.zombies[zombie_id],
+        shove=isinstance(action, ShoveAction),
+        now=manager.narrative.minutes,
+    )
+    return len(hit) > 1
 
 
 def steps_of(
@@ -202,6 +214,7 @@ def steps_of(
             text = f"{verb} a zombie, {mention_k.DECIDED_ON_ARRIVAL}"
         elif nearest in looks:
             name, description = looks[nearest]
-            text, default = f"{verb} the nearest zombie", f"{name}, {description}"
+            beside = " and the ones beside it" if _reaches_several(manager, action, nearest) else ""
+            text, default = f"{verb} the nearest zombie{beside}", f"{name}, {description}"
         steps.append(PlanStep(text, False, default, waiting.get(index)))
     return steps

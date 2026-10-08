@@ -30,6 +30,7 @@ from managers.body.stats.status_effects import active_status_effects, player_sta
 from managers.character import creation
 from managers.character.skills import skill_progress
 from managers.combat import weapons
+from managers.combat.aim import aimed
 from managers.context import NOTHING_DONE_FACT, ContextBuilder
 from managers.corpses.search import corpse_views
 from managers.events.log import build_event_entry, event_stamp
@@ -206,6 +207,7 @@ class GameEngine:
                 actions, parse_failures = self._parsed(manager, typed, picks, emit)
             except llm.LLMError as exc:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
+            actions = aimed(actions, player_input)
             kept, dropped, off_request = self._checked_plan(manager, player_input, actions, emit)
             looks = manager.player.appearance
             for failure in parse_failures:
@@ -311,7 +313,9 @@ class GameEngine:
                 logger.warning(f"Parser failed on the rest of the plan: {exc}")
                 return None
             later_failures.extend(failures)
-            more, dropped, refusals = self._checked_plan(manager, player_input, more, emit)
+            more, dropped, refusals = self._checked_plan(
+                manager, player_input, aimed(more, player_input), emit
+            )
             later_dropped.extend(dropped)
             later_refusals.extend(refusals)
             return more

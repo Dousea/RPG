@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, fields
 
 from data import carry as carry_k
+from data import melee as melee_k
 from data.body import health as body_k
 from data.body import survival as survival_k
 from data.character import exercises as exercise_k
@@ -47,6 +48,7 @@ from managers.body.health import limp_factor
 from managers.body.stats.status_effects import status_effect_level
 from managers.character.exercise import endurance_level
 from managers.combat import weapons
+from managers.combat.aim import is_down_target, is_plain_zombie
 from managers.corpses.search import find_content, perceived_corpses, with_article
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.mentions import container_candidate, zone_candidate
@@ -159,9 +161,6 @@ GOAL_HORIZONS = GOAL_HORIZON_LABELS
 UNSUPPORTED_REASON = "there is no way to do that yet."  # llm-contract
 ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
 CORPSE_ID_PATTERN = re.compile(r"c\d+", re.IGNORECASE)
-
-# Names that mean "the nearest zombie".
-ZOMBIE_WORDS = frozenset({"zombie", "the zombie", "a zombie", "zombies", "the zombies"})
 
 
 @dataclass
@@ -1143,7 +1142,7 @@ class ActionValidator:
                 return Rejected(action, refusal)
             return Accepted(action, zombie_target)
         if self._names_a_zombie(action.target_name):
-            return Rejected(action, f"'{action.target_name}' is not here to attack.")
+            return Rejected(action, self._no_such_zombie(action.target_name, "attack"))
         if self._find_barrier(action.target_name) is not None:
             return self._validate_hit_barrier(action)
         npc = self._npc_named(action.target_name)
@@ -1166,7 +1165,7 @@ class ActionValidator:
         zombie_target = self._zombie_target(action.target_name)
         if zombie_target is None:
             if self._names_a_zombie(action.target_name):
-                return Rejected(action, f"'{action.target_name}' is not here to shove.")
+                return Rejected(action, self._no_such_zombie(action.target_name, "shove"))
             return Rejected(action, f"{self._name} can only shove zombies.")
         if refusal := self._behind_a_barrier(zombie_target.zombie_id):
             return Rejected(action, refusal)
@@ -1175,19 +1174,33 @@ class ActionValidator:
             return Rejected(action, "It's already down.")
         return Accepted(action, zombie_target)
 
+    @staticmethod
+    def _no_such_zombie(name: str, verb: str) -> str:
+        if is_down_target(name):
+            return melee_k.NO_ZOMBIE_DOWN
+        return f"'{name}' is not here to {verb}."
+
     def _names_a_zombie(self, name: str) -> bool:
         needle = name.strip().casefold()
-        return needle in ZOMBIE_WORDS or needle in self.manager.world.zombies
+        return (
+            is_plain_zombie(needle)
+            or is_down_target(needle)
+            or needle in self.manager.world.zombies
+        )
 
     def _zombie_target(self, name: str) -> TargetZombie | None:
-        """The perceived zombie `name` points at: its id, or the nearest for "zombie"."""
+        """The perceived zombie `name` points at: its id, the nearest for "zombie" or a group word, the nearest one down for floor words."""
         manager = self.manager
         needle = name.strip().casefold()
         here = [seen.zombie for seen in perceived_now(manager)]
-        if needle in ZOMBIE_WORDS:
-            pool = sorted(here, key=lambda z: (z.gap, int(z.zombie_id[1:])))
+        if is_down_target(needle):
+            now = manager.narrative.minutes
+            pool = [zombie for zombie in here if zombie.on_floor(now)]
+        elif is_plain_zombie(needle):
+            pool = here
         else:
             pool = [zombie for zombie in here if zombie.zombie_id == needle]
+        pool.sort(key=lambda z: (z.gap, int(z.zombie_id[1:])))
         if not pool:
             return None
         return TargetZombie(

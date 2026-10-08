@@ -8,11 +8,12 @@ from unittest import mock
 
 from adapters.save import files
 from data.items import ITEMS
+from data.melee import NO_ZOMBIE_DOWN
 from data.story.mentions import DECIDED_ON_ARRIVAL
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected
 from modules.action.pins import MENTION_MARK, pin_of
-from modules.action.types import AnyAction, AttackAction, MoveAction
+from modules.action.types import AnyAction, AttackAction, MoveAction, ShoveAction
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
 from modules.resolution import TargetContainer, TargetCorpse, TargetZombie
@@ -51,12 +52,15 @@ class PlanScreenTestCase(EngineTestCase):
         self.llm.parser_script = [f"ACTIONS:\n{reply}" for reply in replies]
 
     def accepted(self) -> list[Accepted]:
-        seen: list[Accepted] = []
+        return self.watch(Accepted)
+
+    def watch[R: Accepted | Rejected](self, kind: type[R]) -> list[R]:
+        seen: list[R] = []
         real = ActionValidator.validate
 
         def spy(validator: ActionValidator, action: AnyAction):
             result = real(validator, action)
-            if isinstance(result, Accepted):
+            if isinstance(result, kind):
                 seen.append(result)
             return result
 
@@ -369,3 +373,67 @@ class SpentPickTests(PlanScreenTestCase):
         later = [r.action for r in checked if isinstance(r.action, AttackAction)]
         self.assertTrue(later)
         self.assertTrue(all(pin_of(a.target_name) is None for a in later))
+
+
+class GroupWordTests(PlanScreenTestCase):
+    """melee: A swing at a group is a swing at the nearest zombie, or the nearest one down for the floor words."""
+
+    def zombies(self, gm: GameManager, *gaps: float, down: tuple[int, ...] = ()):
+        found = [add_zombie(gm, gap=gap, state=ZombieState.CHASING) for gap in gaps]
+        for index in down:
+            found[index].down_until = gm.narrative.minutes + 5
+        return found
+
+    def aimed_at(self, seen: list[Accepted]) -> list[str]:
+        ids = {
+            a.expect(TargetZombie).zombie_id for a in seen if isinstance(a.resolved, TargetZombie)
+        }
+        return sorted(ids)
+
+    def test_shove_them_shoves_the_nearest_zombie(self):
+        gm = self.stage("zone_street")
+        near, _ = self.zombies(gm, 1, 1.5)
+        seen = self.accepted()
+        self.script("SHOVE them")
+        self.engine.play("shove them back")
+        self.assertEqual(self.aimed_at(seen), [near.zombie_id])
+        self.assertTrue(all(isinstance(a.action, ShoveAction) for a in seen))
+
+    def test_the_floor_words_stomp_the_zombie_on_the_floor_whatever_the_parser_wrote(self):
+        gm = self.stage("zone_street")
+        _, down = self.zombies(gm, 1, 1.5, down=(1,))
+        seen = self.accepted()
+        self.script("ATTACK zombie")
+        self.engine.play("stomp the one on the floor")
+        self.assertEqual(self.aimed_at(seen), [down.zombie_id])
+
+    def test_stomp_with_none_down_is_refused_and_does_not_become_a_shove(self):
+        gm = self.stage("zone_street")
+        (zombie,) = self.zombies(gm, 1)
+        seen = self.accepted()
+        refused = self.watch(Rejected)
+        self.script("ATTACK them")
+        self.engine.play("stomp them")
+        self.assertEqual(seen, [])
+        self.assertEqual({r.reason for r in refused}, {NO_ZOMBIE_DOWN})
+        self.assertFalse(zombie.staggered)
+        self.assertEqual(zombie.hits_taken, 0)
+
+    def test_a_shove_that_says_down_still_shoves_the_standing_zombie(self):
+        gm = self.stage("zone_street")
+        near, _ = self.zombies(gm, 1, 1.5, down=(1,))
+        seen = self.accepted()
+        self.script("SHOVE the zombie")
+        self.engine.play("shove the zombie down")
+        self.assertEqual(self.aimed_at(seen), [near.zombie_id])
+        self.assertTrue(all(isinstance(a.action, ShoveAction) for a in seen))
+
+    def test_a_pinned_zombie_wins_over_group_words(self):
+        gm = self.stage("zone_street")
+        pinned, _ = self.zombies(gm, 1.5, 1, down=(1,))
+        seen = self.accepted()
+        self.script("ATTACK zombie")
+        self.engine.play(
+            f"stomp {MENTION_MARK} and the ones on the floor", mentions=[pinned.zombie_id]
+        )
+        self.assertEqual(self.aimed_at(seen), [pinned.zombie_id])

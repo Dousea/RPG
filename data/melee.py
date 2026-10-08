@@ -38,6 +38,24 @@ GLOBAL_MELEE_DAMAGE_REDUCTION_MULTIPLIER = 0.15  # melee
 REACH_TILES = 1.0  # melee: every weapon's reach falls in the one-tile band
 REACH_FACTOR_PER_TILE = 2.0  # melee
 
+SHOVE_HIT_COUNT_UNARMED = 1  # melee
+SHOVE_HIT_COUNT_ARMED = 3  # melee: a weapon in hand
+STOMP_HIT_COUNT = 1  # melee
+
+PLAIN_ZOMBIE_WORDS = frozenset(  # melee: a target that reads as the plain zombie
+    {"zombie", "the zombie", "a zombie", "zombies", "the zombies"}
+    | {"them", "all of them", "the ones", "all the zombies", "all of the zombies"}
+)
+DOWN_TARGET_PATTERN = (  # melee: a target that names the zombies on the floor
+    r"(?:the |all the |all of the )?"
+    r"(?:(?:zombies?|ones?|them|crawlers?)(?: that (?:are|is))? (?:on the (?:floor|ground)|down)|crawlers?)"
+)
+DOWN_INPUT_PATTERN = (  # melee: the player's own words for the floor, or for a stomp
+    r"\bon the (?:floor|ground)\b|\bcrawl(?:er|ers|ing)\b|\bstomp\w*"
+)
+DOWN_TARGET = "the ones on the floor"  # melee: how the engine writes a down target
+NO_ZOMBIE_DOWN = "No zombie within reach is down."  # melee
+
 DOWN_MINUTES = 2  # melee: down this minute and the next
 
 STUCK_KNIFE_BASE_ATTACKING = 3  # melee

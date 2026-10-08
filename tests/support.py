@@ -8,6 +8,7 @@ from pathlib import Path
 
 from adapters.llm import DeltaCallback, ParserReply
 from adapters.save import files
+from data.items import ITEMS
 from managers import carry
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -226,6 +227,17 @@ class ScriptedRandom(random.Random):
 
     def randrange(self, start: int, stop: int | None = None, step: int = 1) -> int:
         return self._ints.pop(0) if self._ints else 0
+
+
+def hold(gm: GameManager, item_id: str) -> ItemEntity:
+    """Put the weapon `item_id` in the player's hands."""
+    entity = ItemEntity(item=ITEMS[item_id])
+    item = entity.item
+    assert isinstance(item, HoldableItem)
+    for slot in item.slots:
+        assert isinstance(slot, CharacterHoldableSlot)
+        gm.player.equipment[slot] = entity
+    return entity
 
 
 def load_pack(player: PlayerEntity, kg: float) -> None:

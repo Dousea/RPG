@@ -16,6 +16,7 @@ from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import MeleeWeaponItem
+from tests.support import hold
 
 
 class FixedRng(random.Random):
@@ -89,16 +90,6 @@ def street_game(*, weapon: str | None = None, blunt: int = 0) -> GameManager:
     if weapon is not None:
         hold(gm, weapon)
     return gm
-
-
-def hold(gm: GameManager, item_id: str) -> ItemEntity:
-    entity = ItemEntity(item=ITEMS[item_id])
-    item = entity.item
-    assert isinstance(item, MeleeWeaponItem)
-    for slot in item.slots:
-        assert isinstance(slot, CharacterHoldableSlot)
-        gm.player.equipment[slot] = entity
-    return entity
 
 
 def add(gm: GameManager, zombie: ZombieEntity) -> ZombieEntity:
@@ -378,6 +369,14 @@ class FloorAttackAndStompTests(unittest.TestCase):
         expected = 3.06 * 3 * (2 / 1.1) * 1.5 * 0.3 * 0.15
         self.assertAlmostEqual(zombie.health, 100 - expected)
 
+    def test_a_stomp_hits_only_the_zombie_on_the_floor_it_aims_at(self):
+        gm = street_game()
+        zombies = [add(gm, make_zombie(n)) for n in range(1, 4)]
+        for zombie in zombies:
+            zombie.down_until = 5
+        swing(gm, now=0)
+        self.assertEqual([z.hits_taken for z in zombies], [1, 0, 0])
+
     def test_a_barefoot_stomp_halves_the_power(self):
         gm = street_game()
         del gm.player.worn[BodyLocation.SHOES]
@@ -411,6 +410,20 @@ class ShoveTests(unittest.TestCase):
         add(gm, make_zombie())
         swing(gm, shove=True, rng=FixedRng(script=[99, 0, 0, 0]))
         self.assertEqual(entity.condition, 15)
+
+    def test_a_shove_with_empty_hands_moves_one_and_with_a_weapon_in_hand_three(self):
+        gm = street_game()
+        zombies = [add(gm, make_zombie(n)) for n in range(1, 4)]
+        swing(gm, shove=True)
+        self.assertEqual([z.staggered for z in zombies], [True, False, False])
+        gm = street_game(weapon="item_crowbar")
+        zombies = [add(gm, make_zombie(n)) for n in range(1, 5)]
+        swing(gm, shove=True)
+        self.assertEqual([z.staggered for z in zombies], [True, True, True, False])
+        gm = street_game(weapon="item_pistol")
+        zombies = [add(gm, make_zombie(n)) for n in range(1, 5)]
+        swing(gm, shove=True)
+        self.assertEqual([z.staggered for z in zombies], [True, True, True, False])
 
     def test_a_shove_wakes_an_idle_target(self):
         gm = street_game()
