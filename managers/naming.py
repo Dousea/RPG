@@ -27,7 +27,7 @@ def clean_name(name: str) -> str:
 def describing_words(entity: ItemEntity) -> tuple[str, ...]:
     """What sets an item apart, in words: its condition, then its wetness when it has one.
 
-    Never a number, so uses left do not count; two items "look the same" when these are equal.
+    Never a number; uses left are kept apart in `uses_words`. Two items "look the same" when these are equal.
     """
     wet = wetness_word(entity.wetness)
     condition = item_condition_word(entity)
@@ -86,6 +86,14 @@ def _distinct_looks(entities: Iterable[ItemEntity]) -> dict[tuple[str, ...], Ite
     return looks
 
 
+def _distinct_variants(entities: Iterable[ItemEntity]) -> dict[tuple[str, ...], ItemEntity]:
+    """The first item of each look and uses left, for the question and its candidates."""
+    variants: dict[tuple[str, ...], ItemEntity] = {}
+    for entity in entities:
+        variants.setdefault((*describing_words(entity), uses_words(entity)), entity)
+    return variants
+
+
 def differing_names(entities: Iterable[ItemEntity]) -> set[str]:
     """Names (as shown) held by items that don't all look the same."""
     by_name: dict[str, list[ItemEntity]] = {}
@@ -99,8 +107,8 @@ def find_named(entities: Iterable[ItemEntity], name: str) -> ItemEntity | list[I
 
     A name is an item's name or id, alone or with describing words before it or in brackets
     after it; only items with all of them match, and of those the ones with the fewest describing
-    words are kept. Several matches that look the same give the first; ones that differ give the
-    list. None when nothing matches. A pinned item is the one in `entities` with its instance id.
+    words are kept. Several matches that look the same and have the same uses left give the
+    first; ones that differ give the list. None when nothing matches. A pinned item is the one in `entities` with its instance id.
     """
     pool = list(entities)
     if pin := pin_of(name, "item"):
@@ -120,7 +128,7 @@ def find_named(entities: Iterable[ItemEntity], name: str) -> ItemEntity | list[I
             matches = [e for e in matches if len(describing_words(e)) == fewest]
     if not matches:
         return None
-    if len(_distinct_looks(matches)) > 1:
+    if len(_distinct_variants(matches)) > 1:
         return matches
     return matches[0]
 
@@ -148,16 +156,19 @@ def qualified_names(entities: Iterable[ItemEntity]) -> list[str]:
 
 
 def item_candidates(entities: Iterable[ItemEntity]) -> tuple[Candidate, ...]:
-    """Each distinct look of `entities` once, as a candidate: the first item of that look by its instance id, and the look in words."""
+    """Each distinct look and uses left of `entities` once, as a candidate: the first such item by its instance id, and its words."""
     return tuple(
         Candidate("item", entity.instance_id, entity.item.name, item_words(entity))
-        for entity in _distinct_looks(entities).values()
+        for entity in _distinct_variants(entities).values()
     )
 
 
 def which_one(candidates: Iterable[ItemEntity]) -> str:
-    """The question for several candidates that look different (carrying-and-loot)."""
-    return container_k.WHICH_ONE.format(choices=" or ".join(qualified_names(candidates)))
+    """The question for several candidates that look different or differ in uses left (carrying-and-loot)."""
+    entities = list(candidates)
+    if len(_distinct_looks(entities)) == 1:
+        return container_k.WHICH_ONE_BY_USES.format(name=entities[0].item.name)
+    return container_k.WHICH_ONE.format(choices=" or ".join(qualified_names(entities)))
 
 
 def scene_names(entities: Iterable[ItemEntity]) -> tuple[str, ...]:

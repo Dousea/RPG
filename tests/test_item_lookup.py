@@ -24,6 +24,7 @@ from tests.test_plan_schema import branches, enum_of, fits
 BAT = "item_baseball_bat"
 KNIFE = "item_kitchen_knife"
 SHIRT = "item_tshirt"
+WIPES = "item_alcohol_wipes"
 
 
 def thing(item_id: str, **fields) -> ItemEntity:
@@ -59,10 +60,27 @@ class LookupTests(unittest.TestCase):
         self.assertEqual(naming.describing_words(thing(SHIRT, wetness=50)), ("intact", "wet"))
         self.assertEqual(naming.describing_words(broken_bat()), ("broken",))
 
-    def test_uses_left_do_not_set_items_apart(self):
-        full = thing("item_bandage")
-        used = thing("item_bandage", uses=1)
-        self.assertIs(naming.find_named([used, full], "Bandage"), used)
+    def test_uses_left_set_items_apart_for_the_question(self):
+        few, many = thing(WIPES, uses=3), thing(WIPES, uses=5)
+        found = naming.find_named([few, many], "Alcohol Wipes")
+        assert isinstance(found, list)
+        self.assertEqual([id(e) for e in found], [id(few), id(many)])
+        self.assertEqual(naming.describing_words(few), naming.describing_words(many))
+
+    def test_equal_uses_left_give_the_first(self):
+        first, second = thing(WIPES, uses=3), thing(WIPES, uses=3)
+        self.assertIs(naming.find_named([first, second], "Alcohol Wipes"), first)
+
+    def test_uses_candidates_carry_ids_and_the_question_has_no_number(self):
+        few, many = thing(WIPES, uses=3), thing(WIPES, uses=5)
+        few.instance_id, many.instance_id = "i1", "i2"
+        candidates = naming.item_candidates([few, many])
+        self.assertEqual([c.id for c in candidates], ["i1", "i2"])
+        self.assertIn("3 left", candidates[0].description)
+        self.assertIn("5 left", candidates[1].description)
+        question = naming.which_one([few, many])
+        self.assertIn("Alcohol Wipes", question)
+        self.assertIsNone(re.search(r"\d", question))
 
     def test_identical_items_give_the_first(self):
         first, second = thing(KNIFE), thing(KNIFE)

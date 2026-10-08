@@ -751,6 +751,7 @@ GONE_THROUGH = "{name} has already been through the {target}."  # carrying-and-l
 NOT_OPENED = "The {container} hasn't been gone through."  # carrying-and-loot
 NO_SUCH_SEARCH_TARGET = "There is no '{target}' to search here."  # carrying-and-loot
 WHICH_ONE = "Which one: {choices}?"  # carrying-and-loot
+WHICH_ONE_BY_USES = "Which {name}?"  # carrying-and-loot
 NOT_IN_THIS_ROOM = "The {container} is in the {room}, not here."  # carrying-and-loot
 CONTAINER_FULL = "The {container} is full."  # carrying-and-loot
 NO_SUCH_IN_CONTAINER = "The {container} holds no '{item}'."  # carrying-and-loot

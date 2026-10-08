@@ -208,15 +208,17 @@ An item is named by its name or id, ignoring case, quotes and a leading "the",
 "my" or "your". What sets items of one name apart is their describing words: the
 condition word (intact, worn, damaged, broken; for a melee weapon good, worn,
 badly worn, broken) and the wetness word when it has one (damp, wet, soaked),
-never a number, so uses left do not count. A name may carry one of those words
+never a number. A name may carry one of those words
 before it ("broken Baseball Bat") or in brackets after it ("Baseball Bat
 (broken)"), or several ("good wet Baseball Bat", "Baseball Bat (good, wet)");
 only items with all of those words match, and of those the ones with the fewest
 describing words are kept, so "intact T-shirt" takes the dry shirt over a wet
-intact one. When the items a name matches look the same, the first is taken.
-When they differ, the action is refused with the choices, each look once as a
+intact one. When the items a name matches look the same and have the same uses
+left, the first is taken. When they differ, or differ only in uses left, the action is refused with the choices, each look once as a
 qualified name ("Which one: broken Baseball Bat or good Baseball Bat?"): the one
-word no other look has, else all the look's words ("good wet Baseball Bat"). The
+word no other look has, else all the look's words ("good wet Baseball Bat"); when
+only the uses left differ the question names the item once ("Which Alcohol
+Wipes?"), never a number. The
 player answers on the plan screen ([entity resolution](../architecture/entity-resolution.md#which-one)). This holds for the pack, the floor, a bag, an opened
 container and a searched body.
 

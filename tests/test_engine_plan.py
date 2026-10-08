@@ -132,6 +132,19 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         carried = [e for e in gm.player.inventory if e.item.id == BAT.id]
         self.assertEqual([e.broken for e in carried], [True])
 
+    def test_two_packs_differing_in_uses_ask_and_go_drops_the_chosen_one(self):
+        gm = self.stage("zone_street")
+        wipes = ITEMS["item_alcohol_wipes"]
+        few, many = ItemEntity(item=wipes, uses=3), ItemEntity(item=wipes, uses=5)
+        gm.player.inventory.extend([few, many])
+        self.script("DROP the alcohol wipes")
+        result = self.engine.play("drop the alcohol wipes")
+        self.assertEqual(len(self.choices(result["plan"])), 2)
+        self.assertIn(few, gm.player.inventory)
+        self.engine.go([self.candidate(result["plan"], "5 left")])
+        self.assertIn(few, gm.player.inventory)
+        self.assertNotIn(many, gm.player.inventory)
+
     def test_two_open_choices_share_one_screen_and_one_go_settles_both(self):
         gm = self.stage("zone_street")
         self.two_bats(gm)
