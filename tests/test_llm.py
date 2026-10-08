@@ -297,6 +297,7 @@ class FakeResponse:
         self.status_code = status_code
         self._content = content
         self._prompt_tokens = prompt_tokens
+        self.text = content
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
@@ -705,6 +706,49 @@ class NarratorStreamTests(unittest.TestCase):
         with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")) as post:
             llm.query_narrator("p")
         self.assertNotIn("stream", post.call_args.kwargs["json"])
+
+
+class DebugLogTests(unittest.TestCase):
+    """Every request to the model and its whole reply are logged at debug."""
+
+    def logged(self, call) -> str:
+        with self.assertLogs("adapters.llm", level="DEBUG") as logs:
+            call()
+        return "\n".join(logs.output)
+
+    def test_a_request_logs_its_purpose_settings_and_both_prompts(self):
+        with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")):
+            text = self.logged(lambda: llm.query_narrator("the user prompt"))
+
+        self.assertIn("(narrator)", text)
+        self.assertIn('"max_tokens"', text)
+        self.assertIn(NARRATOR_SYSTEM_PROMPT, text)
+        self.assertIn("the user prompt", text)
+
+    def test_a_streamed_reply_logs_its_thinking_content_and_usage(self):
+        stream = FakeStreamResponse(THOUGHT_AND_STORY)
+        with mock.patch.object(llm.requests, "post", return_value=stream):
+            text = self.logged(lambda: llm.query_narrator("p", on_delta=lambda *_: None))
+
+        self.assertIn("Hmm.", text)
+        self.assertIn("STORY:\nYou wait.", text)
+        self.assertIn('"completion_tokens": 9', text)
+
+    def test_a_refused_request_logs_the_server_body(self):
+        refused = FakeResponse(500, "model not loaded")
+        with mock.patch.object(llm.requests, "post", return_value=refused):
+            text = self.logged(lambda: self.assertRaises(LLMError, llm.query_narrator, "p"))
+
+        self.assertIn("HTTP 500", text)
+        self.assertIn("model not loaded", text)
+
+    def test_each_caller_names_its_purpose(self):
+        with mock.patch.object(llm.requests, "post", return_value=FakeResponse(200, "x")):
+            text = self.logged(lambda: llm.query_summary("events"))
+            text += self.logged(lambda: llm.query_narrator("p", purpose="narrator retry"))
+
+        self.assertIn("(summarizer)", text)
+        self.assertIn("(narrator retry)", text)
 
 
 class StoryPreviewTests(unittest.TestCase):

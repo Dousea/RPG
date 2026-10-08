@@ -199,7 +199,9 @@ class ScriptedLLM:
             raise self.error
         return ParserReply(self.actions, structured=self.structured)
 
-    def query_narrator(self, prompt: str, on_delta: DeltaCallback | None = None) -> str:
+    def query_narrator(
+        self, prompt: str, on_delta: DeltaCallback | None = None, purpose: str = "narrator"
+    ) -> str:
         self.narrator_prompts.append(prompt)
         if self.error is not None:
             raise self.error

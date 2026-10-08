@@ -61,6 +61,15 @@ class RequestTests(unittest.TestCase):
             checker().conflicts(story, list(questions), "Orton")
         return post
 
+    def test_the_question_its_reply_and_the_verdict_are_logged_at_debug(self):
+        with self.assertLogs("adapters.factcheck", level="DEBUG") as logs:
+            self.post(story="It falls dead.")
+
+        text = "\n".join(logs.output)
+        self.assertIn("It falls dead.", text)
+        self.assertIn("'token': 'A'", text)
+        self.assertIn("conflict", text)
+
     def test_the_request_goes_to_the_llm_url_with_the_timeout(self):
         post = self.post()
         self.assertEqual(post.call_args.args[0], config.llm.base_url)

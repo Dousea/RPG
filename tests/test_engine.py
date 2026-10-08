@@ -831,7 +831,9 @@ class FailureTests(EngineTestCase):
         # Movement was already decided by the engine before the narrator was
         # asked to describe it -- a rendering failure must not discard that.
         class FailingNarrator(ScriptedLLM):
-            def query_narrator(self, prompt: str, on_delta: DeltaCallback | None = None) -> str:
+            def query_narrator(
+                self, prompt: str, on_delta: DeltaCallback | None = None, purpose: str = "narrator"
+            ) -> str:
                 self.narrator_prompts.append(prompt)
                 raise LLMError("LM Studio dropped the connection")
 
@@ -1209,7 +1211,9 @@ class SequencedNarrator(ScriptedLLM):
         super().__init__(**kwargs)
         self.replies = replies
 
-    def query_narrator(self, prompt: str, on_delta: DeltaCallback | None = None) -> str:
+    def query_narrator(
+        self, prompt: str, on_delta: DeltaCallback | None = None, purpose: str = "narrator"
+    ) -> str:
         self.narrator_prompts.append(prompt)
         reply = self.replies.pop(0)
         if isinstance(reply, LLMError):

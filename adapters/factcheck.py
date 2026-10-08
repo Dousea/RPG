@@ -77,9 +77,13 @@ class FactChecker:
             ) as exc:
                 logger.warning(f"Fact check failed, skipping the question: {exc!r}")
                 continue
-            logger.debug(f"Fact check {question.text!r}: {probabilities}")
             key, probability = max(probabilities.items(), key=lambda item: item[1])
-            if key not in question.allowed and probability >= self._threshold:
+            conflict = key not in question.allowed and probability >= self._threshold
+            logger.debug(
+                f"Fact check {question.text!r}: {probabilities}, answer {key} at {probability:.2f}, "
+                f"allowed {sorted(question.allowed)}, conflict {conflict}"
+            )
+            if conflict:
                 conflicting.append(index)
         return conflicting
 
@@ -94,6 +98,13 @@ class FactChecker:
                 for label, (key, description) in zip(labels, question.options, strict=True)
             ],
         }
+        user_content = json.dumps(task)
+        logger.debug(
+            "Fact check request to %s\n--- system ---\n%s\n--- user ---\n%s",
+            self._model_name,
+            SYSTEM_PROMPT,
+            user_content,
+        )
         response = requests.post(
             config.llm.base_url,
             headers={"Content-Type": "application/json"},
@@ -101,7 +112,7 @@ class FactChecker:
                 "model": self._model_name,
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(task)},
+                    {"role": "user", "content": user_content},
                 ],
                 "temperature": 0,
                 "max_tokens": MAX_ANSWER_TOKENS,
@@ -113,6 +124,7 @@ class FactChecker:
         )
         response.raise_for_status()
         top = response.json()["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
+        logger.debug(f"Fact check reply: {top!r}")
         summed = dict.fromkeys(labels, 0.0)
         for entry in top:
             label = entry["token"].strip()

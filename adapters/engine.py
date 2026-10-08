@@ -490,7 +490,11 @@ class GameEngine:
         )
         emit({"type": "step", "step": "rewriting"})
         try:
-            retry = self._reply(llm.query_narrator(retry_prompt, on_delta=_story_listener(emit)))
+            retry = self._reply(
+                llm.query_narrator(
+                    retry_prompt, on_delta=_story_listener(emit), purpose="narrator retry"
+                )
+            )
         except llm.LLMError as exc:
             logger.warning(f"Narrator retry failed, keeping the first story: {exc}")
             return parsed
@@ -533,7 +537,7 @@ class GameEngine:
             + block
         )
         try:
-            reply = llm.query_narrator(prompt)
+            reply = llm.query_narrator(prompt, purpose="narrator options")
         except llm.LLMError as exc:
             logger.warning(f"Options follow-up failed, leaving the turn without options: {exc}")
             return parsed

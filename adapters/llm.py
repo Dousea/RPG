@@ -8,9 +8,11 @@ already-decided outcome facts into STORY prose. Per docs/architecture/engine-aut
 the LLM interprets intent and writes prose; it never decides state.
 """
 
+import itertools
 import json
 import logging
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -290,6 +292,8 @@ DeltaCallback = Callable[[str, str], None]
 def _read_stream(response: requests.Response, on_delta: DeltaCallback) -> dict[str, Any]:
     """The reply body a streamed completion adds up to, passing each piece to `on_delta`."""
     content: list[str] = []
+    reasoning: list[str] = []
+    finish_reason = None
     body: dict[str, Any] = {}
     for raw_line in response.iter_lines():
         line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
@@ -303,13 +307,53 @@ def _read_stream(response: requests.Response, on_delta: DeltaCallback) -> dict[s
             body["usage"] = chunk["usage"]
         for choice in chunk.get("choices") or []:
             delta = choice.get("delta") or {}
+            finish_reason = choice.get("finish_reason") or finish_reason
             if thought := delta.get("reasoning_content"):
+                reasoning.append(thought)
                 on_delta("thinking", thought)
             if text := delta.get("content"):
                 content.append(text)
                 on_delta("story", text)
-    body["choices"] = [{"message": {"content": "".join(content)}}]
+    body["choices"] = [
+        {
+            "message": {"content": "".join(content), "reasoning_content": "".join(reasoning)},
+            "finish_reason": finish_reason,
+        }
+    ]
     return body
+
+
+_request_ids = itertools.count(1)
+
+
+def _log_request(
+    request_id: int, purpose: str, system_prompt: str, payload: dict[str, Any]
+) -> None:
+    settings = {key: value for key, value in payload.items() if key != "messages"}
+    user_content = payload["messages"][-1]["content"]
+    logger.debug(
+        "LLM request #%d (%s), %s\n--- system ---\n%s\n--- user ---\n%s",
+        request_id,
+        purpose,
+        json.dumps(settings),
+        system_prompt,
+        user_content,
+    )
+
+
+def _log_reply(request_id: int, purpose: str, body: dict[str, Any], seconds: float) -> None:
+    choice = body["choices"][0]
+    message = choice.get("message") or {}
+    logger.debug(
+        "LLM reply #%d (%s) in %.1fs, finish %s, usage %s\n--- reasoning ---\n%s\n--- content ---\n%s",
+        request_id,
+        purpose,
+        seconds,
+        choice.get("finish_reason"),
+        json.dumps(body.get("usage")),
+        message.get("reasoning_content") or "",
+        message.get("content"),
+    )
 
 
 def _chat(
@@ -321,6 +365,8 @@ def _chat(
     reasoning_effort: str,
     response_format: dict[str, Any] | None = None,
     on_delta: DeltaCallback | None = None,
+    *,
+    purpose: str,
 ) -> str:
     payload: dict[str, Any] = {
         **sampler,
@@ -339,6 +385,9 @@ def _chat(
         payload["stream"] = True
         payload["stream_options"] = {"include_usage": True}
 
+    request_id = next(_request_ids)
+    _log_request(request_id, purpose, system_prompt, payload)
+    started = time.monotonic()
     try:
         response = requests.post(
             LM_STUDIO_URL,
@@ -347,6 +396,14 @@ def _chat(
             timeout=config.llm.request_timeout,
             stream=on_delta is not None,
         )
+        if response.status_code >= 400:
+            logger.debug(
+                "LLM reply #%d (%s): HTTP %d\n%s",
+                request_id,
+                purpose,
+                response.status_code,
+                response.text,
+            )
         if response_format is not None and 400 <= response.status_code < 500:
             raise LLMRequestRejected(
                 f"LM Studio refused the request with HTTP {response.status_code}."
@@ -359,6 +416,7 @@ def _chat(
                 body = _read_stream(response, on_delta)
             finally:
                 response.close()
+        _log_reply(request_id, purpose, body, time.monotonic() - started)
         content = body["choices"][0]["message"]["content"]
         _record_usage(body, len(system_prompt) + len(user_content))
         return content
@@ -399,11 +457,11 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
                 PARSER_SAMPLER,
                 PARSER_REASONING_EFFORT,
                 response_format,
+                purpose="parser, structured",
             )
         except LLMRequestRejected as exc:
             logger.warning("Structured parser output refused, using the text prompt: %s", exc)
         else:
-            logger.debug("Parser raw response:\n%s", raw)
             return ParserReply(raw, structured=True)
     raw = _chat(
         PARSER_MODEL_NAME,
@@ -412,8 +470,8 @@ def query_parser(prompt_text: str, schema: dict[str, Any] | None = None) -> Pars
         max_tokens,
         PARSER_SAMPLER,
         PARSER_REASONING_EFFORT,
+        purpose="parser, text",
     )
-    logger.debug("Parser raw response:\n%s", raw)
     return ParserReply(raw, structured=False)
 
 
@@ -433,13 +491,15 @@ def read_parser_reply(reply: ParserReply) -> tuple[list[AnyAction], list[ParseFa
     return parse_action_plan(parse_action_response(reply.text))
 
 
-def query_narrator(prompt_text: str, on_delta: DeltaCallback | None = None) -> str:
+def query_narrator(
+    prompt_text: str, on_delta: DeltaCallback | None = None, purpose: str = "narrator"
+) -> str:
     """Ask the narrator to describe outcomes the engine already decided. Raises LLMError on failure.
 
     With `on_delta` the reply streams in, and each piece of its thinking and its
     text reaches `on_delta` as it is written; the return value is the same.
     """
-    raw = _chat(
+    return _chat(
         MODEL_NAME,
         NARRATOR_SYSTEM_PROMPT,
         prompt_text,
@@ -447,9 +507,8 @@ def query_narrator(prompt_text: str, on_delta: DeltaCallback | None = None) -> s
         sampler=NARRATOR_SAMPLER,
         reasoning_effort=NARRATOR_REASONING_EFFORT,
         on_delta=on_delta,
+        purpose=purpose,
     )
-    logger.debug("Narrator raw response:\n%s", raw)
-    return raw
 
 
 def query_summary(text_to_summarize: str) -> str:
@@ -461,6 +520,7 @@ def query_summary(text_to_summarize: str) -> str:
         max_tokens=config.llm.summarizer_max_tokens,
         sampler=SUMMARIZER_SAMPLER,
         reasoning_effort=SUMMARIZER_REASONING_EFFORT,
+        purpose="summarizer",
     ).strip()
 
 
