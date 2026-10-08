@@ -197,7 +197,7 @@
   downed_zombies: 2
   input: stomp the ones on the floor
   expect: [SHOVE zombie]
-  expect_instead: [[SHOVE z1], [SHOVE the ones on the floor]]
+  expect_instead: [[SHOVE z1], [SHOVE the ones on the floor], [SHOVE z1, SHOVE z2]]
 
 - name: stomp one while holding a pan
   zone: zone_street
@@ -215,7 +215,7 @@
   standing_zombies: 2
   input: shove them back
   expect: [SHOVE zombie]
-  expect_instead: [[SHOVE z1]]
+  expect_instead: [[SHOVE z1], [SHOVE z1, SHOVE z2]]
 
 - name: hit the zombie
   zone: zone_street
