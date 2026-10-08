@@ -9,8 +9,9 @@ their own speed, forget the player after a short while, and attack with a
 defence roll, a wound roll and a drag-down rule.
 
 The world has zones, not tiles, so every zombie carries one number the formulas
-need: its **gap**, the distance in tiles between it and the player. Everything is
-stepped minute by minute.
+need: its **gap**, the distance in tiles between it and the player. A tile is only
+a unit of distance, about a metre; there is no grid. Everything is stepped minute
+by minute.
 
 What the player does to a zombie (damage, crits, knockdowns, shoves, weapon
 wear) is left to the melee mechanic. Wounds land in a body part; bleeding,
