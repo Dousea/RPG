@@ -254,14 +254,6 @@ class GameManager:
     def zone_path(self, start_id: str, target_id: str) -> list[str] | None:
         return locations.zone_path(self.world.locations, start_id, target_id)
 
-    @staticmethod
-    def _find_item_entity(entities: list[ItemEntity], name: str) -> ItemEntity | None:
-        needle = name.strip().casefold()
-        for entity in entities:
-            if needle in (entity.item.name.casefold(), entity.item.id.casefold()):
-                return entity
-        return None
-
     def _ground_items(self) -> list[ItemEntity]:
         return [
             entity for entity in self.current_location.entities if isinstance(entity, ItemEntity)

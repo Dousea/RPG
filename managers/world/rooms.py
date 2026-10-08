@@ -1,6 +1,6 @@
 """Finding rooms and containers by name inside the player's zone (carrying-and-loot)."""
 
-from managers import carry
+from managers import naming
 from modules.entity.player import PlayerEntity
 from modules.world.location import Location
 from modules.world.room import ContainerEntity, RoomEntity
@@ -15,7 +15,7 @@ def current_room(zone: Location, player: PlayerEntity) -> RoomEntity | None:
 
 def resolve_room(zone: Location, name: str) -> RoomEntity | None:
     """The room of `zone` that `name` is, by its name or an alias, ignoring case and a leading article."""
-    needle = carry.clean_name(name)
+    needle = naming.clean_name(name)
     if not needle:
         return None
     for room in zone.rooms.values():
@@ -34,7 +34,7 @@ def room_holding(zone: Location, container: ContainerEntity) -> RoomEntity | Non
 
 def container_by_name(zone: Location, name: str) -> ContainerEntity | None:
     """The container of `zone` whose full name is `name`."""
-    needle = carry.clean_name(name)
+    needle = naming.clean_name(name)
     for room in zone.rooms.values():
         for container in room.containers:
             if needle == container.name.casefold():
@@ -50,7 +50,7 @@ def resolve_container(
     A full name finds its container from any room. A bare kind word (an alias) finds one only among
     the containers of the room `room_id`; with more than one match the choices come back as a list.
     """
-    needle = carry.clean_name(name)
+    needle = naming.clean_name(name)
     if not needle:
         return None
     every = [c for room in zone.rooms.values() for c in room.containers]

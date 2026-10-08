@@ -47,6 +47,21 @@ def item_condition_word(entity: ItemEntity) -> str:
     return "damaged"
 
 
+CONDITION_WORDS = frozenset(
+    {
+        "intact",
+        "worn",
+        "damaged",
+        "broken",
+        *(word for _, word in melee_k.CONDITION_WORD_BANDS),
+        melee_k.CONDITION_WORD_BADLY_WORN,
+        melee_k.CONDITION_WORD_BROKEN,
+    }
+)
+WETNESS_WORDS = frozenset({"damp", "wet", "soaked"})
+DESCRIBING_WORDS = CONDITION_WORDS | WETNESS_WORDS
+
+
 ORTON_OUTFIT_IDS = (  # clothing
     "item_tshirt",
     "item_hoodie",

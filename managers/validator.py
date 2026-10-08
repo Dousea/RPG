@@ -14,6 +14,7 @@ re-derive the reason something was legal.
 """
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from data import carry as carry_k
@@ -32,7 +33,7 @@ from data.world.clock import (
     minutes_until,
 )
 from data.zombies import lore as zombie_lore
-from managers import carry
+from managers import carry, naming
 from managers.body.first_aid import (
     bandage_items,
     disinfectant_items,
@@ -343,9 +344,18 @@ class ActionValidator:
             return Rejected(action, zombie_lore.ASLEEP_REFUSAL.format(name=self._name))
         return None
 
-    def _carried(self, name: str) -> ItemEntity | None:
+    @staticmethod
+    def _asked(found: ItemEntity | list[ItemEntity] | None) -> ItemEntity | str | None:
+        """A lookup's result with the which-one question in place of several candidates."""
+        return naming.which_one(found) if isinstance(found, list) else found
+
+    def _item_named(self, entities: Iterable[ItemEntity], name: str) -> ItemEntity | str | None:
+        """The item `name` points at among `entities`; the question to ask when several look different, None when none match."""
+        return self._asked(naming.find_named(entities, name))
+
+    def _carried(self, name: str) -> ItemEntity | str | None:
         """The item `name` points at among what the player carries, bags included."""
-        return self.manager._find_item_entity(carry.carried_items(self.manager.player), name)
+        return self._item_named(carry.carried_items(self.manager.player), name)
 
     def _frames(
         self,
@@ -367,7 +377,9 @@ class ActionValidator:
             return self._validate_take_from(action, action.from_name)
         if action.all_items:
             return self._take_all_here(action)
-        entity = manager._find_item_entity(manager._ground_items(), action.item_name)
+        entity = self._item_named(manager._ground_items(), action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             if container := self._opened_container_holding(action.item_name):
                 return self._take_from_container(action, container)
@@ -404,9 +416,11 @@ class ActionValidator:
         return [c for c in room.containers if c.opened and c.contents]
 
     def _validate_take_from(self, action: TakeAction, source: str) -> ValidationResult:
-        if carry.clean_name(source) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(source.strip()):
+        if naming.clean_name(source) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(source.strip()):
             return self._take_from_corpse(action, source)
-        bag = carry.find_named(carry.carried_bags(self.manager.player), source)
+        bag = self._item_named(carry.carried_bags(self.manager.player), source)
+        if isinstance(bag, str):
+            return Rejected(action, bag)
         if bag is not None:
             return self._take_from_bag(action, bag)
         found = self._container_named(source)
@@ -419,7 +433,7 @@ class ActionValidator:
     def _opened_container_holding(self, item_name: str) -> ContainerEntity | None:
         """The first opened container of the player's room, in layout order, that holds `item_name`."""
         for container in self._stocked_containers():
-            if carry.find_named(container.contents, item_name) is not None:
+            if naming.find_named(container.contents, item_name) is not None:
                 return container
         return None
 
@@ -455,7 +469,9 @@ class ActionValidator:
             if not entities:
                 return Rejected(action, carry_k.BAG_EMPTY.format(source=container.name))
         else:
-            found = carry.find_named(container.contents, action.item_name)
+            found = self._item_named(container.contents, action.item_name)
+            if isinstance(found, str):
+                return Rejected(action, found)
             if found is None:
                 return Rejected(
                     action,
@@ -477,7 +493,9 @@ class ActionValidator:
             if not entities:
                 return Rejected(action, carry_k.BAG_EMPTY.format(source=label))
         else:
-            found = carry.find_named(bag.contents, action.item_name)
+            found = self._item_named(bag.contents, action.item_name)
+            if isinstance(found, str):
+                return Rejected(action, found)
             if found is None:
                 return Rejected(action, carry_k.NOT_IN_BAG.format(bag=label, item=action.item_name))
             entities = (found,)
@@ -503,7 +521,9 @@ class ActionValidator:
                 return Rejected(action, self._cant_carry())
             frames = self._frames(entities, carry.Place.WORLD, carry.Place.PACK)
             return Accepted(action, Transfer(entities, frames, source=corpse))
-        entity = find_content(corpse, action.item_name)
+        entity = self._asked(find_content(corpse, action.item_name))
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(
                 action,
@@ -518,10 +538,14 @@ class ActionValidator:
         player = self.manager.player
         if refusal := self._asleep(action):
             return refusal
-        entity = carry.find_named(carry.carried_items(player), action.item_name)
+        entity = self._item_named(carry.carried_items(player), action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, carry_k.NOT_CARRIED_TO_PUT.format(item=action.item_name))
-        bag = carry.find_named(carry.carried_bags(player), action.target_name)
+        bag = self._item_named(carry.carried_bags(player), action.target_name)
+        if isinstance(bag, str):
+            return Rejected(action, bag)
         if bag is None:
             return self._put_in_container(action, entity, action.target_name)
         if carry.inside(entity, bag):
@@ -577,7 +601,7 @@ class ActionValidator:
             return Rejected(action, zombie_lore.ASLEEP_REFUSAL.format(name=self._name))
         name = action.target_name
         if not (
-            carry.clean_name(name) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(name.strip())
+            naming.clean_name(name) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(name.strip())
         ):
             return self._search_place(action)
         corpse = self._corpse_target(action.target_name)
@@ -637,7 +661,9 @@ class ActionValidator:
             *carry.carried_items(player),
             *(e for e in carry.on_body(player) if isinstance(e.item, ContainerItem)),
         ]
-        entity = self.manager._find_item_entity(reachable, action.item_name)
+        entity = self._item_named(reachable, action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to drop.")
         if self._is_door_key(entity.item.id):
@@ -651,6 +677,8 @@ class ActionValidator:
     def _validate_wear(self, action: WearAction) -> ValidationResult:
         player = self.manager.player
         entity = self._carried(action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to wear.")
         item = entity.item
@@ -672,7 +700,9 @@ class ActionValidator:
 
     def _validate_take_off(self, action: TakeOffAction) -> ValidationResult:
         player = self.manager.player
-        entity = self.manager._find_item_entity(list(player.worn.values()), action.item_name)
+        entity = self._item_named(player.worn.values(), action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"{self._name} is not wearing '{action.item_name}'.")
         if carry.over_the_limit(player, without=[entity], extra=[entity]):
@@ -687,6 +717,8 @@ class ActionValidator:
 
     def _validate_use_item(self, action: UseItemAction) -> ValidationResult:
         entity = self._carried(action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to use.")
         item = entity.item
@@ -702,6 +734,8 @@ class ActionValidator:
     def _validate_equip(self, action: EquipAction) -> ValidationResult:
         player = self.manager.player
         entity = self._carried(action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to hold.")
         item = entity.item
@@ -732,7 +766,9 @@ class ActionValidator:
     def _validate_unequip(self, action: UnequipAction) -> ValidationResult:
         player = self.manager.player
         held = [e for e in player.equipment.values() if e is not None]
-        entity = carry.find_named(held, action.item_name)
+        entity = self._item_named(held, action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"{self._name} is not holding '{action.item_name}'.")
         if carry.over_the_limit(player, without=[entity], extra=[entity]):
@@ -770,6 +806,8 @@ class ActionValidator:
         candidates = bandage_items(player)
         if action.item_name:
             entity = self._carried(action.item_name)
+            if isinstance(entity, str):
+                return Rejected(action, entity)
             if entity is None:
                 return Rejected(action, f"No '{action.item_name}' in inventory to bandage with.")
             if entity not in candidates:
@@ -807,6 +845,8 @@ class ActionValidator:
         candidates = disinfectant_items(player)
         if action.item_name:
             entity = self._carried(action.item_name)
+            if isinstance(entity, str):
+                return Rejected(action, entity)
             if entity is None:
                 return Rejected(action, f"No '{action.item_name}' in inventory to disinfect with.")
             if entity not in candidates:
@@ -1165,6 +1205,8 @@ class ActionValidator:
         if isinstance(npc, str):
             return Rejected(action, npc)
         entity = self._carried(action.item_name)
+        if isinstance(entity, str):
+            return Rejected(action, entity)
         if entity is None:
             return Rejected(action, f"No '{action.item_name}' in inventory to give.")
         if self._is_door_key(entity.item.id):
@@ -1181,7 +1223,9 @@ class ActionValidator:
                     return Rejected(action, f"{npc.name} has already said no.")
                 return Accepted(action, TargetNpc(npc))
             case "give":
-                entity = self.manager._find_item_entity(npc.inventory, action.argument)
+                entity = self._item_named(npc.inventory, action.argument)
+                if isinstance(entity, str):
+                    return Rejected(action, entity)
                 if entity is None:
                     return Rejected(action, f"{npc.name} has no {action.argument} to give.")
                 if locked_out(self.manager, npc, "give"):

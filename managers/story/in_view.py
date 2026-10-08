@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from managers import carry
+from managers import carry, naming
 from managers.game import GameManager
 from managers.world.barriers import find_barrier, state_word
 from managers.world.rooms import current_room
@@ -54,17 +54,17 @@ def _where(manager: GameManager, name: str) -> tuple[ItemEntity, str] | None:
     player = manager.player
     owner = player.appearance.forename
     for entity in player.equipment.values():
-        if entity is not None and carry.find_named([entity], name):
+        if entity is not None and naming.first_named([entity], name):
             return entity, f"in {owner}'s hand"
     for entity in player.worn.values():
-        if entity is not None and carry.find_named([entity], name):
+        if entity is not None and naming.first_named([entity], name):
             return entity, f"worn by {owner}"
-    entity = carry.find_named(carry.carried_items(player), name)
+    entity = naming.first_named(carry.carried_items(player), name)
     if entity is not None:
         bag = carry.holder_bag(player, entity)
         return entity, f"in the {bag.item.name.lower()}" if bag else f"in {owner}'s pack"
     ground = [e for e in manager.current_location.entities if isinstance(e, ItemEntity)]
-    entity = carry.find_named(ground, name)
+    entity = naming.first_named(ground, name)
     if entity is not None:
         return entity, "on the floor"
     zone = manager.current_location
@@ -72,11 +72,11 @@ def _where(manager: GameManager, name: str) -> tuple[ItemEntity, str] | None:
     rooms = sorted(zone.rooms.values(), key=lambda room: room is not here)
     for room in rooms:
         for container in room.containers:
-            entity = carry.find_named(container.contents, name)
+            entity = naming.first_named(container.contents, name)
             if entity is not None:
                 return entity, f"in the {container.name}"
     for npc in manager.npcs_in_location(player.current_location_id):
-        entity = carry.find_named(npc.inventory, name)
+        entity = naming.first_named(npc.inventory, name)
         if entity is not None:
             return entity, f"with {npc.name}"
     return None

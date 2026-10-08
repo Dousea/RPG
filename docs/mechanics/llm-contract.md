@@ -174,11 +174,11 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[CHARACTER]` | name and pronouns only |
 | `[LOCATION]` | zone, spot, description |
 | `[EXITS]` / `[ZONES]` | the connections; every zone with its aliases |
-| `[ITEMS HERE]` | item names |
+| `[ITEMS HERE]` | item names; an item whose name is held by items that look different also shows its describing words in brackets ("Baseball Bat (broken)") |
 | `[NPCS HERE]` | each NPC, "(following you)" when they follow, what they hold, and a line per available topic |
 | `[THREATS]` | perceived zombie ids with distance words |
 | `[DOORS AND WINDOWS]` | the doors and windows of the zone in words and plank counts; the names are the targets of the door verbs ([doors](doors.md#what-the-narrator-and-the-player-see)) |
-| `[INVENTORY]` | carried items |
+| `[INVENTORY]` | carried items, with their describing words as in `[ITEMS HERE]` |
 | `[WORN]` | the worn outfit |
 | `[CONDITION]` | status effects by name and level, `sneaking` |
 | `[WEATHER]` | the weather in words |
@@ -210,6 +210,8 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](health.md)) |
 
 With nothing present, the block lists the nine always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. `EAT` and `DRINK` parse as `USE_ITEM`. Closed labels inside a listed verb are printed in full.
+
+An item name is a closed label. When several listed items share a name and do not all look the same (their condition or wetness words differ), the name is offered bare and in each qualified form ("Baseball Bat", "broken Baseball Bat", "good Baseball Bat"); unique names and duplicates that look the same stay bare. A qualified name that the validator finds ambiguous is refused with "Which one: ...?" ([carrying and loot](carrying-and-loot.md)).
 
 ### Plans
 

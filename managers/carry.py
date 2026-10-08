@@ -241,24 +241,6 @@ def bag_slot(player: PlayerEntity, bag: ItemEntity) -> AnyCharacterEquipmentSlot
     return next((slot for slot in item.slots if player.equipment.get(slot) is None), None)
 
 
-def clean_name(name: str) -> str:
-    """A name as the model writes it: no quotes or trailing marks, no leading article."""
-    needle = name.strip().strip("\"'.,;:").casefold()
-    for article in ("the ", "my ", "your "):
-        needle = needle.removeprefix(article)
-    return needle.strip()
-
-
-def find_named(entities: Iterable[ItemEntity], name: str) -> ItemEntity | None:
-    """The first entity whose name or id is `name`, ignoring case and a leading article."""
-    needle = clean_name(name)
-    for entity in entities:
-        names = (entity.item.name.casefold(), entity.item.id.casefold())
-        if needle in names:
-            return entity
-    return None
-
-
 def contents_weight(bag: ItemEntity) -> float:
     """What is in a bag, in kg, each thing in full."""
     return sum(inner.weight for inner in bag.contents)

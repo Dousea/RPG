@@ -1,7 +1,7 @@
 """Corpses in the player's view, going through them and taking from them (zombie-lifecycle)."""
 
 import random
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 
 from data import carry as carry_k
@@ -10,6 +10,7 @@ from data.loot.catalogue import LOOT_KIND_MODIFIERS
 from data.loot.tables import LootTable
 from data.zombies import lore as zombie_lore
 from data.zombies.loot import DEFAULT_LOOT_TABLES, OUTFIT_LOOT_TABLES
+from managers import naming
 from managers.corpses.bodies import rot_stage
 from managers.game import GameManager
 from managers.world.containers import fill_bag, roll_table
@@ -109,12 +110,12 @@ def contents_in_words(corpse: CorpseEntity) -> str:
     return items_in_words(corpse.contents) or zombie_lore.SEARCH_NOTHING
 
 
-def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | None:
-    """The item on a body that `name` points at: its exact name or id, else a name containing it."""
+def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | list[ItemEntity] | None:
+    """What on a body `name` points at: `naming.find_named`, else the first name containing it."""
+    found = naming.find_named(corpse.contents, name)
+    if found is not None:
+        return found
     needle = name.strip().casefold()
-    for entity in corpse.contents:
-        if needle in (entity.item.name.casefold(), entity.item.id.casefold()):
-            return entity
     for entity in corpse.contents:
         if needle and needle in entity.item.name.casefold():
             return entity
@@ -193,8 +194,13 @@ def _looks(corpse: CorpseEntity) -> str:
     return f"{person} in {worn}"
 
 
-def corpse_views(manager: GameManager) -> list[CorpseView]:
-    """The perceived bodies in words: no numbers, and nothing that says one may get up."""
+def corpse_views(
+    manager: GameManager, ambiguous: Collection[str] = frozenset()
+) -> list[CorpseView]:
+    """The perceived bodies in words: no numbers, and nothing that says one may get up.
+
+    Items whose names are in `ambiguous` carry their describing words.
+    """
     now = manager.narrative.minutes
     return [
         CorpseView(
@@ -208,7 +214,7 @@ def corpse_views(manager: GameManager) -> list[CorpseView]:
             searched=c.searched,
             skeleton=c.skeleton,
             looks=_looks(c),
-            contents=tuple(e.item.name.lower() for e in c.contents),
+            contents=tuple(naming.tagged_name(e, ambiguous).lower() for e in c.contents),
             sex_word="" if c.skeleton else _sex_word(c),
         )
         for c in perceived_corpses(manager)

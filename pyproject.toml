@@ -43,7 +43,7 @@ ignore = ["E501"]
 [tool.ruff.lint.flake8-import-conventions]
 # Modules of plain functions: call them through the module
 # (`units.per_hour_from_frame`), so a call says where it comes from.
-banned-from = ["modules.units", "managers.carry", "managers.combat.weapons"]
+banned-from = ["modules.units", "managers.carry", "managers.naming", "managers.combat.weapons"]
 
 [tool.ruff.lint.per-file-ignores]
 # The outside world may read the wall clock (timestamps, timeouts).

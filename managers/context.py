@@ -13,7 +13,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from datetime import date
 
 from data.body.status_effects import STATUS_EFFECT_MAX_LEVEL
@@ -35,7 +35,7 @@ from data.story.memory import LAST_SCENE_MAX_CHARS, LAST_SCENE_MAX_LINES
 from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
 from data.world.clock import TIMES_OF_DAY
-from managers import carry
+from managers import carry, naming
 from managers.body.first_aid import bandage_items, disinfectant_items, part_word
 from managers.body.health import open_wounds
 from managers.body.stats.status_effects import active_status_effects
@@ -104,11 +104,11 @@ class ContextBuilder:
 
     # === Shared sections ===
 
-    def _current_items_section(self) -> str:
+    def _current_items_section(self, ambiguous: Collection[str] = frozenset()) -> str:
         items = self.manager._ground_items()
         if not items:
             return "No items here."
-        return "\n".join(f" - {item.item.name}" for item in items)
+        return "\n".join(f" - {naming.tagged_name(item, ambiguous)}" for item in items)
 
     def _nearby_locations_section(self) -> str:
         location = self.manager.current_location
@@ -312,7 +312,7 @@ class ContextBuilder:
         }
         return "\n".join(self._barrier_line(barrier, pounding) for barrier in barriers)
 
-    def _rooms_section(self) -> str:
+    def _rooms_section(self, ambiguous: Collection[str] = frozenset()) -> str:
         """[ROOMS]: the rooms of the player's zone and their containers; only an opened container shows what is in it."""
         zone = self.manager.current_location
         if not zone.rooms:
@@ -321,7 +321,7 @@ class ContextBuilder:
         lines: list[str] = []
         for room in zone.rooms.values():
             mark = container_k.ROOM_HERE_MARK if room is here else ""
-            parts = ", ".join(_container_phrase(c) for c in room.containers)
+            parts = ", ".join(_container_phrase(c, ambiguous) for c in room.containers)
             lines.append(f"{room.name}{mark}: {parts}")
         return "\n".join(lines)
 
@@ -356,8 +356,9 @@ class ContextBuilder:
         return f"[IN VIEW]\n(How things stand right now, and who and what the story must show this turn, however briefly.)\n{lines}\n\n"
 
     def _corpses_section(self, *, with_id: bool) -> str:
-        """The bodies the player can see, in words: the parser gets ids to aim SEARCH at."""
-        lines = [view.line(with_id=with_id) for view in corpse_views(self.manager)]
+        """The bodies the player can see, in words: the parser gets ids to aim SEARCH at, and the words that tell like items apart."""
+        ambiguous = self._ambiguous_names() if with_id else frozenset()
+        lines = [view.line(with_id=with_id) for view in corpse_views(self.manager, ambiguous)]
         return "\n".join(lines) or "None"
 
     def _parser_threats_section(self) -> str:
@@ -466,7 +467,7 @@ Traits: {_lines(trait_lines) or "None"}
         )
         return f"{names}\nCarrying: {' and '.join(items) or 'nothing to lift'}"
 
-    def _inventory_lines(self) -> list[str]:
+    def _inventory_lines(self, ambiguous: Collection[str] = frozenset()) -> list[str]:
         """What the player holds, wears as a bag and has in the pack; each bag with what is inside."""
         player = self.manager.player
         held = carry.held_things(self.manager.player)
@@ -474,13 +475,17 @@ Traits: {_lines(trait_lines) or "None"}
         for entity in held:
             bag = isinstance(entity.item, ContainerItem)
             lines.append(
-                _inventory_line(entity, carry.bag_place(player, entity) if bag else "in hands")
+                _inventory_line(
+                    entity, carry.bag_place(player, entity) if bag else "in hands", ambiguous
+                )
             )
         for entity in carry.on_body(player):
             worn_bag = isinstance(entity.item, ContainerItem) and not any(entity is h for h in held)
             if worn_bag:
-                lines.append(_inventory_line(entity, carry.bag_place(player, entity)))
-        lines.extend(carry.grouped(_inventory_line(entity, "") for entity in player.inventory))
+                lines.append(_inventory_line(entity, carry.bag_place(player, entity), ambiguous))
+        lines.extend(
+            carry.grouped(_inventory_line(entity, "", ambiguous) for entity in player.inventory)
+        )
         return lines
 
     def _carried_things(self) -> list[ItemEntity]:
@@ -488,6 +493,25 @@ Traits: {_lines(trait_lines) or "None"}
         player = self.manager.player
         bags = [e for e in carry.on_body(player) if isinstance(e.item, ContainerItem)]
         return [*carry.carried_items(player), *bags]
+
+    def _ambiguous_names(self) -> frozenset[str]:
+        """Item names, anywhere the parser sees them, held by items that don't all look the same."""
+        manager = self.manager
+        npcs = manager.npcs_in_location(manager.player.current_location_id)
+        everything = [
+            *carry.on_body(manager.player),
+            *self._carried_things(),
+            *manager._ground_items(),
+            *(entity for c in self._opened_in_zone() for entity in c.contents),
+            *(entity for npc in npcs for entity in npc.inventory),
+            *(
+                entity
+                for body in perceived_corpses(manager)
+                if body.searched
+                for entity in body.contents
+            ),
+        ]
+        return frozenset(naming.differing_names(everything))
 
     def scene_keys(self) -> frozenset[SceneKey]:
         """The kinds of thing the scene holds, from the same state the blocks render."""
@@ -555,7 +579,7 @@ Traits: {_lines(trait_lines) or "None"}
         stocked = [entity for c in self._opened_in_zone() for entity in c.contents]
         return SceneChoices(
             items_here=_names(ground),
-            carried=tuple(dict.fromkeys(_names([*self._carried_things(), *ground, *stocked]))),
+            carried=_names([*self._carried_things(), *ground, *stocked]),
             held=_names(carry.held_things(self.manager.player)),
             wearable=_names(
                 entity
@@ -569,17 +593,17 @@ Traits: {_lines(trait_lines) or "None"}
                 view.zombie_id for view in threat_views(manager) if view.zombie_id is not None
             ),
             corpse_ids=tuple(body.corpse_id for body in bodies),
-            corpse_items=tuple(
-                entity.item.name for body in bodies if body.searched for entity in body.contents
+            corpse_items=naming.scene_names(
+                entity for body in bodies if body.searched for entity in body.contents
             ),
             rooms=tuple(room.name for room in manager.current_location.rooms.values()),
             containers=tuple(
                 c.name for room in manager.current_location.rooms.values() for c in room.containers
             ),
             open_containers=tuple(c.name for c in self._opened_in_zone()),
-            container_items=tuple(dict.fromkeys(_names(stocked))),
-            bags=tuple(dict.fromkeys(_names(bags))),
-            bag_items=tuple(dict.fromkeys(_names(e for bag in bags for e in bag.contents))),
+            container_items=_names(stocked),
+            bags=_names(bags),
+            bag_items=_names(e for bag in bags for e in bag.contents),
             hurt_parts=tuple(
                 part_word(part)
                 for part, state in player.body.items()
@@ -686,10 +710,11 @@ reach {looks.object}, though {looks.subject} can still hear them.)
         npcs = manager.npcs_in_location(manager.player.current_location_id)
         if not npcs:
             return "No one else is here."
+        ambiguous = self._ambiguous_names()
         lines: list[str] = []
         for npc in npcs:
             lines.append(f" - {npc.name}{' (following you)' if npc.following else ''}")
-            held = ", ".join(entity.item.name for entity in npc.inventory)
+            held = ", ".join(naming.tagged_name(entity, ambiguous) for entity in npc.inventory)
             if held:
                 lines.append(f"   Holds: {held}")
             for topic in visible_topics(manager, npc):
@@ -713,7 +738,8 @@ reach {looks.object}, though {looks.subject} can still hear them.)
         """
         manager = self.manager
         player = manager.player
-        inventory_str = "\n".join(self._inventory_lines()) or "Empty"
+        ambiguous = self._ambiguous_names()
+        inventory_str = "\n".join(self._inventory_lines(ambiguous)) or "Empty"
         looks = player.appearance
         return f"""[CHARACTER]
 {player.name} ({looks.subject}/{looks.object}). Say "{looks.subject}" and "{looks.object}", never "they", for this character.
@@ -736,7 +762,7 @@ door rather than refusing the move.)
 {self._zones_section().rstrip()}
 
 [ITEMS HERE]
-{self._current_items_section().rstrip()}
+{self._current_items_section(ambiguous).rstrip()}
 
 [NPCS HERE]
 {self._parser_npcs_section()}
@@ -748,7 +774,7 @@ door rather than refusing the move.)
 {self._corpses_section(with_id=True)}
 
 [ROOMS]
-{self._rooms_section()}
+{self._rooms_section(ambiguous)}
 
 [DOORS AND WINDOWS]
 {self._barriers_section()}
@@ -944,36 +970,40 @@ engine could not decide at all -- treat it the same as [OUTCOMES].)
 {player_input}"""
 
 
-def _container_phrase(container: ContainerEntity) -> str:
+def _container_phrase(container: ContainerEntity, ambiguous: Collection[str]) -> str:
     if not container.opened:
         return container_k.CONTAINER_NOT_OPENED.format(name=container.name)
-    items = ", ".join(entity.item.name.lower() for entity in container.contents)
+    items = ", ".join(
+        naming.tagged_name(entity, ambiguous).lower() for entity in container.contents
+    )
     return container_k.CONTAINER_OPENED.format(
         name=container.name, items=items or container_k.EMPTY_WORD
     )
 
 
-def _inventory_line(entity: ItemEntity, place: str) -> str:
+def _inventory_line(entity: ItemEntity, place: str, ambiguous: Collection[str]) -> str:
     """One inventory line: the name, where it is if not loose, and a bag's contents."""
-    line = f" - {entity.item.name}{_marks(entity)}"
+    marks = _uses_left(entity) if entity.item.name in ambiguous else _marks(entity)
+    line = f" - {naming.tagged_name(entity, ambiguous)}{marks}"
     if place:
         line += f" ({place})"
     if isinstance(entity.item, ContainerItem):
-        line += f": {_contents_words(entity) or 'empty'}"
+        line += f": {_contents_words(entity, ambiguous) or 'empty'}"
     return line
 
 
-def _contents_words(bag: ItemEntity) -> str:
+def _contents_words(bag: ItemEntity, ambiguous: Collection[str]) -> str:
     """What is inside a bag by name; a bag inside it shows its own contents in brackets."""
     parts = []
     for inner in bag.contents:
-        nested = _contents_words(inner)
-        parts.append(f"{inner.item.name} ({nested})" if nested else inner.item.name)
+        nested = _contents_words(inner, ambiguous)
+        name = naming.tagged_name(inner, ambiguous)
+        parts.append(f"{name} ({nested})" if nested else name)
     return ", ".join(carry.grouped(parts))
 
 
 def _names(entities: Iterable[ItemEntity]) -> tuple[str, ...]:
-    return tuple(entity.item.name for entity in entities)
+    return naming.scene_names(entities)
 
 
 def _lines(lines: Iterable[str]) -> str:
