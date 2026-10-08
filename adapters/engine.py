@@ -49,6 +49,7 @@ from modules.action.types import AnyAction
 from modules.action.words import describe_action, refusal_in_words
 from modules.body.stats import StatusEffect
 from modules.character.build import CharacterBuild
+from modules.character.equipment import CharacterHoldableSlot
 from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.npc import NpcEntity
@@ -619,6 +620,9 @@ class GameEngine:
         narrative = manager.narrative
         npcs_here = manager.npcs_in_location(player.current_location_id)
         mentioned = mentionables(manager)
+        looks = {
+            m.id: (m.name, label) for m, label in zip(mentioned, labels(mentioned), strict=True)
+        }
 
         return {
             "needs_creation": False,
@@ -655,12 +659,14 @@ class GameEngine:
             "threats": [
                 {
                     "id": view.zombie_id,
+                    "name": looks[view.zombie_id][0] if view.zombie_id else None,
+                    "label": looks[view.zombie_id][1] if view.zombie_id else None,
                     "distance_word": view.distance_word,
                     "state_word": view.state_word,
                 }
                 for view in threat_views(manager)
             ],
-            "corpses": _corpses(manager),
+            "corpses": _corpses(manager, looks),
             "rooms": _rooms(manager),
             "barriers": _barriers(manager),
             "mentions": [
@@ -742,11 +748,13 @@ def _rooms(manager: GameManager) -> list[dict[str, Any]]:
     ]
 
 
-def _corpses(manager: GameManager) -> list[dict[str, Any]]:
-    """The bodies the player can see, in words; what a body holds shows only once it is searched."""
+def _corpses(manager: GameManager, looks: dict[str, tuple[str, str]]) -> list[dict[str, Any]]:
+    """The bodies the player can see, in words and named as the `@` list names them; what a body holds shows only once it is searched."""
     return [
         {
             "id": view.corpse_id,
+            "name": looks[view.corpse_id][0],
+            "label": looks[view.corpse_id][1],
             "distance_word": view.distance_word,
             "rot_word": view.rot_word,
             "searched": view.searched,
@@ -865,14 +873,26 @@ def _held(player: PlayerEntity) -> dict[str, str] | None:
 
 
 def _equipment(player: PlayerEntity) -> list[dict[str, Any]]:
-    return [
-        {
-            "slot": slot.value.replace("_", " ").title(),
-            "item": entity.item.name if entity is not None else None,
-            "condition": _condition(entity) if entity is not None else None,
-        }
-        for slot, entity in player.equipment.items()
-    ]
+    """The hand and shoulder slots; one entity filling both hands is a single `both_hands` entry."""
+    right = player.equipment[CharacterHoldableSlot.RIGHT_HAND]
+    left = player.equipment[CharacterHoldableSlot.LEFT_HAND]
+    both = right is not None and right is left
+
+    entries: list[dict[str, Any]] = []
+    for slot, entity in player.equipment.items():
+        if both and slot is CharacterHoldableSlot.LEFT_HAND:
+            continue
+        shared = both and slot is CharacterHoldableSlot.RIGHT_HAND
+        entries.append(
+            {
+                "slot": "Both Hands" if shared else slot.value.replace("_", " ").title(),
+                "both_hands": shared,
+                "item": entity.item.name if entity is not None else None,
+                "condition": _condition(entity) if entity is not None else None,
+            }
+        )
+
+    return entries
 
 
 def _worn(player: PlayerEntity) -> list[dict[str, Any]]:

@@ -24,8 +24,9 @@ from data.story.memory import BUDGET_MARGIN_TOKENS
 from data.time_costs import MAX_PLAN_ACTIONS
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
+from managers.zombies.population import ThreatView
 from modules.body.parts import BodyLocation, BodyPart
-from modules.character.equipment import CharacterArmorSlot
+from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.skills import SkillState
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
@@ -203,7 +204,15 @@ class TurnTests(EngineTestCase):
         state = self.engine.state()
         self.assertEqual(
             state["threats"],
-            [{"id": "z1", "distance_word": "close", "state_word": "coming at you"}],
+            [
+                {
+                    "id": "z1",
+                    "name": "man",
+                    "label": "man",
+                    "distance_word": "close",
+                    "state_word": "coming at you",
+                }
+            ],
         )
         self.assertIs(state["sneaking"], True)
 
@@ -226,6 +235,8 @@ class TurnTests(EngineTestCase):
         )
         expected = {
             "id": "c1",
+            "name": "man in a police jacket",
+            "label": "man in a police jacket",
             "distance_word": "close",
             "rot_word": "decaying",
             "searched": False,
@@ -254,6 +265,55 @@ class TurnTests(EngineTestCase):
             crawling=True,
         )
         self.assertEqual(self.engine.state()["threats"][0]["state_word"], "crawling toward you")
+
+    def test_look_alike_bodies_and_zombies_are_numbered_as_the_mention_list_numbers_them(self):
+        manager = self.engine.game
+        manager.world.outbreak_started_at = 0
+        here = manager.player.current_location_id
+        for corpse_id in ("c1", "c2"):
+            manager.world.corpses[corpse_id] = CorpseEntity(
+                corpse_id=corpse_id,
+                zone_id=here,
+                gap=3.0,
+                female=True,
+                outfit="generic01",
+                died_at=0,
+                rot_at_death=2,
+            )
+        manager.world.zombies["z9"] = ZombieEntity(
+            zombie_id="z9",
+            zone_id=here,
+            health=2.0,
+            speed_type=3,
+            speed_mod=0.6,
+            lunger=False,
+            strength=3,
+            memory=800,
+            sight=2,
+            hearing=2,
+            state=ZombieState.CHASING,
+            gap=3.0,
+            female=False,
+        )
+        state = self.engine.state()
+        listed = {m["id"]: m["label"] for m in state["mentions"]}
+        bodies = state["corpses"]
+        self.assertEqual([c["label"] for c in bodies], [listed["c1"], listed["c2"]])
+        self.assertEqual([c["label"] for c in bodies], ["woman #1", "woman #2"])
+        self.assertEqual({c["name"] for c in bodies}, {"woman"})
+        (threat,) = state["threats"]
+        self.assertEqual(threat["label"], listed["z9"])
+        for entry in [*bodies, threat]:
+            for key in ("name", "label"):
+                self.assertNotRegex(entry[key], r"\b[cz]\d+\b")
+
+    def test_an_unseen_threat_has_no_name(self):
+        heard = ThreatView(None, "far off", "moaning")
+        with mock.patch.object(engine_module, "threat_views", return_value=[heard]):
+            (threat,) = self.engine.state()["threats"]
+        self.assertIsNone(threat["id"])
+        self.assertIsNone(threat["name"])
+        self.assertIsNone(threat["label"])
 
     def test_snapshot_lists_the_rooms_with_what_an_opened_container_holds(self):
         """carrying-and-loot: What the narrator and the player see: `rooms`."""
@@ -475,9 +535,6 @@ class TurnTests(EngineTestCase):
         self.assertEqual(slots, ["Right Hand", "Left Hand", "Shoulders"])
 
     def test_snapshot_carries_the_held_item_and_kills(self):
-        from data.items import ITEMS
-        from modules.character.equipment import CharacterHoldableSlot
-
         state = self.engine.state()
         self.assertIsNone(state["held"])
         self.assertEqual(state["zombie_kills"], 0)
@@ -490,8 +547,18 @@ class TurnTests(EngineTestCase):
         state = self.engine.state()
         self.assertEqual(state["held"], {"name": "Crowbar", "condition_word": "badly worn"})
         self.assertEqual(state["zombie_kills"], 3)
-        right = next(e for e in state["equipment"] if e["slot"] == "Right Hand")
-        self.assertEqual(right["condition"], "badly worn")
+        self.assertEqual([entry["both_hands"] for entry in state["equipment"]], [True, False])
+        self.assertEqual(state["equipment"][0]["condition"], "badly worn")
+
+    def test_a_one_handed_item_and_an_empty_hand_keep_their_rows(self):
+        self.engine.game.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(
+            item=ITEMS["item_crowbar"]
+        )
+        state = self.engine.state()
+        self.assertEqual(
+            [(e["slot"], e["item"]) for e in state["equipment"]][:2],
+            [("Right Hand", "Crowbar"), ("Left Hand", None)],
+        )
 
     def test_snapshot_has_game_over_false_by_default(self):
         result = self.engine.state()

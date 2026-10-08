@@ -128,7 +128,9 @@ level, no healing progress.
 ### Inventory
 
 The held item first, with its condition word (sharpness and head words come
-with `weapon-upkeep`). Then the equipped slots, empty ones marked empty, then
+with `weapon-upkeep`). Then the equipped slots, empty ones marked empty; an
+item that fills both hands is one "Both Hands" row reading "Two-handed grip"
+(the payload's `both_hands`), not its name and condition again. Then
 carried items by name. The carried weight shows against what the
 character can carry, in kilograms, and each bag shows its place and contents
 (`carry`, see `mechanics/carrying-and-loot.md`).
@@ -155,7 +157,10 @@ for other callers; the page doesn't read it.
 
 ### Nearby
 
-Threats by distance word and state word, closest first; corpses by distance
+Threats by distance word and state word, closest first; each zombie and body
+under the name the `@` list gives it (its looks, numbered `#1`, `#2` where two
+look alike), a threat that is only heard as "Something unseen", the body the
+player carries as "The body you carry"; corpses by distance
 and rot words, with their contents once searched; doors and windows by name
 with their state words, plank counts on each side and a thumping tag; rooms
 of the building, the one the player is in marked, each with its containers

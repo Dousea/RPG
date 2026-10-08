@@ -299,7 +299,11 @@ function renderEquipment(data) {
     clearAndFill(equipmentList, slots.map(slot => {
         const li = el('li', 'row-item');
         li.appendChild(el('span', 'label', slot.slot));
-        li.appendChild(el('span', slot.item ? 'value' : 'value muted', slot.item ? `${slot.item} (${slot.condition})` : 'Empty'));
+        if (slot.both_hands) {
+            li.appendChild(el('span', 'value muted', 'Two-handed grip'));
+        } else {
+            li.appendChild(el('span', slot.item ? 'value' : 'value muted', slot.item ? `${slot.item} (${slot.condition})` : 'Empty'));
+        }
         return li;
     }));
 }
@@ -438,11 +442,10 @@ function renderThreats(data) {
         clearAndFill(threatList, [emptyNote('Nothing threatening in sight.')]);
         return;
     }
-    // The id only says whether the zombie is seen; it is never shown.
     clearAndFill(threatList, threats.map(threat => {
         const li = el('li', 'row-item');
         const who = el('span', 'who');
-        who.appendChild(el('span', null, threat.id ? 'A zombie' : 'Something unseen'));
+        who.appendChild(el('span', null, threat.label ? capitalised(threat.label) : 'Something unseen'));
         if (threat.distance_word) who.appendChild(el('span', 'aside', capitalised(threat.distance_word)));
         li.appendChild(who);
         li.appendChild(tag(threat.state_word, threatTone(threat)));
@@ -460,7 +463,7 @@ function renderCorpses(data) {
     clearAndFill(corpseList, corpses.map(corpse => {
         const li = el('li', 'row-item');
         const who = el('span', 'who');
-        who.appendChild(el('span', null, corpse.carried ? 'The body you carry' : 'A body'));
+        who.appendChild(el('span', null, corpse.carried ? 'The body you carry' : capitalised(corpse.label)));
         who.appendChild(el('span', 'aside', capitalised(corpse.distance_word)));
         if (corpse.searched) {
             const held = corpse.contents.length ? corpse.contents.map(capitalised).join(', ') : 'Nothing left';
