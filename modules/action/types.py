@@ -111,6 +111,22 @@ class CloseAction:
 
 
 @dataclass
+class LockAction:
+    """Lock a closed door or window of the player's zone (doors)."""
+
+    verb: ClassVar[str] = "LOCK"
+    barrier_name: str
+
+
+@dataclass
+class UnlockAction:
+    """Unlock a door or window of the player's zone (doors)."""
+
+    verb: ClassVar[str] = "UNLOCK"
+    barrier_name: str
+
+
+@dataclass
 class BarricadeAction:
     """Nail one plank across a door or window on the player's side (doors)."""
 
@@ -283,6 +299,8 @@ AnyAction = (
     | ShoveAction
     | OpenAction
     | CloseAction
+    | LockAction
+    | UnlockAction
     | BarricadeAction
     | UnbarricadeAction
     | EquipAction

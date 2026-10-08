@@ -1314,6 +1314,18 @@ class SimulationCore:
             accepted, target.walk, lambda: self._barriers.close(target.barrier), 0
         )
 
+    def _resolve_lock(self, accepted: Accepted) -> tuple[list[str], int]:
+        target = accepted.expect(TargetBarrier)
+        return self._barrier_verb(
+            accepted, target.walk, lambda: self._barriers.lock(target.barrier), 0
+        )
+
+    def _resolve_unlock(self, accepted: Accepted) -> tuple[list[str], int]:
+        target = accepted.expect(TargetBarrier)
+        return self._barrier_verb(
+            accepted, target.walk, lambda: self._barriers.unlock(target.barrier), 0
+        )
+
     def _resolve_barricade(self, accepted: Accepted) -> tuple[list[str], int]:
         kit = accepted.expect(BarricadeKit)
         minutes = max(
@@ -1689,6 +1701,8 @@ class SimulationCore:
         "ATTACK": _resolve_attack,
         "OPEN": _resolve_open,
         "CLOSE": _resolve_close,
+        "LOCK": _resolve_lock,
+        "UNLOCK": _resolve_unlock,
         "BARRICADE": _resolve_barricade,
         "UNBARRICADE": _resolve_unbarricade,
         "SHOVE": _resolve_zombie_attack,

@@ -103,6 +103,7 @@ drift apart.
 | `SHOVE` | zombie id, or `zombie` | 1 per swing |
 | `EQUIP` / `UNEQUIP` | item | 1 |
 | `OPEN` / `CLOSE` | door or window | 0 |
+| `LOCK` / `UNLOCK` | door or window | 0 |
 | `BARRICADE` / `UNBARRICADE` | door or window | 1 |
 | `BANDAGE` | body part, optional `with` item | 1 |
 | `REMOVE_BANDAGE` | body part | 1 |
@@ -204,7 +205,7 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `TAKE_OFF` | `worn` | something is worn or in hand |
 | `TALK`, `REQUEST`, `GIVE` | `npcs_here` | someone is here |
 | `ATTACK` | `npcs_here`, `threats`, `barriers` | someone is here, a zombie is perceived, or a door or window is here |
-| `OPEN`, `CLOSE`, `BARRICADE`, `UNBARRICADE` | `barriers` | the zone has a door or window ([doors](doors.md)) |
+| `OPEN`, `CLOSE`, `LOCK`, `UNLOCK`, `BARRICADE`, `UNBARRICADE` | `barriers` | the zone has a door or window ([doors](doors.md)) |
 | `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](health.md)) |
 
 With nothing present, the block lists the nine always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. `EAT` and `DRINK` parse as `USE_ITEM`. Closed labels inside a listed verb are printed in full.

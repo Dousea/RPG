@@ -152,16 +152,16 @@ class FactCheckRecordTests(unittest.TestCase):
     def test_an_unsupported_request_is_refused_by_name_and_costs_nothing(self):
         gm = GameManager()
         core = SimulationCore(gm)
-        facts = core.resolve([UnsupportedAction(text="lock the door")])
+        facts = core.resolve([UnsupportedAction(text="light a fire")])
         self.assertEqual(
             facts,
-            ["Refused: Orton can't lock the door: there is no way to do that yet."],
+            ["Refused: Orton can't light a fire: there is no way to do that yet."],
         )
         self.assertEqual(gm.narrative.minutes, 0)
         self.assertEqual(
-            core.refused_actions, [("lock the door", "there is no way to do that yet.")]
+            core.refused_actions, [("light a fire", "there is no way to do that yet.")]
         )
-        self.assertEqual(core.refused_plan, [UnsupportedAction(text="lock the door")])
+        self.assertEqual(core.refused_plan, [UnsupportedAction(text="light a fire")])
 
     def test_an_action_done_later_in_the_turn_is_not_recorded_as_refused(self):
         gm = GameManager()

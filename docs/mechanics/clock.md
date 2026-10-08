@@ -79,7 +79,7 @@ the validator's resolved data and returns whole minutes.
 | `TAKE`, `DROP` | 1 |
 | `USE_ITEM` on food or drink | the item's `eat_minutes` (default 5) |
 | `USE_ITEM` on anything else | 1 |
-| `OPEN`, `CLOSE` | 0 |
+| `OPEN`, `CLOSE`, `LOCK`, `UNLOCK` | 0 |
 | `BARRICADE`, `UNBARRICADE`, `ATTACK` on a door, window or plank | 1 |
 | walking to a door or window the player isn't at | 1, before the action |
 | `MOVE_TO` another zone | the walking minutes of each connection crossed (below), +1 through a window |

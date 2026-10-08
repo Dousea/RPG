@@ -1857,7 +1857,9 @@ class BarrierBlockTests(unittest.TestCase):
 
     def test_the_door_verbs_are_listed_where_there_is_a_door(self):
         listed = listed_in_prompt(self.builder.build_parser_prompt("look"))
-        self.assertTrue({"OPEN", "CLOSE", "BARRICADE", "UNBARRICADE", "ATTACK"} <= listed)
+        self.assertTrue(
+            {"OPEN", "CLOSE", "LOCK", "UNLOCK", "BARRICADE", "UNBARRICADE", "ATTACK"} <= listed
+        )
 
 
 def section(prompt: str, name: str) -> str:

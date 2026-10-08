@@ -15,6 +15,7 @@ from modules.action.types import (
     EquipAction,
     ExerciseAction,
     GiveAction,
+    LockAction,
     MoveAction,
     OpenAction,
     PutAction,
@@ -31,6 +32,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnlockAction,
     UnsupportedAction,
     UseItemAction,
     WaitAction,
@@ -97,6 +99,10 @@ def describe_action(action: AnyAction) -> str:
             return f"open the {name}"
         case CloseAction(barrier_name=name):
             return f"close the {name}"
+        case LockAction(barrier_name=name):
+            return f"lock the {name}"
+        case UnlockAction(barrier_name=name):
+            return f"unlock the {name}"
         case BarricadeAction(barrier_name=name):
             return f"board up the {name}"
         case UnbarricadeAction(barrier_name=name):

@@ -126,7 +126,7 @@ _PARSER_RULES = (
     "to or ask: when the input asks or tells them anything, that part of the "
     "input is no action at all, not some other action with what is listed.\n\n"
     "When the player asks for something no listed verb does, use UNSUPPORTED "
-    "with what they asked for as a short verb phrase ('lock the door'), never "
+    "with what they asked for as a short verb phrase ('light a fire'), never "
     "the nearest verb on an "
     "unrelated item.\n\n"
     "Note: there is no action for dealing or taking damage directly, for "

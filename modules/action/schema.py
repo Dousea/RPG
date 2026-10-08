@@ -153,7 +153,7 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             return _target_branch(
                 name, (*choices.npcs, *choices.zombie_ids, *nearest, *choices.barriers)
             )
-        case "OPEN" | "CLOSE" | "BARRICADE" | "UNBARRICADE":
+        case "OPEN" | "CLOSE" | "LOCK" | "UNLOCK" | "BARRICADE" | "UNBARRICADE":
             return _target_branch(name, choices.barriers)
         case "SHOVE":
             return _target_branch(name, choices.zombie_ids)
@@ -352,6 +352,8 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "SHOVE": _target_line("SHOVE"),
     "OPEN": _target_line("OPEN"),
     "CLOSE": _target_line("CLOSE"),
+    "LOCK": _target_line("LOCK"),
+    "UNLOCK": _target_line("UNLOCK"),
     "BARRICADE": _target_line("BARRICADE"),
     "UNBARRICADE": _target_line("UNBARRICADE"),
     "SHOUT": lambda fields: "SHOUT",

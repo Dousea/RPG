@@ -13,8 +13,11 @@ from modules.action.types import (
     AttackAction,
     BarricadeAction,
     CloseAction,
+    LockAction,
+    MoveAction,
     OpenAction,
     UnbarricadeAction,
+    UnlockAction,
 )
 from modules.body.stats import CharacterStat
 from modules.character.equipment import CharacterHoldableSlot
@@ -382,6 +385,127 @@ class OpenCloseTests(unittest.TestCase):
         gm = stocked_game()
         facts, _ = run(gm, OpenAction(barrier_name="lobby door"))
         self.assertIn("There's no door here.", facts[0])
+
+
+class LockTests(unittest.TestCase):
+    """doors: `LOCK <barrier>` / `UNLOCK <barrier>`."""
+
+    def inside(self, *, locked: bool = False):
+        gm = stocked_game()
+        door = gm.world.barriers["door_apartment"]
+        door.locked = locked
+        return gm, door
+
+    def outside(self, *, locked: bool, key: bool):
+        gm = stocked_game()
+        gm.player.current_location_id = BUILDING
+        gm.player.at_barrier = "door_apartment"
+        gm.player.inventory.clear()
+        if key:
+            gm.player.inventory.append(ItemEntity(item=ITEMS["item_apartment_key"]))
+        door = gm.world.barriers["door_apartment"]
+        door.locked = locked
+        return gm, door
+
+    def test_locking_a_closed_door_from_inside_costs_nothing(self):
+        gm, door = self.inside()
+        facts, minutes = run(gm, LockAction(barrier_name="apartment door"))
+        self.assertEqual(minutes, 0)
+        self.assertTrue(door.locked)
+        self.assertFalse(door.open)
+        self.assertIn("locks the apartment door", facts[0])
+
+    def test_getting_to_the_door_to_lock_it_costs_a_minute(self):
+        gm, door = self.inside()
+        gm.player.at_barrier = None
+        _, minutes = run(gm, LockAction(barrier_name="apartment door"))
+        self.assertEqual(minutes, 1)
+        self.assertTrue(door.locked)
+
+    def test_lock_is_refused_for_each_reason_at_no_cost(self):
+        is_open, _ = self.inside()
+        is_open.world.barriers["door_apartment"].open = True
+        locked, _ = self.inside(locked=True)
+        broken, _ = self.inside()
+        broken.world.barriers["door_apartment"].broken = True
+        smashed, _ = self.inside()
+        smashed.world.barriers["window_test"] = window()
+        smashed.world.barriers["window_test"].broken = True
+        no_key, _ = self.outside(locked=False, key=False)
+        keyless, _ = self.outside(locked=False, key=True)
+        keyless.world.barriers["door_apartment"].key_id = None
+        for label, gm, name, reason in (
+            ("open", is_open, "apartment door", "Close it first."),
+            ("already locked", locked, "apartment door", "already locked"),
+            ("broken", broken, "apartment door", "no door left"),
+            ("smashed", smashed, "kitchen window", "smashed"),
+            ("outside, no key", no_key, "apartment door", "no key"),
+            ("outside, keyless barrier", keyless, "apartment door", "no key"),
+            ("not here", self.inside()[0], "lobby door", "There's no door here."),
+        ):
+            with self.subTest(label):
+                facts, minutes = run(gm, LockAction(barrier_name=name))
+                self.assertEqual(minutes, 0)
+                self.assertTrue(facts[0].startswith("Refused:"), facts)
+                self.assertIn(reason, facts[0])
+
+    def test_locking_from_outside_with_the_key(self):
+        gm, door = self.outside(locked=False, key=True)
+        _, minutes = run(gm, LockAction(barrier_name="apartment door"))
+        self.assertEqual(minutes, 0)
+        self.assertTrue(door.locked)
+
+    def test_unlocking_from_inside_leaves_the_door_closed(self):
+        gm, door = self.inside(locked=True)
+        facts, minutes = run(gm, UnlockAction(barrier_name="apartment door"))
+        self.assertEqual(minutes, 0)
+        self.assertFalse(door.locked)
+        self.assertFalse(door.open)
+        self.assertIn("unlocks the apartment door", facts[0])
+
+    def test_unlocking_from_outside_with_the_key(self):
+        gm, door = self.outside(locked=True, key=True)
+        run(gm, UnlockAction(barrier_name="apartment door"))
+        self.assertFalse(door.locked)
+
+    def test_unlock_is_refused_for_each_reason_at_no_cost(self):
+        not_locked, _ = self.inside()
+        no_key, _ = self.outside(locked=True, key=False)
+        broken, _ = self.inside(locked=True)
+        broken.world.barriers["door_apartment"].broken = True
+        smashed, _ = self.inside()
+        smashed.world.barriers["window_test"] = window()
+        smashed.world.barriers["window_test"].broken = True
+        smashed.world.barriers["window_test"].locked = True
+        for label, gm, name, reason in (
+            ("not locked", not_locked, "apartment door", "isn't locked"),
+            ("outside, no key", no_key, "apartment door", "no key"),
+            ("broken", broken, "apartment door", "no door left"),
+            ("smashed", smashed, "kitchen window", "smashed"),
+            ("not here", self.inside()[0], "lobby door", "There's no door here."),
+        ):
+            with self.subTest(label):
+                facts, minutes = run(gm, UnlockAction(barrier_name=name))
+                self.assertEqual(minutes, 0)
+                self.assertTrue(facts[0].startswith("Refused:"), facts)
+                self.assertIn(reason, facts[0])
+
+    def test_a_door_locked_by_the_verb_stops_a_move_from_outside(self):
+        gm, door = self.inside()
+        run(gm, LockAction(barrier_name="apartment door"))
+        gm.player.current_location_id = BUILDING
+        gm.player.inventory.clear()
+        facts, _ = run(gm, MoveAction(destination="Your Apartment"))
+        self.assertEqual(gm.player.current_location_id, BUILDING)
+        self.assertTrue(door.locked)
+        self.assertIn("locked", " ".join(facts))
+
+    def test_a_door_locked_by_the_verb_unlocks_when_opened_from_inside(self):
+        gm, door = self.inside()
+        run(gm, LockAction(barrier_name="apartment door"))
+        run(gm, OpenAction(barrier_name="apartment door"))
+        self.assertTrue(door.open)
+        self.assertFalse(door.locked)
 
 
 class HitBarrierTests(unittest.TestCase):

@@ -26,6 +26,7 @@ from modules.action.types import (
     EquipAction,
     ExerciseAction,
     GiveAction,
+    LockAction,
     MoveAction,
     OpenAction,
     PutAction,
@@ -42,6 +43,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnlockAction,
     UnsupportedAction,
     UseItemAction,
     WaitAction,
@@ -179,6 +181,18 @@ def _parse_close(args: str) -> CloseAction:
     if not args:
         raise _ActionParseError("CLOSE needs a door or window.")
     return CloseAction(barrier_name=args)
+
+
+def _parse_lock(args: str) -> LockAction:
+    if not args:
+        raise _ActionParseError("LOCK needs a door or window.")
+    return LockAction(barrier_name=args)
+
+
+def _parse_unlock(args: str) -> UnlockAction:
+    if not args:
+        raise _ActionParseError("UNLOCK needs a door or window.")
+    return UnlockAction(barrier_name=args)
 
 
 def _parse_barricade(args: str) -> BarricadeAction:
@@ -622,6 +636,22 @@ VERBS: dict[str, Verb] = dict(
             ("barrier",),
             _parse_close,
             "a door or window from [DOORS AND WINDOWS]; takes no time",
+            0,
+            ("barriers",),
+        ),
+        _verb(
+            "LOCK",
+            ("barrier",),
+            _parse_lock,
+            "a closed door or window from [DOORS AND WINDOWS]; takes no time, from outside needs its key",
+            0,
+            ("barriers",),
+        ),
+        _verb(
+            "UNLOCK",
+            ("barrier",),
+            _parse_unlock,
+            "a locked door or window from [DOORS AND WINDOWS]; takes no time, from outside needs its key",
             0,
             ("barriers",),
         ),

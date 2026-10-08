@@ -22,6 +22,7 @@ from modules.action.types import (
     AttackAction,
     Duration,
     GiveAction,
+    LockAction,
     MoveAction,
     RemoveGoalAction,
     RequestAction,
@@ -31,6 +32,7 @@ from modules.action.types import (
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnlockAction,
     UnsupportedAction,
     UseItemAction,
     WaitAction,
@@ -519,13 +521,40 @@ class SocialActionWordsTests(unittest.TestCase):
         )
 
 
+class LockParseTests(unittest.TestCase):
+    """doors: `LOCK <barrier>` / `UNLOCK <barrier>`."""
+
+    def test_lock_and_unlock_name_a_barrier(self):
+        self.assertEqual(parse_action_line("LOCK apartment door"), LockAction("apartment door"))
+        self.assertEqual(parse_action_line("UNLOCK apartment door"), UnlockAction("apartment door"))
+
+    def test_they_need_a_barrier(self):
+        self.assertIsInstance(parse_action_line("LOCK"), ParseFailure)
+        self.assertIsInstance(parse_action_line("UNLOCK"), ParseFailure)
+
+    def test_close_and_lock_is_two_actions_listed_with_barriers_and_free(self):
+        actions, failures = parse_action_plan(["CLOSE apartment door", "LOCK apartment door"])
+        self.assertEqual(failures, [])
+        self.assertEqual([a.verb for a in actions], ["CLOSE", "LOCK"])
+        listed = [verb.name for verb in available_verbs(frozenset({"barriers"}))]
+        self.assertIn("LOCK", listed)
+        self.assertIn("UNLOCK", listed)
+        self.assertEqual(VERBS["LOCK"].minutes, 0)
+
+    def test_they_are_described(self):
+        self.assertEqual(describe_action(LockAction("apartment door")), "lock the apartment door")
+        self.assertEqual(
+            describe_action(UnlockAction("apartment door")), "unlock the apartment door"
+        )
+
+
 class UnsupportedParseTests(unittest.TestCase):
     """llm-contract: Verbs: UNSUPPORTED."""
 
     def test_the_text_is_what_follows_the_verb(self):
         self.assertEqual(
-            parse_action_line("UNSUPPORTED lock the door"),
-            UnsupportedAction(text="lock the door"),
+            parse_action_line("UNSUPPORTED light a fire"),
+            UnsupportedAction(text="light a fire"),
         )
 
     def test_it_is_listed_in_every_scene_and_costs_nothing(self):
@@ -540,4 +569,4 @@ class UnsupportedParseTests(unittest.TestCase):
         self.assertIsInstance(parse_action_line("UNSUPPORTED"), ParseFailure)
 
     def test_it_is_described_by_its_text(self):
-        self.assertEqual(describe_action(UnsupportedAction("lock the door")), "lock the door")
+        self.assertEqual(describe_action(UnsupportedAction("light a fire")), "light a fire")

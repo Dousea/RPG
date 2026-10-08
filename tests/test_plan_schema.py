@@ -242,7 +242,7 @@ class ClosedFieldTests(unittest.TestCase):
 
     def test_the_door_verbs_offer_the_barriers_of_the_zone(self):
         names = branches(ContextBuilder(building_scene()).build_plan_schema())
-        for verb in ("OPEN", "CLOSE", "BARRICADE", "UNBARRICADE"):
+        for verb in ("OPEN", "CLOSE", "LOCK", "UNLOCK", "BARRICADE", "UNBARRICADE"):
             with self.subTest(verb=verb):
                 self.assertEqual(
                     enum_of(names[verb], "target"),
@@ -364,10 +364,12 @@ EQUIVALENTS = [
     ({"verb": "ATTACK", "target": "lobby door"}, "ATTACK lobby door"),
     ({"verb": "OPEN", "target": "lobby door"}, "OPEN lobby door"),
     ({"verb": "CLOSE", "target": "lobby door"}, "CLOSE lobby door"),
+    ({"verb": "LOCK", "target": "lobby door"}, "LOCK lobby door"),
+    ({"verb": "UNLOCK", "target": "lobby door"}, "UNLOCK lobby door"),
     ({"verb": "BARRICADE", "target": "lobby door"}, "BARRICADE lobby door"),
     ({"verb": "UNBARRICADE", "target": "lobby door"}, "UNBARRICADE lobby door"),
     ({"verb": "SHOUT"}, "SHOUT"),
-    ({"verb": "UNSUPPORTED", "text": "lock the door"}, "UNSUPPORTED lock the door"),
+    ({"verb": "UNSUPPORTED", "text": "light a fire"}, "UNSUPPORTED light a fire"),
     (
         {"verb": "TALK", "npc": "Emma", "approach": "chat", "speech": "Hi there, how are you?"},
         'TALK Emma chat "Hi there, how are you?"',

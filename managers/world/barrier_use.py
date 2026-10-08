@@ -83,6 +83,16 @@ class BarrierActions:
         barrier.open = False
         return [barrier_k.CLOSE_FACT.format(name=self._name, barrier=barrier.name)]
 
+    def lock(self, barrier: BarrierEntity) -> list[str]:
+        self.reach(barrier)
+        barrier.locked = True
+        return [barrier_k.LOCK_FACT.format(name=self._name, barrier=barrier.name)]
+
+    def unlock(self, barrier: BarrierEntity) -> list[str]:
+        self.reach(barrier)
+        barrier.locked = False
+        return [barrier_k.UNLOCK_FACT.format(name=self._name, barrier=barrier.name)]
+
     def open_to_cross(self, barrier: BarrierEntity) -> frozenset[str] | None:
         """Open a closed barrier on the way through; returns who that released, None if it was not closed."""
         if barrier.open or barrier.broken:

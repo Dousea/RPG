@@ -27,7 +27,7 @@ Four facts shape everything below:
 | The thumping fields and the `thumping` state | `modules/entity/zombie.py` |
 | `PlayerEntity.at_barrier` | `modules/entity/player.py` |
 | `StackItem` (nails) | `modules/item.py`, `modules/entity/item.py` |
-| The verbs `OPEN`, `CLOSE`, `BARRICADE`, `UNBARRICADE`; `ATTACK` on a barrier | `modules/action/types.py`, `modules/action/parser.py`, `modules/action/schema.py`, `modules/action/words.py`, `modules/resolution.py` |
+| The verbs `OPEN`, `CLOSE`, `LOCK`, `UNLOCK`, `BARRICADE`, `UNBARRICADE`; `ATTACK` on a barrier | `modules/action/types.py`, `modules/action/parser.py`, `modules/action/schema.py`, `modules/action/words.py`, `modules/resolution.py` |
 | The two shipped doors, every number and every fact | `data/world/barriers.py` |
 | Hammer, Plank, Nails, starting loot | `data/items.py`, `data/world/locations.py` |
 | Time costs | `data/time_costs.py`, `modules/units.py` |
@@ -274,6 +274,28 @@ with nothing else costs the one-minute floor.
 - **Effect:** `open` flips. Opening a barrier zombies are thumping releases them;
   with the player at it, they lunge.
 
+### `LOCK <barrier>` / `UNLOCK <barrier>`
+
+**0 minutes**, after the walk to the barrier if the player isn't at it. A turn
+with nothing else costs the one-minute floor. "Close and lock the door" is
+`CLOSE` then `LOCK`.
+
+- **`LOCK` refused** (0 minutes):
+  - not a barrier of the player's zone;
+  - open ("Close it first.");
+  - already locked;
+  - broken, or a smashed window;
+  - from the outside without the barrier's key, or a barrier with no key from
+    the outside.
+- **`UNLOCK` refused** (0 minutes): not a barrier of the player's zone; not
+  locked; broken, or a smashed window; from the outside without the key.
+- **Effect:** `locked` becomes true (`LOCK`) or false (`UNLOCK`); `open` is
+  unchanged. From the inside either works without a key; from the outside the
+  key is held or carried, the same check `OPEN` uses.
+- Locking changes nothing about thumping or breaking: a locked door is broken
+  down as a closed one is. Opening a locked barrier from the inside still
+  unlocks it.
+
 ### `MOVE_TO` through a barrier
 
 `MOVE_TO` crosses each barrier on its route in order:
@@ -438,7 +460,7 @@ door-damage factor `m`; Fitness the door-hit endurance.
 
 ## Hooks into other mechanics
 
-- **Game clock:** `OPEN` and `CLOSE` cost 0 minutes; `BARRICADE`, `UNBARRICADE`
+- **Game clock:** `OPEN`, `CLOSE`, `LOCK` and `UNLOCK` cost 0 minutes; `BARRICADE`, `UNBARRICADE`
   and `ATTACK` on a barrier 1; walking to a barrier 1; climbing through a window
   +1. `BARRICADE` and `UNBARRICADE` take the action-time multiplier.
 - **Survival stats:** stress gains the sounds source.
@@ -476,8 +498,8 @@ door-damage factor `m`; Fitness the door-hit endurance.
 - **`[THREATS]`:** a thumper the player can see through glass (2 planks or fewer)
   is listed by id, "z4, behind the lobby window, pounding". One only heard is
   "something at the apartment door".
-- **Parser:** the block's names are the targets for `OPEN`, `CLOSE`, `BARRICADE`,
-  `UNBARRICADE` and `ATTACK`. "Board up the door" with 3 planks is three
+- **Parser:** the block's names are the targets for `OPEN`, `CLOSE`, `LOCK`,
+  `UNLOCK`, `BARRICADE`, `UNBARRICADE` and `ATTACK`. "Board up the door" with 3 planks is three
   `BARRICADE`s.
 - **UI:** the `/play` payload has `barriers: [{id, name, state_word, planks_here,
   planks_far, thumping}]`. The Nearby screen lists them with a state tag, plank
@@ -531,13 +553,6 @@ Found in the 2026-10-08 playtest.
   (a zombie notices, Endurance runs low) or at a cap of 30 swings. The count is for
   barriers only: a fight with a zombie stays one swing per turn, so the player
   decides each blow.
-- **No way to lock a door.** Opening the apartment door from inside unlocks it
-  for good, and no verb locks it again, so after the first trip out home is never
-  locked. "Close and lock the door" parsed to `CLOSE` plus `BARRICADE`. *Fix:*
-  `LOCK <barrier>` and `UNLOCK <barrier>`, 0 minutes like `OPEN`: from inside
-  always, from outside with the barrier's key. An explicit verb, not a lock on
-  every close, since the player says "lock" when they mean it and the parser then
-  has somewhere to put it.
 - **A blocked move names a door for a window.** "Move to The Corner Store:
   blocked -- the door to The Corner Store is locked" when the barrier is the shop
   window. *Fix:* use the barrier's kind word in the fact.

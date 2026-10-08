@@ -13,6 +13,7 @@ from modules.action.types import (
     DropAction,
     EquipAction,
     GiveAction,
+    LockAction,
     MoveAction,
     OpenAction,
     PutAction,
@@ -20,6 +21,7 @@ from modules.action.types import (
     TakeOffAction,
     UnbarricadeAction,
     UnequipAction,
+    UnlockAction,
     UseItemAction,
     WearAction,
 )
@@ -112,7 +114,15 @@ def touched_lines(manager: GameManager, refused: Iterable[AnyAction]) -> list[st
         line: str | None = None
         if isinstance(action, MoveAction):
             line = _move_line(manager)
-        elif isinstance(action, OpenAction | CloseAction | BarricadeAction | UnbarricadeAction):
+        elif isinstance(
+            action,
+            OpenAction
+            | CloseAction
+            | LockAction
+            | UnlockAction
+            | BarricadeAction
+            | UnbarricadeAction,
+        ):
             line = _barrier_line(manager, action.barrier_name)
         elif (name := _item_name(action)) is not None:
             line = _item_line(manager, name)

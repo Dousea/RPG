@@ -830,7 +830,7 @@ class MemoryFactsTests(EngineTestCase):
 
     def test_a_none_turn_tells_the_narrator_nothing_typed_happens(self):
         self.llm.actions = "ACTIONS:\nNONE"
-        self.engine.play("lock the door")
+        self.engine.play("light a fire")
         self.assertIn(
             f" - {NOTHING_DONE_FACT.format(name='Orton')}\n - About 1 minute passes.",
             self.llm.narrator_prompts[-1],
@@ -838,7 +838,7 @@ class MemoryFactsTests(EngineTestCase):
 
     def test_the_nothing_done_fact_stays_out_of_memory(self):
         self.llm.actions = "ACTIONS:\nNONE"
-        self.engine.play("lock the door")
+        self.engine.play("light a fire")
         self.assertNotIn("[SCENE]", self.engine.game.memory.full_event_log[-1])
 
     def test_a_turn_with_an_action_or_a_refused_line_has_no_nothing_done_fact(self):
@@ -1250,19 +1250,19 @@ class PlanCheckTests(EngineTestCase):
         self.assertEqual(steps(events)[:3], ["parsing", "checking_plan", "narrating"])
 
     def unsupported_turn(self) -> str:
-        self.llm.actions = "ACTIONS:\nUNSUPPORTED lock the door"
-        self.engine.play("lock the door")
+        self.llm.actions = "ACTIONS:\nUNSUPPORTED light a fire"
+        self.engine.play("light a fire")
         return self.llm.narrator_prompts[0]
 
     def test_an_unsupported_action_asks_whether_a_listed_verb_does_it(self):
         self.unsupported_turn()
         ((_, questions),) = self.checker().plan_calls
-        self.assertIn('does one of them do "lock the door"?', questions[0].text)
+        self.assertIn('does one of them do "light a fire"?', questions[0].text)
         self.assertIn("- MOVE_TO", questions[0].text)
 
     def test_an_unsupported_action_nothing_fits_is_refused_by_name(self):
         prompt = self.unsupported_turn()
-        self.assertIn("Refused: Orton can't lock the door: there is no way to do that yet.", prompt)
+        self.assertIn("Refused: Orton can't light a fire: there is no way to do that yet.", prompt)
         self.assertNotIn("rephrase", prompt)
 
     def test_an_unsupported_action_a_verb_fits_is_not_understood(self):
@@ -1274,7 +1274,7 @@ class PlanCheckTests(EngineTestCase):
     def test_an_unsupported_action_stands_without_the_check(self):
         self.checker().enabled = False
         prompt = self.unsupported_turn()
-        self.assertIn("Orton can't lock the door", prompt)
+        self.assertIn("Orton can't light a fire", prompt)
 
     def test_a_disabled_checker_skips_the_step(self):
         self.checker().enabled = False

@@ -80,6 +80,7 @@ from modules.action.types import (
     EquipAction,
     ExerciseAction,
     GiveAction,
+    LockAction,
     MoveAction,
     OpenAction,
     PutAction,
@@ -96,6 +97,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnlockAction,
     UnsupportedAction,
     UseItemAction,
     WaitAction,
@@ -872,6 +874,46 @@ class ActionValidator:
             return Rejected(action, barrier_k.BARRICADED.format(barrier=barrier.name))
         return Accepted(action, TargetBarrier(barrier, self._walks_to(barrier)))
 
+    def _validate_lock(self, action: LockAction) -> ValidationResult:
+        found = self._barrier_here(action.barrier_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        barrier = found
+        if barrier.broken:
+            return Rejected(action, self._gone(barrier, barrier_k.NO_DOOR_LEFT_TO_LOCK))
+        if barrier.open:
+            return Rejected(action, barrier_k.CLOSE_FIRST)
+        if barrier.locked:
+            return Rejected(action, barrier_k.ALREADY_LOCKED.format(barrier=barrier.name))
+        refusal = self._needs_key(barrier)
+        if refusal is not None:
+            return Rejected(action, refusal)
+        return Accepted(action, TargetBarrier(barrier, self._walks_to(barrier)))
+
+    def _validate_unlock(self, action: UnlockAction) -> ValidationResult:
+        found = self._barrier_here(action.barrier_name)
+        if isinstance(found, str):
+            return Rejected(action, found)
+        barrier = found
+        if barrier.broken:
+            return Rejected(action, self._gone(barrier, barrier_k.NO_DOOR_LEFT_TO_UNLOCK))
+        if not barrier.locked:
+            return Rejected(action, barrier_k.NOT_LOCKED.format(barrier=barrier.name))
+        refusal = self._needs_key(barrier)
+        if refusal is not None:
+            return Rejected(action, refusal)
+        return Accepted(action, TargetBarrier(barrier, self._walks_to(barrier)))
+
+    def _gone(self, barrier: BarrierEntity, door_text: str) -> str:
+        return door_text if barrier.kind == BarrierKind.DOOR else barrier_k.SMASHED_WINDOW
+
+    def _needs_key(self, barrier: BarrierEntity) -> str | None:
+        """The refusal when the player is outside and does not hold the barrier's key."""
+        outside = self.manager.player.current_location_id != barrier.inside_zone
+        if outside and not self._has_key(barrier.key_id):
+            return barrier_k.NO_KEY.format(name=self._name, barrier=barrier.name)
+        return None
+
     def _validate_barricade(self, action: BarricadeAction) -> ValidationResult:
         found = self._barrier_here(action.barrier_name)
         if isinstance(found, str):
@@ -1171,6 +1213,8 @@ class ActionValidator:
         "TAKE_OFF": _validate_take_off,
         "OPEN": _validate_open,
         "CLOSE": _validate_close,
+        "LOCK": _validate_lock,
+        "UNLOCK": _validate_unlock,
         "BARRICADE": _validate_barricade,
         "UNBARRICADE": _validate_unbarricade,
         "ATTACK": _validate_attack,
