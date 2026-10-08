@@ -238,6 +238,16 @@ A mechanic that adds or changes a snapshot field:
 | Header shows the outbreak stage | now `outbreak_day` (`llm-contract`): "Before the outbreak" or "Outbreak day N" |
 | Inventory and equipment show item condition as `n/max` | condition word with `melee` |
 
+## Known limitations
+
+- **A failed Go hides the plan.** The page hides the plan screen before Go's
+  request goes out; if the request fails, the kept plan stays hidden until the
+  next turn's snapshot brings it back. *Fix:* hide it only once the response
+  starts, or show it again on a failed request.
+- **A plan candidate sends a field the page never shows.** Each candidate
+  in `plan` carries `pinned_as`, which only the engine uses. *Fix:* leave it
+  out of the payload, so the plan's fields are the ones the screen renders.
+
 ---
 
 [Index](../README.md)

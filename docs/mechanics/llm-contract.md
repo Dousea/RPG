@@ -714,6 +714,15 @@ entry says what goes wrong and how to fix it.
 
 ### Parser
 
+### Narrator
+
+- **A zone question names the zone, not the place.** When "the apartment"
+  asks, the picker reads "Emma's apartment, in Your Building", but the
+  question's words in the refusal fact list the zone's name ("Your Apartment
+  or Your Building or ..."), so the narrator may say "Your Building" where
+  the player meant Emma's apartment. *Fix:* build the question's words from
+  the candidates' names (`ZONE_KIND_NAMES`), the same as the picker.
+
 ### People
 
 - **Bystanders don't react.** Jen watched Orton smash two shop windows and beat on
