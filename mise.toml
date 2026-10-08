@@ -15,8 +15,8 @@ run = "uv pip install -r requirements.txt -r requirements-dev.txt"
 run = "python app.py"
 
 [tasks.test]
-description = "Run the tests, one test module per core"
-run = "unittest-parallel -s tests -t . -b"
+description = "Run the tests at low priority on 4 workers (RPG_TEST_JOBS to change)"
+run = "nice -n 10 unittest-parallel -j ${RPG_TEST_JOBS:-4} -s tests -t . -b"
 
 [tasks.test-serial]
 description = "Run the tests in one process (for debugging test order)"

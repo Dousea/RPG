@@ -3,3 +3,6 @@ ruff>=0.16
 basedpyright>=1.40
 import-linter>=2.15
 unittest-parallel>=1.8
+# Test quality: line coverage and mutation testing (run by hand, not in `mise run check`).
+coverage>=7.16
+cosmic-ray>=8.7
