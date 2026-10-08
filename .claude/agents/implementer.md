@@ -52,6 +52,19 @@ Never commit, never push, never stage.
   brief doesn't give): don't invent a feature. Pick the smallest choice that
   keeps tests honest, list it under Gaps, and keep going; if it blocks the
   task, stop and report.
+- Tests that last: the suite is large and every round runs it, so each test
+  must earn its place.
+  - Assert the behaviour, not the wording: that a prompt or fact holds the
+    words, names or ids it must and lacks what it must not, or that it equals
+    a named constant. Never a whole sentence of prose spelled out in the test.
+  - One layer per behaviour: before writing a test, grep for one that
+    already covers it in the validator, simulation, engine or context tests.
+    Extend that one, or test at the lowest layer that shows the behaviour,
+    plus one engine-level test only where the wiring itself is the risk.
+    Never a second test of the same behaviour at the same layer, and never
+    a third layer.
+  - A new test module goes in its domain's package (`tests/<domain>/`), never
+    at `tests/` top level.
 - Run `mise run check` at the end and fix everything it reports. Don't add
   to `.basedpyright/baseline.json`.
 - Don't call the live LLM unless the brief says to.
@@ -69,6 +82,7 @@ relayed summary, so it must stand alone:
 <each behaviour: test module, red→green seen (yes/no)>
 ## Test modules
 FAST: tests.test_a, tests.test_b   <every test module you added or changed>
+Tests: <count before> → <count after>; `mise run test` wall time <before> → <after>
 ## Gaps
 <each choice the brief didn't make: what you chose and why it's smallest>
 ## Not built

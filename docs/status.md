@@ -237,6 +237,24 @@ Zombie wounds, bleeding, the zombie infection, starvation, thirst and deep cold 
 heat all take the player's health to zero; see
 [`health`](mechanics/health.md).
 
+**The test suite has outgrown its layout.** About 3,000 tests, most added in
+two days, and every task runs them all several times. Three costs to work
+off:
+
+- Placement: most tests sit in top-level `tests/test_*.py` files instead of
+  the domain packages AGENTS.md asks for, including recent ones
+  (`test_item_lookup.py`, `test_mentions.py`, `test_engine_mentions.py`,
+  `test_pins.py`). Move each into its package when the area is next touched.
+- Wording: prompt and fact tests in `test_context.py`, `test_simulation.py`
+  and `test_engine.py` often spell out whole sentences, so a wording change
+  breaks many tests. Rewrite them to check key words or named constants when
+  touched.
+- Overlap: one behaviour is often tested in the validator, the simulation
+  and the engine. Keep the lowest layer, plus an engine test only where the
+  wiring is the risk.
+
+New tests follow these rules already; this entry is the old ones.
+
 **`item_storage_key` is unplaced.** The item is still defined in
 `data/items.py`, a holdover from the old storage-room map, but nothing in
 `data/world/locations.py` puts it on the ground anywhere and no quest references

@@ -42,6 +42,13 @@ conventions). The prompt may name a base commit; diff against it when given.
    helpers, needless complexity (an abstraction with one caller, a layer of
    indirection that adds nothing), work repeated per call that should be
    computed once, code that doesn't match the idiom of the file around it.
+6. **Tests that last.** Read the new and changed tests against the
+   implementer's "Tests that last" rules: a test that spells out a sentence
+   of prose instead of checking key words or a named constant; a behaviour
+   tested again at a layer that already covers it; a new test module at
+   `tests/` top level instead of its domain package. Compare the report's
+   test count and `mise run test` wall time before and after; say so when
+   the time grew noticeably for what the task adds.
 
 ## What is blocking
 
@@ -50,8 +57,12 @@ no test that would catch its removal, a failing check, a layer or
 convention breach, an excluded file tracked or linked, a doc that
 contradicts the code, a `/play` field missing from or stale in
 `static/app.js`, a bug that gives a wrong result or crashes a turn, and
-duplication or complexity the next task will have to work around. Not
-blocking: style the linters accept, naming judgement, test structure, small
+duplication or complexity the next task will have to work around, a test
+that spells out prose where a key-word or constant check would do, a new
+test module at `tests/` top level, a test that repeats an existing one at
+the same layer, and a behaviour tested at a third layer with no wiring risk
+there. Not blocking: style the linters accept, naming judgement, the
+lowest-layer-plus-engine pair the implementer's rules allow, small
 refactors that are a matter of taste. Report at most three notes for those.
 
 ## Reply
