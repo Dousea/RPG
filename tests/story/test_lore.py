@@ -161,11 +161,6 @@ class KeyTests(unittest.TestCase):
         self.assertIn("stage_news constant", text)
         self.assertIn("merrow_star key", text)
 
-    def test_scores_are_ignored_for_now(self):
-        gm = GameManager()
-        hits = select_lore(gm, "", {"merrow_star": 0.99})
-        self.assertNotIn("merrow_star", [h.entry.entry_id for h in hits])
-
     def test_selecting_changes_nothing(self):
         gm = GameManager()
         before = (set(gm.narrative.discovered_flags), dict(gm.narrative.flags))
@@ -292,6 +287,88 @@ class SystemTextTests(unittest.TestCase):
         text = system_text(get_lorebook()).lower()
         for secret in ("velloran", "vx-7", "study", "binder"):
             self.assertNotIn(secret, text)
+
+
+def keyed(entry_id: str, order: int = 40, **kw) -> LoreEntry:
+    return LoreEntry(entry_id, "z" * 100, Position.WORLD, keys=("alpha",), order=order, **kw)
+
+
+def semantic_hits(entries: list[LoreEntry], scores: dict[str, float], text: str = ""):
+    book = Lorebook({e.entry_id: e for e in entries})
+    with mock.patch("managers.story.lore.get_lorebook", return_value=book):
+        return select_lore(GameManager(), text, scores)
+
+
+class SemanticTests(unittest.TestCase):
+    """world-lore: Semantic retrieval."""
+
+    def test_a_keyed_entry_over_the_threshold_shows_with_no_key_and_carries_its_score(self):
+        hits = semantic_hits([keyed("a")], {"a": 0.5})
+        self.assertEqual(
+            [(h.entry.entry_id, h.reason, h.score) for h in hits], [("a", "semantic", 0.5)]
+        )
+
+    def test_the_threshold_is_the_constant(self):
+        edge = lore_k.LORE_SEMANTIC_MIN_SCORE
+        self.assertEqual(len(semantic_hits([keyed("a")], {"a": edge})), 1)
+        self.assertEqual(semantic_hits([keyed("a")], {"a": edge - 0.01}), [])
+        self.assertEqual(semantic_hits([keyed("a")], {"a": 0.30}), [])
+
+    def test_a_locked_or_replaced_entry_never_shows_whatever_its_score(self):
+        gm = GameManager()
+        scores = {"trial_truth": 0.99, "imrie_truth": 0.99, "merrow_star": 0.99}
+        discover(gm, "apocalypse_cause")
+        ids = shown(gm, "", scores)
+        self.assertNotIn("trial_truth", ids)
+        self.assertNotIn("imrie_truth", ids)
+        self.assertNotIn("merrow_star", ids)
+
+    def test_only_the_best_few_over_the_threshold_show_ties_by_id(self):
+        entries = [keyed("a"), keyed("b"), keyed("c"), keyed("d")]
+        scores = {"a": 0.5, "b": 0.9, "c": 0.5, "d": 0.7}
+        hits = semantic_hits(entries, scores)
+        self.assertEqual(len(hits), lore_k.LORE_SEMANTIC_MAX)
+        self.assertEqual([h.entry.entry_id for h in hits], ["b", "d"])
+
+        tied = semantic_hits([keyed("b"), keyed("a"), keyed("c")], {"a": 0.6, "b": 0.6, "c": 0.6})
+        self.assertEqual(sorted(h.entry.entry_id for h in tied), ["a", "b"])
+
+    def test_constant_stage_and_opted_out_entries_never_show_by_score(self):
+        entries = [
+            entry("const", 10),
+            entry("stage", 0, stage=True),
+            keyed("optout", semantic=False),
+        ]
+        hits = semantic_hits(entries, {"const": 0.99, "stage": 0.99, "optout": 0.99})
+        self.assertEqual([h.reason for h in hits], ["constant", "constant"])
+        self.assertNotIn("optout", [h.entry.entry_id for h in hits])
+
+    def test_an_entry_already_hit_by_a_key_is_not_a_second_hit(self):
+        hits = semantic_hits([keyed("a")], {"a": 0.9}, "alpha")
+        self.assertEqual([h.reason for h in hits], ["key"])
+
+    def test_a_key_match_stays_when_a_semantic_hit_competes_for_a_full_cap(self):
+        piece = "y" * 1000
+        key = LoreEntry("key", piece, Position.WORLD, keys=("alpha",), order=90)
+        sem = LoreEntry("sem", piece, Position.WORLD, keys=("beta",), order=10)
+        hits = semantic_hits([key, sem], {"sem": 0.9}, "alpha")
+        self.assertEqual({h.entry.entry_id: h.shown for h in hits}, {"key": True, "sem": False})
+
+    def test_a_semantic_hit_with_sticky_starts_its_stay_through_select_lore(self):
+        book = Lorebook({"a": keyed("a", sticky=3)})
+        gm = GameManager()
+        with mock.patch("managers.story.lore.get_lorebook", return_value=book):
+            record_turn(gm, select_lore(gm, "", {"a": 0.8}))
+            self.assertEqual(gm.narrative.lore_sticky, {"a": 3})
+            hits = select_lore(gm, "", {})
+        self.assertEqual([h.reason for h in hits], ["sticky"])
+
+    def test_the_reason_and_score_are_debug_logged(self):
+        with self.assertLogs("managers.story.lore", logging.DEBUG) as logs:
+            semantic_hits([keyed("a")], {"a": 0.5})
+        text = "\n".join(logs.output)
+        self.assertIn("a semantic", text)
+        self.assertIn("0.5", text)
 
 
 class StickyTests(unittest.TestCase):

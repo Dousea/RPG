@@ -1,5 +1,7 @@
 """Shared test helpers: an isolated save file and stubs for the slow edges."""
 
+import hashlib
+import math
 import random
 import shutil
 import tempfile
@@ -77,14 +79,22 @@ class FakeMemory:
 
     The real one loads a sentence-transformer model on first use, which would
     make every test slow and network-dependent. Recall is scripted instead:
-    `next_hits` are the event-log indices the next search returns.
+    `next_hits` are the event-log indices the next search returns. Text
+    vectors are deterministic and unit length; `vectors` overrides a text's
+    with a scripted one, and `encoded` lists each text embedded, in order,
+    the way the real `encode_query` embeds a repeated text once.
     """
+
+    DIMENSION = 32
 
     def __init__(self):
         self.next_hits: list[int] = []
         self.rebuilt_with: list[list[str]] = []
         self.searched_for: list[str] = []
         self.searched_k: list[int] = []
+        self.vectors: dict[str, list[float]] = {}
+        self.encoded: list[str] = []
+        self._last_query: tuple[str, list[list[float]]] | None = None
 
     def rebuild(self, events: list[str]) -> None:
         self.rebuilt_with.append(list(events))
@@ -92,7 +102,25 @@ class FakeMemory:
     def search(self, query_text: str, k: int = 2) -> list[int]:
         self.searched_for.append(query_text)
         self.searched_k.append(k)
+        self.encode_query(query_text)
         return list(self.next_hits)
+
+    def encode(self, texts: list[str]) -> list[list[float]]:
+        self.encoded.extend(texts)
+        return [self._vector(text) for text in texts]
+
+    def encode_query(self, text: str) -> list[list[float]]:
+        if self._last_query is None or self._last_query[0] != text:
+            self._last_query = (text, self.encode([text]))
+        return self._last_query[1]
+
+    def _vector(self, text: str) -> list[float]:
+        if text in self.vectors:
+            return self.vectors[text]
+        digest = hashlib.sha256(text.encode()).digest()
+        raw = [byte - 127.5 for byte in digest[: self.DIMENSION]]
+        norm = math.sqrt(sum(x * x for x in raw))
+        return [x / norm for x in raw]
 
 
 class FakeFactChecker:

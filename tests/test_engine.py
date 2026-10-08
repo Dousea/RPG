@@ -1598,6 +1598,16 @@ class LoreTests(EngineTestCase):
         self.assertIn("apocalypse_cause", gm.narrative.discovered_flags)
         self.assertIn(self.content("apocalypse_cause"), self.world_block())
 
+    def test_an_entry_close_in_meaning_to_the_input_shows_with_no_key_word(self):
+        gm = self.engine.game
+        gm.narrative.discovered_flags.add("apocalypse_cause")
+        text = "who made the sickness"
+        memory = cast(FakeMemory, self.engine.memory)
+        memory.vectors[text] = memory.vectors[self.content("ship_story")] = [1.0] + [0.0] * 31
+        self.engine.play(text)
+        self.assertIn(self.content("ship_story"), self.world_block())
+        self.assertEqual(memory.encoded.count(text), 1)
+
     def test_the_hits_are_selected_once_after_the_plan_resolves(self):
         order: list[str] = []
         real_resolve = engine_module.SimulationCore.resolve

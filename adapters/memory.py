@@ -29,6 +29,7 @@ class SemanticMemory:
         self._model: SentenceTransformer | None = None
         self._index = None
         self._size = 0
+        self._last_query: tuple[str, np.ndarray] | None = None
 
     @property
     def model(self) -> SentenceTransformer:
@@ -37,6 +38,18 @@ class SemanticMemory:
             self._model = SentenceTransformer(EMBEDDING_MODEL_NAME)
         return self._model
 
+    def encode(self, texts: list[str]) -> np.ndarray:
+        """L2-normalized float32 vectors, one row per text; the model loads on first use."""
+        vectors = np.asarray(self.model.encode(texts), dtype=np.float32)
+        faiss.normalize_L2(vectors)
+        return vectors
+
+    def encode_query(self, text: str) -> np.ndarray:
+        """The vector of one text, kept so that the turn's input is embedded once however many ask."""
+        if self._last_query is None or self._last_query[0] != text:
+            self._last_query = (text, self.encode([text]))
+        return self._last_query[1]
+
     def rebuild(self, events: list[str]) -> None:
         """Rebuild the index from the full event log."""
         self._size = len(events)
@@ -44,10 +57,8 @@ class SemanticMemory:
             self._index = None
             return
 
-        embeddings = self.model.encode(events)
-        embeddings = np.asarray(embeddings, dtype=np.float32)
         # IndexFlatIP on L2-normalized vectors gives cosine similarity.
-        faiss.normalize_L2(embeddings)
+        embeddings = self.encode(events)
 
         index = faiss.IndexFlatIP(EMBEDDING_DIMENSION)
         index.add(embeddings)
@@ -59,9 +70,6 @@ class SemanticMemory:
         if self._index is None or self._size == 0 or not query_text.strip():
             return []
 
-        query = np.asarray(self.model.encode([query_text]), dtype=np.float32)
-        faiss.normalize_L2(query)
-
-        _scores, indices = self._index.search(query, min(k, self._size))
+        _scores, indices = self._index.search(self.encode_query(query_text), min(k, self._size))
         # FAISS pads unfilled slots with -1.
         return [int(i) for i in indices[0] if i >= 0]

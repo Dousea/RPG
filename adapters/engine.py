@@ -15,6 +15,7 @@ from typing import Any
 import config
 from adapters import llm
 from adapters.factcheck import FactChecker
+from adapters.lore_index import LoreIndex
 from adapters.memory import DEFAULT_RECALL, SemanticMemory
 from adapters.save import codec, files
 from data.character.occupations import OCCUPATIONS
@@ -131,6 +132,7 @@ class GameEngine:
     def __init__(self):
         self._lock = threading.Lock()
         self.memory = SemanticMemory()
+        self.lore_index = LoreIndex(self.memory)
         self.factcheck = FactChecker()
         self.manager: GameManager | None = files.load()
         self._kept: _Turn | None = None
@@ -290,6 +292,7 @@ class GameEngine:
             and (entry := manager.memory.full_event_log[i]) not in manager.memory.recent_events
         ][:DEFAULT_RECALL]
         logger.debug(f"Recalled {len(deep_memories)} deep memories.")
+        lore_scores = self.lore_index.scores(player_input)
 
         stamp = event_stamp(manager)
 
@@ -340,7 +343,7 @@ class GameEngine:
         if turn.nothing_parsed:
             narrated_facts = [NOTHING_DONE_FACT.format(name=looks.forename), *outcome_facts]
         context = ContextBuilder(manager)
-        lore = select_lore(manager, player_input, {})
+        lore = select_lore(manager, player_input, lore_scores)
         narrator_prompt = context.build_narrator_prompt(
             player_input,
             narrated_facts,

@@ -90,13 +90,15 @@ def world_lines(hits: list[LoreHit]) -> list[str]:
 def select_lore(manager: GameManager, player_input: str, scores: dict[str, float]) -> list[LoreHit]:
     """Every `world` entry that triggered this turn, with the cap applied; changes nothing.
 
-    `scores` is for the semantic step, which is not built yet. A keyed entry with turns left
-    in `lore_sticky` is a `sticky` hit.
+    A keyed entry with turns left in `lore_sticky` is a `sticky` hit. `scores` maps entry ids
+    to their similarity to the input; the best few over `LORE_SEMANTIC_MIN_SCORE` among the
+    entries left out are `semantic` hits.
     """
     book = get_lorebook()
     entries = sorted(book.world_entries(), key=lambda e: (e.order, e.entry_id))
 
     hits: list[LoreHit] = []
+    left_out: list[LoreEntry] = []
     for entry in entries:
         if not _known(entry, manager) or _replaced(entry, book, manager):
             continue
@@ -105,12 +107,34 @@ def select_lore(manager: GameManager, player_input: str, scores: dict[str, float
             reason = "sticky"
         if reason is not None:
             hits.append(LoreHit(entry, reason))
+        else:
+            left_out.append(entry)
+
+    hits.extend(_semantic_hits(left_out, scores))
 
     hits = _capped(hits)
     for hit in hits:
-        logger.debug("Lore %s %s (shown: %s)", hit.entry.entry_id, hit.reason, hit.shown)
+        logger.debug(
+            "Lore %s %s score %.2f (shown: %s)",
+            hit.entry.entry_id,
+            hit.reason,
+            hit.score,
+            hit.shown,
+        )
 
     return hits
+
+
+def _semantic_hits(left_out: list[LoreEntry], scores: dict[str, float]) -> list[LoreHit]:
+    candidates = [
+        LoreHit(entry, "semantic", scores[entry.entry_id])
+        for entry in left_out
+        if entry.keys
+        and entry.semantic
+        and scores.get(entry.entry_id, 0.0) >= lore_k.LORE_SEMANTIC_MIN_SCORE
+    ]
+    candidates.sort(key=lambda hit: (-hit.score, hit.entry.entry_id))
+    return candidates[: lore_k.LORE_SEMANTIC_MAX]
 
 
 def record_turn(manager: GameManager, hits: list[LoreHit]) -> None:

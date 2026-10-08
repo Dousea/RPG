@@ -148,6 +148,12 @@ boundary to `LAST_SCENE_MAX_CHARS` in `data/story/memory.py`, and
 left out when there is none), and `[LAST TURN]`, the newest entry of the event
 log, goes to the parser. The parser never sees story text.
 
+The embedding model is shared. Deep memory (`SemanticMemory.search`) and world
+lore (`adapters/lore_index.py`'s `LoreIndex`, see
+[World Lore](../mechanics/world-lore.md#similarity)) both embed the turn's
+player input through `SemanticMemory.encode_query`, which keeps the last text's
+vector, so the input is embedded once per turn.
+
 A fourth and fifth section round out the narrator prompt, both assembled by
 `managers/context.py`'s `ContextBuilder`: `[OUTCOMES]`, what the Action
 Validator and Simulation Core already decided *this* turn (movement, combat,

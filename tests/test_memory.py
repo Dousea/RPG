@@ -6,8 +6,11 @@ Opt in with RPG_TEST_EMBEDDINGS=1.
 
 import os
 import unittest
+from unittest import mock
 
-from adapters.memory import SemanticMemory
+import numpy as np
+
+from adapters.memory import EMBEDDING_DIMENSION, SemanticMemory
 
 REQUIRES_MODEL = unittest.skipUnless(
     os.environ.get("RPG_TEST_EMBEDDINGS") == "1",
@@ -30,6 +33,52 @@ class EmptyIndexTests(unittest.TestCase):
         memory = SemanticMemory()
         memory.rebuild([])
         self.assertIsNone(memory._model)
+
+
+class StubModel:
+    """Stands in for the sentence transformer: one unnormalized vector per text."""
+
+    def __init__(self):
+        self.encoded: list[list[str]] = []
+
+    def encode(self, texts):
+        self.encoded.append(list(texts))
+        return [[3.0, 4.0, *[0.0] * (EMBEDDING_DIMENSION - 2)] for _ in texts]
+
+
+class EncodeTests(unittest.TestCase):
+    """world-lore: Semantic retrieval: one embedding per turn."""
+
+    def setUp(self):
+        self.model = StubModel()
+        self.memory = SemanticMemory()
+        self.memory._model = self.model  # pyright: ignore[reportAttributeAccessIssue]
+
+    def test_encode_returns_unit_length_float32_rows(self):
+        vectors = self.memory.encode(["a", "b"])
+        self.assertEqual(vectors.dtype, np.float32)
+        np.testing.assert_allclose(np.linalg.norm(vectors, axis=1), [1.0, 1.0], rtol=1e-6)
+
+    def test_encode_query_encodes_a_text_once_and_caches_the_last(self):
+        first = self.memory.encode_query("hello")
+        again = self.memory.encode_query("hello")
+        self.assertIs(first, again)
+        self.assertEqual(self.model.encoded, [["hello"]])
+
+        self.memory.encode_query("other")
+        self.memory.encode_query("hello")
+        self.assertEqual(len(self.model.encoded), 3)
+
+    def test_search_goes_through_encode_query(self):
+        self.memory.rebuild(["one event"])
+        self.model.encoded.clear()
+        with mock.patch.object(
+            SemanticMemory,
+            "encode_query",
+            return_value=np.ones((1, EMBEDDING_DIMENSION), dtype=np.float32),
+        ) as encode_query:
+            self.memory.search("where is it")
+        encode_query.assert_called_once_with("where is it")
 
 
 @REQUIRES_MODEL

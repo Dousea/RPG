@@ -1,11 +1,8 @@
 # World Lore
 
-> **Status: Partial.** Built: the lorebook file and its loader, the `[WORLD]`
-> block, the system entries, the stages, the secrets, the topics, the binder and
-> sticky entries.
-> **Not built yet:** similarity retrieval (an entry chosen because the
-> player's words are close in meaning to it). The `semantic` field is read and
-> checked today; nothing acts on it.
+> **Status: Implemented.** The lorebook file and its loader, the `[WORLD]`
+> block, the system entries, the stages, the secrets, the topics, the binder,
+> sticky entries and similarity retrieval.
 
 The narrator knows the tone of the game and, without this, nothing about its
 world: the city's name, what the news says, what the player has found out, or
@@ -31,7 +28,9 @@ condenses a paragraph there, and a story change goes there first.
 | The binder and its cabinet | `data/items.py`, `data/loot/containers.py` |
 | `[WORLD]` in the narrator prompt | `managers/context.py` |
 | The system entries and the `[WORLD]` rule in the system prompt | `adapters/llm.py` |
-| Selecting after the turn resolves | `adapters/engine.py` |
+| Selecting after the turn resolves, scoring the input | `adapters/engine.py` |
+| Similarity scores for the entries | `adapters/lore_index.py` |
+| Embedding a text, the cached query vector | `adapters/memory.py` |
 
 ## The lorebook
 
@@ -53,7 +52,7 @@ entry, what replaces it, and which line is the stage line.
 | `replaced_by` | none | Hidden once that entry's `when` holds. |
 | `stage` | `false` | This is a stage line. |
 | `sticky` | none | 1 to 10 turns a keyed entry stays after its trigger. See [Sticky](#sticky). |
-| `semantic` | `true` | A keyed entry may also be chosen by similarity; `false` opts out. Read and checked; not acted on yet. |
+| `semantic` | `true` | A keyed entry may also be chosen by similarity; `false` opts out. See [Similarity](#similarity). |
 
 ### Position and the prompt cache
 
@@ -148,16 +147,19 @@ reads. It changes nothing. For each `world` entry:
    other key as a word or phrase in the player's input (whole words, case
    ignored: "ship" matches "the ship" and not "relationship"), or when it is
    sticky-active ([Sticky](#sticky)): no key matches now but it has turns left.
+4. From the entries steps 1 to 3 left out, take the keyed ones that allow it
+   (`semantic` not `false`) whose similarity score is at least 0.35, best first,
+   ties by `id`, up to 2 ([Similarity](#similarity)).
 
 Each hit is `(entry, reason, score, shown)`, and each is logged at debug with
-its id and reason. Today the reasons are `constant`, `key` and `sticky`.
+its id, reason and score. The reasons are `constant`, `key`, `sticky` and
+`semantic`.
 
 **The cap.** While the shown lines total over 1800 characters, the next hit in
 `drop_order` is marked not shown; the stage entry never is. `drop_order` is the
 one drop rule: similarity hits first, worst score first, then the highest
 `order`, ties by `entry_id` descending (the last line of `[WORLD]` first).
-Nothing in the shipped file is a similarity hit yet, and the rule is built so
-retrieval doesn't change it.
+A similarity hit is always dropped before a key, constant or sticky one.
 
 **The prompt budget.** When the narrator prompt is over its budget, the drops
 go: deep memories, then lore lines in `drop_order` (on a copy; the turn's hits
@@ -302,22 +304,44 @@ world facts only from the blocks, and a topic's fact only when `[OUTCOMES]`
 says it was told. The player sees only what the narrator writes from it, the
 stage facts in the story, and the quest. No lore line is shown raw.
 
-## Not built yet
+## Similarity
 
-- **Similarity retrieval:** up to two entries chosen because the player's input
-  is close in meaning to them, ranked after the key matches and dropped first.
+Keys miss the player who asks "who made the sickness" and never says "study".
+After the keys, up to 2 keyed `world` entries are added because their `content`
+is close in meaning to the turn's input: the cosine similarity of the two
+embeddings is at least 0.35 (a first guess, tuned in play).
+
+- **Candidates.** Keyed `world` entries without `"semantic": false`; never a
+  stage, constant or `system` entry. All of them are embedded, locked or not,
+  because the lorebook is static. The knowledge rule runs after: an entry whose
+  `when` is false, or that is replaced, is never shown whatever its score.
+- **Rank.** A similarity hit never displaces a key, constant or sticky one:
+  under the cap it is dropped first, lowest score first. A similarity hit with
+  a `sticky` starts its stay like a key hit does.
+- **One embedding per turn.** `LoreIndex` embeds the candidates' `content` once,
+  on the first turn that asks, with the model deep memory already uses. The
+  engine scores the input right after the deep-memory search, and
+  `SemanticMemory.encode_query` keeps the last text's vector, so the input is
+  embedded once for both. The scores are plain numbers handed to `select_lore`,
+  so the selection runs with no embedder.
+- **If the model fails** to load or encode, one warning is logged and every
+  later turn scores nothing; the keys carry on.
 
 ## Testing
 
 - `tests/story/test_lorebook.py`: the file, the conditions, each rejected case.
 - `tests/story/test_lore.py`: public, replaced and locked entries; zone, NPC
-  and word keys; the stage line at every minute; the cap and `drop_order`; no
-  number in any entry.
+  and word keys; the stage line at every minute; the cap and `drop_order`;
+  similarity hits from scores passed in; no number in any entry.
+- `tests/test_lore_index.py`: the lazy single embedding, the candidates, a
+  failing model, one encoding of the input per turn. `tests/test_memory.py`:
+  `encode` and `encode_query`.
 - `tests/story/test_story_beats.py`, `tests/story/test_topics.py`,
   `tests/story/test_quests.py`: the stages, the binder, the eight topics, the
   quest.
 - `tests/test_context.py`: `[WORLD]` and the drop order in the budget.
 - `tests/test_llm.py`: the canon in the system prompt.
-- `tests/test_engine.py`: `[WORLD]` after the turn resolves; the same hits in the
+- `tests/test_engine.py`: `[WORLD]` after the turn resolves; an entry chosen by
+  similarity with no key word; the same hits in the
   retry and options prompts; the stays counted once per turn.
 - `tests/test_persistence.py`: the schema version, the cabinet, `lore_sticky`.
