@@ -12,8 +12,8 @@ read-only commands (`git diff`, `git status`, grep, sed -n,
 `mise run check`, `mise run test`).
 
 Inputs: `.claude/briefs/<slug>/brief.md` (the task); `report.md` next to it
-(the implementer's hand-off: files, behaviours, gaps; read it after the
-brief); `git diff` and untracked files from `git status` (the
+(the implementer's hand-off, saved by the main session: files, behaviours,
+gaps; read it after the brief); `git diff` and untracked files from `git status` (the
 implementation); `AGENTS.md` and every `CLAUDE*.md` at the repo root (the
 conventions). The prompt may name a base commit; diff against it when given.
 
@@ -70,7 +70,8 @@ refactors that are a matter of taste. Report at most three notes for those.
 
 ## Reply
 
-Under 300 words:
+Your reply is the findings; the main session saves it to
+`.claude/briefs/<slug>/findings.md` for the fix round. Under 300 words:
 
 ```
 VERDICT: PASS | BLOCKING

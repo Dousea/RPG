@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements one task from a written brief (.claude/briefs/<slug>/brief.md) in the codebase, test-first, and writes a hand-off report next to it. Give it the brief's slug and, on a fix round, the findings file. Never commits.
+description: Implements one task from a written brief (.claude/briefs/<slug>/brief.md) in the codebase, test-first, and returns a hand-off report as its reply. Give it the brief's slug and, on a fix round, the findings file. Never commits.
 model: sonnet
 tools: Read, Grep, Glob, Bash, Write, Edit
 ---
@@ -72,8 +72,12 @@ Never commit, never push, never stage.
 
 ## Report
 
-Write `.claude/briefs/<slug>/report.md`. The reviewer reads it instead of a
-relayed summary, so it must stand alone:
+Your final reply is the hand-off report; the main session saves it to
+`.claude/briefs/<slug>/report.md`, and the reviewer reads that file instead
+of a relayed summary, so it must stand alone. Don't write the report to a
+file yourself, with Write or through Bash: the harness refuses report files
+from subagents, and getting around it is not allowed. Never say a report was
+written to a file.
 
 ```
 # <slug> — <title>
@@ -92,11 +96,5 @@ Tests: <count before> → <count after>; `mise run test` wall time <before> → 
 <the `mise run check` summary lines>
 ```
 
-On a fix round, append `## Fix round N` with each finding, what you changed
-and the check result; don't rewrite earlier sections unless the fix changed
-them.
-
-## Reply
-
-Under 150 words: the report's path, the check summary line, the number of
-gaps, and anything that blocked you. Everything else is in the file.
+On a fix round, reply with only `## Fix round N`: each finding, what you
+changed and the check result. The main session appends it to the report.
