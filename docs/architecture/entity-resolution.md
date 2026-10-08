@@ -1,6 +1,6 @@
 # Entity Resolution
 
-> **Status: Partial.** Each kind of target has its own lookup: NPCs (`resolve_npc`), zones (`resolve_location`), items (`naming.find_named`), corpse items (`find_content`, the item lookup then a contained name), rooms and containers (`resolve_room`, `resolve_container`), barriers, zombies (by id) and corpses (by id). All match names and ids case-insensitively. Containers and items ask "which one?" when several match: the validator refuses with the choices, and an item is told apart by its describing words (its condition and wetness, such as "broken Baseball Bat"). Nothing else has an ambiguity path, there is no description-based resolution, and items still have no instance ids. See [Implementation Status](../status.md).
+> **Status: Partial.** Each kind of target has its own lookup: NPCs (`resolve_npc`), zones (`resolve_location`), items (`naming.find_named`), corpse items (`find_content`, the item lookup then a contained name), rooms and containers (`resolve_room`, `resolve_container`), barriers, zombies (by id) and corpses (by id). All match names and ids case-insensitively. Containers and items ask "which one?" when several match: the validator refuses with the choices, and an item is told apart by its describing words (its condition and wetness, such as "broken Baseball Bat"). Nothing else has an ambiguity path, there is no description-based resolution, and items still have no instance ids. A player can also pin a zombie, corpse, NPC, barrier, room, container, zone or body part with `@` ([Mentions](#mentions)); the engine binds a pin itself, with no name matching. See [Implementation Status](../status.md).
 
 A local LLM can identify language references, but the engine should resolve them to real entities.
 
@@ -42,6 +42,21 @@ If multiple entities match:
 The system should prefer asking rather than silently making a consequential guess.
 
 This is especially important for pronouns, objects with duplicate names, and spatial descriptions.
+
+## Mentions
+
+The player can say which one they mean. Typing `@` in the input opens a list of what is in reach (`/play` and `/state` carry it as `mentions`: kind, id, the name, a short description and the label the list and the chip show), and a pick goes into the turn as an id, not as prose. The player never sees an id: a zombie or body is named by its looks ("man in a police jacket", built by the helper that words a corpse's looks), and the other kinds by their display names. A pick is a reference the engine binds itself:
+
+- **Listed:** the zombies the player sees (one only heard has no id and is left out), the bodies they perceive, the NPCs in the zone, the barriers on the zone's connections (so a neighbouring zone's window can be named from here), the zone's rooms and containers, every other zone `zone_path` reaches, and the body parts first aid can act on (the hurt and bandaged ones). `managers/mentions.py` builds the list.
+- **Not listed:** conversation topics (the list would show what an NPC knows before it is asked) and items, which have no instance id yet (see the limitation below). A pick in this task needs an id or a closed name.
+- **Descriptions** reuse the words the scene already uses (a zombie's distance and state, a barrier's state word and the zones it joins, a zone's direction or next zone on the way and the barrier that blocks it, a container's room and whether it is opened) and never carry a number. Two zombies or bodies in the same outer garment get one more garment each, then their distance and state words tell them apart. Bare bones leave the sex out, as the scene does. Entries that still read the same get a `#1`, `#2` in their label, in the list and on the chip alike, since the scene words nothing else that tells them apart.
+- **Checked first:** before the parser runs, each pick is checked against what is in reach now. One that no longer is (the zombie moved off, the NPC left) refuses the turn in words, before any LLM call and without spending game time.
+- **The parser** lists each seen zombie and body with its looks beside its id (`z1 (a man in a police jacket, close)`), so plain prose can name one without `@`. It sees the pick in the input as `[pinned: z32]` (a zombie or body by id, anything else by the name the scene uses) and in a `[PINNED]` block. Nothing new reaches the narrator, the event log or the memory: they read the pick as its plain name.
+- **Bound after parsing:** `modules.action.pins.bind` puts each pick into the matching target field of the parsed actions as a `Pinned` text, which reads as the scene's name and carries the id. A pick first takes the field that already writes it; one the parser dropped or swapped takes the first field of its kind that no pick has taken, in action order, and the pin wins over what the parser wrote there. The validator resolves a pinned target by id: `z32` is attacked, not the nearest zombie; a pinned container never gets the which-one question; a pinned zone or room is the move's destination without `resolve_location`'s phrase matching; a pinned part goes into the part field. Both parser forms (the JSON schema and the text lines) go through `bind`.
+- **Across a zone change** the picks carry into the second parse, so "go to @Supermarket and smash @the supermarket window" binds the window in the second plan. A pick in reach at the start but not at the destination is refused there by the validator like any target out of reach, and the first pass's actions stay. Only the picks the first pass did not bind go into the second pass's binding, so a pick already spent on the move to the zone is not bound again to a target at the destination.
+- **Typed text is prose:** the request marks each pick's place in the text with U+FFFC and sends the ids in order, so `@z32` typed without picking is plain prose.
+
+Mentions live in one request. Nothing is saved.
 
 ## Limitation: items have no instance identity
 

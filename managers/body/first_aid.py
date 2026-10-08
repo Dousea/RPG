@@ -7,9 +7,9 @@ from data.character import traits as trait_k
 from data.items import ALCOHOL_WIPES_ID, ITEMS
 from data.zombies import lore as zombie_lore
 from managers import carry
-from managers.body.health import clear_bandage
+from managers.body.health import clear_bandage, open_wounds
 from managers.character.skills import SkillEngine, skill_levels
-from modules.body.parts import BodyPart
+from modules.body.parts import BodyPart, PartState
 from modules.body.stats import CharacterStat
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
@@ -24,6 +24,18 @@ _PART_BY_WORD: dict[str, BodyPart] = {
 
 def part_word(part: BodyPart) -> str:
     return zombie_lore.BODY_PART_WORDS[part.value]
+
+
+def part_state_words(state: PartState) -> list[str]:
+    """A hurt or bandaged part in words: its open wounds, bleeding, bandage and infection."""
+    words = open_wounds(state)
+    if state.bleeding:
+        words.append("bleeding")
+    if state.bandaged:
+        words.append("bandaged (dirty)" if state.bandage_life <= 0 else "bandaged")
+    elif state.infected_wound and state.wounded:
+        words.append("infected")
+    return words
 
 
 def find_part(name: str) -> BodyPart | None:

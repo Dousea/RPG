@@ -24,6 +24,7 @@ const barrierList = document.getElementById('barrier-list');
 const corpseList = document.getElementById('corpse-list');
 const roomList = document.getElementById('room-list');
 const choiceOptions = document.getElementById('choice-options');
+const mentionList = document.getElementById('mention-list');
 const inputForm = document.getElementById('input-form');
 const playerInput = document.getElementById('player-input');
 const submitButton = document.getElementById('submit-button');
@@ -548,7 +549,7 @@ function renderChoiceOptions(data) {
         const button = el('button', 'choice-option', optionText);
         button.type = 'button';
         button.addEventListener('click', () => {
-            playerInput.value = optionText;
+            playerInput.textContent = optionText;
             inputForm.requestSubmit();
         });
         return button;
@@ -578,7 +579,7 @@ function applyGameOverState(data) {
         if (data.death_cause) deathBanner.appendChild(el('span', 'death-cause', data.death_cause));
     }
     deathBanner.hidden = !isGameOver;
-    playerInput.disabled = isGameOver;
+    setInputEnabled(!isGameOver);
     submitButton.disabled = isGameOver;
     choiceOptions.querySelectorAll('button').forEach(button => {
         button.disabled = isGameOver;
@@ -616,6 +617,7 @@ function updatePanel(data) {
     renderBarriers(data);
     renderQuests(data);
     renderChoiceOptions(data);
+    setMentions(data);
     applyGameOverState(data);
     updateLiveScreens(data);
 }
@@ -740,13 +742,187 @@ async function readTurnStream(response) {
     throw new Error('the turn stopped before it finished');
 }
 
+// === The @ list ===
+// Typing "@" opens a list of what the engine says is in reach (data.mentions).
+// A pick puts a chip into the input: a non-editable token that deletes as one
+// unit. The turn sends the text with a mark where each chip stood plus the
+// picked ids in order, so the engine binds the entity itself. "@" text with no
+// pick is plain prose.
+
+const MENTION_MARK = '￼';
+const MENTION_KINDS = [
+    ['zombie', 'Zombies'],
+    ['corpse', 'Bodies'],
+    ['npc', 'People'],
+    ['barrier', 'Doors and windows'],
+    ['room', 'Rooms'],
+    ['container', 'Containers'],
+    ['zone', 'Places'],
+    ['body_part', 'Your body'],
+];
+
+let mentionEntries = [];
+let mentionShown = [];
+let mentionActive = 0;
+
+function setMentions(data) {
+    mentionEntries = data.mentions || [];
+    closeMentions();
+}
+
+function setInputEnabled(enabled) {
+    playerInput.contentEditable = enabled ? 'plaintext-only' : 'false';
+    playerInput.setAttribute('aria-disabled', String(!enabled));
+}
+
+// The "@..." being typed at the caret (in a text run, never inside a chip), or null when there is none.
+function mentionQuery() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount || !selection.isCollapsed) return null;
+    const node = selection.anchorNode;
+    if (!node || node.nodeType !== Node.TEXT_NODE || !playerInput.contains(node)) return null;
+    if (node.parentElement !== playerInput) return null;
+    const end = selection.anchorOffset;
+    const before = node.data.slice(0, end);
+    const start = before.lastIndexOf('@');
+    if (start < 0 || (start > 0 && !/\s/.test(before[start - 1]))) return null;
+    return { node, start, end, text: before.slice(start + 1) };
+}
+
+function closeMentions() {
+    mentionShown = [];
+    mentionList.hidden = true;
+    mentionList.innerHTML = '';
+    playerInput.setAttribute('aria-expanded', 'false');
+    playerInput.removeAttribute('aria-activedescendant');
+}
+
+function setActiveMention(index) {
+    mentionActive = (index + mentionShown.length) % mentionShown.length;
+    mentionList.querySelectorAll('.mention-option').forEach((node, i) => {
+        node.setAttribute('aria-selected', String(i === mentionActive));
+        if (i === mentionActive) {
+            playerInput.setAttribute('aria-activedescendant', node.id);
+            node.scrollIntoView({ block: 'nearest' });
+        }
+    });
+}
+
+function refreshMentions() {
+    const query = mentionQuery();
+    if (!query) return closeMentions();
+    const words = query.text.toLowerCase().split(/\s+/).filter(Boolean);
+    const kindLabel = new Map(MENTION_KINDS);
+    mentionShown = mentionEntries.filter(entry => {
+        const haystack = `${entry.label} ${entry.description} ${kindLabel.get(entry.kind)}`.toLowerCase();
+        return words.every(word => haystack.includes(word));
+    });
+    if (!mentionShown.length) return closeMentions();
+    mentionList.innerHTML = '';
+    let index = 0;
+    MENTION_KINDS.forEach(([kind, heading]) => {
+        const group = mentionShown.filter(entry => entry.kind === kind);
+        if (!group.length) return;
+        const headingNode = el('li', 'mention-kind', heading);
+        headingNode.setAttribute('role', 'presentation');
+        headingNode.setAttribute('aria-hidden', 'true');
+        mentionList.appendChild(headingNode);
+        group.forEach(entry => {
+            const optionIndex = index++;
+            const option = el('li', 'mention-option');
+            option.id = `mention-option-${optionIndex}`;
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-label', `${heading}: ${entry.label}`);
+            option.appendChild(el('span', 'mention-name', entry.label));
+            if (entry.description) option.appendChild(el('span', 'mention-detail', entry.description));
+            option.addEventListener('click', () => pickMention(entry));
+            mentionList.appendChild(option);
+        });
+    });
+    // The list reads in group order, so the entries do too.
+    mentionShown = MENTION_KINDS.flatMap(([kind]) => mentionShown.filter(entry => entry.kind === kind));
+    mentionList.hidden = false;
+    playerInput.setAttribute('aria-expanded', 'true');
+    setActiveMention(0);
+}
+
+function pickMention(entry) {
+    const query = mentionQuery();
+    if (!query) return;
+    const chip = el('span', 'mention-chip', `@${entry.label}`);
+    chip.contentEditable = 'false';
+    chip.dataset.id = entry.id;
+    const rest = query.node.splitText(query.end);
+    query.node.deleteData(query.start, query.end - query.start);
+    query.node.after(chip);
+    rest.data = ` ${rest.data}`;
+    const range = document.createRange();
+    range.setStart(rest, 1);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    closeMentions();
+    playerInput.focus();
+}
+
+// The input's text with a mark where each chip stands, and the chips' ids in text order.
+function pinnedInput() {
+    let input = '';
+    const mentions = [];
+    playerInput.childNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('mention-chip')) {
+            input += MENTION_MARK;
+            mentions.push(node.dataset.id);
+        } else {
+            input += node.textContent.replaceAll(MENTION_MARK, '');
+        }
+    });
+    return { input: input.trim(), mentions };
+}
+
+playerInput.addEventListener('input', refreshMentions);
+playerInput.addEventListener('click', refreshMentions);
+playerInput.addEventListener('keyup', event => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) refreshMentions();
+});
+playerInput.addEventListener('blur', closeMentions);
+// The input holds one line of plain text and chips: nothing pasted or dropped brings markup in.
+playerInput.addEventListener('paste', event => {
+    event.preventDefault();
+    const text = event.clipboardData.getData('text/plain').replace(/\s+/g, ' ');
+    document.execCommand('insertText', false, text);
+});
+playerInput.addEventListener('drop', event => event.preventDefault());
+playerInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        if (event.isComposing || !playerInput.isContentEditable) return;
+        if (!mentionList.hidden) pickMention(mentionShown[mentionActive]);
+        else inputForm.requestSubmit();
+        return;
+    }
+    if (mentionList.hidden) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveMention(mentionActive + (event.key === 'ArrowDown' ? 1 : -1));
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMentions();
+    }
+});
+// Keeps the input focused, so a click on the list does not blur and close it first.
+mentionList.addEventListener('mousedown', event => event.preventDefault());
+
 // Function to handle form submission
 async function handleTurn(event) {
     event.preventDefault();
-    const inputText = playerInput.value.trim();
-    if (!inputText) return;
+    const sent = pinnedInput();
+    if (!sent.input) return;
+    const inputText = playerInput.textContent.trim();
 
-    playerInput.disabled = true;
+    setInputEnabled(false);
     submitButton.disabled = true;
     submitButton.textContent = 'Wait…';
     choiceOptions.querySelectorAll('button').forEach(button => { button.disabled = true; });
@@ -756,7 +932,7 @@ async function handleTurn(event) {
         const response = await fetch('/play/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: inputText })
+            body: JSON.stringify(sent)
         });
 
         if (!response.ok) {
@@ -772,12 +948,13 @@ async function handleTurn(event) {
         stopTurnStatus();
         showSystemError(error.message);
     } finally {
-        playerInput.value = '';
+        playerInput.textContent = '';
+        closeMentions();
         submitButton.textContent = 'Act';
         // A dead game stays locked down -- updateUI already applied that
         // via applyGameOverState, so this must not undo it.
         if (!isGameOver) {
-            playerInput.disabled = false;
+            setInputEnabled(true);
             playerInput.focus();
             submitButton.disabled = false;
             // On success updateUI already re-rendered fresh (enabled)

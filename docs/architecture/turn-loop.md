@@ -1,6 +1,6 @@
 # Full Turn Loop and Failure Handling
 
-> **Status: Partial.** `GameEngine.play` now makes two LLM calls, not one — steps 2-3 are a real parser call and typed action plan (`modules/action/parser.py`), steps 5-7 are `ActionValidator`/`SimulationCore`, and narration happens after, not before, with a refusal surfaced the *same* turn via `[OUTCOMES]` rather than next turn's `[CONTINUITY]`. Step 4 (entity resolution) is folded into the validator rather than a separate stage; there is still no distinct world/story/NPC/faction rules layer beyond quest advancement. See [Implementation Status](../status.md).
+> **Status: Partial.** Before the parser runs, `GameEngine.play` checks each `@` pick the player made against what is in reach; one that is not refuses the turn with a reason, with no LLM call and no game time ([Mentions](entity-resolution.md#mentions)). `GameEngine.play` now makes two LLM calls, not one — steps 2-3 are a real parser call and typed action plan (`modules/action/parser.py`), steps 5-7 are `ActionValidator`/`SimulationCore`, and narration happens after, not before, with a refusal surfaced the *same* turn via `[OUTCOMES]` rather than next turn's `[CONTINUITY]`. Step 4 (entity resolution) is folded into the validator rather than a separate stage; there is still no distinct world/story/NPC/faction rules layer beyond quest advancement. See [Implementation Status](../status.md).
 
 ## Full Turn Loop
 

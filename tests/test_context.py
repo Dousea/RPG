@@ -1005,7 +1005,8 @@ class CorpsesContextTests(unittest.TestCase):
     def test_a_searched_body_lists_what_it_holds(self):
         self.body(3.0, "item_jacket_police", "item_kitchen_knife", searched=True)
         self.assertEqual(
-            self.parser(), "- c1, close, fresh, searched: police jacket, kitchen knife"
+            self.parser(),
+            "- c1, close, a man in a police jacket, fresh, searched: police jacket, kitchen knife",
         )
 
     def test_a_woman_and_the_rot_words(self):
@@ -1183,7 +1184,7 @@ class ThreatsContextTests(unittest.TestCase):
     def test_the_parser_sees_the_ids_and_distances_only(self):
         add_zombie(self.gm, 3, ZombieState.CHASING)
         block = threats_block(ContextBuilder(self.gm).build_parser_prompt("look"))
-        self.assertIn("z1 (close)", block)
+        self.assertIn("z1 (a man, close)", block)
         self.assertNotIn("coming at you", block)
 
 
@@ -1830,7 +1831,7 @@ class BarrierBlockTests(unittest.TestCase):
             )
         parser = self.builder.build_parser_prompt("look")
         threats = parser.split("[THREATS]")[1].split("[CORPSES]")[0].strip()
-        self.assertEqual(threats, "- z1 (behind the kitchen window)")
+        self.assertEqual(threats, "- z1 (a man, behind the kitchen window)")
         narrator = self.builder.build_narrator_prompt("look")
         section = narrator.split("[THREATS]")[1].split("[OUTCOMES]")[0]
         self.assertIn("a zombie, behind the kitchen window, pounding", section)

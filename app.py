@@ -47,24 +47,30 @@ def state():
     return jsonify(get_engine().state())
 
 
-def _turn_input() -> tuple[str, Any]:
-    """The player's input, or "" and the error response a turn request gets instead."""
+def _turn_input() -> tuple[str, list[str], Any]:
+    """The player's input and the ids they picked from the `@` list, or "" and the error response a turn request gets instead."""
     payload = request.get_json(silent=True) or {}
     player_input = (payload.get("input") or "").strip()
     if not player_input:
-        return "", (jsonify({"error": "No input provided"}), 400)
+        return "", [], (jsonify({"error": "No input provided"}), 400)
     if not get_engine().has_game:
-        return "", (jsonify({"error": "Create a character first.", "needs_creation": True}), 409)
-    return player_input, None
+        return (
+            "",
+            [],
+            (jsonify({"error": "Create a character first.", "needs_creation": True}), 409),
+        )
+    mentions = payload.get("mentions")
+    ids = [m for m in mentions if isinstance(m, str)] if isinstance(mentions, list) else []
+    return player_input, ids, None
 
 
 @app.route("/play", methods=["POST"])
 def play():
     """Receives player input, runs a game turn, and returns the result."""
-    player_input, error = _turn_input()
+    player_input, mentions, error = _turn_input()
     if error:
         return error
-    return jsonify(get_engine().play(player_input))
+    return jsonify(get_engine().play(player_input, mentions=mentions))
 
 
 @app.route("/play/stream", methods=["POST"])
@@ -74,7 +80,7 @@ def play_stream():
     The turn runs on its own thread, so a player who closes the page mid-turn
     still gets the turn decided, recorded and saved.
     """
-    player_input, error = _turn_input()
+    player_input, mentions, error = _turn_input()
     if error:
         return error
     engine = get_engine()
@@ -82,7 +88,8 @@ def play_stream():
 
     def run() -> None:
         try:
-            events.put({"type": "done", "turn": engine.play(player_input, on_event=events.put)})
+            turn = engine.play(player_input, on_event=events.put, mentions=mentions)
+            events.put({"type": "done", "turn": turn})
         except Exception as exc:
             logger.exception("Streamed turn failed")
             events.put({"type": "error", "message": str(exc)})

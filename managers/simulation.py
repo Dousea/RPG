@@ -276,7 +276,7 @@ class SimulationCore:
         actions: list[AnyAction],
         *,
         refused: int = 0,
-        reparse: Callable[[list[str]], list[AnyAction] | None] | None = None,
+        reparse: Callable[[list[str], list[AnyAction]], list[AnyAction] | None] | None = None,
     ) -> list[str]:
         """Validate and resolve each action in order, one at a time.
 
@@ -292,8 +292,9 @@ class SimulationCore:
         actions and none of those is a `NONE` turn and costs a minute.
 
         When a plan stops at a zone change with actions left, `reparse` is
-        called once with the actions done so far, in words, and returns the
-        plan parsed again at the destination, or None if it couldn't. That plan
+        called once with the actions done so far, in words, and every action
+        tried (done or refused), and returns the plan parsed again at the
+        destination, or None if it couldn't. That plan
         resolves in the same turn under what is left of `MAX_PLAN_ACTIONS`, and
         the not-yet-done fact is dropped; on None it stays.
 
@@ -322,6 +323,7 @@ class SimulationCore:
             facts.extend(stat_facts)
         attempted = 0
         done_words: list[str] = []
+        tried: list[AnyAction] = []
         plan = actions
         while True:
             budget = MAX_PLAN_ACTIONS - attempted
@@ -330,6 +332,7 @@ class SimulationCore:
             left: list[AnyAction] = []
             for index, action in enumerate(plan[:budget]):
                 attempted += 1
+                tried.append(action)
                 self._release_vanished_body()
                 result = self.validator.validate(action)
                 if isinstance(result, Rejected):
@@ -356,7 +359,7 @@ class SimulationCore:
                     break
             if not left or self.manager.narrative.game_over:
                 break
-            more = reparse(done_words) if reparse is not None else None
+            more = reparse(done_words, tried) if reparse is not None else None
             reparse = None
             if not more:
                 unattempted = [describe_action(a) for a in left]

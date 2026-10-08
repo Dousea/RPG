@@ -218,12 +218,51 @@ class PlayStreamTests(RouteTestCase):
         self.assertTrue(response.get_json()["needs_creation"])
 
     def test_a_crashed_turn_ends_the_stream_with_an_error(self):
-        def crash(player_input, on_event=None):
+        def crash(player_input, on_event=None, mentions=()):
             raise RuntimeError("boom")
 
         self.engine.play = crash
         events = self.events()
         self.assertEqual(events[-1]["type"], "error")
+
+
+class MentionRouteTests(RouteTestCase):
+    """llm-contract: The `@` list in the payload, and the picks a turn request carries."""
+
+    def test_state_lists_what_can_be_mentioned(self):
+        payload = self.client.get("/state").get_json()
+        kinds = {entry["kind"] for entry in payload["mentions"]}
+        self.assertIn("zone", kinds)
+        self.assertIn("room", kinds)
+        self.assertEqual(
+            set(payload["mentions"][0]), {"kind", "id", "name", "description", "label"}
+        )
+
+    def test_play_pins_the_ids_the_request_carries(self):
+        self.llm.actions = "ACTIONS:\nMOVE_TO nowhere in particular"
+        mark = "\ufffc"
+        response = self.client.post(
+            "/play", json={"input": f"go to {mark}", "mentions": ["zone_street"]}
+        )
+        self.assertEqual(response.get_json()["current_location"], "The Street")
+        self.assertIn("go to [pinned: The Street]", self.llm.prompts[-1])
+
+    def test_a_pick_out_of_reach_refuses_the_turn_with_no_parser_call(self):
+        response = self.client.post("/play", json={"input": "hit \ufffc", "mentions": ["z99"]})
+        self.assertIn("no longer within reach", response.get_json()["story_text"])
+        self.assertEqual(self.llm.prompts, [])
+
+    def test_the_stream_carries_the_picks_too(self):
+        self.llm.actions = "ACTIONS:\nMOVE_TO nowhere in particular"
+        response = self.client.post(
+            "/play/stream", json={"input": "go to \ufffc", "mentions": ["zone_building"]}
+        )
+        done = json.loads(response.get_data(as_text=True).splitlines()[-1])
+        self.assertEqual(done["turn"]["current_location"], "Your Building")
+
+    def test_a_malformed_mentions_field_is_plain_prose(self):
+        response = self.client.post("/play", json={"input": "look", "mentions": "z1"})
+        self.assertEqual(response.status_code, 200)
 
 
 class SaveLoadRouteTests(RouteTestCase):

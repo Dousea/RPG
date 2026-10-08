@@ -159,13 +159,20 @@ class CorpseView:
     contents: tuple[str, ...]
     sex_word: str  # empty for bare bones
 
+    def words(self) -> str:
+        """The body in a few words for a list: how far, how rotten, whether searched."""
+        parts = [self.distance_word, self.rot_word]
+        parts.append("searched" if self.searched else "not searched")
+        return ", ".join(parts)
+
     def line(self, *, with_id: bool) -> str:
         """One line for a prompt: a body is only ever dead, never fake-dead or crawling."""
         parts = [self.corpse_id] if with_id else []
         parts.append(self.distance_word)
         if self.skeleton:
-            parts.append(self.rot_word)
+            parts.append(self.looks if with_id else self.rot_word)
         elif self.searched:
+            parts.extend([self.looks] if with_id else [])
             parts.append(self.rot_word)
             parts.append(f"searched: {', '.join(self.contents) or zombie_lore.SEARCH_NOTHING}")
         else:
@@ -179,19 +186,30 @@ def _layer(entity: ItemEntity) -> int:
     return LAYER_ORDER[item.body_location]
 
 
-def _sex_word(corpse: CorpseEntity) -> str:
-    return zombie_lore.WOMAN_WORD if corpse.female else zombie_lore.MAN_WORD
+def person_word(female: bool) -> str:
+    return zombie_lore.WOMAN_WORD if female else zombie_lore.MAN_WORD
 
 
-def _looks(corpse: CorpseEntity) -> str:
-    person = _sex_word(corpse)
-    clothes = [e for e in corpse.contents if isinstance(e.item, ClothingItem)]
-    garments = sorted(clothes, key=_layer, reverse=True)[: zombie_lore.CORPSE_LOOK_ITEMS]
+def looks_words(
+    person: str, things: Iterable[ItemEntity], limit: int = zombie_lore.CORPSE_LOOK_ITEMS
+) -> str:
+    """A body or a zombie by sight: `person` and the `limit` outermost garments among `things`."""
+    clothes = [e for e in things if isinstance(e.item, ClothingItem)]
+    garments = sorted(clothes, key=_layer, reverse=True)[:limit]
     names = [with_article(e.item.name.lower()) for e in garments]
     if not names:
         return person
     worn = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
     return f"{person} in {worn}"
+
+
+def corpse_person(corpse: CorpseEntity) -> str:
+    """What a body is called by sight: bare bones leave the sex out."""
+    return zombie_lore.SKELETON_WORD if corpse.skeleton else person_word(corpse.female)
+
+
+def _looks(corpse: CorpseEntity) -> str:
+    return looks_words(corpse_person(corpse), corpse.contents)
 
 
 def corpse_views(
@@ -215,7 +233,7 @@ def corpse_views(
             skeleton=c.skeleton,
             looks=_looks(c),
             contents=tuple(naming.tagged_name(e, ambiguous).lower() for e in c.contents),
-            sex_word="" if c.skeleton else _sex_word(c),
+            sex_word="" if c.skeleton else person_word(c.female),
         )
         for c in perceived_corpses(manager)
     ]

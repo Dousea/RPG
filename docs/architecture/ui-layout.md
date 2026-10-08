@@ -72,7 +72,7 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 | Story log | each turn's input echo and prose, appended | `story_text` |
 | Location | where the player stands | `current_location`, `current_place`, `location_description` |
 | Tabs | the screens below | everything else |
-| Input | suggestions, then the free-text input | `options` |
+| Input | suggestions, then the free-text input; `@` opens a list of what is in reach, grouped by kind and filtered as the player types, and a pick stays in the text as a chip, one unit that deletes whole | `options`, `mentions` ([Mentions](entity-resolution.md#mentions)) |
 
 The story column holds the scene: where the player stands, what happened and
 what they do next, kept to a readable measure. The tabs take the full height

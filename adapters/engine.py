@@ -8,7 +8,8 @@ docs/architecture/engine-authority.md.
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import asdict
 from typing import Any
 
 import config
@@ -20,6 +21,7 @@ from data.character.occupations import OCCUPATIONS
 from data.character.skills import SKILLS
 from data.character.traits import TRAITS
 from data.items import item_condition_word, wetness_word
+from data.story import mentions as mention_k
 from data.story.memory import BUDGET_MARGIN_TOKENS
 from managers import carry
 from managers.body.first_aid import part_word
@@ -32,12 +34,14 @@ from managers.context import NOTHING_DONE_FACT, ContextBuilder
 from managers.corpses.search import corpse_views
 from managers.events.log import build_event_entry, event_stamp
 from managers.game import MAX_RECENT_EVENTS, GameManager
+from managers.mentions import labels, mentionables, picked
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion, build_questions, plan_questions
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import weather_summary
 from managers.world.rooms import current_room
 from managers.zombies.population import threat_views
+from modules.action.pins import Mention, bind, pinned_ids, render_input
 from modules.action.types import AnyAction
 from modules.action.words import refusal_in_words
 from modules.body.stats import StatusEffect
@@ -125,12 +129,20 @@ class GameEngine:
 
     # === Turn execution ===
 
-    def play(self, player_input: str, on_event: TurnListener | None = None) -> dict[str, Any]:
+    def play(
+        self,
+        player_input: str,
+        on_event: TurnListener | None = None,
+        mentions: Sequence[str] = (),
+    ) -> dict[str, Any]:
         """Run a full turn and return the payload the frontend renders.
 
         `on_event` hears each step of the turn as it starts, and the narrator's
         thinking and story as they are written; the returned payload is the
-        same either way.
+        same either way. `mentions` are the ids the player picked from the `@`
+        list, in the order their marks stand in `player_input`: one no longer
+        in reach refuses the turn before any LLM call, and the rest are pinned
+        into the parsed actions.
         """
         emit = on_event or _ignore
         with self._lock:
@@ -151,6 +163,12 @@ class GameEngine:
                     )
                 )
 
+            picks, gone = picked(manager, mentions)
+            if gone:
+                return self._snapshot(story_text=mention_k.NO_LONGER_IN_REACH)
+            typed = player_input
+            player_input = render_input(typed, picks, for_parser=False)
+
             # 1. Recall semantically relevant past events (for the narrator).
             indices = self.memory.search(player_input, DEFAULT_RECALL + MAX_RECENT_EVENTS)
             deep_memories = [
@@ -165,7 +183,7 @@ class GameEngine:
 
             # 2. Ask the parser what the player is trying to do. No prose exists yet.
             try:
-                actions, parse_failures = self._parsed(manager, player_input, emit)
+                actions, parse_failures = self._parsed(manager, typed, picks, emit)
             except llm.LLMError as exc:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
             kept, off_request = self._checked_plan(manager, player_input, actions, emit)
@@ -179,9 +197,11 @@ class GameEngine:
             later_failures: list[llm.ParseFailure] = []
             later_refusals: list[str] = []
 
-            def reparse(done: list[str]) -> list[AnyAction] | None:
+            def reparse(done: list[str], tried: list[AnyAction]) -> list[AnyAction] | None:
+                bound = pinned_ids(tried)
+                unbound = [pick for pick in picks if pick.id not in bound]
                 try:
-                    more, failures = self._parsed(manager, player_input, emit, done)
+                    more, failures = self._parsed(manager, typed, picks, emit, done, unbound)
                 except llm.LLMError as exc:
                     logger.warning(f"Parser failed on the rest of the plan: {exc}")
                     return None
@@ -257,17 +277,26 @@ class GameEngine:
     def _parsed(
         self,
         manager: GameManager,
-        player_input: str,
+        typed: str,
+        picks: list[Mention],
         emit: TurnListener,
         done: list[str] | None = None,
+        to_bind: list[Mention] | None = None,
     ) -> tuple[list[AnyAction], list[llm.ParseFailure]]:
-        """Ask the parser for the plan in the scene as it stands; `done` is what this turn already did."""
+        """Ask the parser for the plan in the scene as it stands, with the player's picks pinned into it.
+
+        `typed` is the player's text with a mark where each pick stands; `done` is what this turn
+        already did. `to_bind` is the part of `picks` still to pin (all of them by default).
+        """
         context = ContextBuilder(manager)
         emit({"type": "step", "step": "parsing"})
-        reply = llm.query_parser(
-            context.build_parser_prompt(player_input, done or ()), context.build_plan_schema()
+        prompt = context.build_parser_prompt(
+            render_input(typed, picks, for_parser=True), done or (), picks
         )
-        return llm.read_parser_reply(reply)
+        actions, failures = llm.read_parser_reply(
+            llm.query_parser(prompt, context.build_plan_schema())
+        )
+        return bind(actions, picks if to_bind is None else to_bind), failures
 
     def _checked_plan(
         self,
@@ -476,6 +505,7 @@ class GameEngine:
         player = manager.player
         narrative = manager.narrative
         npcs_here = manager.npcs_in_location(player.current_location_id)
+        mentioned = mentionables(manager)
 
         return {
             "needs_creation": False,
@@ -520,6 +550,10 @@ class GameEngine:
             "corpses": _corpses(manager),
             "rooms": _rooms(manager),
             "barriers": _barriers(manager),
+            "mentions": [
+                {**asdict(mention), "label": label}
+                for mention, label in zip(mentioned, labels(mentioned), strict=True)
+            ],
             "sneaking": player.sneaking,
             "zombie_kills": player.zombie_kills,
         }

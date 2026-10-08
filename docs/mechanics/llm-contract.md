@@ -176,7 +176,7 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[EXITS]` / `[ZONES]` | the connections; every zone with its aliases |
 | `[ITEMS HERE]` | item names; an item whose name is held by items that look different also shows its describing words in brackets ("Baseball Bat (broken)") |
 | `[NPCS HERE]` | each NPC, "(following you)" when they follow, what they hold, and a line per available topic |
-| `[THREATS]` | perceived zombie ids with distance words |
+| `[THREATS]` | perceived zombie ids with their looks ("a man in a police jacket") and distance words |
 | `[DOORS AND WINDOWS]` | the doors and windows of the zone in words and plank counts; the names are the targets of the door verbs ([doors](doors.md#what-the-narrator-and-the-player-see)) |
 | `[INVENTORY]` | carried items, with their describing words as in `[ITEMS HERE]` |
 | `[WORN]` | the worn outfit |
@@ -185,7 +185,8 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[EXERCISES]` | exercise types, and whether a barbell or dumbbell is carried |
 | `[AVAILABLE ACTIONS]` | the verbs the scene lists, each with its argument kinds and gloss; `TALK` carries its eight approaches |
 | `[LAST TURN]` | the latest event-log entry (the attempt and its facts, zombie ids in words), so "again" and pronouns resolve; omitted with an empty log |
-| `[PLAYER INPUT]` | what the player typed |
+| `[PINNED]` | the things the player picked from the `@` list this turn, as the parser should write them; omitted with no picks ([entity resolution](../architecture/entity-resolution.md#mentions)) |
+| `[PLAYER INPUT]` | what the player typed; a pick stands in it as `[pinned: z32]` (a zombie or body by id, anything else by the scene's name) |
 
 `[THREATS]`, `[CORPSES]` and `[DOORS AND WINDOWS]` follow `[NPCS HERE]` in that order. The system prompt uses the character's name and pronouns.
 
@@ -272,6 +273,7 @@ empty list is `NONE`.
   hasn't yet: smash the window." That fact also stands at a second zone change. A
   move within the zone, or one stopped at a locked door, changes nothing. Both
   parses report the `parsing` step.
+- **A pick is pinned after parsing.** Each pick the player made with `@` is put into the matching target of the parsed actions by the engine, whichever way the parser wrote it or whether it dropped it, and the validator resolves it by id. The second parse of a plan that changed zone carries the picks too. A pick no longer in reach refuses the turn before the parser runs ([entity resolution](../architecture/entity-resolution.md#mentions)).
 - **`NONE` still costs a minute.** A turn where the parser proposes nothing costs
   1 minute, so the zombies and the stats still run. A turn whose only lines were
   refused costs 0.

@@ -51,9 +51,11 @@
 
             <footer class="scene-input">
                 <div id="choice-options"></div>
+                <ul id="mention-list" class="mention-list" role="listbox" aria-label="Things you can point at" hidden></ul>
                 <form id="input-form">
-                    <label for="player-input" class="visually-hidden">What do you do?</label>
-                    <input type="text" id="player-input" autocomplete="off" placeholder="What do you do?">
+                    <div id="player-input" contenteditable="plaintext-only" role="combobox" aria-label="What do you do?" aria-multiline="false"
+                        data-placeholder="What do you do? Type @ to point at something"
+                        aria-autocomplete="list" aria-expanded="false" aria-controls="mention-list" spellcheck="false"></div>
                     <button type="button" id="sheet-button" class="btn" aria-expanded="false" aria-controls="dossier">Status</button>
                     <button type="submit" id="submit-button">Act</button>
                 </form>

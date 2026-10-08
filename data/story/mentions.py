@@ -1,0 +1,15 @@
+"""Words for the `@` list and the refusals of a mention that no longer holds (llm-contract)."""
+
+ROOM_HERE = "you are here"
+ROOM_ELSEWHERE = "not where you are"
+CONTAINER_IN_ROOM = "in the {room}, {state}"
+CONTAINER_OPENED = "opened"
+CONTAINER_CLOSED = "not opened"
+BARRIER_BETWEEN = "{state}, between {a} and {b}"
+ZONE_VIA = "via {zone}"
+ZONE_BLOCKED = "{way}, blocked by the {barrier} ({state})"
+NPC_HERE = "here"
+NPC_FOLLOWING = "following you"
+
+NO_LONGER_IN_REACH = "What you pointed at is no longer within reach."
+OUT_OF_REACH = "{name} is out of reach."

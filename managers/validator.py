@@ -24,6 +24,7 @@ from data.character import exercises as exercise_k
 from data.clothing.locations import EXCLUSIVE_LOCATIONS
 from data.items import ITEMS
 from data.loot import containers as container_k
+from data.story import mentions as mention_k
 from data.story.topics import TOPICS
 from data.world import barriers as barrier_k
 from data.world.clock import (
@@ -66,6 +67,7 @@ from managers.world.rooms import (
 )
 from managers.zombies.population import approach_minutes, perceived_now
 from modules.action.parser import CORPSE_WORDS, GOAL_HORIZON_LABELS, TALK_APPROACH_LABELS
+from modules.action.pins import Pinned, pin_of
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
@@ -144,8 +146,9 @@ from modules.resolution import (
     TimeSpan,
     Transfer,
 )
+from modules.world.location import Location
 from modules.world.pace import Pace
-from modules.world.room import ContainerEntity
+from modules.world.room import ContainerEntity, RoomEntity
 
 GOAL_HORIZONS = GOAL_HORIZON_LABELS
 
@@ -247,13 +250,12 @@ class ActionValidator:
         if not raw:
             return Accepted(action, StayPut(current))
 
+        if pin := pin_of(action.destination, "zone", "room"):
+            return self._move_pinned(action, pin)
+
         room = resolve_room(current, raw)
         if room is not None:
-            if current_room(current, manager.player) is room:
-                return Rejected(
-                    action, container_k.ALREADY_IN_ROOM.format(name=self._name, room=room.name)
-                )
-            return Accepted(action, MoveToRoom(current, room))
+            return self._enter_room(action, room)
 
         folded = raw.casefold()
 
@@ -281,7 +283,32 @@ class ActionValidator:
             if folded in (target.id.casefold(), target.name.casefold()) or folded in BARE_DIRECTIONS
             else raw[:MAX_PLACE_LENGTH]
         )
+        return self._walk_to_zone(action, target, place)
 
+    def _enter_room(self, action: MoveAction, room: RoomEntity) -> ValidationResult:
+        manager = self.manager
+        if current_room(manager.current_location, manager.player) is room:
+            return Rejected(
+                action, container_k.ALREADY_IN_ROOM.format(name=self._name, room=room.name)
+            )
+        return Accepted(action, MoveToRoom(manager.current_location, room))
+
+    def _move_pinned(self, action: MoveAction, pin: Pinned) -> ValidationResult:
+        """A MOVE_TO the player pinned to a zone or a room of this zone, resolved by id with no phrase matching."""
+        manager = self.manager
+        if pin.kind == "room":
+            room = manager.current_location.rooms.get(pin.entity_id)
+            if room is None:
+                return Rejected(action, mention_k.OUT_OF_REACH.format(name=pin))
+            return self._enter_room(action, room)
+        zone = manager.world.locations.get(pin.entity_id)
+        if zone is None:
+            return Rejected(action, mention_k.OUT_OF_REACH.format(name=pin))
+        return self._walk_to_zone(action, zone, "")
+
+    def _walk_to_zone(self, action: MoveAction, target: Location, place: str) -> ValidationResult:
+        manager = self.manager
+        current = manager.current_location
         if target.id == current.id:
             return Accepted(action, MoveToSpot(current, place))
 
@@ -418,7 +445,11 @@ class ActionValidator:
     def _validate_take_from(self, action: TakeAction, source: str) -> ValidationResult:
         if naming.clean_name(source) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(source.strip()):
             return self._take_from_corpse(action, source)
-        bag = self._item_named(carry.carried_bags(self.manager.player), source)
+        bag = (
+            None
+            if pin_of(source, "container")
+            else self._item_named(carry.carried_bags(self.manager.player), source)
+        )
         if isinstance(bag, str):
             return Rejected(action, bag)
         if bag is not None:
@@ -440,10 +471,26 @@ class ActionValidator:
     def _container_named(self, name: str) -> ContainerEntity | str | None:
         """The container `name` points at in this zone; the question to ask when several match, None when none do."""
         manager = self.manager
+        if pin := pin_of(name):
+            return self._pinned_container(pin)
         found = resolve_container(manager.current_location, manager.player.current_room, name)
         if isinstance(found, list):
             return container_k.WHICH_ONE.format(choices=" or ".join(c.name for c in found))
         return found
+
+    def _pinned_container(self, pin: Pinned) -> ContainerEntity | None:
+        """The container of this zone a pin names, by id; None for a pin of another kind or a container not here."""
+        if pin.kind != "container":
+            return None
+        return next(
+            (
+                container
+                for room in self.manager.current_location.rooms.values()
+                for container in room.containers
+                if container.container_id == pin.entity_id
+            ),
+            None,
+        )
 
     def _container_reach(self, action: AnyAction, container: ContainerEntity) -> Rejected | None:
         """A refusal when the player can't use an opened container from where they stand."""
@@ -543,7 +590,11 @@ class ActionValidator:
             return Rejected(action, entity)
         if entity is None:
             return Rejected(action, carry_k.NOT_CARRIED_TO_PUT.format(item=action.item_name))
-        bag = self._item_named(carry.carried_bags(player), action.target_name)
+        bag = (
+            None
+            if pin_of(action.target_name, "container")
+            else self._item_named(carry.carried_bags(player), action.target_name)
+        )
         if isinstance(bag, str):
             return Rejected(action, bag)
         if bag is None:
@@ -621,8 +672,13 @@ class ActionValidator:
         zone = manager.current_location
         here = current_room(zone, manager.player)
         name = action.target_name
-        exact = container_by_name(zone, name)
-        room = None if exact is not None else resolve_room(zone, name)
+        if pin := pin_of(name, "room"):
+            room, exact = zone.rooms.get(pin.entity_id), None
+        elif pin := pin_of(name, "container"):
+            room, exact = None, self._pinned_container(pin)
+        else:
+            exact = container_by_name(zone, name)
+            room = None if exact is not None else resolve_room(zone, name)
         if room is not None:
             closed = unopened(room)
             if not closed:
@@ -860,6 +916,8 @@ class ActionValidator:
     # === Doors, windows and planks ===
 
     def _find_barrier(self, name: str) -> BarrierEntity | None:
+        if pin := pin_of(name, "barrier"):
+            return self.manager.world.barriers.get(pin.entity_id)
         return find_barrier(self.manager.world, self.manager.player.current_location_id, name)
 
     def _barrier_here(self, name: str) -> BarrierEntity | str:
@@ -1026,7 +1084,7 @@ class ActionValidator:
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
         if self._find_barrier(action.target_name) is not None:
             return self._validate_hit_barrier(action)
-        npc = manager.resolve_npc(action.target_name)
+        npc = self._npc_named(action.target_name)
         if npc is None or npc.current_location_id != manager.player.current_location_id:
             return Rejected(action, f"'{action.target_name}' is not here to attack.")
         if npc.hit_points <= 0:
@@ -1165,7 +1223,7 @@ class ActionValidator:
     def _validate_add_relationship_note(
         self, action: AddRelationshipNoteAction
     ) -> ValidationResult:
-        npc = self.manager.resolve_npc(action.npc_name)
+        npc = self._npc_named(action.npc_name)
         if npc is None:
             return Rejected(action, f"Unknown NPC: '{action.npc_name}'.")
         return Accepted(action, TargetNpc(npc))
@@ -1178,10 +1236,16 @@ class ActionValidator:
     def note_talked(self, npc_id: str) -> None:
         self._talked_to.add(npc_id)
 
+    def _npc_named(self, name: str) -> NpcEntity | None:
+        """The NPC `name` points at: a pinned one by id, else by name or id."""
+        if pin := pin_of(name, "npc"):
+            return self.manager.npcs.get(pin.entity_id)
+        return self.manager.resolve_npc(name)
+
     def _npc_here(self, name: str) -> NpcEntity | str:
         """The NPC `name` points at if they are in the player's zone, else the refusal."""
         manager = self.manager
-        npc = manager.resolve_npc(name)
+        npc = self._npc_named(name)
         if npc is None:
             if ZOMBIE_ID_PATTERN.fullmatch(name.strip()) or self._names_a_zombie(name):
                 return f"{name.strip()} isn't listening."

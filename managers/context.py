@@ -36,12 +36,16 @@ from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
 from data.world.clock import TIMES_OF_DAY
 from managers import carry, naming
-from managers.body.first_aid import bandage_items, disinfectant_items, part_word
-from managers.body.health import open_wounds
+from managers.body.first_aid import (
+    bandage_items,
+    disinfectant_items,
+    part_state_words,
+    part_word,
+)
 from managers.body.stats.status_effects import active_status_effects
 from managers.character.skills import level_word
 from managers.combat import weapons
-from managers.corpses.search import corpse_views, perceived_corpses
+from managers.corpses.search import corpse_views, looks_words, perceived_corpses, person_word
 from managers.game import GameManager
 from managers.story import in_view
 from managers.story.beats import visible_topics
@@ -51,6 +55,7 @@ from managers.world.climate import describe_weather
 from managers.world.rooms import current_room
 from managers.zombies.population import threat_views
 from modules.action.parser import SceneKey, available_verbs
+from modules.action.pins import Mention
 from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
 from modules.action.types import AnyAction
 from modules.entity.barrier import BarrierEntity
@@ -231,6 +236,18 @@ class ContextBuilder:
             "Parse only the rest of the input.\n\n"
         )
 
+    @staticmethod
+    def _pinned_section(pinned: Sequence[Mention]) -> str:
+        """[PINNED]: what the player picked from the `@` list, to aim the actions at."""
+        if not pinned:
+            return ""
+        lines = "\n".join(f" - {m.written}: {m.kind}, {m.description}" for m in pinned)
+        return (
+            "[PINNED]\n(The player picked these from a list. Where the input says [pinned: X], "
+            "aim the action at exactly X, written as shown.)\n"
+            f"{lines}\n\n"
+        )
+
     def _corrections_section(self) -> str:
         corrections = self.manager.narrative.pending_corrections
         if not corrections:
@@ -267,14 +284,7 @@ class ContextBuilder:
         for part, state in self.manager.player.body.items():
             if not (state.injured or state.bandaged):
                 continue
-            words = open_wounds(state)
-            if state.bleeding:
-                words.append("bleeding")
-            if state.bandaged:
-                words.append("bandaged (dirty)" if state.bandage_life <= 0 else "bandaged")
-            elif state.infected_wound and state.wounded:
-                words.append("infected")
-            lines.append(f"{part_word(part)}: {', '.join(words)}")
+            lines.append(f"{part_word(part)}: {', '.join(part_state_words(state))}")
         return lines
 
     def _threats_section(self) -> str:
@@ -362,9 +372,10 @@ class ContextBuilder:
         return "\n".join(lines) or "None"
 
     def _parser_threats_section(self) -> str:
-        """Seen zombies by id and distance only, so the parser can aim ATTACK at one."""
+        """Seen zombies by id, looks and distance only, so the parser can aim ATTACK at one."""
+        zombies = self.manager.world.zombies
         lines = [
-            f" - {view.zombie_id} ({view.distance_word})"
+            f" - {view.zombie_id} ({looks_words(person_word(zombies[view.zombie_id].female), zombies[view.zombie_id].worn.values())}, {view.distance_word})"
             for view in threat_views(self.manager)
             if view.zombie_id is not None
         ]
@@ -727,14 +738,17 @@ reach {looks.object}, though {looks.subject} can still hear them.)
 
     # === Parser prompt ===
 
-    def build_parser_prompt(self, player_input: str, done: Sequence[str] = ()) -> str:
+    def build_parser_prompt(
+        self, player_input: str, done: Sequence[str] = (), pinned: Sequence[Mention] = ()
+    ) -> str:
         """Assemble the minimal-context prompt for the intent parser call.
 
         The parser only needs to know what is reachable/visible right now to
         propose actions -- it does not narrate, so it gets none of the prose
         context (memory, summaries, relationship bands) the narrator needs.
         `done` is what the turn has already done, when the rest of the input
-        is parsed again at a new zone.
+        is parsed again at a new zone. `pinned` are the things the player picked
+        from the `@` list; the input marks each as `[pinned: X]`.
         """
         manager = self.manager
         player = manager.player
@@ -797,7 +811,7 @@ door rather than refusing the move.)
 [AVAILABLE ACTIONS]
 {self.available_actions_section()}
 
-{self._last_turn_section()}{self._already_done_section(done)}[PLAYER INPUT]
+{self._last_turn_section()}{self._already_done_section(done)}{self._pinned_section(pinned)}[PLAYER INPUT]
 {player_input}"""
 
     # === Narrator prompt ===
