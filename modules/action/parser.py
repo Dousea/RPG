@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from modules.action.types import (
+    UNTIL_IT_GIVES,
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
@@ -159,9 +160,20 @@ def _parse_take_off(args: str) -> TakeOffAction:
     return TakeOffAction(item_name=args)
 
 
+_UNTIL_IT_GIVES_TAIL = re.compile(rf"\s+{UNTIL_IT_GIVES}$", re.IGNORECASE)
+
+
 def _parse_attack(args: str) -> AttackAction:
     if not args:
         raise _ActionParseError("ATTACK needs a target.")
+    until = _UNTIL_IT_GIVES_TAIL.search(args)
+    if until and until.start():
+        return AttackAction(target_name=args[: until.start()], swings=UNTIL_IT_GIVES)
+    name, _, tail = args.rpartition(" ")
+    if name and tail.isdigit():
+        if int(tail) < 1:
+            raise _ActionParseError("ATTACK needs at least 1 swing.")
+        return AttackAction(target_name=name, swings=int(tail))
     return AttackAction(target_name=args)
 
 
@@ -619,7 +631,7 @@ VERBS: dict[str, Verb] = dict(
             "ATTACK",
             ("npc", "zombie", "barrier"),
             _parse_attack,
-            "an NPC name, a zombie id from [THREATS], 'zombie' for the nearest, or a door or window from [DOORS AND WINDOWS]",
+            "an NPC name, a zombie id from [THREATS], 'zombie' for the nearest, or a door or window from [DOORS AND WINDOWS], then for a door or window optionally a number of swings or 'until it gives'",
             1,
             ("npcs_here", "threats", "barriers"),
         ),

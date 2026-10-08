@@ -100,7 +100,7 @@ drift apart.
 | `USE_ITEM` | item (eating and drinking too) | 1, or the food's time |
 | `WEAR` / `TAKE_OFF` | clothing item | 1 |
 | `EXERCISE` | type, optional minutes | as done |
-| `ATTACK` | NPC name, zombie id, `zombie`, or a door or window | 1 per swing |
+| `ATTACK` | NPC name, zombie id or `zombie`: 1 per swing. A door or window, with a required `swings` (a whole number, or `until it gives`): 1 per swing, see [doors](doors.md#breaking-through) | per swing |
 | `SHOVE` | zombie id, or `zombie` | 1 per swing |
 | `EQUIP` / `UNEQUIP` | item | 1 |
 | `OPEN` / `CLOSE` | door or window | 0 |
@@ -226,7 +226,10 @@ empty list is `NONE`.
   `WEAR` fit in one plan), `BANDAGE` and `DISINFECT` an injured part that has no bandage
   and optionally a carried bandage or alcohol item, `REMOVE_BANDAGE` a bandaged part,
   `ATTACK` an NPC here, a seen zombie's id or `zombie` (offered only while a zombie is
-  seen), `SHOVE` a seen zombie's id, `TALK` an NPC here with the closed
+  seen), or, in a branch of its own that also requires `swings`, a door or window here
+  (the text form is `ATTACK <barrier> <n>` or `ATTACK <barrier> until it gives`; a bare
+  `ATTACK <barrier>` is one swing; the field is required because the model never fills an
+  optional one), `SHOVE` a seen zombie's id, `TALK` an NPC here with the closed
   approach labels, `REQUEST` an NPC here to follow or stay, and, only when there is one to
   name, for an item an NPC here carries (`give`) or about a topic one of them can
   discuss (`about`); those two requests require the item or the topic. The `REQUEST` line in

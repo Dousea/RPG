@@ -20,7 +20,7 @@ from modules.action.parser import (
     Verb,
     parse_action_plan,
 )
-from modules.action.types import AnyAction
+from modules.action.types import UNTIL_IT_GIVES, AnyAction
 
 JsonObject = dict[str, Any]
 
@@ -150,9 +150,7 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             )
         case "ATTACK":
             nearest = ("zombie",) if choices.zombie_ids else ()
-            return _target_branch(
-                name, (*choices.npcs, *choices.zombie_ids, *nearest, *choices.barriers)
-            )
+            return _target_branch(name, (*choices.npcs, *choices.zombie_ids, *nearest))
         case "OPEN" | "CLOSE" | "LOCK" | "UNLOCK" | "BARRICADE" | "UNBARRICADE":
             return _target_branch(name, choices.barriers)
         case "SHOVE":
@@ -238,9 +236,31 @@ def _request_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
     return asks
 
 
+def _swings_property() -> JsonObject:
+    return {
+        "oneOf": [
+            {"type": "integer", "minimum": 1},
+            {"const": UNTIL_IT_GIVES},
+        ],
+        "description": (
+            "How many swings at the door or window: 1 for a single hit, the number the player "
+            f"said, or '{UNTIL_IT_GIVES}' for 'keep hitting it' or 'break it down'."
+        ),
+    }
+
+
+def _attack_barrier_branch(choices: SceneChoices) -> JsonObject | None:
+    if not choices.barriers:
+        return None
+    return _branch("ATTACK", {"target": _one_of(choices.barriers), "swings": _swings_property()})
+
+
 def _verb_branches(name: str, choices: SceneChoices) -> list[JsonObject]:
     if name == "REQUEST":
         return _request_branches(name, choices)
+    if name == "ATTACK":
+        branches = (_verb_branch(name, choices), _attack_barrier_branch(choices))
+        return [branch for branch in branches if branch is not None]
     branch = _verb_branch(name, choices)
     return [branch] if branch is not None else []
 
@@ -321,6 +341,15 @@ def _target_line(verb: str) -> Callable[[JsonObject], str]:
     return lambda fields: _line(verb, _text(fields, "target"))
 
 
+def _attack_line(fields: JsonObject) -> str:
+    swings = fields.get("swings")
+    if swings is not None and (
+        swings != UNTIL_IT_GIVES and (not isinstance(swings, int) or isinstance(swings, bool))
+    ):
+        raise _PlanShapeError(f"'swings' must be a whole number or '{UNTIL_IT_GIVES}'.")
+    return _line("ATTACK", _text(fields, "target"), "" if swings is None else str(swings))
+
+
 def _first_aid(verb: str) -> Callable[[JsonObject], str]:
     return lambda fields: _first_aid_line(verb, fields)
 
@@ -348,7 +377,7 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "DISINFECT": _first_aid("DISINFECT"),
     "REMOVE_BANDAGE": lambda fields: _line("REMOVE_BANDAGE", _text(fields, "body_part")),
     "EXERCISE": _exercise_line,
-    "ATTACK": _target_line("ATTACK"),
+    "ATTACK": _attack_line,
     "SHOVE": _target_line("SHOVE"),
     "OPEN": _target_line("OPEN"),
     "CLOSE": _target_line("CLOSE"),

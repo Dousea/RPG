@@ -80,7 +80,8 @@ the validator's resolved data and returns whole minutes.
 | `USE_ITEM` on food or drink | the item's `eat_minutes` (default 5) |
 | `USE_ITEM` on anything else | 1 |
 | `OPEN`, `CLOSE`, `LOCK`, `UNLOCK` | 0 |
-| `BARRICADE`, `UNBARRICADE`, `ATTACK` on a door, window or plank | 1 |
+| `BARRICADE`, `UNBARRICADE` | 1 |
+| `ATTACK` on a door, window or plank | 1 per swing, up to the count asked (see [doors](doors.md#breaking-through)) |
 | walking to a door or window the player isn't at | 1, before the action |
 | `MOVE_TO` another zone | the walking minutes of each connection crossed (below), +1 through a window |
 | `MOVE_TO` stopped at a locked door | the same for each hop walked, at least 1 |

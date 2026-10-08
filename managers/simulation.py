@@ -15,6 +15,7 @@ import logging
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 
 from data import carry as carry_k
 from data import melee as melee_k
@@ -79,7 +80,7 @@ from managers.story.beats import clock_minutes, holds
 from managers.story.social import SocialManager
 from managers.validator import Accepted, ActionValidator, Rejected
 from managers.world.barrier_use import BarrierActions, unbarricade_minutes
-from managers.world.barriers import barriers_between
+from managers.world.barriers import barriers_between, thumpable_for
 from managers.world.climate import weather_change_facts
 from managers.world.containers import open_container
 from managers.world.rooms import move_to_room
@@ -93,6 +94,7 @@ from managers.zombies.population import (
 )
 from modules import units
 from modules.action.types import (
+    UNTIL_IT_GIVES,
     AddGoalAction,
     AddRelationshipNoteAction,
     AnyAction,
@@ -1272,6 +1274,18 @@ class SimulationCore:
 
     # === Doors, windows and planks ===
 
+    def _walk_to_barrier(self, accepted: Accepted, walk: bool) -> tuple[int, list[str], bool]:
+        """The minutes and facts of the walk to the barrier, and whether the player got there."""
+        if not walk:
+            return 0, [], True
+        spent, facts = self._spend(WALK_TO_BARRIER_MIN, accepted.action, motion=Motion(Pace.WALK))
+        if self.manager.narrative.game_over:
+            return spent, facts, False
+        if self._interruption:
+            never = f"{self._name} never gets to {describe_action(accepted.action)}."
+            return spent, [*facts, never], False
+        return spent, facts, True
+
     def _barrier_verb(
         self,
         accepted: Accepted,
@@ -1280,25 +1294,26 @@ class SimulationCore:
         minutes: int,
     ) -> tuple[list[str], int]:
         """Walk to the barrier if need be, do `apply`, then spend `minutes` with the sounds it made."""
-        spent = 0
-        facts: list[str] = []
-        if walk:
-            spent, facts = self._spend(
-                WALK_TO_BARRIER_MIN, accepted.action, motion=Motion(Pace.WALK)
-            )
-            if self.manager.narrative.game_over:
-                return facts, spent
-            if self._interruption:
-                never = f"{self._name} never gets to {describe_action(accepted.action)}."
-                return [*facts, never], spent
+        spent, facts, arrived = self._walk_to_barrier(accepted, walk)
+        if not arrived:
+            return facts, spent
+        done, more = self._barrier_step(accepted.action, apply, minutes)
+        return [*facts, *done], spent + more
+
+    def _barrier_step(
+        self, action: AnyAction, apply: Callable[[], list[str]], minutes: int
+    ) -> tuple[list[str], int]:
+        """Do `apply`, hand its sounds to the zombies, then spend `minutes`; the facts and minutes."""
         self._skill_facts = []
         done = apply()
         self._pending_sounds.extend(self._barriers.sounds)
         self._barriers.sounds.clear()
-        facts.extend([self._check_player_death(done[0]), *done[1:], *self._skill_facts])
+        if done:
+            done[0] = self._check_player_death(done[0])
+        facts = [*done, *self._skill_facts]
+        spent = 0
         if minutes:
-            more, spend_facts = self._spend(minutes, accepted.action, motion=Motion(Pace.STILL))
-            spent += more
+            spent, spend_facts = self._spend(minutes, action, motion=Motion(Pace.STILL))
             facts.extend(spend_facts)
         return facts, spent
 
@@ -1346,11 +1361,58 @@ class SimulationCore:
         )
 
     def _resolve_hit_barrier(self, accepted: Accepted) -> tuple[list[str], int]:
+        """Swing a minute at a time until the barrier gives, the count is done or something stops the run."""
         target = accepted.expect(TargetBarrier)
-        now = self.manager.narrative.minutes
-        return self._barrier_verb(
-            accepted, target.walk, lambda: self._barriers.hit(target.barrier, now), SWING_MIN
-        )
+        action = accepted.action
+        assert isinstance(action, AttackAction), "only ATTACK is routed here"
+        barrier = target.barrier
+        until = action.swings == UNTIL_IT_GIVES
+        wanted = barrier_k.MAX_BARRIER_SWINGS if until else int(action.swings)
+        planned = min(wanted, barrier_k.MAX_BARRIER_SWINGS)
+        spent, facts, arrived = self._walk_to_barrier(accepted, target.walk)
+        if not arrived:
+            return facts, spent
+        named = {"name": self._name, "barrier": barrier.name}
+        run_fact = barrier_k.KEEPS_HITTING_UNTIL_FACT if until else barrier_k.KEEPS_HITTING_FACT
+        player = self.manager.player
+        for swing in range(planned):
+            held = weapons.held_entity(player)
+            lead = len(facts)
+            done, more = self._barrier_step(
+                action,
+                partial(
+                    self._barriers.hit,
+                    barrier,
+                    self.manager.narrative.minutes,
+                    announce=swing == 0,
+                ),
+                SWING_MIN,
+            )
+            facts.extend(done)
+            spent += more
+            if self.manager.narrative.game_over:
+                break
+            if thumpable_for(barrier, player.current_location_id) is None:
+                break
+            if not until and swing + 1 >= wanted:
+                break
+            if held is not None and weapons.held_entity(player) is not held:
+                break
+            if self._interruption:
+                facts.append(barrier_k.SWINGS_INTERRUPTED_FACT.format(**named))
+                break
+            if swing + 1 == planned:
+                capped = barrier_k.SWINGS_CAPPED_FACT.format(
+                    possessive=player.appearance.possessive, **named
+                )
+                facts.append(capped)
+                break
+            if endurance_level(player) >= barrier_k.BARRIER_SWINGS_STOP_ENDURANCE_LEVEL:
+                facts.append(barrier_k.SWINGS_TIRED_FACT.format(**named))
+                break
+            if swing == 0:
+                facts[lead] = run_fact.format(**named)
+        return facts, spent
 
     # === First aid ===
 

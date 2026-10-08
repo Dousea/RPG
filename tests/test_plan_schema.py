@@ -34,6 +34,14 @@ def branches(schema: dict) -> dict[str, dict]:
     }
 
 
+def attack_branches(schema: dict) -> list[dict]:
+    return [
+        b
+        for b in schema["properties"]["actions"]["items"]["anyOf"]
+        if b["properties"]["verb"]["const"] == "ATTACK"
+    ]
+
+
 def request_branches(schema: dict) -> list[dict]:
     return [
         b
@@ -210,35 +218,30 @@ class ClosedFieldTests(unittest.TestCase):
         gm = building_scene()
         gm.world.outbreak_started_at = 0
         zombie = add_zombie(gm, 5.0, ZombieState.IDLE)
-        names = branches(ContextBuilder(gm).build_plan_schema())
+        schema = ContextBuilder(gm).build_plan_schema()
+        names = branches(schema)
+        fighting, hitting = attack_branches(schema)
         self.assertEqual(
-            enum_of(names["ATTACK"], "target"),
-            [
-                "Emma",
-                "Marcus",
-                zombie.zombie_id,
-                "zombie",
-                "apartment door",
-                "lobby door",
-                "vacant flat door",
-                "tenant flat door",
-            ],
+            enum_of(fighting, "target"), ["Emma", "Marcus", zombie.zombie_id, "zombie"]
+        )
+        self.assertEqual(
+            enum_of(hitting, "target"),
+            ["apartment door", "lobby door", "vacant flat door", "tenant flat door"],
         )
         self.assertEqual(enum_of(names["SHOVE"], "target"), [zombie.zombie_id])
 
+    def test_only_a_barrier_target_carries_a_required_swing_count(self):
+        gm = building_scene()
+        fighting, hitting = attack_branches(ContextBuilder(gm).build_plan_schema())
+        self.assertNotIn("swings", fighting["properties"])
+        self.assertEqual(hitting["required"], ["verb", "target", "swings"])
+        swings = hitting["properties"]["swings"]
+        self.assertIn({"const": "until it gives"}, swings["oneOf"])
+        self.assertIn("until it gives", swings["description"])
+
     def test_attack_offers_no_nearest_zombie_when_none_is_seen(self):
-        names = branches(ContextBuilder(building_scene()).build_plan_schema())
-        self.assertEqual(
-            enum_of(names["ATTACK"], "target"),
-            [
-                "Emma",
-                "Marcus",
-                "apartment door",
-                "lobby door",
-                "vacant flat door",
-                "tenant flat door",
-            ],
-        )
+        fighting, _ = attack_branches(ContextBuilder(building_scene()).build_plan_schema())
+        self.assertEqual(enum_of(fighting, "target"), ["Emma", "Marcus"])
 
     def test_the_door_verbs_offer_the_barriers_of_the_zone(self):
         names = branches(ContextBuilder(building_scene()).build_plan_schema())
@@ -361,7 +364,12 @@ EQUIVALENTS = [
     ({"verb": "EXERCISE", "exercise": "Squats"}, "EXERCISE Squats"),
     ({"verb": "ATTACK", "target": "z3"}, "ATTACK z3"),
     ({"verb": "SHOVE", "target": "z3"}, "SHOVE z3"),
-    ({"verb": "ATTACK", "target": "lobby door"}, "ATTACK lobby door"),
+    ({"verb": "ATTACK", "target": "lobby door", "swings": 1}, "ATTACK lobby door 1"),
+    ({"verb": "ATTACK", "target": "lobby door", "swings": 5}, "ATTACK lobby door 5"),
+    (
+        {"verb": "ATTACK", "target": "lobby door", "swings": "until it gives"},
+        "ATTACK lobby door until it gives",
+    ),
     ({"verb": "OPEN", "target": "lobby door"}, "OPEN lobby door"),
     ({"verb": "CLOSE", "target": "lobby door"}, "CLOSE lobby door"),
     ({"verb": "LOCK", "target": "lobby door"}, "LOCK lobby door"),

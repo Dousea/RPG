@@ -408,6 +408,32 @@ kitchen knife 1, bare hands 0.
 - The door breaks as under [Breaking](#breaking). A barricade broken from the far
   side drops nothing.
 
+### A run of swings
+
+`ATTACK <barrier>` carries a count: a whole number of swings, or "until it gives"
+(the text form `ATTACK <barrier> <n>` or `ATTACK <barrier> until it gives`; a bare
+`ATTACK <barrier>` is one swing). Attacks on zombies and NPCs have no count: one
+swing a turn, so the player decides each blow.
+
+The run is one multi-minute action, like a room search: one swing a minute, each
+exactly the swing above (damage, the 1 in 10, endurance, wear, noise, Maintenance
+XP), with the zombie loop and the body running each minute. It ends at the first of:
+
+- the barrier has nothing left to hit (broken, smashed, or the last plank gone
+  with the door already open or broken);
+- the count is done;
+- an interruption: a zombie notices or attacks, a story beat, a worsening wound;
+- the Endurance status effect reaches level 2, the level at which
+  [survival-stats](survival-stats.md#endurance) says exertion starts to tell;
+- the weapon breaks;
+- 30 swings, the cap; a larger count is clamped to it.
+
+One swing always happens, even when the character is already at level 2 or worse.
+The facts name the run once ("keeps hitting the door", or "... until it gives way"),
+then what matters once: a plank splintering, the door giving, the weapon breaking and
+the reason it stopped early (winded, interrupted, the cap with the door still
+holding). They hold no numbers.
+
 ## Items
 
 | Item | Values |
@@ -545,14 +571,6 @@ from the data. Saves of other versions are discarded and a new game starts.
 
 Found in the 2026-10-08 playtest.
 
-- **Breaking a door down is unplayable.** A door takes about 24 crowbar swings,
-  and the player gets one per turn: "keep hitting it until it gives" and "hit it
-  five times" each parsed to one `ATTACK`. *Fix:* an optional count or "until it
-  gives" on `ATTACK <barrier>`, resolved as a multi-minute action like a room
-  `SEARCH`: one swing a minute, ending when the barrier breaks, on an interruption
-  (a zombie notices, Endurance runs low) or at a cap of 30 swings. The count is for
-  barriers only: a fight with a zombie stays one swing per turn, so the player
-  decides each blow.
 - **A blocked move names a door for a window.** "Move to The Corner Store:
   blocked -- the door to The Corner Store is locked" when the barrier is the shop
   window. *Fix:* use the barrier's kind word in the fact.

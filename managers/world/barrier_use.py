@@ -157,8 +157,11 @@ class BarrierActions:
         )
         return facts
 
-    def hit(self, barrier: BarrierEntity, now: int) -> list[str]:
-        """One swing at the barrier: damage, the break, endurance, weapon wear and noise."""
+    def hit(self, barrier: BarrierEntity, now: int, *, announce: bool = True) -> list[str]:
+        """One swing at the barrier: damage, the break, endurance, weapon wear and noise.
+
+        `announce` leads the facts with the swing itself; a run of swings states that once instead.
+        """
         manager = self._manager
         player, world = manager.player, manager.world
         self.reach(barrier)
@@ -167,7 +170,7 @@ class BarrierActions:
         side = player.current_location_id
         levels = self._levels()
         result = weapon_hit(barrier, side, door_damage(melee), levels[skill_k.STRENGTH], self._rng)
-        facts = [self._hit_fact(melee, barrier)]
+        facts = [self._hit_fact(melee, barrier)] if announce else []
         if result.plank_broke:
             facts.append(barrier_k.PLANK_BREAKS_FACT.format(barrier=barrier.name))
         self.sounds.append(barrier_hit_sound())

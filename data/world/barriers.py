@@ -201,6 +201,9 @@ DOOR_HIT_ENDURANCE_BY_FITNESS = (  # doors: endurance, levels 0 to 10
 )
 JOGGER_DOOR_ENDURANCE_MULT = 0.9  # doors
 
+MAX_BARRIER_SWINGS = 30  # doors: swings in one ATTACK
+BARRIER_SWINGS_STOP_ENDURANCE_LEVEL = 2  # doors: status effect level at which a run of swings ends
+
 PLAYER_AT_BARRIER_DISTANCE = 1  # doors: tiles
 BROKEN_DOOR_PLANKS_MIN = 1  # doors: planks
 BROKEN_DOOR_PLANKS_MAX = 2  # doors: planks
@@ -225,6 +228,12 @@ CLOSE_FACT = "{name} closes the {barrier}."
 LOCK_FACT = "{name} locks the {barrier}."
 UNLOCK_FACT = "{name} unlocks the {barrier}."
 CLIMB_FACT = "{name} climbs through the {barrier}."
+
+KEEPS_HITTING_FACT = "{name} keeps hitting the {barrier}."
+KEEPS_HITTING_UNTIL_FACT = "{name} keeps hitting the {barrier} until it gives way."
+SWINGS_TIRED_FACT = "{name} is too winded to keep swinging."
+SWINGS_INTERRUPTED_FACT = "{name} breaks off the blows."
+SWINGS_CAPPED_FACT = "{name} stops to catch {possessive} breath, the {barrier} still holding."
 
 NOTHING_TO_HIT = "There's nothing to hit."
 NO_BARRIER_HERE = "There's no {name} here."

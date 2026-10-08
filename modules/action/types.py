@@ -82,10 +82,16 @@ class TakeOffAction:
     item_name: str
 
 
+UNTIL_IT_GIVES = "until it gives"
+
+
 @dataclass
 class AttackAction:
+    """One swing at an NPC or zombie; `swings` counts swings at a barrier, or is UNTIL_IT_GIVES."""
+
     verb: ClassVar[str] = "ATTACK"
     target_name: str
+    swings: int | str = 1
 
 
 @dataclass
