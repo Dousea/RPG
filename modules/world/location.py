@@ -81,5 +81,7 @@ class World:
     # Dead bodies by id, numbered c1, c2, ... in order of creation (zombie-lifecycle).
     corpses: dict[str, CorpseEntity] = field(default_factory=dict[str, CorpseEntity])
     next_corpse_number: int = 1
+    # The number the next item instance id takes: i1, i2, ... (carrying-and-loot).
+    next_item_number: int = 1
     # The zone the smell of the dead was last reported in, so the fact is not repeated (zombie-lifecycle).
     smell_zone_id: str | None = None

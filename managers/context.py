@@ -241,7 +241,13 @@ class ContextBuilder:
         """[PINNED]: what the player picked from the `@` list, to aim the actions at."""
         if not pinned:
             return ""
-        lines = "\n".join(f" - {m.written}: {m.kind}, {m.description}" for m in pinned)
+        # An item's description says where it lies and how much is left: for the player's screen only.
+        lines = "\n".join(
+            f" - {m.written}: {m.kind}"
+            if m.kind == "item"
+            else f" - {m.written}: {m.kind}, {m.description}"
+            for m in pinned
+        )
         return (
             "[PINNED]\n(The player picked these from a list. Where the input says [pinned: X], "
             "aim the action at exactly X, written as shown.)\n"

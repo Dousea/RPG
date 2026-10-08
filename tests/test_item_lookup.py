@@ -10,7 +10,9 @@ from managers.context import ContextBuilder
 from managers.corpses.search import find_content
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected, ValidationResult
+from managers.world.item_ids import stamp_world
 from modules.action.parser import available_verbs
+from modules.action.pins import Pinned
 from modules.action.schema import build_plan_schema, parse_plan
 from modules.action.types import EquipAction, PutAction, TakeAction
 from modules.character.equipment import CharacterArmorSlot
@@ -230,6 +232,17 @@ class WhichOneTests(unittest.TestCase):
         self.assertEqual(result.reason, "Which one: good Baseball Bat or broken Baseball Bat?")
         picked = validator.validate(TakeAction(item_name="broken Baseball Bat", from_name="c1"))
         self.assertTrue(taken(picked).broken)
+
+    def test_a_pin_on_an_item_elsewhere_never_takes_the_bodys_copy(self):
+        gm, corpse = with_body(BAT)
+        corpse.searched = True
+        stamp_world(gm.world, gm.player)
+        elsewhere = Pinned("Baseball Bat", "item", "i999")
+        result = ActionValidator(gm).validate(TakeAction(item_name=elsewhere, from_name="c1"))
+        self.assertIsInstance(result, Rejected)
+        own = Pinned("Baseball Bat", "item", corpse.contents[0].instance_id)
+        result = ActionValidator(gm).validate(TakeAction(item_name=own, from_name="c1"))
+        self.assertIs(taken(result), corpse.contents[0])
 
     def test_putting_a_carried_item_asks(self):
         self.gm.player.inventory.extend([thing("item_duffel_bag"), broken_bat(), thing(BAT)])

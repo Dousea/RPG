@@ -8,6 +8,7 @@ from data.items import ITEMS
 from managers.game import GameManager
 from managers.mentions import labels, mentionables, picked
 from managers.story.beats import visible_topics
+from managers.world import item_ids
 from managers.zombies.population import threat_views
 from modules.action.pins import Mention
 from modules.body.parts import BodyPart
@@ -118,7 +119,7 @@ class MentionListTests(unittest.TestCase):
         alike = [label for m, label in zip(listed, shown, strict=True) if m.name == "man"]
         self.assertEqual(alike, ["man #1", "man #2", "man #3"])
         for m, label in zip(listed, shown, strict=True):
-            if m.name != "man":
+            if m.name != "man" and m.kind != "item":
                 self.assertEqual(label, m.name)
 
     def test_npcs_in_the_zone_are_listed_and_topics_are_not(self):
@@ -194,17 +195,125 @@ class MentionListTests(unittest.TestCase):
         self.assertEqual(parts["hand_l"].description, "scratch")
         self.assertEqual(parts["head"].description, "bandaged")
 
-    def test_no_description_carries_a_digit_and_items_are_never_listed(self):
+    def test_only_an_items_description_carries_a_digit_and_no_id_is_a_type_id(self):
         gm = zombie_game("zone_neighborhood")
         add_zombie(gm, gap=3, state=ZombieState.CHASING)
         gm.player.body[BodyPart.HAND_L].scratch_time = 10.0
         for mention in mentionables(gm):
-            self.assertNotRegex(mention.description, r"\d", mention)
+            if mention.kind != "item":
+                self.assertNotRegex(mention.description, r"\d", mention)
         self.assertEqual(
             {m.kind for m in mentionables(gm)},
-            {"zombie", "npc", "barrier", "zone", "body_part"},
+            {"zombie", "npc", "barrier", "zone", "body_part", "item"},
         )
         self.assertFalse(re.search("item_", " ".join(m.id for m in mentionables(gm))))
+
+
+class ItemMentionTests(unittest.TestCase):
+    """carrying-and-loot: Items in the `@` list, each told apart from its copies."""
+
+    def setUp(self):
+        self.gm = zombie_game("zone_street")
+        self.bats = [
+            ItemEntity(item=ITEMS["item_baseball_bat"]),
+            ItemEntity(item=ITEMS["item_baseball_bat"], condition=0),
+        ]
+        self.gm.player.inventory.append(self.bats[0])
+        self.gm.current_location.entities.append(self.bats[1])
+        item_ids.stamp_world(self.gm.world, self.gm.player)
+
+    def test_two_identical_bats_are_both_listed_by_instance_id_and_numbered(self):
+        listed = [m for m in mentionables(self.gm) if m.name == "Baseball Bat"]
+        self.assertEqual([m.id for m in listed], [b.instance_id for b in self.bats])
+        self.assertEqual(
+            [
+                label
+                for m, label in zip(
+                    mentionables(self.gm), labels(mentionables(self.gm)), strict=True
+                )
+                if m.name == "Baseball Bat"
+            ],
+            ["Baseball Bat #1", "Baseball Bat #2"],
+        )
+
+    def test_a_description_says_where_the_item_is_and_how_it_looks(self):
+        carried, floor = [m for m in mentionables(self.gm) if m.name == "Baseball Bat"]
+        self.assertIn("good", carried.description)
+        self.assertIn("pack", carried.description)
+        self.assertIn("broken", floor.description)
+        self.assertIn("floor", floor.description)
+
+    def test_a_pack_with_one_use_left_reads_differently_from_a_full_one(self):
+        full = ItemEntity(item=ITEMS["item_painkillers"])
+        spent = ItemEntity(item=ITEMS["item_painkillers"], uses=1)
+        self.gm.player.inventory.extend([full, spent])
+        item_ids.stamp_world(self.gm.world, self.gm.player)
+        pills = [m for m in mentionables(self.gm) if m.name == "Painkillers"]
+        self.assertEqual([m.id for m in pills], [full.instance_id, spent.instance_id])
+        self.assertIn("10 left", pills[0].description)
+        self.assertIn("1 left", pills[1].description)
+
+    def test_bats_on_two_searched_bodies_name_their_body_by_its_looks(self):
+        gm = zombie_game()
+        for corpse_id, garment in (("c1", "item_jacket_police"), ("c2", "item_jeans")):
+            gm.world.corpses[corpse_id] = CorpseEntity(
+                corpse_id=corpse_id,
+                zone_id="zone_street",
+                gap=3.0,
+                female=False,
+                outfit="generic01",
+                died_at=0,
+                rot_at_death=1,
+                searched=True,
+                contents=[
+                    ItemEntity(item=ITEMS["item_baseball_bat"]),
+                    ItemEntity(item=ITEMS[garment]),
+                ],
+            )
+        item_ids.stamp_world(gm.world, gm.player)
+        mentions = mentionables(gm)
+        bodies = {m.id: m.name for m in kinds(mentions, "corpse")}
+        self.assertEqual(len(set(bodies.values())), 2)
+        for corpse_id, body_name in bodies.items():
+            bat = gm.world.corpses[corpse_id].contents[0]
+            (listed,) = [m for m in kinds(mentions, "item") if m.id == bat.instance_id]
+            self.assertIn(body_name, listed.description)
+
+    def test_bats_on_look_alike_bodies_name_the_numbered_body(self):
+        gm = zombie_game()
+        for corpse_id in ("c1", "c2"):
+            gm.world.corpses[corpse_id] = CorpseEntity(
+                corpse_id=corpse_id,
+                zone_id="zone_street",
+                gap=3.0,
+                female=False,
+                outfit="generic01",
+                died_at=0,
+                rot_at_death=1,
+                searched=True,
+                contents=[
+                    ItemEntity(item=ITEMS["item_baseball_bat"]),
+                    ItemEntity(item=ITEMS["item_jeans"]),
+                ],
+            )
+        item_ids.stamp_world(gm.world, gm.player)
+        mentions = mentionables(gm)
+        bodies = kinds(mentions, "corpse")
+        body_labels = labels(bodies)
+        self.assertEqual(len(set(body_labels)), 2)
+        descriptions = []
+        for body, label in zip(bodies, body_labels, strict=True):
+            bat = gm.world.corpses[body.id].contents[0]
+            (listed,) = [m for m in kinds(mentions, "item") if m.id == bat.instance_id]
+            self.assertIn(label, listed.description)
+            descriptions.append(listed.description)
+        self.assertNotEqual(*descriptions)
+
+    def test_worn_clothes_are_listed_as_worn(self):
+        gm = GameManager()
+        names = {m.name: m.description for m in mentionables(gm) if m.kind == "item"}
+        for entity in gm.player.worn.values():
+            self.assertIn("worn", names[entity.item.name])
 
 
 class ReachTests(unittest.TestCase):

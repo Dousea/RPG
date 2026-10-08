@@ -220,6 +220,13 @@ word no other look has, else all the look's words ("good wet Baseball Bat"). The
 player answers on the plan screen ([entity resolution](../architecture/entity-resolution.md#which-one)). This holds for the pack, the floor, a bag, an opened
 container and a searched body.
 
+Every item also has its own instance id (`i1`, `i2`, ...), taken from a counter the
+world keeps and saved with it. One sweep numbers every item that has no id yet,
+before each turn is asked, saved or snapshotted ([entity resolution](../architecture/entity-resolution.md#items-have-an-instance-id)). The player never types one; they pick an item from the `@` list and the
+engine binds that exact item ([entity resolution](../architecture/entity-resolution.md#mentions)),
+so two items that look the same can be told apart. The which-one answer is an item by
+its instance id too.
+
 ### Moving things
 
 Frames per item (`w` is the item's own weight, at most 3 kg):

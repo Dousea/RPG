@@ -102,7 +102,7 @@ def broadcast_event(event: AnyEvent) -> list[AnyModifier]:
                     continue
 
                 logger.debug(
-                    f"Effect '{trait.name}' on entity #'{entity.id}' ({role}) generated modifier: {type(mod).__name__}"
+                    f"Effect '{trait.name}' on {type(entity).__name__} ({role}) generated modifier: {type(mod).__name__}"
                 )
                 collected_modifiers.append(mod)
 
@@ -133,7 +133,7 @@ def apply_event_modifiers(
 
         event.target.hit_points -= final_damage
         logger.debug(
-            f"Applied {final_damage} damage to #'{event.target.id}'. HP is now {event.target.hit_points}."
+            f"Applied {final_damage} damage to {type(event.target).__name__}. HP is now {event.target.hit_points}."
         )
 
     # Every other modifier type applies to the event's target (falling

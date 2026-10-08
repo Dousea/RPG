@@ -8,6 +8,8 @@ from modules.item import BaseItem, MedicalItem, MeleeWeaponItem, StackItem
 @dataclass
 class ItemEntity(BaseEntity):
     item: BaseItem
+    # "i12": numbered from the world's counter, empty until stamped; carrying-and-loot
+    instance_id: str = ""
     wetness: float = 0.0  # 0-100, clothing
     holes: set[BodyPart] = field(default_factory=set[BodyPart])  # clothing: written from zombies
     condition: int = -1  # a melee weapon's wear: -1 until set to full, 0 is broken; melee

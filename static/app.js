@@ -857,6 +857,7 @@ const MENTION_KINDS = [
     ['container', 'Containers'],
     ['zone', 'Places'],
     ['body_part', 'Your body'],
+    ['item', 'Items'],
 ];
 
 let mentionEntries = [];

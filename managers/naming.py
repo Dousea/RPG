@@ -5,8 +5,11 @@ from collections.abc import Collection, Iterable
 
 from data.items import DESCRIBING_WORDS, item_condition_word, wetness_word
 from data.loot import containers as container_k
+from data.story import mentions as mention_k
 from modules.action.choices import Candidate
+from modules.action.pins import pin_of
 from modules.entity.item import ItemEntity
+from modules.item import MedicalItem, StackItem
 
 BRACKETED_WORD = re.compile(r"(.+?)\s*\(([^()]+)\)")
 
@@ -29,6 +32,19 @@ def describing_words(entity: ItemEntity) -> tuple[str, ...]:
     wet = wetness_word(entity.wetness)
     condition = item_condition_word(entity)
     return (condition, wet) if wet else (condition,)
+
+
+def uses_words(entity: ItemEntity) -> str:
+    """The uses a medical item or stack has left ("3 left"); empty for anything else or a single-use one."""
+    item = entity.item
+    if isinstance(item, MedicalItem | StackItem) and item.uses > 1:
+        return mention_k.USES_LEFT.format(uses=entity.uses)
+    return ""
+
+
+def item_words(entity: ItemEntity) -> str:
+    """What tells this item from a copy of it, in words: its describing words and the uses it has left."""
+    return ", ".join([*describing_words(entity), *filter(None, [uses_words(entity)])])
 
 
 def _matching(entities: Iterable[ItemEntity], needle: str) -> list[ItemEntity]:
@@ -84,9 +100,11 @@ def find_named(entities: Iterable[ItemEntity], name: str) -> ItemEntity | list[I
     A name is an item's name or id, alone or with describing words before it or in brackets
     after it; only items with all of them match, and of those the ones with the fewest describing
     words are kept. Several matches that look the same give the first; ones that differ give the
-    list. None when nothing matches.
+    list. None when nothing matches. A pinned item is the one in `entities` with its instance id.
     """
     pool = list(entities)
+    if pin := pin_of(name, "item"):
+        return next((e for e in pool if e.instance_id == pin.entity_id), None)
     needle = clean_name(name)
     matches = _matching(pool, needle)
     if not matches:
@@ -130,13 +148,10 @@ def qualified_names(entities: Iterable[ItemEntity]) -> list[str]:
 
 
 def item_candidates(entities: Iterable[ItemEntity]) -> tuple[Candidate, ...]:
-    """Each distinct look of `entities` once, as a candidate: the qualified name, and the look in words."""
-    looks = _distinct_looks(entities)
-    labels = _labels(list(looks))
+    """Each distinct look of `entities` once, as a candidate: the first item of that look by its instance id, and the look in words."""
     return tuple(
-        Candidate("item", qualified, entity.item.name, ", ".join(look))
-        for look, entity in looks.items()
-        for qualified in [f"{labels[look]} {entity.item.name}"]
+        Candidate("item", entity.instance_id, entity.item.name, item_words(entity))
+        for entity in _distinct_looks(entities).values()
     )
 
 

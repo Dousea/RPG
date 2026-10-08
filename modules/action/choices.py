@@ -10,7 +10,7 @@ CandidateKind = Literal["item", "zone", "container"]
 
 @dataclass(frozen=True)
 class Candidate:
-    """One thing a name could mean: a zone or container by id, an item by its qualified name ("broken Baseball Bat")."""
+    """One thing a name could mean, by id: a zone, a container or an item (its instance id)."""
 
     kind: CandidateKind
     id: str
@@ -19,9 +19,7 @@ class Candidate:
     pinned_as: str = ""
 
     def written(self) -> str:
-        """What goes into the action's target field to name exactly this: a pin for a zone or container, the qualified name for an item."""
-        if self.kind == "item":
-            return self.id
+        """What goes into the action's target field to name exactly this: a pin."""
         return Pinned(self.pinned_as or self.name, self.kind, self.id)
 
 

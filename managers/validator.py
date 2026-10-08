@@ -51,6 +51,7 @@ from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.mentions import container_candidate, zone_candidate
 from managers.story.beats import visible_topics
 from managers.story.social import locked_out
+from managers.world import item_ids
 from managers.world.barriers import (
     barriers_between,
     carried_entities,
@@ -410,12 +411,12 @@ class ActionValidator:
             return Rejected(action, zombie_lore.ASLEEP_REFUSAL.format(name=self._name))
         return None
 
-    @staticmethod
     def _asked(
-        found: ItemEntity | list[ItemEntity] | None, name: str
+        self, found: ItemEntity | list[ItemEntity] | None, name: str
     ) -> ItemEntity | Question | None:
         """A lookup's result with the which-one question in place of several candidates."""
         if isinstance(found, list):
+            item_ids.stamp(self.manager.world, found)
             return Question(naming.which_one(found), name, naming.item_candidates(found))
         return found
 

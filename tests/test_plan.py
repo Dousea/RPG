@@ -8,9 +8,11 @@ from data.items import ITEMS
 from data.story.mentions import DECIDED_ON_ARRIVAL
 from managers.game import GameManager
 from managers.plan import bind_choices, open_choices, steps_of
+from managers.validator import Accepted, ActionValidator
 from modules.action.types import AddGoalAction, AttackAction, MoveAction, TakeAction
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
+from modules.resolution import Transfer
 from tests.test_simulation import add_zombie, zombie_game
 
 BAT = ITEMS["item_baseball_bat"]
@@ -56,9 +58,13 @@ class OpenChoiceTests(unittest.TestCase):
         gm = two_bats_on_the_street()
         plan = [TakeAction(item_name="Baseball Bat")]
         (choice,) = open_choices(gm, plan)
-        (bound,) = bind_choices(plan, [choice], [choice.candidates[1]])
-        self.assertEqual(bound, replace(plan[0], item_name="good Baseball Bat"))
+        good = next(c for c in choice.candidates if c.description == "good")
+        (bound,) = bind_choices(plan, [choice], [good])
+        self.assertEqual(bound, replace(plan[0], item_name=good.written()))
         self.assertEqual(open_choices(gm, [bound]), [])
+        result = ActionValidator(gm).validate(bound)
+        assert isinstance(result, Accepted)
+        self.assertEqual([e.broken for e in result.expect(Transfer).entities], [False])
 
 
 class StepTests(unittest.TestCase):

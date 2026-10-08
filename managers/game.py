@@ -18,7 +18,7 @@ from data.world.locations import build_starting_locations
 from managers.character.creation import new_player
 from managers.events.pipeline import apply_event_modifiers, broadcast_event
 from managers.story.relationship import RelationshipManager
-from managers.world import locations
+from managers.world import item_ids, locations
 from managers.world.climate import ClimateEngine
 from modules.character.build import CharacterBuild
 from modules.entity.item import ItemEntity
@@ -188,6 +188,7 @@ class GameManager:
         # Whatever the world arrived with, the narrative clock is authoritative.
         # Doing this here also repairs saves written while the two could drift.
         self._sync_world_clock()
+        item_ids.stamp_world(self.world, self.player, self.npcs.values())
 
     @classmethod
     def from_build(cls, build: CharacterBuild) -> "GameManager":

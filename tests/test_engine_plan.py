@@ -72,6 +72,13 @@ class PlanScreenTestCase(EngineTestCase):
     def choices(self, plan: dict, number: int = 0) -> list[str]:
         return [c["id"] for c in plan["choices"][number]["candidates"]]
 
+    def candidate(self, plan: dict, word: str, number: int = 0) -> str:
+        """The id of the candidate whose description has `word`."""
+        (found,) = [
+            c["id"] for c in plan["choices"][number]["candidates"] if word in c["description"]
+        ]
+        return found
+
     def assert_nothing_ran(self, gm: GameManager, minutes: int, result: dict) -> None:
         self.assertEqual(gm.narrative.minutes, minutes)
         self.assertEqual(self.llm.narrator_prompts, [])
@@ -118,9 +125,9 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         self.two_bats(gm)
         self.script("TAKE Baseball Bat\nMOVE_TO out")
         result = self.engine.play("grab the bat and head out")
-        self.assertEqual(self.choices(result["plan"]), ["broken Baseball Bat", "good Baseball Bat"])
+        self.assertEqual(len(self.choices(result["plan"])), 2)
         self.assertEqual(gm.player.current_location_id, "zone_street")
-        self.engine.go(["broken Baseball Bat"])
+        self.engine.go([self.candidate(result["plan"], "broken")])
         self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
         carried = [e for e in gm.player.inventory if e.item.id == BAT.id]
         self.assertEqual([e.broken for e in carried], [True])
@@ -132,7 +139,7 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         result = self.engine.play("grab the bat and go to the store")
         self.assertEqual(len(result["plan"]["choices"]), 2)
         self.assertEqual([s["choice"] for s in result["plan"]["steps"]], [0, 1])
-        self.engine.go(["good Baseball Bat", "zone_bodega"])
+        self.engine.go([self.candidate(result["plan"], "good"), "zone_bodega"])
         self.assertEqual(gm.player.current_location_id, "zone_bodega")
         self.assertFalse([e for e in gm.player.inventory if e.item.id == BAT.id and e.broken])
 
@@ -230,13 +237,11 @@ class PausedPlanTests(PlanScreenTestCase):
         steps = result["plan"]["steps"]
         self.assertEqual([s["done"] for s in steps], [True, False, False])
         self.assertEqual([s["choice"] for s in steps], [None, 0, None])
-        self.assertEqual(
-            sorted(self.choices(result["plan"])), ["broken Baseball Bat", "good Baseball Bat"]
-        )
+        self.assertEqual(len(set(self.choices(result["plan"]))), 2)
 
     def test_go_resumes_without_running_the_done_steps_again(self):
-        gm, _ = self.pause()
-        result = self.engine.go(["good Baseball Bat"])
+        gm, paused = self.pause()
+        result = self.engine.go([self.candidate(paused["plan"], "good")])
         self.assertEqual(len(self.llm.prompts), 1)
         self.assertEqual(len(self.llm.narrator_prompts), 2)
         self.assertNotIn("Refused:", self.llm.narrator_prompts[1])

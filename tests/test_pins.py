@@ -3,15 +3,18 @@
 import unittest
 from unittest import mock
 
+from data.items import ITEMS
 from managers.game import GameManager
 from managers.mentions import mentionables
 from managers.simulation import SimulationCore
 from managers.validator import Accepted, ActionValidator, Rejected
+from managers.world import item_ids
 from modules.action.pins import MENTION_MARK, Mention, Pinned, bind, pin_of, render_input
 from modules.action.types import (
     AttackAction,
     BandageAction,
     CloseAction,
+    EquipAction,
     MoveAction,
     OpenAction,
     PutAction,
@@ -19,9 +22,12 @@ from modules.action.types import (
     ShoveAction,
     TakeAction,
     TalkAction,
+    UseItemAction,
 )
+from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
 from modules.resolution import (
+    HeldItem,
     MoveToRoom,
     MoveToZone,
     TargetBarrier,
@@ -160,6 +166,36 @@ class ResolveTests(unittest.TestCase):
         (action,) = bind([PutAction("Bandage", "counter")], [counter])
         assert isinstance(action, PutAction)
         self.assertIsInstance(action.target_name, Pinned)
+
+    def test_a_pinned_item_is_the_one_held_of_two_that_look_the_same(self):
+        gm = zombie_game("zone_street")
+        bats = [ItemEntity(item=ITEMS["item_baseball_bat"]) for _ in range(2)]
+        gm.player.inventory.extend(bats)
+        item_ids.stamp_world(gm.world, gm.player)
+        second = pick(gm, "item", bats[1].instance_id)
+        (action,) = bind([EquipAction("Baseball Bat")], [second])
+        result = self.validate(gm, action)
+        assert isinstance(result, Accepted)
+        self.assertIs(result.expect(HeldItem).entity, bats[1])
+
+    def test_a_pinned_pack_with_one_use_left_is_used_over_a_full_one(self):
+        gm = zombie_game("zone_street")
+        full = ItemEntity(item=ITEMS["item_painkillers"])
+        spent = ItemEntity(item=ITEMS["item_painkillers"], uses=1)
+        gm.player.inventory.extend([full, spent])
+        item_ids.stamp_world(gm.world, gm.player)
+        (action,) = bind([UseItemAction("Painkillers")], [pick(gm, "item", spent.instance_id)])
+        result = self.validate(gm, action)
+        assert isinstance(result, Accepted)
+        self.assertIs(result.expect(HeldItem).entity, spent)
+
+    def test_a_pinned_item_out_of_the_lookups_reach_is_not_found(self):
+        gm = zombie_game("zone_street")
+        floor = ItemEntity(item=ITEMS["item_baseball_bat"])
+        gm.current_location.entities.append(floor)
+        item_ids.stamp_world(gm.world, gm.player)
+        (action,) = bind([EquipAction("Baseball Bat")], [pick(gm, "item", floor.instance_id)])
+        self.assertIsInstance(self.validate(gm, action), Rejected)
 
     def test_a_pinned_barrier_of_a_neighbouring_zone_is_the_one_swung_at(self):
         gm = zombie_game("zone_neighborhood")

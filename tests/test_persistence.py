@@ -376,8 +376,8 @@ class NewZoneSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """clock: Saves."""
 
-    def test_schema_version_is_24(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 24)
+    def test_schema_version_is_25(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 25)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()

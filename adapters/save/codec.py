@@ -31,6 +31,7 @@ from managers.game import (
     NarrativeState,
 )
 from managers.story.relationship import RelationshipManager
+from managers.world import item_ids
 from managers.world.climate import ClimateEngine
 from modules.body.parts import BodyLocation, BodyPart, PartState, new_body
 from modules.body.stats import Stats
@@ -61,7 +62,7 @@ from modules.world.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 24  # carrying-and-loot
+SCHEMA_VERSION = 25  # carrying-and-loot
 
 MAX_ID_LENGTH = 40
 
@@ -247,6 +248,7 @@ def _item_entity_to_dict(entity: ItemEntity) -> dict[str, Any]:
     return {
         "item_id": entity.item.id,
         "hit_points": entity.hit_points,
+        "instance_id": entity.instance_id,
         "wetness": entity.wetness,
         "holes": sorted(part.value for part in entity.holes),
         "condition": entity.condition,
@@ -261,7 +263,7 @@ def _item_entity_from_dict(data: dict[str, Any]) -> ItemEntity | None:
     if item is None:
         logger.warning(f"Dropping unknown item id '{data.get('item_id')}'.")
         return None
-    entity = ItemEntity(item=item)
+    entity = ItemEntity(item=item, instance_id=_as_text(data.get("instance_id", ""), MAX_ID_LENGTH))
     # __post_init__ sets full health; restore the saved condition over it.
     entity.hit_points = int(data.get("hit_points", entity.max_hit_points))
     entity.wetness = min(max(float(data.get("wetness", 0.0)), 0.0), WETNESS_MAX)
@@ -600,6 +602,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
     player = manager.player
     narrative = manager.narrative
     memory = manager.memory
+    item_ids.stamp_world(manager.world, player, manager.npcs.values())
 
     return {
         "version": SCHEMA_VERSION,
@@ -616,6 +619,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "zombies": [_zombie_to_dict(zombie) for zombie in manager.world.zombies.values()],
             "corpses": [_corpse_to_dict(corpse) for corpse in manager.world.corpses.values()],
             "next_corpse_number": manager.world.next_corpse_number,
+            "next_item_number": manager.world.next_item_number,
             "smell_zone_id": manager.world.smell_zone_id,
             "barriers": {
                 barrier_id: _barrier_to_dict(barrier)
@@ -801,6 +805,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         last_redistribution_minute=_optional_minute(world_data.get("last_redistribution_minute")),
         next_zombie_number=int(world_data.get("next_zombie_number", 1)),
         next_corpse_number=int(world_data.get("next_corpse_number", 1)),
+        next_item_number=int(world_data.get("next_item_number", 1)),
         smell_zone_id=(
             world_data["smell_zone_id"] if world_data.get("smell_zone_id") in locations else None
         ),

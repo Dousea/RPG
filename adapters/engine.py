@@ -23,7 +23,7 @@ from data.character.traits import TRAITS
 from data.items import item_condition_word, wetness_word
 from data.story import mentions as mention_k
 from data.story.memory import BUDGET_MARGIN_TOKENS
-from managers import carry
+from managers import carry, naming
 from managers.body.first_aid import part_word
 from managers.body.health import open_wounds
 from managers.body.stats.status_effects import active_status_effects, player_status_effect_levels
@@ -38,6 +38,7 @@ from managers.mentions import labels, mentionables, picked
 from managers.plan import OpenChoice, bind_choices, open_choices, steps_of
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion, build_questions, plan_questions
+from managers.world import item_ids
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import weather_summary
 from managers.world.rooms import current_room
@@ -613,6 +614,7 @@ class GameEngine:
         manager = self.manager
         if manager is None:
             return {"needs_creation": True, "story_text": story_text, "options": []}
+        item_ids.stamp_world(manager.world, manager.player, manager.npcs.values())
         player = manager.player
         narrative = manager.narrative
         npcs_here = manager.npcs_in_location(player.current_location_id)
@@ -851,7 +853,7 @@ def _condition(entity: ItemEntity) -> str:
     if isinstance(entity.item, MeleeWeaponItem):
         return item_condition_word(entity)
     if isinstance(entity.item, MedicalItem | StackItem):
-        return f"{entity.uses} left" if entity.item.uses > 1 else item_condition_word(entity)
+        return naming.uses_words(entity) or item_condition_word(entity)
     return f"{entity.hit_points}/{entity.max_hit_points}"
 
 

@@ -11,7 +11,7 @@ from typing import Literal
 from modules.action.types import AnyAction
 
 MentionKind = Literal[
-    "zombie", "corpse", "npc", "barrier", "room", "container", "zone", "body_part"
+    "zombie", "corpse", "npc", "barrier", "room", "container", "zone", "body_part", "item"
 ]
 
 # Stands in the sent text where a picked entry sits; a typed "@" is never a pick.
@@ -69,30 +69,40 @@ class _Slot:
     when_set: bool = False
 
 
+_ITEM_SLOT = (_Slot("item_name", ("item",)),)
 _BARRIER_SLOT = (_Slot("barrier_name", ("barrier",)),)
 _PART_SLOT = (_Slot("part_name", ("body_part",)),)
 _NPC_SLOT = (_Slot("npc_name", ("npc",)),)
 
 SLOTS: dict[str, tuple[_Slot, ...]] = {
     "MOVE_TO": (_Slot("destination", ("zone", "room")),),
-    "TAKE": (_Slot("from_name", ("corpse", "container"), when_set=True),),
-    "PUT": (_Slot("target_name", ("container",)),),
+    "TAKE": (
+        _Slot("item_name", ("item",), when_set=True),
+        _Slot("from_name", ("corpse", "container"), when_set=True),
+    ),
+    "PUT": (_Slot("item_name", ("item",)), _Slot("target_name", ("container",))),
     "CARRY": (_Slot("corpse_name", ("corpse",)),),
     "SEARCH": (_Slot("target_name", ("corpse", "room", "container")),),
     "ATTACK": (_Slot("target_name", ("npc", "zombie", "barrier")),),
     "SHOVE": (_Slot("target_name", ("zombie",)),),
+    "DROP": _ITEM_SLOT,
+    "WEAR": _ITEM_SLOT,
+    "TAKE_OFF": _ITEM_SLOT,
+    "EQUIP": _ITEM_SLOT,
+    "UNEQUIP": _ITEM_SLOT,
+    "USE_ITEM": _ITEM_SLOT,
     "OPEN": _BARRIER_SLOT,
     "CLOSE": _BARRIER_SLOT,
     "LOCK": _BARRIER_SLOT,
     "UNLOCK": _BARRIER_SLOT,
     "BARRICADE": _BARRIER_SLOT,
     "UNBARRICADE": _BARRIER_SLOT,
-    "BANDAGE": _PART_SLOT,
+    "BANDAGE": (*_PART_SLOT, *_ITEM_SLOT),
     "REMOVE_BANDAGE": _PART_SLOT,
-    "DISINFECT": _PART_SLOT,
+    "DISINFECT": (*_PART_SLOT, *_ITEM_SLOT),
     "TALK": _NPC_SLOT,
     "REQUEST": _NPC_SLOT,
-    "GIVE": _NPC_SLOT,
+    "GIVE": (*_NPC_SLOT, *_ITEM_SLOT),
     "ADD_RELATIONSHIP_NOTE": _NPC_SLOT,
 }
 

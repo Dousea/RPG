@@ -15,6 +15,7 @@ from managers.corpses.bodies import rot_stage
 from managers.game import GameManager
 from managers.world.containers import fill_bag, roll_table
 from managers.zombies.population import distance_word, light_level
+from modules.action.pins import pin_of
 from modules.body.parts import LAYER_ORDER
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
@@ -111,9 +112,12 @@ def contents_in_words(corpse: CorpseEntity) -> str:
 
 
 def find_content(corpse: CorpseEntity, name: str) -> ItemEntity | list[ItemEntity] | None:
-    """What on a body `name` points at: `naming.find_named`, else the first name containing it."""
+    """What on a body `name` points at: `naming.find_named`, else the first name containing it.
+
+    A pinned item is that item or nothing; it never falls back to a look-alike.
+    """
     found = naming.find_named(corpse.contents, name)
-    if found is not None:
+    if found is not None or pin_of(name, "item") is not None:
         return found
     needle = name.strip().casefold()
     for entity in corpse.contents:

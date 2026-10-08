@@ -232,9 +232,12 @@ abstract `max_hit_points` each subclass defines. For an `ItemEntity` this is
 **durability**: a crowbar at 40/60 is a worn crowbar. The design documents
 model item condition nowhere.
 
-`BaseEntity.id` is `id(self)` — a memory address. It is never persisted and
-never used as a key. Stable identity is `PlayerEntity.entity_id` (`"player"`)
-and `NpcEntity.npc_id`.
+`BaseEntity` has no id of its own. Stable identity is `PlayerEntity.entity_id`
+(`"player"`), `NpcEntity.npc_id` and, for an item, `ItemEntity.instance_id`
+(`"i12"`): numbered from `World.next_item_number`, saved with the item and the
+counter, and given by `managers/world/item_ids.py` to every item that has none
+(at the start of a game, on each turn's screen, when a which-one question is built
+and before a save is written).
 
 ### Player
 

@@ -4,12 +4,16 @@ import json
 import re
 from unittest import mock
 
+from data.items import ITEMS
+from managers.combat import weapons
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.validator import Accepted, ActionValidator, Rejected
+from managers.world import item_ids
 from modules.action.pins import MENTION_MARK, pin_of
 from modules.action.types import AnyAction, AttackAction, BandageAction, MoveAction
 from modules.body.parts import BodyPart
+from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
 from modules.resolution import TargetBarrier, TargetContainer, TargetZombie
 from tests.test_engine import EngineTestCase
@@ -17,6 +21,7 @@ from tests.test_simulation import add_zombie, zombie_game
 
 STORY = "STORY:\nIt happens.\n\nEVENT:\nSomething happened\n\nOPTIONS:\nNONE"
 ZOMBIE_ID = re.compile(r"\bz\d+\b")
+ITEM_ID = re.compile(r"\bi\d+\b")
 
 
 class MentionTurnTests(EngineTestCase):
@@ -257,12 +262,26 @@ class MentionTurnTests(EngineTestCase):
         self.assertIn("Refused", self.llm.narrator_prompts[0])
         self.assertFalse(gm.world.barriers["door_clinic"].broken)
 
+    def test_a_pinned_item_is_held_and_no_prompt_carries_an_id_or_its_description(self):
+        gm = self.stage("zone_street")
+        bats = [ItemEntity(item=ITEMS["item_baseball_bat"]) for _ in range(2)]
+        gm.player.inventory.extend(bats)
+        item_ids.stamp_world(gm.world, gm.player)
+        self.script("EQUIP Baseball Bat")
+        self.engine.play(f"hold {MENTION_MARK}", mentions=[bats[1].instance_id])
+        self.assertIs(weapons.held_entity(gm.player), bats[1])
+        prompts = [*self.llm.prompts, *self.llm.narrator_prompts]
+        self.assertEqual(len(prompts), 2)
+        for prompt in prompts:
+            self.assertNotRegex(prompt, ITEM_ID)
+        self.assertNotIn("in your pack", self.llm.prompts[0])
+
     def test_the_payload_lists_the_mentionable_things(self):
         gm = self.stage("zone_neighborhood")
         add_zombie(gm, gap=3, state=ZombieState.CHASING)
         payload = self.engine.state()
         kinds = {entry["kind"] for entry in payload["mentions"]}
-        self.assertEqual(kinds, {"zombie", "npc", "barrier", "zone"})
+        self.assertEqual(kinds, {"zombie", "npc", "barrier", "zone", "item"})
         zombie = next(e for e in payload["mentions"] if e["kind"] == "zombie")
         self.assertEqual(
             zombie,
@@ -275,4 +294,5 @@ class MentionTurnTests(EngineTestCase):
             },
         )
         for entry in payload["mentions"]:
-            self.assertNotRegex(entry["description"], r"\d")
+            if entry["kind"] != "item":
+                self.assertNotRegex(entry["description"], r"\d")

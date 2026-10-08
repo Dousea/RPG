@@ -2,8 +2,8 @@
 
 Only what has a stable id or a closed name is listed: seen zombies, perceived bodies, the
 NPCs and rooms and containers of the zone, the barriers on its connections, every zone
-`zone_path` reaches and the player's hurt or bandaged parts. Items have no instance id yet,
-and topics would show what an NPC knows before it is asked.
+`zone_path` reaches, the player's hurt or bandaged parts and the items in reach, each by its
+instance id. Topics would show what an NPC knows before it is asked.
 """
 
 from collections.abc import Sequence
@@ -12,8 +12,15 @@ from typing import Literal
 from data.story import mentions as mention_k
 from data.world.locations import ZONE_KIND_NAMES
 from data.zombies import lore as zombie_lore
+from managers import carry, naming
 from managers.body.first_aid import part_state_words, part_word
-from managers.corpses.search import corpse_person, corpse_views, looks_words, person_word
+from managers.corpses.search import (
+    corpse_person,
+    corpse_views,
+    looks_words,
+    perceived_corpses,
+    person_word,
+)
 from managers.game import GameManager
 from managers.world.barriers import barriers_of, blocks, state_word
 from managers.world.rooms import current_room, room_holding
@@ -190,6 +197,46 @@ def _body_parts(manager: GameManager) -> list[Mention]:
     ]
 
 
+def _item_mention(entity: ItemEntity, where: str) -> Mention:
+    words = ", ".join([naming.item_words(entity), where])
+    return Mention("item", entity.instance_id, entity.item.name, words)
+
+
+def _items(manager: GameManager) -> list[Mention]:
+    """The items in reach: carried, worn, held, on the floor, in opened containers of the room and on searched bodies."""
+    player = manager.player
+    mentions: list[Mention] = []
+    for entity in carry.carried_items(player):
+        bag = carry.holder_bag(player, entity)
+        where = (
+            mention_k.ITEM_IN_PACK
+            if bag is None
+            else mention_k.ITEM_IN_BAG.format(bag=bag.item.name)
+        )
+        mentions.append(_item_mention(entity, where))
+    held = carry.held_things(player)
+    for entity in carry.on_body(player):
+        where = mention_k.ITEM_HELD if any(entity is each for each in held) else mention_k.ITEM_WORN
+        mentions.append(_item_mention(entity, where))
+    mentions.extend(
+        _item_mention(e, mention_k.ITEM_ON_FLOOR)
+        for e in manager.current_location.entities
+        if isinstance(e, ItemEntity)
+    )
+    room = current_room(manager.current_location, player)
+    for container in room.containers if room is not None else ():
+        if container.opened:
+            where = mention_k.ITEM_IN_CONTAINER.format(container=container.name)
+            mentions.extend(_item_mention(e, where) for e in container.contents)
+    listed = _corpses(manager)
+    body_names = dict(zip((m.id for m in listed), labels(listed), strict=True))
+    for corpse in perceived_corpses(manager):
+        if corpse.searched:
+            where = mention_k.ITEM_ON_BODY.format(body=body_names[corpse.corpse_id])
+            mentions.extend(_item_mention(e, where) for e in corpse.contents)
+    return mentions
+
+
 def mentionables(manager: GameManager) -> list[Mention]:
     """What the player can mention now, grouped by kind in the order the list shows them."""
     return [
@@ -200,6 +247,7 @@ def mentionables(manager: GameManager) -> list[Mention]:
         *_rooms(manager),
         *_zones(manager),
         *_body_parts(manager),
+        *_items(manager),
     ]
 
 

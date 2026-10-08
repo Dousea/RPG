@@ -5,10 +5,6 @@ from dataclasses import dataclass
 @dataclass
 class BaseEntity(ABC):
     @property
-    def id(self) -> int:
-        return id(self)
-
-    @property
     def hit_points(self) -> int:
         return self._hit_points
 

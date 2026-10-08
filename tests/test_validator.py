@@ -785,9 +785,14 @@ class AskedValidationTests(unittest.TestCase):
         )
         asked = self.asked(TakeAction(item_name="Baseball Bat"))
         self.assertEqual(asked.attr, "item_name")
+        ground = self.gm.current_location.entities
         self.assertEqual(
             [(c.kind, c.id) for c in asked.candidates],
-            [("item", "broken Baseball Bat"), ("item", "good Baseball Bat")],
+            [
+                ("item", e.instance_id)
+                for e in ground
+                if isinstance(e, ItemEntity) and e.item is bat
+            ],
         )
         fixed = replace(asked.action, item_name=asked.candidates[0].written())
         self.assertIsInstance(self.validator.validate(fixed), Accepted)
