@@ -63,8 +63,9 @@ Never commit, never push, never stage.
     plus one engine-level test only where the wiring itself is the risk.
     Never a second test of the same behaviour at the same layer, and never
     a third layer.
-  - A new test module goes in its domain's package (`tests/<domain>/`), never
-    at `tests/` top level.
+  - A new test module mirrors the code it tests (AGENTS.md): code in a
+    domain package gets its tests in `tests/<domain>/`; only code at its
+    layer's top level gets a test module at `tests/` top level.
 - Run `mise run check` at the end and fix everything it reports. Don't add
   to `.basedpyright/baseline.json`.
 - Don't call the live LLM unless the brief says to.

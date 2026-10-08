@@ -45,8 +45,9 @@ conventions). The prompt may name a base commit; diff against it when given.
 6. **Tests that last.** Read the new and changed tests against the
    implementer's "Tests that last" rules: a test that spells out a sentence
    of prose instead of checking key words or a named constant; a behaviour
-   tested again at a layer that already covers it; a new test module at
-   `tests/` top level instead of its domain package. Compare the report's
+   tested again at a layer that already covers it; a new test module that
+   doesn't mirror the code it tests (domain code tested at `tests/` top
+   level). Compare the report's
    test count and `mise run test` wall time before and after; say so when
    the time grew noticeably for what the task adds.
 
@@ -59,7 +60,7 @@ contradicts the code, a `/play` field missing from or stale in
 `static/app.js`, a bug that gives a wrong result or crashes a turn, and
 duplication or complexity the next task will have to work around, a test
 that spells out prose where a key-word or constant check would do, a new
-test module at `tests/` top level, a test that repeats an existing one at
+test module that doesn't mirror the code it tests, a test that repeats an existing one at
 the same layer, and a behaviour tested at a third layer with no wiring risk
 there. Not blocking: style the linters accept, naming judgement, the
 lowest-layer-plus-engine pair the implementer's rules allow, small

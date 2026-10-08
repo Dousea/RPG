@@ -241,10 +241,11 @@ heat all take the player's health to zero; see
 two days, and every task runs them all several times. Three costs to work
 off:
 
-- Placement: most tests sit in top-level `tests/test_*.py` files instead of
-  the domain packages AGENTS.md asks for, including recent ones
-  (`test_item_lookup.py`, `test_mentions.py`, `test_engine_mentions.py`,
-  `test_pins.py`). Move each into its package when the area is next touched.
+- Placement: most tests sit in top-level `tests/test_*.py` files although
+  they test code in a domain package (`test_clothing.py`,
+  `test_time_and_sleep.py` for the world clock, `test_event_log.py`), or in a package with no test package yet
+  (`modules/action/`: `test_action.py`, `test_plan_schema.py`). Move each to
+  the package that mirrors its code when the area is next touched.
 - Wording: prompt and fact tests in `test_context.py`, `test_simulation.py`
   and `test_engine.py` often spell out whole sentences, so a wording change
   breaks many tests. Rewrite them to check key words or named constants when
