@@ -109,11 +109,14 @@ actions, so "fight it until it drops" is up to 5 `ATTACK`s.
   | down | a weapon | a floor attack |
   | down | nothing | a stomp |
 
+  A `SHOVE` is a shove at a standing zombie and a stomp at a down one, whatever
+  is in the hands.
+
 - **More than one zombie.** A swing hits the target, then other zombies at
   `gap <= 1` in the same posture (all standing, or all down), nearest first, until
   the swing's hit count is reached: the weapon's `max_hit_count` for a weapon hit or
   a floor attack, 3 for a shove with a weapon in hand, 1 for a shove with empty hands
-  and 1 for a stomp. It never hits a zombie on the side opposite the target's (front
+  and 1 for a stomp (a `SHOVE` at a down zombie included). It never hits a zombie on the side opposite the target's (front
   and behind, left and right). The `n`th zombie hit takes the split in
   [Damage](#damage).
 - **An idle or alerted target** that is hit starts chasing and faces the player.
@@ -226,22 +229,30 @@ A swing at a down zombie lands on the head or the neck (see zombie armour in `zo
   is rolled as usual.
 - **Bare-handed, a stomp:** the split is the stomp term, crits use the shove
   chance, and there is no x5. A stomp costs double the hit's endurance. It hits
-  the one zombie on the floor and no other.
+  the one zombie on the floor and no other. A `SHOVE` at a zombie on the floor is
+  this same stomp, with a weapon in hand or not: bare-hands reach, the shoe power,
+  no wear on the weapon.
 
 Either one keeps the zombie down.
 
 ## Shoves
 
 `SHOVE <zombie>` is one shove, 1 minute, target at `gap <= 1` (closed first like
-`ATTACK`). It is what bare-handed `ATTACK` on a standing zombie already is,
-available with a weapon in hand too.
+`ATTACK`). On a standing zombie it is what bare-handed `ATTACK` already is,
+available with a weapon in hand too. On a zombie on the floor it is a stomp (see
+[Floor attacks and stomps](#floor-attacks-and-stomps)).
 
 - Bare hands for reach and endurance, whatever is held. The held weapon takes no
   wear. It moves 3 zombies with a weapon in hand and 1 with empty hands.
 - No damage, and `hits_taken` does not increase.
 - Rolls the shove crit chance. A crit knocks the zombie down, otherwise it is
   staggered.
-- Refused on a down zombie ("It's already down."); `ATTACK` stomps it instead.
+- A plain or group target ("zombie", "them") takes the nearest standing zombie
+  first and the nearest one on the floor only when none stands, so "shove them
+  back" does not stomp a downed one while another stands. `ATTACK` takes the
+  nearest either way. The floor words ("on the floor", "stomp") aim a `SHOVE` at
+  the nearest zombie on the floor, as they do an `ATTACK`; with none down the
+  swing is refused.
 - Refused on an NPC.
 
 ## The knife jaw stab

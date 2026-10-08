@@ -8,6 +8,7 @@ from unittest import mock
 
 from adapters import llm
 from data.items import ITEMS
+from data.zombies.lore import CRAWLER_STATE_WORDS, STATE_WORD_DOWN
 from managers.character import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
@@ -1207,6 +1208,17 @@ class ThreatsContextTests(unittest.TestCase):
         block = threats_block(ContextBuilder(self.gm).build_parser_prompt("look"))
         self.assertIn("z1 (a man, close)", block)
         self.assertNotIn("coming at you", block)
+
+    def test_the_parser_sees_which_zombies_are_down_or_crawling_and_not_the_standing(self):
+        standing = add_zombie(self.gm, 3, ZombieState.CHASING)
+        down = add_zombie(self.gm, 3, ZombieState.CHASING)
+        down.down_until = self.gm.narrative.minutes + 5
+        crawler = add_zombie(self.gm, 3, ZombieState.CHASING, crawling=True)
+        block = threats_block(ContextBuilder(self.gm).build_parser_prompt("look"))
+        lines = {line.split()[1]: line for line in block.strip().splitlines()}
+        self.assertTrue(lines[standing.zombie_id].endswith("close)"))
+        self.assertIn(STATE_WORD_DOWN, lines[down.zombie_id])
+        self.assertIn(CRAWLER_STATE_WORDS["chasing"], lines[crawler.zombie_id])
 
 
 class MeleeContextTests(unittest.TestCase):

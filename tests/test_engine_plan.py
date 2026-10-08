@@ -459,6 +459,49 @@ class GroupWordTests(PlanScreenTestCase):
         self.assertEqual(self.aimed_at(seen), [near.zombie_id])
         self.assertTrue(all(isinstance(a.action, ShoveAction) for a in seen))
 
+    def test_shove_them_shoves_the_standing_zombie_before_a_nearer_down_one(self):
+        gm = self.stage("zone_street")
+        _, standing = self.zombies(gm, 1, 1.5, down=(0,))
+        seen = self.accepted()
+        self.script("SHOVE them")
+        self.engine.play("shove them back")
+        self.assertEqual(self.aimed_at(seen), [standing.zombie_id])
+
+    def test_shove_them_stomps_the_nearest_when_only_down_zombies_are_left(self):
+        gm = self.stage("zone_street")
+        near, _ = self.zombies(gm, 1, 1.5, down=(0, 1))
+        seen = self.accepted()
+        self.script("SHOVE them")
+        self.engine.play("shove them back")
+        self.assertEqual(self.aimed_at(seen), [near.zombie_id])
+
+    def test_attack_them_still_hits_the_nearest_zombie_even_when_it_is_down(self):
+        gm = self.stage("zone_street")
+        near, _ = self.zombies(gm, 1, 1.5, down=(0,))
+        seen = self.accepted()
+        self.script("ATTACK them")
+        self.engine.play("hit them")
+        self.assertEqual(self.aimed_at(seen), [near.zombie_id])
+
+    def test_stomp_scripted_as_a_shove_aims_at_the_one_on_the_floor(self):
+        gm = self.stage("zone_street")
+        _, down = self.zombies(gm, 1, 1.5, down=(1,))
+        seen = self.accepted()
+        self.script("SHOVE zombie")
+        self.engine.play("stomp the one on the floor")
+        self.assertEqual(self.aimed_at(seen), [down.zombie_id])
+
+    def test_stomp_scripted_as_a_shove_with_none_down_is_refused(self):
+        gm = self.stage("zone_street")
+        (zombie,) = self.zombies(gm, 1)
+        seen = self.accepted()
+        refused = self.watch(Rejected)
+        self.script("SHOVE them")
+        self.engine.play("stomp them")
+        self.assertEqual(seen, [])
+        self.assertEqual({r.reason for r in refused}, {NO_ZOMBIE_DOWN})
+        self.assertFalse(zombie.staggered)
+
     def test_the_floor_words_stomp_the_zombie_on_the_floor_whatever_the_parser_wrote(self):
         gm = self.stage("zone_street")
         _, down = self.zombies(gm, 1, 1.5, down=(1,))

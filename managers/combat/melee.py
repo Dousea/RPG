@@ -205,7 +205,7 @@ class MeleeEngine:
         held = weapons.equipped_weapon(player)
         held_melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
         weapon = held_melee or melee_k.BARE_HANDS
-        kind = self._kind(shove, target.on_floor(now), held_melee is not None)
+        kind = self.kind_at(player, target, shove=shove, now=now)
         targets = self.reach(world, player, target, shove=shove, now=now)
         levels = skill_levels(player)
         status_effects = player_status_effect_levels(player)
@@ -301,11 +301,14 @@ class MeleeEngine:
         result.facts.append(zombie_lore.CRAWL_FACT.format(target=zombie.zombie_id))
 
     @staticmethod
-    def _kind(shove: bool, down: bool, armed: bool) -> SwingKind:
-        if shove or (not down and not armed):
-            return SwingKind.SHOVE
-        if down:
+    def kind_at(player: PlayerEntity, target: ZombieEntity, *, shove: bool, now: int) -> SwingKind:
+        """The kind of swing `player` makes at `target`: a stomp for a shove, or bare hands, at one on the floor."""
+        held = weapons.equipped_weapon(player)
+        armed = isinstance(held, MeleeWeaponItem) and not shove
+        if target.on_floor(now):
             return SwingKind.FLOOR_ATTACK if armed else SwingKind.STOMP
+        if shove or not armed:
+            return SwingKind.SHOVE
         return SwingKind.HIT
 
     @staticmethod
@@ -320,7 +323,7 @@ class MeleeEngine:
         """The zombies a swing at `target` hits, rolling nothing: the target, then the nearest others in reach and in its posture, up to the swing's hit count."""
         held = weapons.equipped_weapon(player)
         melee = held if isinstance(held, MeleeWeaponItem) and not shove else None
-        kind = MeleeEngine._kind(shove, target.on_floor(now), melee is not None)
+        kind = MeleeEngine.kind_at(player, target, shove=shove, now=now)
         if kind == SwingKind.SHOVE:
             limit = (
                 melee_k.SHOVE_HIT_COUNT_UNARMED if held is None else melee_k.SHOVE_HIT_COUNT_ARMED

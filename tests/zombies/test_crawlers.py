@@ -3,6 +3,7 @@
 import random
 import unittest
 
+from data.melee import STOMP_FACT
 from managers.character.skills import SkillEngine
 from managers.combat.melee import MeleeEngine
 from managers.game import GameManager
@@ -183,13 +184,13 @@ class CrawlerPostureTests(unittest.TestCase):
         self.assertTrue(zombie.staggered)
         self.assertEqual(zombie.down_until, 0)
 
-    def test_shoving_a_crawler_is_refused(self):
+    def test_shoving_a_crawler_stomps_it(self):
         gm = zombie_game()
         zombie = add_zombie(gm, gap=1, state=ZombieState.CHASING)
         zombie.crawling = True
         zombie.time_since_seen = 0
         facts = simulate(gm, ShoveAction(target_name="z1"))
-        self.assertTrue(any("It's already down." in fact for fact in facts), facts)
+        self.assertIn(STOMP_FACT.format(name="Orton", target="z1"), facts)
 
     def test_bare_hands_stomp_a_crawler(self):
         stomped = street_game()

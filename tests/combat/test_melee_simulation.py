@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 from data.items import ITEMS
+from data.melee import STOMP_FACT
 from managers.character.skills import SkillEngine
 from managers.combat.melee import MeleeEngine
 from managers.game import GameManager
@@ -347,12 +348,13 @@ class ShoveActionTests(unittest.TestCase):
         simulate(gm, ShoveAction(target_name=zombie.zombie_id), rng=random.Random(1))
         self.assertEqual(gm.narrative.minutes - before, 3)
 
-    def test_a_shove_on_a_down_zombie_is_refused(self):
+    def test_a_shove_on_a_down_zombie_stomps_it_with_a_weapon_in_hand(self):
         gm = fight_game()
         zombie = add_zombie(gm, gap=1, health=100)
         zombie.down_until = gm.narrative.minutes + 2
         facts = simulate(gm, ShoveAction(target_name=zombie.zombie_id))
-        self.assertEqual(facts[0], "Refused: Orton can't shove z1: It's already down.")
+        self.assertIn(STOMP_FACT.format(name="Orton", target="z1"), facts)
+        self.assertEqual(zombie.hits_taken, 1)
 
     def test_attack_on_a_down_zombie_stomps_or_floor_attacks(self):
         gm = fight_game()

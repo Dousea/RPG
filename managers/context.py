@@ -382,10 +382,12 @@ class ContextBuilder:
         return "\n".join(lines) or "None"
 
     def _parser_threats_section(self) -> str:
-        """Seen zombies by id, looks and distance only, so the parser can aim ATTACK at one."""
+        """Seen zombies by id, looks and distance, and the posture of one on the floor, so the parser can aim ATTACK or SHOVE at one."""
         zombies = self.manager.world.zombies
+        now = self.manager.narrative.minutes
         lines = [
-            f" - {view.zombie_id} ({looks_words(person_word(zombies[view.zombie_id].female), zombies[view.zombie_id].worn.values())}, {view.distance_word})"
+            f" - {view.zombie_id} ({looks_words(person_word(zombies[view.zombie_id].female), zombies[view.zombie_id].worn.values())}, {view.distance_word}"
+            f"{', ' + view.state_word if zombies[view.zombie_id].on_floor(now) else ''})"
             for view in threat_views(self.manager)
             if view.zombie_id is not None
         ]

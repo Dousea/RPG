@@ -13,7 +13,7 @@ from data.story import mentions as mention_k
 from data.time_costs import MAX_PLAN_ACTIONS
 from managers import naming
 from managers.combat.aim import is_down_target, is_plain_zombie
-from managers.combat.melee import MeleeEngine
+from managers.combat.melee import MeleeEngine, SwingKind
 from managers.game import GameManager
 from managers.mentions import body_candidates, body_named, mentionables, zone_candidate
 from managers.validator import (
@@ -188,6 +188,19 @@ def _nearest_zombie(manager: GameManager, action: AnyAction) -> str | None:
     return None
 
 
+def _stomps(manager: GameManager, action: AnyAction, zombie_id: str | None) -> bool:
+    """Whether `action` at `zombie_id` is a stomp: a shove, or a bare-handed attack, at a zombie on the floor."""
+    if zombie_id is None:
+        return False
+    kind = MeleeEngine.kind_at(
+        manager.player,
+        manager.world.zombies[zombie_id],
+        shove=isinstance(action, ShoveAction),
+        now=manager.narrative.minutes,
+    )
+    return kind == SwingKind.STOMP
+
+
 def _reaches_several(manager: GameManager, action: AnyAction, zombie_id: str) -> bool:
     """Whether the swing of `action` at `zombie_id` would hit more than that zombie."""
     hit = MeleeEngine.reach(
@@ -216,6 +229,8 @@ def steps_of(
         nearest = _nearest_zombie(manager, action)
         verb = "shove" if isinstance(action, ShoveAction) else "hit"
         if nearest in looks:
+            if _stomps(manager, action, nearest):
+                verb = "stomp"
             name, description = looks[nearest]
             beside = " and the ones beside it" if _reaches_several(manager, action, nearest) else ""
             text, default = f"{verb} the nearest zombie{beside}", f"{name}, {description}"

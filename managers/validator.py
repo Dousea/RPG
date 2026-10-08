@@ -1174,17 +1174,13 @@ class ActionValidator:
         return Accepted(action, TargetBarrier(found, self._walks_to(found)))
 
     def _validate_shove(self, action: ShoveAction) -> ValidationResult:
-        manager = self.manager
-        zombie_target = self._zombie_target(action.target_name)
+        zombie_target = self._zombie_target(action.target_name, standing_first=True)
         if zombie_target is None:
             if self._names_a_zombie(action.target_name):
                 return Rejected(action, self._no_such_zombie(action.target_name, "shove"))
             return Rejected(action, f"{self._name} can only shove zombies.")
         if refusal := self._behind_a_barrier(zombie_target.zombie_id):
             return Rejected(action, refusal)
-        zombie = manager.world.zombies[zombie_target.zombie_id]
-        if zombie.on_floor(manager.narrative.minutes):
-            return Rejected(action, "It's already down.")
         return Accepted(action, zombie_target)
 
     @staticmethod
@@ -1201,8 +1197,8 @@ class ActionValidator:
             or needle in self.manager.world.zombies
         )
 
-    def _zombie_target(self, name: str) -> TargetZombie | None:
-        """The perceived zombie `name` points at: its id, the nearest for "zombie" or a group word, the nearest one down for floor words."""
+    def _zombie_target(self, name: str, *, standing_first: bool = False) -> TargetZombie | None:
+        """The perceived zombie `name` points at: its id, the nearest for "zombie" or a group word (a standing one first when `standing_first`), the nearest one down for floor words."""
         manager = self.manager
         needle = name.strip().casefold()
         here = [seen.zombie for seen in perceived_now(manager)]
@@ -1210,7 +1206,10 @@ class ActionValidator:
             now = manager.narrative.minutes
             pool = [zombie for zombie in here if zombie.on_floor(now)]
         elif is_plain_zombie(needle):
+            now = manager.narrative.minutes
             pool = here
+            if standing_first and any(not zombie.on_floor(now) for zombie in here):
+                pool = [zombie for zombie in here if not zombie.on_floor(now)]
         else:
             pool = [zombie for zombie in here if zombie.zombie_id == needle]
         pool.sort(key=lambda z: (z.gap, int(z.zombie_id[1:])))

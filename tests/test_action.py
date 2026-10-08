@@ -283,6 +283,11 @@ class VerbRegistryTests(unittest.TestCase):
         self.assertEqual(self.EXPECTED, set(VERBS) & self.EXPECTED)
         self.assertTrue(set(VERBS) >= self.EXPECTED)
 
+    def test_the_shove_gloss_names_stomping_and_the_attack_gloss_sends_it_there(self):
+        self.assertIn("stomp", VERBS["SHOVE"].gloss)
+        self.assertIn("stomp", VERBS["ATTACK"].gloss)
+        self.assertIn("SHOVE", VERBS["ATTACK"].gloss)
+
     def test_every_verb_in_the_registry_has_a_validator_and_a_resolver(self):
         resolved = set(VERBS) - {"UNSUPPORTED"}
         self.assertEqual(resolved, set(ActionValidator._VALIDATORS))

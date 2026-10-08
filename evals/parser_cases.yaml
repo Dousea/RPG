@@ -2,7 +2,9 @@
 # Each case: the scene (`zone`, optional `outbreak`, `sneaking`), the player's `input`,
 # and the `expect`ed ACTIONS lines in order. `[]` means NONE. A TALK line is judged by
 # whether it carries words (`"words"` stands for any), not by what they are; an UNSUPPORTED
-# line by its verb alone. `carrying` lists item ids in the inventory.
+# line by its verb alone. `carrying` lists item ids in the inventory; `holding` is one item
+# id in the hands; `standing_zombies` and `downed_zombies` count the zombies beside the player.
+# `expect_instead` lists other `expect`ed plans that also pass.
 - name: creep to the lobby
   zone: zone_home
   input: I creep down to the lobby
@@ -188,3 +190,37 @@
   zone: zone_home
   input: go to the store
   expect: [MOVE_TO the store]
+
+- name: stomp the downed zombies
+  zone: zone_street
+  outbreak: true
+  downed_zombies: 2
+  input: stomp the ones on the floor
+  expect: [SHOVE zombie]
+  expect_instead: [[SHOVE z1], [SHOVE the ones on the floor]]
+
+- name: stomp one while holding a pan
+  zone: zone_street
+  outbreak: true
+  carrying: [item_frying_pan]
+  holding: item_frying_pan
+  downed_zombies: 1
+  input: stomp it
+  expect: [SHOVE z1]
+  expect_instead: [[SHOVE zombie]]
+
+- name: shove them back
+  zone: zone_street
+  outbreak: true
+  standing_zombies: 2
+  input: shove them back
+  expect: [SHOVE zombie]
+  expect_instead: [[SHOVE z1]]
+
+- name: hit the zombie
+  zone: zone_street
+  outbreak: true
+  standing_zombies: 1
+  input: hit the zombie
+  expect: [ATTACK zombie]
+  expect_instead: [[ATTACK z1]]

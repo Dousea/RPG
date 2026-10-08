@@ -5,9 +5,9 @@ import random
 import unittest
 
 from data.items import ITEMS
-from data.melee import BARE_HANDS
+from data.melee import BARE_HANDS, STOMP_FACT
 from managers.character.skills import SkillEngine
-from managers.combat.melee import MeleeEngine, crit_chance, hit_split, hits_taken_factor
+from managers.combat.melee import MeleeEngine, SwingKind, crit_chance, hit_split, hits_taken_factor
 from managers.game import GameManager
 from modules.body.parts import BodyLocation
 from modules.body.stats import CharacterStat, Stats
@@ -404,6 +404,39 @@ class FloorAttackAndStompTests(unittest.TestCase):
         swing(gm, rng=FixedRng(by_size={2: 0}), now=0)
         expected = (1.7 * 0.5) * 3 * (2 / 1.1) * 1.5 * 0.3 * 0.15
         self.assertAlmostEqual(zombie.health, 100 - expected)
+
+
+class ShoveAtTheFloorTests(unittest.TestCase):
+    """melee: Floor attacks and stomps: a shove at a zombie on the floor is a stomp."""
+
+    def test_a_shove_stomps_a_down_zombie_whatever_is_held(self):
+        expected = 3.06 * 3 * (2 / 1.1) * 1.5 * 0.3 * 0.15
+        for weapon in (None, "item_crowbar"):
+            gm = street_game()
+            entity = hold(gm, weapon) if weapon else None
+            zombies = [add(gm, make_zombie(n)) for n in range(1, 4)]
+            for zombie in zombies:
+                zombie.down_until = 5
+            result = swing(gm, rng=FixedRng(by_size={2: 0}), shove=True, now=0)
+            if entity is not None:
+                self.assertEqual(entity.condition, 15)
+            self.assertAlmostEqual(zombies[0].health, 100 - expected)
+            self.assertEqual([z.hits_taken for z in zombies], [1, 0, 0])
+            self.assertIn(STOMP_FACT.format(name="Orton", target="z1"), result.facts)
+
+    def test_the_swing_kind_is_a_stomp_for_a_shove_or_bare_hands_at_a_down_zombie(self):
+        for weapon, shove, kind in (
+            ("item_crowbar", False, SwingKind.FLOOR_ATTACK),
+            ("item_crowbar", True, SwingKind.STOMP),
+            (None, False, SwingKind.STOMP),
+            (None, True, SwingKind.STOMP),
+        ):
+            gm = street_game(weapon=weapon)
+            zombie = add(gm, make_zombie())
+            zombie.down_until = 5
+            self.assertEqual(MeleeEngine.kind_at(gm.player, zombie, shove=shove, now=0), kind)
+        zombie.down_until = 0
+        self.assertEqual(MeleeEngine.kind_at(gm.player, zombie, shove=True, now=0), SwingKind.SHOVE)
 
 
 class ShoveTests(unittest.TestCase):

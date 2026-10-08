@@ -102,7 +102,7 @@ drift apart.
 | `WEAR` / `TAKE_OFF` | clothing item | 1 |
 | `EXERCISE` | type, optional minutes | as done |
 | `ATTACK` | NPC name, zombie id or `zombie`: 1 per swing. A door or window, with a required `swings` (a whole number, or `until it gives`): 1 per swing, see [doors](doors.md#breaking-through) | per swing |
-| `SHOVE` | zombie id, or `zombie` | 1 per swing |
+| `SHOVE` | zombie id, or `zombie`: knocks a standing zombie back and stomps one that is down, whatever is held; the verb for a stomp or kick | 1 per swing |
 | `EQUIP` / `UNEQUIP` | item | 1 |
 | `OPEN` / `CLOSE` | door or window | 0 |
 | `LOCK` / `UNLOCK` | door or window | 0 |
@@ -178,7 +178,7 @@ The scene and the last turn: no memory, no narrator prose, no relationship bands
 | `[EXITS]` / `[ZONES]` | the connections; every zone with its aliases |
 | `[ITEMS HERE]` | item names; an item whose name is held by items that look different also shows its describing words in brackets ("Baseball Bat (broken)") |
 | `[NPCS HERE]` | each NPC, "(following you)" when they follow, what they hold, and a line per available topic |
-| `[THREATS]` | perceived zombie ids with their looks ("a man in a police jacket") and distance words |
+| `[THREATS]` | perceived zombie ids with their looks ("a man in a police jacket") and distance words, and the posture word of one that is down or crawling |
 | `[DOORS AND WINDOWS]` | the doors and windows of the zone in words and plank counts; the names are the targets of the door verbs ([doors](doors.md#what-the-narrator-and-the-player-see)) |
 | `[INVENTORY]` | carried items, with their describing words as in `[ITEMS HERE]` |
 | `[WORN]` | the worn outfit |

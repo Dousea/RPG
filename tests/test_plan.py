@@ -264,6 +264,26 @@ class StepTests(unittest.TestCase):
         self.assertIn("nearest zombie and the ones beside it", step.text)
         self.assertIsNotNone(step.default)
 
+    def test_a_shove_or_bare_attack_at_a_down_zombie_reads_as_a_stomp(self):
+        gm = zombie_game("zone_street")
+        hold(gm, "item_crowbar")
+        down = add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        down.down_until = gm.narrative.minutes + 5
+        other = add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        other.down_until = gm.narrative.minutes + 5
+        (step,) = steps_of(gm, [], [ShoveAction(target_name=DOWN_TARGET)], [])
+        self.assertIn("stomp", step.text)
+        self.assertNotIn("beside", step.text)
+        (step,) = steps_of(gm, [], [AttackAction(target_name=DOWN_TARGET)], [])
+        self.assertNotIn("stomp", step.text)
+
+    def test_a_bare_handed_attack_at_a_down_zombie_reads_as_a_stomp(self):
+        gm = zombie_game("zone_street")
+        down = add_zombie(gm, gap=1, state=ZombieState.CHASING)
+        down.down_until = gm.narrative.minutes + 5
+        (step,) = steps_of(gm, [], [AttackAction(target_name=DOWN_TARGET)], [])
+        self.assertIn("stomp", step.text)
+
     def test_a_zombie_named_by_id_reads_as_its_looks(self):
         gm = zombie_game("zone_street")
         zombie = add_zombie(gm, gap=3, state=ZombieState.CHASING)

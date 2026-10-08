@@ -19,8 +19,11 @@ from managers.world.locations import connection_target  # noqa: E402
 from modules.action.parser import parse_action_plan  # noqa: E402
 from modules.action.types import AnyAction, MoveAction, TalkAction, UnsupportedAction  # noqa: E402
 from modules.entity.item import ItemEntity  # noqa: E402
+from modules.entity.zombie import ZombieEntity, ZombieState  # noqa: E402
+from modules.item import HoldableItem  # noqa: E402
 
 CASES_FILE = Path(__file__).resolve().parent.parent / "evals" / "parser_cases.yaml"
+DOWN_FOR_MINUTES = 10_000
 
 
 def scene(case: dict) -> GameManager:
@@ -30,7 +33,36 @@ def scene(case: dict) -> GameManager:
     manager.player.inventory.extend(ItemEntity(item=ITEMS[i]) for i in case.get("carrying", []))
     if case.get("outbreak"):
         manager.world.outbreak_started_at = 0
+    if holding := case.get("holding"):
+        held = ItemEntity(item=ITEMS[holding])
+        assert isinstance(held.item, HoldableItem)
+        for slot in held.item.slots:
+            manager.player.equipment[slot] = held
+    for _ in range(case.get("standing_zombies", 0)):
+        _add_zombie(manager, down=False)
+    for _ in range(case.get("downed_zombies", 0)):
+        _add_zombie(manager, down=True)
     return manager
+
+
+def _add_zombie(manager: GameManager, *, down: bool) -> None:
+    number = manager.world.next_zombie_number
+    manager.world.next_zombie_number += 1
+    manager.world.zombies[f"z{number}"] = ZombieEntity(
+        zombie_id=f"z{number}",
+        zone_id=manager.player.current_location_id,
+        health=2.0,
+        speed_type=3,
+        speed_mod=0.6,
+        lunger=False,
+        strength=3,
+        memory=800,
+        sight=2,
+        hearing=2,
+        state=ZombieState.IDLE,
+        gap=1.0,
+        down_until=manager.narrative.minutes + DOWN_FOR_MINUTES if down else 0,
+    )
 
 
 def _reached(manager: GameManager, action: AnyAction) -> object:
@@ -64,8 +96,11 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
         context.build_parser_prompt(case["input"]), context.build_plan_schema()
     )
     got, _ = llm.read_parser_reply(reply)
-    want, _ = parse_action_plan(list(case["expect"]))
-    return same_plan(manager, got, want), [repr(action) for action in got]
+    for lines in [case["expect"], *case.get("expect_instead", [])]:
+        want, _ = parse_action_plan(list(lines))
+        if same_plan(manager, got, want):
+            return True, [repr(action) for action in got]
+    return False, [repr(action) for action in got]
 
 
 def main() -> int:

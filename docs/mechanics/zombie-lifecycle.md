@@ -182,7 +182,7 @@ A crawler keeps its id, health, hit count, memory, sight and hearing.
 | --- | --- |
 | Speed | `speed_mod` re-rolled as 0.30 plus a whole number below 1500 over 10,000, so 0.30 to 0.45; never a lunger |
 | Thumping | none. At a closed barrier it stops and does nothing |
-| Posture | it counts as down for the player's swings: a weapon makes a floor attack, bare hands a stomp. `SHOVE` is refused ("It's already down.") |
+| Posture | it counts as down for the player's swings: a weapon makes a floor attack, bare hands a stomp. `SHOVE` stomps it too, whatever is held |
 | Staggering | a hit crawler skips its attack that minute |
 | Reach | within 1 tile, like any zombie |
 | Spotting, hearing, memory | as for any zombie |
