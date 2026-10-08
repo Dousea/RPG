@@ -7,7 +7,7 @@ import unittest
 from data.world.barriers import WINDOW_HEALTH_SINGLE
 from managers.character.skills import SkillEngine
 from managers.game import GameManager
-from managers.zombies import thumping
+from managers.zombies import distance, thumping
 from managers.zombies.noise import Sound
 from managers.zombies.population import PlayerMinute, ZombieLoop, redistribute, shut_behind
 from modules.entity.barrier import BarrierEntity, BarrierKind
@@ -204,7 +204,7 @@ class StartingTests(unittest.TestCase):
         self.assertEqual(chaser.state, ZombieState.THUMPING)
         self.assertEqual(chaser.thump_barrier, "door_lobby")
         self.assertEqual(chaser.zone_id, STREET)
-        self.assertEqual(chaser.gap, 80)
+        self.assertEqual(chaser.gap, 12)
 
     def test_a_chaser_already_at_the_door_thumps_at_once(self):
         gm = game()
@@ -602,6 +602,47 @@ class SightTests(unittest.TestCase):
                 break
         self.assertLess(z.time_since_seen, 5000)
         self.assertEqual(z.state, ZombieState.THUMPING)
+
+
+class ConnectionTilesTests(unittest.TestCase):
+    """zombies: A connection's length in tiles is its walking minutes at walking pace."""
+
+    def test_a_short_connection_is_4_tiles_and_a_long_one_is_40(self):
+        locations = game().world.locations
+        self.assertEqual(distance.tiles_between(locations, HOME, BUILDING), 4)
+        self.assertEqual(
+            distance.tiles_between(locations, "zone_neighborhood", "zone_pharmacy"), 40
+        )
+
+    def test_a_path_sums_its_connections(self):
+        locations = game().world.locations
+        self.assertEqual(distance.tiles_between(locations, "zone_supermarket", HOME), 72)
+
+    def test_the_same_zone_is_no_distance_and_no_route_is_none(self):
+        locations = game().world.locations
+        self.assertEqual(distance.tiles_between(locations, HOME, HOME), 0)
+        self.assertIsNone(distance.tiles_between(locations, HOME, "zone_nowhere"))
+
+    def test_a_sound_in_the_apartment_reaches_a_zombie_in_the_building(self):
+        gm = game(HOME)
+        z = zombie(gm, BUILDING, state=ZombieState.IDLE)
+        loop_for(gm)._hear(PlayerMinute(), [Sound(radius=20, volume=20)], CLEAR)
+        self.assertEqual(z.state, ZombieState.ALERTED)
+        self.assertEqual(z.sound_gap, 4)
+
+    def test_a_thumper_released_from_the_building_side_is_alerted_4_tiles_off(self):
+        gm = game(HOME)
+        door = gm.world.barriers["door_flat_vacant"]
+        z = thumper(gm, "door_flat_vacant", BUILDING)
+        thumping.release(gm.world, gm.player, door)
+        self.assertEqual(z.state, ZombieState.ALERTED)
+        self.assertEqual(z.sound_gap, 4)
+
+    def test_a_barrier_outside_the_players_zone_stops_a_walker_at_the_path_tiles(self):
+        gm = game(HOME)
+        door = gm.world.barriers["door_flat_vacant"]
+        self.assertEqual(thumping.stop_gap(gm.world, gm.player, door, BUILDING), 4)
+        self.assertEqual(thumping.stop_gap(gm.world, gm.player, door, STREET), 12)
 
 
 if __name__ == "__main__":

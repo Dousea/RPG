@@ -17,7 +17,7 @@ from managers.corpses import bodies as corpses
 from managers.game import GameManager
 from managers.world.barriers import can_see_through, connection_blocked, d_b
 from managers.world.locations import zone_path
-from managers.zombies import thumping
+from managers.zombies import distance, thumping
 from managers.zombies.attack import AttackOutcome, resolve_attack
 from managers.zombies.dress import dress, make_crawler
 from managers.zombies.noise import (
@@ -609,10 +609,9 @@ class ZombieLoop:
         manager = self._manager
         if zombie.zone_id == manager.player.current_location_id:
             return zombie.gap
-        path = zone_path(
+        return distance.tiles_between(
             manager.world.locations, zombie.zone_id, manager.player.current_location_id
         )
-        return None if path is None else len(path) * zombie_lore.HOP_TILES
 
     def _hear(self, minute: PlayerMinute, extra: Sequence[Sound], sample: WeatherSample) -> None:
         manager = self._manager

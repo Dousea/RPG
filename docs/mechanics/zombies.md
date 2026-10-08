@@ -89,9 +89,11 @@ Zombies ignore NPCs.
 `size_tiles` is the farthest a zombie in the zone can be from the player.
 `chunks` counts 8×8-tile chunks. `zombie_intensity` is a byte, 0 to 255.
 
-Every connection between zones is **40 tiles** (`HOP_TILES`), the distance the
-player covers in a 10-minute hop at walking pace; shorter connections take
-fewer minutes ([clock](clock.md)).
+A connection between zones is as long as the player walks it in its walking
+minutes ([clock](clock.md)) at walking pace, 4 tiles a minute: 4 tiles from the
+apartment to the building, 8 from the building to the street, 20 from the
+street to the neighborhood, 40 from the neighborhood to a shop. A path across
+several zones is the sum of its connections.
 
 ## Population
 
@@ -184,8 +186,9 @@ Redistribution is checked at the start of each minute.
 - **In the player's zone:** every zombie has a gap from 1 to `size_tiles`. When
   the player enters a zone, each zombie there that isn't already hunting gets a
   fresh gap, drawn uniformly, and a random facing.
-- **In other zones:** a zombie one hop away is 40 tiles from the player for
-  hearing, two hops 80. Its place inside its zone doesn't matter until the
+- **In other zones:** a zombie is as many tiles from the player for hearing
+  as the connections between them add up to (a zombie in the building hears the
+  apartment at 4 tiles). Its place inside its zone doesn't matter until the
   player arrives.
 - **Chasers** keep their own gap across zone changes. A chaser belongs to the
   player's zone while its gap is within that zone's size, and otherwise to the
@@ -521,11 +524,3 @@ and `player.sneaking`. A zombie in an unknown zone is dropped on load.
   nothing.
 - **Determinism.** Every roll uses the simulation's own random source, in loop
   order, so a seeded test replays exactly.
-
-## Known limitations
-
-- **A short connection does not slow a chaser.** A hop is still 40 tiles for
-  sound and path distance, while a connection can now take as little as 1 minute
-  ([clock](clock.md)), so a chaser keeps up with the player over a short
-  connection. *Fix:* give each connection its own length in tiles, together with
-  positions inside zones.

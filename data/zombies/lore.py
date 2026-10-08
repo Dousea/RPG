@@ -10,8 +10,6 @@ from data.character.traits import (
 from modules import units
 from modules.body.parts import BodyPart
 
-HOP_TILES = 40  # zombies: every zone connection
-
 ZOMBIE_STRENGTH = 3  # zombies
 ZOMBIE_MEMORY_FRAMES = 800  # zombies
 SPAWN_CLEARED_ZONE_IDS = ("zone_home",)  # zombies: the spawn building starts clear

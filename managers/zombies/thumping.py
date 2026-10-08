@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from data.character import traits as trait_k
 from data.items import ITEMS
 from data.world import barriers as barrier_k
-from data.zombies import lore as zombie_lore
 from managers.world.barriers import barriers_between, blocks, d_b, sound_stress, thump
 from managers.world.locations import zone_path
+from managers.zombies import distance
 from managers.zombies.noise import BarrierSound, Sound
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
@@ -61,11 +61,10 @@ def first_blocker(world: World, start_id: str, target_id: str) -> tuple[BarrierE
 
 
 def stop_gap(world: World, player: PlayerEntity, barrier: BarrierEntity, side: str) -> float:
-    """How close a walker on `side` gets: one tile beyond a barrier of the player's zone, else the hop boundary."""
+    """How close a walker on `side` gets: one tile beyond a barrier of the player's zone, else the path's tiles."""
     if of_player_zone(barrier, player):
         return d_b(world, player, barrier) + 1
-    path = zone_path(world.locations, side, player.current_location_id) or []
-    return len(path) * zombie_lore.HOP_TILES
+    return distance.tiles_between(world.locations, side, player.current_location_id) or 0
 
 
 def is_deaf(player: PlayerEntity) -> bool:
@@ -122,12 +121,12 @@ def release(world: World, player: PlayerEntity, barrier: BarrierEntity) -> froze
         if of_player_zone(barrier, player):
             zombie.sound_gap = d_b(world, player, barrier) + 1
             continue
-        path = zone_path(world.locations, zombie.zone_id, player.current_location_id)
-        if path is None:
+        tiles = distance.tiles_between(world.locations, zombie.zone_id, player.current_location_id)
+        if tiles is None:
             zombie.state = ZombieState.IDLE
             zombie.sound_gap = 0.0
         else:
-            zombie.sound_gap = len(path) * zombie_lore.HOP_TILES
+            zombie.sound_gap = tiles
     return frozenset(zombie.zombie_id for zombie in released)
 
 
