@@ -77,6 +77,7 @@ from managers.corpses.search import search as loot_search
 from managers.corpses.sickness import corpse_count, corpse_defence, smell_fact
 from managers.events.pipeline import broadcast_event
 from managers.game import DEATH_CAUSE_MAX_LENGTH, GameManager
+from managers.plan import steps_in_this_scene
 from managers.story.beats import clock_minutes, holds
 from managers.story.social import SocialManager
 from managers.validator import Accepted, ActionValidator, Asked, Rejected
@@ -265,6 +266,8 @@ class SimulationCore:
         self.tried: list[AnyAction] = []
         self.asked: Asked | None = None
         self.pending: list[AnyAction] = []
+        self.rest_unreached = False
+        self.zone_change_actions: list[AnyAction | None] = []
         self._social = SocialManager(manager, self._rng)
         self._body = BodyEngine(self._rng)
         self._first_aid = FirstAid(self._rng, self.skill_engine)
@@ -297,12 +300,14 @@ class SimulationCore:
         `refused` counts the lines the parser already refused: a turn with no
         actions and none of those is a `NONE` turn and costs a minute.
 
-        When a plan stops at a zone change with actions left, `reparse` is
-        called once with the actions done so far, in words, and every action
-        tried (done or refused), and returns the plan parsed again at the
-        destination, or None if it couldn't. That plan
-        resolves in the same turn under what is left of `MAX_PLAN_ACTIONS`, and
-        the not-yet-done fact is dropped; on None it stays.
+        When an action changes zone, `reparse` is called once with the actions done so
+        far, in words, and every action tried (done or refused), and returns the plan
+        parsed again at the destination, or None if it couldn't. That plan resolves in
+        the same turn under what is left of `MAX_PLAN_ACTIONS`. The actions parsed after
+        the zone change come from the old scene: they are never tried or named.
+        `zone_change_actions` holds, for each plan run, the action that changed zone (or
+        None). `rest_unreached` says the turn stopped at or after a zone change without running
+        a second plan (an interrupted move, a second zone change, no second plan).
 
         An action whose target fits several things (`Asked`) ends the plan there, as a zone
         change does: `asked` is the question and `pending` the actions from it on, none of
@@ -338,13 +343,16 @@ class SimulationCore:
         self.done_actions = []
         self.asked = None
         self.pending = []
+        self.rest_unreached = False
+        self.zone_change_actions = []
         plan = actions
         while True:
             budget = MAX_PLAN_ACTIONS - attempted
             if len(plan) > budget:
                 facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
-            left: list[AnyAction] = []
+            moved = False
             stalled = False
+            self.zone_change_actions.append(None)
             for index, action in enumerate(plan[:budget]):
                 attempted += 1
                 tried.append(action)
@@ -360,7 +368,10 @@ class SimulationCore:
                     )
                     self.asked = result
                     self.pending = plan[index:budget]
-                    unattempted = [describe_action(a) for a in self.pending]
+                    unattempted = [
+                        describe_action(a)
+                        for a in self.pending[: steps_in_this_scene(self.manager, self.pending)]
+                    ]
                     facts.append(
                         f"{self._name} can't tell which one is meant, so {self._subject} "
                         f"hasn't yet: {', '.join(unattempted)}."
@@ -393,30 +404,34 @@ class SimulationCore:
                 total_minutes += minutes
                 if not self.manager.narrative.game_over:
                     facts.extend(self._after_action())
+                changed_zone = self.manager.player.current_location_id != zone_before
+                if changed_zone:
+                    self.zone_change_actions[-1] = action
                 if self._interruption:
                     logger.debug("Plan interrupted by %s after %r", self._interruption, action)
-                    cancelled = [describe_action(a) for a in plan[index + 1 : budget]]
+                    if changed_zone:
+                        self.rest_unreached = not self.manager.narrative.game_over
+                        break
+                    later = plan[index + 1 : budget]
+                    cancelled = [
+                        describe_action(a)
+                        for a in later[: steps_in_this_scene(self.manager, later)]
+                    ]
                     if cancelled:
                         facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
                     break
-                if self.manager.player.current_location_id != zone_before:
-                    left = plan[index + 1 : budget]
-                    if isinstance(result.resolved, MoveBlocked):
-                        stalled = True
+                if changed_zone:
+                    moved = True
+                    stalled = isinstance(result.resolved, MoveBlocked)
                     break
-            if not left or self.manager.narrative.game_over:
+            if not moved or self.manager.narrative.game_over:
                 break
             more = reparse(done_words, tried) if reparse is not None else None
             reparse = None
             if more and stalled and self._repeats_blocked_move(more[0]):
                 more = more[1:]
             if not more:
-                unattempted = [describe_action(a) for a in left]
-                here = self.manager.world.locations[self.manager.player.current_location_id]
-                facts.append(
-                    f"{self._name} arrives at {here.name}; "
-                    f"{self._subject} hasn't yet: {', '.join(unattempted)}."
-                )
+                self.rest_unreached = True
                 break
             plan = more
         if self._shouted and not total_minutes and not self.manager.narrative.game_over:

@@ -266,21 +266,26 @@ empty list is `NONE`.
   answers ([entity resolution](../architecture/entity-resolution.md#which-one)).
 - **An interrupted action stops the plan.** The actions after it are cancelled with
   one fact: "Orton never gets to: take the knife, drop the bag." A story beat that
-  interrupts does the same.
+  interrupts does the same. Only the actions in the same scene are named: the ones
+  after a zone change are never named (see the next bullet).
 - **A plan ends at its first zone change, and the rest is parsed again there.** The
-  actions after a `MOVE_TO` that leaves the zone are neither validated nor resolved.
-  The plan's closed sets come from the scene before the turn, so the engine asks the
-  parser once more in the new scene: a new prompt and a new schema built from the
+  actions after a `MOVE_TO` that leaves the zone were parsed in the wrong scene: they
+  are never put to the plan check, validated, resolved or named in any fact. The
+  plan's closed sets come from the scene before the turn, so every zone change makes
+  the engine ask the parser once more in the new scene, even when nothing was parsed
+  after the move: a new prompt and a new schema built from the
   destination, with the player's full input and, where `[LAST TURN]` sits, a
   `[THIS TURN]` note ("Already done this turn: go to supermarket. Parse only the rest
   of the input."). The second plan goes through the same plan check, validator and
   core in the same turn: its facts, minutes, refusals and finds join the first
   pass's, and the narrator sees one turn. The cap of 5 actions counts across both
   plans; the second plan is cut to what is left of it. There is at most one re-parse
-  per turn: a second zone change stops there. When the second plan has actions, the
-  first pass's not-yet fact is dropped; when the second parse fails (a parser error)
-  or comes back empty, the first pass stands and one fact says so: "Orton arrives at the supermarket; he
-  hasn't yet: smash the window." That fact also stands at a second zone change. A
+  per turn: a second zone change stops there. When the turn stops at or after a zone
+  change without running a second plan (an interrupted move to another zone, a second
+  zone change, a failed second parse, an empty second plan), the narrator gets one
+  fact that names nothing parsed: "Nothing else Orton asked for happens this turn."
+  Like the `NONE` fact below, it goes to the narrator only and never into the event
+  log. A
   move the walk left blocked partway, if the second plan opens with the same move, is
   not run or reported again. The turn's facts keep the order things happened in. A
   move within the zone, or one stopped at a locked door, changes nothing. Both
@@ -520,6 +525,9 @@ model by that name in the input, matches; no id reaches the model. An id with no
 behind it any more reads "the zombie" or "the body". A pinned target is asked about
 like any other: the pin is the player's own choice of target, and the question still
 tests the verb.
+
+The check asks only about the actions up to and including the plan's first zone
+change; the second plan is checked the same way.
 
 An action answered no, at or above `factcheck.conflict_threshold`, is never validated
 or resolved. It becomes a refusal fact after the turn's other facts: "Refused: Orton

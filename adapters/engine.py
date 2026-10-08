@@ -37,7 +37,7 @@ from managers.corpses.search import corpse_views
 from managers.events.log import build_event_entry, event_stamp
 from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.mentions import labels, mentionables, picked
-from managers.plan import OpenChoice, bind_choices, open_choices, steps_of
+from managers.plan import OpenChoice, bind_choices, open_choices, steps_in_this_scene, steps_of
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion, build_questions, plan_questions
 from managers.story.lore import LoreHit, record_turn, select_lore
@@ -83,6 +83,56 @@ def _ignore(_event: dict[str, Any]) -> None:
 
 
 @dataclass
+class _Check:
+    """What the plan check made of one parsed plan.
+
+    `dropped` holds each flagged action with its place in the parsed plan and its refusal; `kept_at`
+    the place of each kept action. `cut` says the plan's tail after a predicted zone change was left out.
+    """
+
+    kept: list[AnyAction]
+    kept_at: list[int]
+    dropped: list[tuple[int, AnyAction, str]]
+    cut: bool
+
+
+@dataclass
+class _Round:
+    """A `_Check` tied to the plan the core ran, so a refusal can be told from one that falls after the real zone change."""
+
+    plan: list[AnyAction]
+    check: _Check
+
+    def refused_before(self, change: AnyAction | None) -> list[tuple[AnyAction, str]]:
+        """The flagged actions parsed before `change`, the action that really changed zone (all of them when none did)."""
+        at = next((i for i, action in enumerate(self.plan) if action is change), None)
+        if change is None or at is None:
+            return [(action, fact) for _, action, fact in self.check.dropped]
+        limit = self.check.kept_at[at]
+        return [(action, fact) for place, action, fact in self.check.dropped if place < limit]
+
+    def _pending_at(self, pending: list[AnyAction]) -> int:
+        start = next(i for i, action in enumerate(self.plan) if action is pending[0])
+        return self.check.kept_at[start]
+
+    def refused_before_pending(self, pending: list[AnyAction]) -> list[tuple[AnyAction, str]]:
+        """The flagged actions parsed before the actions still to run; the later ones wait for the resumed run."""
+        limit = self._pending_at(pending)
+        return [(action, fact) for place, action, fact in self.check.dropped if place < limit]
+
+    def resumed(self, pending: list[AnyAction]) -> _Check:
+        """The check for the actions still to run, holding the flagged ones that come after them."""
+        limit = self._pending_at(pending)
+        start = self.check.kept_at.index(limit)
+        return _Check(
+            pending,
+            self.check.kept_at[start : start + len(pending)],
+            [entry for entry in self.check.dropped if entry[0] > limit],
+            self.check.cut,
+        )
+
+
+@dataclass
 class _Turn:
     """A turn's plan on its way to the run, kept in memory while the player settles an open choice (never saved).
 
@@ -99,6 +149,7 @@ class _Turn:
     refused: int
     extra_facts: list[str]
     spent: set[str]
+    check: _Check | None = None
     done: list[AnyAction] = field(default_factory=list[AnyAction])
     choices: list[OpenChoice] = field(default_factory=list[OpenChoice])
 
@@ -223,7 +274,7 @@ class GameEngine:
             aimed_actions = aimed(actions, player_input)
             _trace_rewrites(actions, aimed_actions)
             actions = aimed_actions
-            kept, dropped, off_request = self._checked_plan(manager, player_input, actions, emit)
+            checked = self._checked_plan(manager, player_input, actions, emit)
             looks = manager.player.appearance
             for failure in parse_failures:
                 logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
@@ -231,18 +282,18 @@ class GameEngine:
                 typed=typed,
                 player_input=player_input,
                 picks=picks,
-                plan=kept,
+                plan=checked.kept,
                 nothing_parsed=not actions and not parse_failures,
-                refused=len(parse_failures) + len(off_request),
+                refused=len(parse_failures) + len(checked.dropped),
                 extra_facts=[
-                    *(refusal_in_words(f, looks.forename, looks.subject) for f in parse_failures),
-                    *off_request,
+                    refusal_in_words(f, looks.forename, looks.subject) for f in parse_failures
                 ],
-                spent=pinned_ids(dropped),
+                spent=set(),
+                check=checked,
             )
 
             # 2. A target that fits several things is asked about before anything runs.
-            turn.choices = open_choices(manager, kept, player_input)
+            turn.choices = open_choices(manager, checked.kept, player_input)
             if turn.choices:
                 _trace_choices(turn.choices)
                 self._kept = turn
@@ -323,11 +374,17 @@ class GameEngine:
         # once more from the destination.
         core = SimulationCore(manager)
         later_failures: list[llm.ParseFailure] = []
-        later_refusals: list[str] = []
-        later_dropped: list[AnyAction] = []
+        first = turn.check or _Check(turn.plan, list(range(len(turn.plan))), [], False)
+        rounds = [_Round(turn.plan, first)]
+        turn.check = None
 
         def reparse(done: list[str], tried: list[AnyAction]) -> list[AnyAction] | None:
-            bound = turn.spent | pinned_ids(tried) | pinned_ids(later_dropped)
+            moved_by = core.zone_change_actions[0]
+            bound = (
+                turn.spent
+                | pinned_ids(tried)
+                | pinned_ids([action for action, _ in rounds[0].refused_before(moved_by)])
+            )
             unbound = [pick for pick in turn.picks if pick.id not in bound]
             before = [describe_action(action) for action in turn.done]
             try:
@@ -341,20 +398,33 @@ class GameEngine:
             _trace_plan("Re-parsed plan at the destination", more)
             aimed_more = aimed(more, player_input)
             _trace_rewrites(more, aimed_more)
-            more, dropped, refusals = self._checked_plan(manager, player_input, aimed_more, emit)
-            later_dropped.extend(dropped)
-            later_refusals.extend(refusals)
-            return more
+            checked = self._checked_plan(manager, player_input, aimed_more, emit)
+            rounds.append(_Round(checked.kept, checked))
+            return checked.kept
 
         outcome_facts = core.resolve(turn.plan, refused=turn.refused, reparse=reparse)
         for failure in later_failures:
             logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
             outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
-        outcome_facts.extend([*turn.extra_facts, *later_refusals])
+        paused = core.asked is not None and not manager.narrative.game_over
+        refused_in_scene: list[tuple[AnyAction, str]] = []
+        rest_unreached = core.rest_unreached
+        for number, rnd in enumerate(rounds):
+            change = (
+                core.zone_change_actions[number] if number < len(core.zone_change_actions) else None
+            )
+            if paused and rnd is rounds[-1]:
+                refused_in_scene.extend(rnd.refused_before_pending(core.pending))
+                turn.check = rnd.resumed(core.pending)
+            else:
+                refused_in_scene.extend(rnd.refused_before(change))
+            if rnd.check.cut and change is None and core.asked is None:
+                rest_unreached = not manager.narrative.game_over
+        outcome_facts.extend([*turn.extra_facts, *(fact for _, fact in refused_in_scene)])
         logger.debug("Outcome facts: %s", outcome_facts)
         turn.done.extend(core.done_actions)
-        turn.spent |= pinned_ids(core.tried) | pinned_ids(later_dropped)
-        if core.asked is not None and not manager.narrative.game_over:
+        turn.spent |= pinned_ids(core.tried) | pinned_ids([a for a, _ in refused_in_scene])
+        if paused:
             turn.plan, turn.extra_facts, turn.refused = core.pending, [], 0
             turn.nothing_parsed = False
             turn.choices = open_choices(manager, turn.plan, turn.player_input)
@@ -366,6 +436,11 @@ class GameEngine:
         narrated_facts = outcome_facts
         if turn.nothing_parsed:
             narrated_facts = [NOTHING_DONE_FACT.format(name=looks.forename), *outcome_facts]
+        if rest_unreached:
+            narrated_facts = [
+                *narrated_facts,
+                mention_k.REST_NOT_REACHED_FACT.format(name=looks.forename),
+            ]
         context = ContextBuilder(manager)
         lore = select_lore(manager, player_input, lore_scores)
         narrator_prompt = context.build_narrator_prompt(
@@ -465,10 +540,17 @@ class GameEngine:
         player_input: str,
         actions: list[AnyAction],
         emit: TurnListener,
-    ) -> tuple[list[AnyAction], list[AnyAction], list[str]]:
-        """The actions the decision model doesn't rule out, the ones it does, and a refusal fact for each of those."""
+    ) -> _Check:
+        """The actions the decision model doesn't rule out, the ones it does, and a refusal fact for each of those.
+
+        Only the actions up to the plan's first predicted zone change are asked about and kept:
+        the ones after it were parsed in the wrong scene.
+        """
+        steps = steps_in_this_scene(manager, actions)
+        cut = steps < len(actions)
+        actions = actions[:steps]
         if not actions or not self.factcheck.enabled:
-            return actions, [], []
+            return _Check(actions, list(range(len(actions))), [], cut)
         emit({"type": "step", "step": "checking_plan"})
         questions = plan_questions(
             manager,
@@ -479,9 +561,11 @@ class GameEngine:
         for index in sorted(flagged):
             logger.warning(f"Dropped {actions[index]!r}: not what the player asked for.")
         logger.debug("Plan check dropped %s of %s actions", len(flagged), len(actions))
-        kept = [action for index, action in enumerate(actions) if index not in flagged]
-        dropped = [actions[index] for index in sorted(flagged)]
-        return kept, dropped, [questions[index].correction for index in sorted(flagged)]
+        kept_at = [index for index in range(len(actions)) if index not in flagged]
+        dropped = [
+            (index, actions[index], questions[index].correction) for index in sorted(flagged)
+        ]
+        return _Check([actions[index] for index in kept_at], kept_at, dropped, cut)
 
     def _fact_checked(
         self,

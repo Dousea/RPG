@@ -135,13 +135,18 @@ def _ends_the_scene(result: object) -> bool:
     return isinstance(result, Accepted | Asked) and _changes_zone(result)
 
 
-def _steps_in_this_scene(manager: GameManager, actions: Sequence[AnyAction]) -> int:
-    """How many of `actions` run before the plan's first zone change, that change included."""
+def _zone_change_at(manager: GameManager, actions: Sequence[AnyAction]) -> int | None:
     validator = ActionValidator(manager)
     for index, action in enumerate(actions[:MAX_PLAN_ACTIONS]):
         if _ends_the_scene(validator.validate(action)):
-            return index + 1
-    return len(actions)
+            return index
+    return None
+
+
+def steps_in_this_scene(manager: GameManager, actions: Sequence[AnyAction]) -> int:
+    """How many of `actions` run before the plan's first zone change, that change included."""
+    change = _zone_change_at(manager, actions)
+    return len(actions) if change is None else change + 1
 
 
 def bind_choices(
@@ -203,18 +208,18 @@ def steps_of(
 ) -> list[PlanStep]:
     """The steps of a plan screen: what is done, then what is still to do with its default targets and open choices."""
     looks = _looks(manager)
-    in_scene = _steps_in_this_scene(manager, pending)
+    change = _zone_change_at(manager, pending)
     waiting = {choice.index: number for number, choice in enumerate(choices)}
     steps = [PlanStep(_words(action, looks), True, None, None) for action in done]
-    for index, action in enumerate(pending):
+    for index, action in enumerate(pending[: None if change is None else change + 1]):
         text, default = _words(action, looks), None
         nearest = _nearest_zombie(manager, action)
         verb = "shove" if isinstance(action, ShoveAction) else "hit"
-        if index >= in_scene and _is_plain_zombie_target(action):
-            text = f"{verb} a zombie, {mention_k.DECIDED_ON_ARRIVAL}"
-        elif nearest in looks:
+        if nearest in looks:
             name, description = looks[nearest]
             beside = " and the ones beside it" if _reaches_several(manager, action, nearest) else ""
             text, default = f"{verb} the nearest zombie{beside}", f"{name}, {description}"
         steps.append(PlanStep(text, False, default, waiting.get(index)))
+    if change is not None:
+        steps.append(PlanStep(mention_k.AFTER_THE_MOVE, False, None, None))
     return steps

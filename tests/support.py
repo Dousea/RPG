@@ -142,7 +142,8 @@ class FakeFactChecker:
 
     def plan_conflicts(self, player_input: str, questions: list[StateQuestion]) -> list[int]:
         self.plan_calls.append((player_input, list(questions)))
-        return self.plan_results.pop(0) if self.plan_results else []
+        flagged = self.plan_results.pop(0) if self.plan_results else []
+        return [index for index in flagged if index < len(questions)]
 
     def conflicts(self, story: str, questions: list[StateQuestion], player_name: str) -> list[str]:
         self.calls.append((story, list(questions)))
@@ -187,7 +188,7 @@ class ScriptedLLM:
         self.parser_script: list[str | Exception] = []
 
     def query_parser(self, prompt: str, schema: dict | None = None) -> ParserReply:
-        """Answers from `parser_script` first (an Exception is raised), then from `actions`."""
+        """Answers from `parser_script` first (an Exception is raised), then from `actions`; a re-parse at a destination finds nothing more."""
         self.prompts.append(prompt)
         self.schemas.append(schema)
         if self.parser_script:
@@ -197,6 +198,8 @@ class ScriptedLLM:
             return ParserReply(scripted, structured=self.structured)
         if self.error is not None:
             raise self.error
+        if "Already done this turn" in prompt:
+            return ParserReply("ACTIONS:\nNONE", structured=self.structured)
         return ParserReply(self.actions, structured=self.structured)
 
     def query_narrator(

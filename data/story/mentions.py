@@ -1,4 +1,4 @@
-"""Words for the `@` list, the refusals of a mention that no longer holds and of a plan answer that no longer fits (llm-contract)."""
+"""Words for the `@` list, the refusals of a mention that no longer holds and of a plan answer that no longer fits, and the plan screen's and narrator's lines about what a zone change leaves for later (llm-contract)."""
 
 ROOM_HERE = "you are here"
 ROOM_ELSEWHERE = "not where you are"
@@ -7,7 +7,7 @@ CONTAINER_OPENED = "opened"
 CONTAINER_CLOSED = "not opened"
 BARRIER_BETWEEN = "{state}, between {a} and {b}"
 ZONE_VIA = "via {zone}"
-DECIDED_ON_ARRIVAL = "its target is decided on arrival"
+AFTER_THE_MOVE = "Anything after that is worked out on arrival."
 ZONE_BLOCKED = "{way}, blocked by the {barrier} ({state})"
 NPC_HERE = "here"
 NPC_FOLLOWING = "following you"
@@ -24,3 +24,6 @@ NO_LONGER_IN_REACH = "What you pointed at is no longer within reach."
 OUT_OF_REACH = "{name} is out of reach."
 NO_PLAN_WAITING = "No plan is waiting for an answer."
 ANSWER_NOT_ON_OFFER = "That answer is no longer on offer; say what you want to do again."
+
+# Narrator-only: the engine adds it to the narrator's facts, not the outcome facts the event log is built from.
+REST_NOT_REACHED_FACT = "Nothing else {name} asked for happens this turn."

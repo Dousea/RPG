@@ -196,7 +196,9 @@ class PlayStreamTests(RouteTestCase):
         events = self.events()
         steps = [event["step"] for event in events if event["type"] == "step"]
         # The scripted story has no OPTIONS section, so the follow-up asks for them.
-        self.assertEqual(steps, ["parsing", "checking_plan", "narrating", "options", "saving"])
+        self.assertEqual(
+            steps, ["parsing", "checking_plan", "parsing", "narrating", "options", "saving"]
+        )
         self.assertEqual(events[-1]["type"], "done")
 
     def test_the_finished_turn_is_the_play_payload(self):

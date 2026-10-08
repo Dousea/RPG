@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from data.items import ITEMS
 from data.melee import DOWN_TARGET
-from data.story.mentions import DECIDED_ON_ARRIVAL
+from data.story.mentions import AFTER_THE_MOVE
 from managers.game import GameManager
 from managers.mentions import mentionables
 from managers.plan import bind_choices, open_choices, steps_of
@@ -271,7 +271,7 @@ class StepTests(unittest.TestCase):
         self.assertNotRegex(step.text, r"\bz\d+\b")
         self.assertIn("man", step.text)
 
-    def test_a_step_after_a_zone_change_has_no_default_target_until_arrival(self):
+    def test_the_steps_after_a_zone_change_give_way_to_the_arrival_line(self):
         gm = zombie_game("zone_street")
         add_zombie(gm, gap=3, state=ZombieState.CHASING)
         plan = [
@@ -280,17 +280,23 @@ class StepTests(unittest.TestCase):
             AttackAction(target_name="zombie"),
         ]
         steps = steps_of(gm, [], plan, [])
+        self.assertEqual(len(steps), 3)
+        self.assertEqual(steps[2].text, AFTER_THE_MOVE)
         self.assertIsNone(steps[2].default)
-        self.assertIn(DECIDED_ON_ARRIVAL, steps[2].text)
-        self.assertNotIn("nearest", steps[2].text)
+        self.assertIsNone(steps[2].choice)
+        self.assertNotIn("zombie", " ".join(step.text for step in steps))
 
-    def test_a_step_after_a_move_that_asks_has_no_default_either(self):
+    def test_a_plan_without_a_zone_change_has_no_arrival_line(self):
+        gm = two_bats_on_the_street()
+        steps = steps_of(gm, [], [TakeAction(item_name="Baseball Bat")], [])
+        self.assertNotIn(AFTER_THE_MOVE, [step.text for step in steps])
+
+    def test_a_step_after_a_move_that_asks_gives_way_to_the_arrival_line_too(self):
         gm = zombie_game("zone_home")
         add_zombie(gm, gap=3, state=ZombieState.CHASING)
         plan = [MoveAction(destination="the apartment"), AttackAction(target_name="zombie")]
         steps = steps_of(gm, [], plan, open_choices(gm, plan))
-        self.assertIsNone(steps[1].default)
-        self.assertIn(DECIDED_ON_ARRIVAL, steps[1].text)
+        self.assertEqual(steps[1].text, AFTER_THE_MOVE)
 
     def test_done_steps_come_first_and_an_open_choice_marks_its_step(self):
         gm = two_bats_on_the_street()

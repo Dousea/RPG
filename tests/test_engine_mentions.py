@@ -112,11 +112,11 @@ class MentionTurnTests(EngineTestCase):
         self.script("ATTACK zombie\nSHOUT")
         checker = cast(FakeFactChecker, self.engine.factcheck)
         checker.plan_results = [[1]]
-        seen = self.accepted()
-        self.engine.play(f"hit {MENTION_MARK} and shout", mentions=[far.zombie_id])
+        with mock.patch.object(SimulationCore, "resolve", autospec=True, return_value=[]) as run:
+            self.engine.play(f"hit {MENTION_MARK} and shout", mentions=[far.zombie_id])
         (_, questions) = checker.plan_calls[0]
         self.assertEqual(len(questions), 2)
-        self.assertEqual({a.action.verb for a in seen}, {"ATTACK"})
+        self.assertEqual({a.verb for a in run.call_args.args[1]}, {"ATTACK"})
 
     def test_a_parsed_target_that_differs_from_the_pin_is_overridden(self):
         gm = self.stage()
@@ -249,10 +249,12 @@ class MentionTurnTests(EngineTestCase):
         self.assertEqual(len(self.llm.prompts), 2)
         self.assertIn("smash [pinned: supermarket window]", self.llm.prompts[1])
         self.assertTrue(any(isinstance(a.action, MoveAction) for a in seen))
-        (swing,) = [r.action for r in checked if isinstance(r.action, AttackAction)]
-        pin = pin_of(swing.target_name, "barrier")
-        assert pin is not None
-        self.assertEqual(pin.entity_id, "window_supermarket")
+        swings = [r.action for r in checked if isinstance(r.action, AttackAction)]
+        self.assertTrue(swings)
+        for swing in swings:
+            pin = pin_of(swing.target_name, "barrier")
+            assert pin is not None
+            self.assertEqual(pin.entity_id, "window_supermarket")
 
     def test_a_pick_bound_in_the_first_pass_is_not_bound_again_at_the_destination(self):
         gm = self.stage("zone_neighborhood")

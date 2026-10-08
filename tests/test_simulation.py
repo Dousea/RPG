@@ -3,6 +3,7 @@
 import dataclasses
 import random
 import unittest
+from unittest.mock import patch
 
 from adapters.save import codec
 from data.items import ITEMS
@@ -1179,16 +1180,18 @@ class PlanTests(unittest.TestCase):
 
         return len([fact for fact in facts if fact.startswith("Move to")])
 
-    def test_a_dropped_repeat_leaves_the_not_yet_fact_for_the_rest(self):
+    def test_a_dropped_repeat_leaves_the_rest_unreached(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_street"
         move = MoveAction(destination="pharmacy")
+        core = SimulationCore(gm)
 
-        facts = SimulationCore(gm).resolve(
+        facts = core.resolve(
             [move, TakeAction(item_name="knife")], reparse=lambda _done, _tried: [move]
         )
 
-        self.assertTrue(any("hasn't yet: take the knife" in fact for fact in facts))
+        self.assertTrue(core.rest_unreached)
+        self.assertFalse(any("knife" in fact for fact in facts))
 
     def test_a_climb_out_comes_before_the_blocked_move_it_led_to(self):
         gm = GameManager()
@@ -1233,12 +1236,95 @@ class PlanTests(unittest.TestCase):
         facts = simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
         self.assertFalse(any("never gets to" in fact for fact in facts))
 
-    def test_a_zone_change_ends_the_plan_with_a_not_yet_fact(self):
+    def test_a_zone_change_calls_reparse_even_with_nothing_after_it(self):
         gm = GameManager()
-        facts = simulate(gm, MoveAction(destination="out"), TakeAction(item_name="knife"))
+        calls: list[list[str]] = []
+
+        def reparse(done: list[str], _tried: list[AnyAction]) -> list[AnyAction]:
+            calls.append(done)
+            return [AddGoalAction(horizon="short_term", goal_text="Ask Marcus")]
+
+        core = SimulationCore(gm)
+        core.resolve([MoveAction(destination="out")], reparse=reparse)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(gm.narrative.goals["short_term"], ["Ask Marcus"])
+        self.assertFalse(core.rest_unreached)
+
+    def test_the_actions_after_a_zone_change_are_never_named_or_run(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+
+        facts = core.resolve(
+            [MoveAction(destination="out"), TakeAction(item_name="knife")],
+            reparse=lambda _done, _tried: None,
+        )
+
         self.assertEqual(gm.player.current_location_id, "zone_building")
-        self.assertIn("Orton arrives at Your Building; he hasn't yet: take the knife.", facts)
-        self.assertEqual(sum("Refused" in fact for fact in facts), 0)
+        self.assertTrue(core.rest_unreached)
+        self.assertFalse(any("knife" in fact or "hasn't yet" in fact for fact in facts))
+
+    def test_each_plan_round_names_the_action_that_changed_zone(self):
+        gm = GameManager()
+        core = SimulationCore(gm, rng=random.Random(1))
+        move = MoveAction(destination="out")
+        goal = AddGoalAction(horizon="short_term", goal_text="Ask Marcus")
+
+        core.resolve([goal, move], reparse=lambda _done, _tried: [goal])
+
+        self.assertEqual(core.zone_change_actions, [move, None])
+
+    def test_a_second_zone_change_leaves_the_rest_unreached(self):
+        gm = GameManager()
+        core = SimulationCore(gm, rng=random.Random(1))
+        calls: list[int] = []
+
+        def reparse(_done: list[str], _tried: list[AnyAction]) -> list[AnyAction]:
+            calls.append(1)
+            return [MoveAction(destination="out")]
+
+        core.resolve([MoveAction(destination="out")], reparse=reparse)
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(core.rest_unreached)
+
+    def test_an_interrupted_move_to_another_zone_names_nothing_after_it(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+
+        def interrupt() -> list[str]:
+            core._interruption = "something"
+            return []
+
+        with patch.object(core, "_after_action", interrupt):
+            facts = core.resolve(
+                [MoveAction(destination="out"), TakeAction(item_name="knife")],
+                reparse=lambda _done, _tried: [TakeAction(item_name="knife")],
+            )
+
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertTrue(core.rest_unreached)
+        self.assertFalse(any("never gets to" in fact or "knife" in fact for fact in facts))
+
+    def test_an_interruption_names_only_the_actions_in_this_scene(self):
+        gm = zombie_game("zone_building")
+        add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+        core = SimulationCore(gm, rng=random.Random(1))
+
+        facts = core.resolve(
+            [
+                WaitAction(duration=Duration(minutes=30)),
+                TakeAction(item_name="knife"),
+                MoveAction(destination="out"),
+                DropAction(item_name="bag"),
+            ]
+        )
+
+        self.assertEqual(
+            [fact for fact in facts if "never gets to" in fact],
+            ["Orton never gets to: take the knife, go to out."],
+        )
+        self.assertFalse(core.rest_unreached)
 
     def test_the_actions_after_a_zone_change_are_not_refused(self):
         gm = GameManager()
@@ -1279,11 +1365,6 @@ class PlanTests(unittest.TestCase):
         )
         self.assertEqual(gm.player.current_location_id, "zone_building")
         self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
-        self.assertFalse(any("hasn't yet" in fact for fact in facts))
-
-    def test_a_plan_ending_with_the_zone_change_adds_no_fact(self):
-        gm = GameManager()
-        facts = simulate(gm, MoveAction(destination="out"))
         self.assertFalse(any("hasn't yet" in fact for fact in facts))
 
     def test_a_question_ends_the_plan_there_and_keeps_what_is_left(self):
