@@ -1,5 +1,6 @@
 """Zombies: rolling, population and the minute loop (zombies)."""
 
+import logging
 import math
 import random
 from collections.abc import Iterable, Sequence
@@ -37,6 +38,8 @@ from modules.item import ClothingItem
 from modules.world.location import Location, World
 from modules.world.pace import Pace
 from modules.world.weather import WeatherSample
+
+logger = logging.getLogger(__name__)
 
 
 def per_chunk(zombie_intensity: int) -> float:
@@ -113,6 +116,15 @@ def _spawn(
     if zone_id == player_zone_id:
         place_in_zone(zombie, world.locations[zone_id], rng)
     world.zombies[zombie_id] = zombie
+    logger.debug(
+        "Spawned %s in %s: health %.1f, %s%s, gap %.0f",
+        zombie_id,
+        zone_id,
+        zombie.health,
+        zombie.speed_type,
+        " lunger" if zombie.lunger else "",
+        zombie.gap,
+    )
     return zombie
 
 
@@ -131,6 +143,7 @@ def start_outbreak(world: World, minute: int, player_zone_id: str, rng: random.R
 def kill_zombie(world: World, zombie_id: str) -> ZombieEntity:
     """Remove a dead zombie for good; its zone does not repopulate over it."""
     zombie = world.zombies.pop(zombie_id)
+    logger.debug("Zombie %s died in %s", zombie_id, zombie.zone_id)
     world.zombie_kills[zombie.zone_id] = world.zombie_kills.get(zombie.zone_id, 0) + 1
     return zombie
 
@@ -173,6 +186,14 @@ def redistribute(world: World, minute: int, player_zone_id: str, rng: random.Ran
                 continue
             counts[zone.id] -= 1
             counts[destination.id] += 1
+            logger.debug(
+                "Redistribution moves %s from %s to %s (target %s, now %s)",
+                zombie.zombie_id,
+                zone.id,
+                destination.id,
+                targets[destination.id],
+                counts[destination.id] - 1,
+            )
             zombie.zone_id = destination.id
             moved.add(zombie.zombie_id)
             if destination.id == player_zone_id:
@@ -650,6 +671,17 @@ class ZombieLoop:
             )
             if loudest <= 0:
                 continue
+
+            if thumper or zombie.state == ZombieState.IDLE:
+                logger.debug(
+                    "%s hears a sound %.1f tiles away (strength %.2f, other zone=%s, indoor mismatch=%s)",
+                    zombie.zombie_id,
+                    distance,
+                    loudest,
+                    other_zone,
+                    mismatch,
+                )
+
             if thumper:
                 thumping.stop_for_sound(zombie, distance)
             else:
@@ -755,6 +787,8 @@ class ZombieLoop:
             return
         zombie.gap = gap
         if zombie.gap <= size:
+            if zombie.zone_id != player_zone:
+                logger.debug("%s follows into %s at gap %.1f", zombie.zombie_id, player_zone, gap)
             zombie.zone_id = player_zone
 
     def _follow_sound(
@@ -777,6 +811,12 @@ class ZombieLoop:
             return
         zombie.sound_gap -= step
         if zombie.sound_gap <= size:
+            logger.debug(
+                "%s follows a sound into %s at gap %.1f",
+                zombie.zombie_id,
+                player_zone,
+                zombie.sound_gap,
+            )
             zombie.zone_id = player_zone
             zombie.gap = max(float(zombie_lore.ATTACK_RANGE_TILES), zombie.sound_gap)
 
@@ -838,6 +878,14 @@ class ZombieLoop:
         zombie.has_chased = True
         world.zombies[zombie_id] = zombie
         del world.corpses[body.corpse_id]
+        logger.debug(
+            "Body %s rises as %s in %s at gap %.1f (crawling=%s)",
+            body.corpse_id,
+            zombie_id,
+            body.zone_id,
+            body.gap,
+            body.crawling,
+        )
         report.facts.append(
             zombie_lore.RISE_CRAWLING_FACT if body.crawling else zombie_lore.RISE_FACT
         )
@@ -860,6 +908,7 @@ class ZombieLoop:
         newly = False
         rolled = spotted_any = close_call = False
         engaged = (minute.approach_target, minute.swing_target)
+
         for zombie in _by_id(world.zombies.values()):
             hunting = zombie.state in _HUNTING
             thumper = zombie.state == ZombieState.THUMPING
@@ -868,6 +917,7 @@ class ZombieLoop:
                     continue
             elif not hunting and zombie.zone_id != player_zone:
                 continue
+
             if zombie.state == ZombieState.IDLE:
                 zombie.facing_cos = self._rng.uniform(-1.0, 1.0)
             else:
@@ -879,7 +929,19 @@ class ZombieLoop:
                 and zombie.gap <= zombie_lore.SNEAK_XP_CLOSE_TILES
             ):
                 close_call = True
-            if self._rng.random() < result.per_minute:
+
+            roll = self._rng.random()
+            if roll < result.per_minute:
+                if not hunting:
+                    logger.debug(
+                        "%s notices the player at gap %.1f: chance %.3f/min (raw %.1f), roll %.3f",
+                        zombie.zombie_id,
+                        zombie.gap,
+                        result.per_minute,
+                        result.raw,
+                        roll,
+                    )
+
                 spotted_any = True
                 zombie.time_since_seen = 0.0
                 zombie.has_chased = True
@@ -890,6 +952,7 @@ class ZombieLoop:
                 elif not hunting:
                     zombie.state = ZombieState.CHASING
                     newly = newly or zombie.zombie_id not in engaged
+
         if rolled and not spotted_any and not close_call and minute.pace == Pace.SNEAK:
             self._sneak_xp(report)
         return newly
@@ -909,6 +972,7 @@ class ZombieLoop:
                 0.0, zombie.bonus_spot_time - zombie_lore.FRAMES_PER_MINUTE
             )
             if zombie.state in _HUNTING and zombie.time_since_seen > zombie.memory:
+                logger.debug("%s loses track of the player", zombie.zombie_id)
                 zombie.state = ZombieState.IDLE
                 zombie.side = None
 
@@ -922,6 +986,7 @@ class ZombieLoop:
                 continue
             within = zombie.zone_id == player_zone and zombie.gap <= zombie_lore.ATTACK_RANGE_TILES
             if within and zombie.state != ZombieState.ATTACKING:
+                logger.debug("%s reaches the player (gap %.1f)", zombie.zombie_id, zombie.gap)
                 zombie.state = ZombieState.ATTACKING
                 zombie.has_chased = True
                 reached = reached or zombie.zombie_id not in (
@@ -967,6 +1032,19 @@ class ZombieLoop:
             assert zombie.side is not None
             outcome = resolve_attack(
                 player, zombie.side, counted, self._rng, crawler=zombie.crawling
+            )
+            logger.debug(
+                "%s attacks from %s (%s attackers, crawler=%s): idle=%s defended=%s "
+                "dragged=%s blocked=%s wound=%s",
+                zombie.zombie_id,
+                zombie.side.name,
+                counted,
+                zombie.crawling,
+                outcome.idle,
+                outcome.defended,
+                outcome.dragged_down,
+                outcome.blocked,
+                outcome.wound,
             )
             if outcome.idle:
                 continue

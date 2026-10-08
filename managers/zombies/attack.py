@@ -1,5 +1,6 @@
 """A zombie's attack on the player: defence, drag-down, wounds and clothing (zombies)."""
 
+import logging
 import math
 import random
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from modules.body.stats import StatusEffect
 from modules.entity.player import PlayerEntity
 from modules.entity.zombie import AttackSide
 from modules.item import ClothingItem, MeleeWeaponItem
+
+logger = logging.getLogger(__name__)
 
 _BODY_PARTS = list(BodyPart)
 
@@ -229,33 +232,67 @@ def resolve_attack(
     half the time, cannot be defended against, never drags down and bites the legs.
     """
     outcome = AttackOutcome()
+
     if crawler:
-        if rng.randrange(zombie_lore.CRAWLER_ATTACK_NOTHING_ONE_IN) != 0:
+        idle_roll = rng.randrange(zombie_lore.CRAWLER_ATTACK_NOTHING_ONE_IN)
+        if idle_roll != 0:
+            logger.debug("Crawler attack does nothing (roll %s)", idle_roll)
             outcome.idle = True
             return outcome
     else:
-        if (
-            side == AttackSide.FRONT
-            and attackers <= zombie_lore.DEFENCE_MAX_ATTACKERS
-            and rng.randrange(100) < player_defence(player, attackers)
-        ):
-            outcome.defended = True
-            return outcome
+        if side == AttackSide.FRONT and attackers <= zombie_lore.DEFENCE_MAX_ATTACKERS:
+            defence_roll = rng.randrange(100)
+            defence = player_defence(player, attackers)
+            logger.debug(
+                "Defence vs %s attackers from %s: chance %s, roll %s",
+                attackers,
+                side.name,
+                defence,
+                defence_roll,
+            )
+            if defence_roll < defence:
+                outcome.defended = True
+                return outcome
         if attackers >= zombie_lore.DRAG_DOWN_ATTACKERS:
+            logger.debug("Dragged down by %s attackers", attackers)
             outcome.dragged_down = True
             return outcome
+
     odds = wound_odds(weapon_level(player), attackers, side, player.traits)
     part = roll_crawler_body_part(rng) if crawler else roll_body_part(rng, side, attackers)
     damage = roll_wound_damage(rng)
     kind = roll_wound_kind(rng, odds)
+
+    logger.debug(
+        "Attack from %s on %s: odds %s, wound %s, damage %.2f",
+        side.name,
+        part.name,
+        odds,
+        kind,
+        damage,
+    )
     if kind is None:
         return outcome
-    if rng.randrange(100) < clothing_defence(player, part, kind):
+
+    clothing = clothing_defence(player, part, kind)
+    block_roll = rng.randrange(100)
+    logger.debug("Clothing on %s stops %s%%, roll %s", part.name, clothing, block_roll)
+    if block_roll < clothing:
         outcome.blocked = True
         return outcome
+
     for entity in player.layers_for(part):
         entity.holes.add(part)
-    wound = Wound(kind, part, damage, roll_zombie_infection(kind, rng))
+    infected = roll_zombie_infection(kind, rng)
+    logger.debug(
+        "Wound %s on %s: infection chance %s%%, infected=%s",
+        kind,
+        part.name,
+        zombie_lore.ZOMBIE_INFECTION_CHANCE_PERCENT[kind],
+        infected,
+    )
+
+    wound = Wound(kind, part, damage, infected)
     apply_wound(player, wound, rng)
     outcome.wound = wound
     return outcome

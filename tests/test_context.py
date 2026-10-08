@@ -1757,6 +1757,19 @@ class NarratorBudgetTests(unittest.TestCase):
         self.assertEqual(len(logged.records), 1)
         self.assertIn("deep memory", logged.records[0].getMessage())
 
+    def test_the_prompt_size_and_each_drop_are_traced_at_debug(self):
+        full = self.prompt()
+        budget = len(full) - 1
+
+        with self.assertLogs("managers.context", level="DEBUG") as logged:
+            self.prompt(budget)
+
+        debug = [r.getMessage() for r in logged.records if r.levelname == "DEBUG"]
+        self.assertTrue(any("deep memory" in line and str(budget) in line for line in debug))
+        self.assertTrue(
+            any(line.startswith("Narrator prompt") and "budget" in line for line in debug)
+        )
+
     def test_a_prompt_that_cannot_fit_is_returned_with_a_warning(self):
         with self.assertLogs("managers.context", level="WARNING") as logged:
             prompt = self.prompt(0)

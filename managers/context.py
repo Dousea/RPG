@@ -887,6 +887,19 @@ door rather than refusing the move.)
                 break
             dropped[kind] = dropped.get(kind, 0) + 1
             prompt = render()
+            logger.debug(
+                "Narrator prompt dropped one of %s: now %d characters of %s",
+                kind,
+                len(prompt),
+                max_chars,
+            )
+        logger.debug(
+            "Narrator prompt %d characters against a budget of %s; lore shown %d of %d",
+            len(prompt),
+            max_chars,
+            sum(1 for hit in hits if hit.shown),
+            len(hits),
+        )
         if dropped:
             logger.warning(
                 "Narrator prompt over budget; dropped %s.",

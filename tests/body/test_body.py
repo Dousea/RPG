@@ -186,6 +186,16 @@ class WoundLandingTests(unittest.TestCase):
         land_wound(player, kind, part, damage, zombie_infected, random.Random(seed))
         return player, player.body[part]
 
+    def test_a_landed_wound_is_traced_with_its_kind_part_and_damage(self):
+        with self.assertLogs("managers.body.health", level="DEBUG") as logs:
+            self.land("bite", BodyPart.HAND_L, damage=5.0, zombie_infected=True)
+
+        (line,) = [record.getMessage() for record in logs.records]
+        self.assertIn("bite", line)
+        self.assertIn("HAND_L", line)
+        self.assertIn("damage 5.00", line)
+        self.assertIn("zombie_infected=True", line)
+
     def test_the_damage_goes_into_the_part_and_is_clamped_at_zero(self):
         player, state = self.land("scratch", BodyPart.HAND_L, damage=10.0)
         self.assertEqual(state.health, 90.0)

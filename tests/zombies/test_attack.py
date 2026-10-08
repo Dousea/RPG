@@ -244,6 +244,9 @@ class ClothingDefenceTests(unittest.TestCase):
         self.assertEqual(clothing_defence(self.player, BodyPart.NECK, WoundKind.BITE), 80)
 
 
+WOUNDING_SCRIPT = [50, 5, 9, 50, 500, 0, 70, 70, 90, 50]
+
+
 class ResolveAttackTests(unittest.TestCase):
     """zombies: Zombie attacks and Wounds: a whole attack, step by step."""
 
@@ -257,6 +260,20 @@ class ResolveAttackTests(unittest.TestCase):
         self.assertIsNone(outcome.wound)
         self.assertFalse(outcome.dragged_down)
         self.assertEqual(self.player.hit_points, 100)
+
+    def test_an_attack_traces_its_defence_roll_and_the_wound(self):
+        with self.assertLogs("managers.zombies.attack", level="DEBUG") as logs:
+            resolve_attack(self.player, AttackSide.FRONT, 1, ScriptedRng([0]))
+        defence = "\n".join(record.getMessage() for record in logs.records)
+
+        with self.assertLogs("managers.zombies.attack", level="DEBUG") as logs:
+            resolve_attack(self.player, AttackSide.FRONT, 1, ScriptedRng(WOUNDING_SCRIPT))
+        wound = "\n".join(record.getMessage() for record in logs.records)
+
+        self.assertIn("chance", defence)
+        self.assertIn("roll 0", defence)
+        self.assertIn("Attack from FRONT", wound)
+        self.assertIn("damage", wound)
 
     def test_no_defence_from_behind_or_the_side(self):
         for side in (AttackSide.BEHIND, AttackSide.LEFT, AttackSide.RIGHT):

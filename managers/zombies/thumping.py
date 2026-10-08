@@ -1,5 +1,6 @@
 """Zombies pounding on doors and windows: starting, the minute step and letting go (doors)."""
 
+import logging
 import random
 from dataclasses import dataclass, field
 
@@ -15,6 +16,8 @@ from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
 from modules.world.location import World
+
+logger = logging.getLogger(__name__)
 
 HUNTING = (ZombieState.CHASING, ZombieState.ATTACKING)
 
@@ -93,6 +96,13 @@ def start(
     ]
     zombie.thump_carry = 0.0
     zombie.side = None
+    logger.debug(
+        "%s starts thumping %s from %s at %s thumps/min",
+        zombie.zombie_id,
+        barrier.barrier_id,
+        side,
+        zombie.thump_rate,
+    )
     if of_player_zone(barrier, player):
         zombie.gap = d_b(world, player, barrier) + 1
 

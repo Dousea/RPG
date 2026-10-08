@@ -203,6 +203,17 @@ class TimeCostTests(unittest.TestCase):
         facts = simulate(gm, WaitAction(duration=Duration(minutes=90)))
         self.assertEqual(facts, ["Orton waits 1 hour 30 minutes."])
 
+    def test_sleep_start_and_wake_are_traced_with_the_reason(self):
+        gm = GameManager()
+        gm.player.stats.set(CharacterStat.FATIGUE, 0.9)
+
+        with self.assertLogs("managers.simulation", level="DEBUG") as logs:
+            simulate(gm, SleepAction(duration=Duration(minutes=60)))
+
+        lines = [record.getMessage() for record in logs.records]
+        self.assertTrue(any(line.startswith("Sleep starts") and "60" in line for line in lines))
+        self.assertTrue(any(line.startswith("Sleep ends after 60 of 60") for line in lines))
+
     def test_a_lone_sleep_states_its_time_once(self):
         gm = GameManager()
         gm.player.stats.set(CharacterStat.FATIGUE, 0.9)

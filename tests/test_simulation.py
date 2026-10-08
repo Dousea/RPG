@@ -1063,6 +1063,17 @@ class ZombieFollowUpTests(unittest.TestCase):
         self.assertEqual(zombie.state, ZombieState.CHASING)
         self.assertTrue(zombie.has_chased)
 
+    def test_noticing_the_player_is_traced_with_the_chance_and_roll(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+
+        with self.assertLogs("managers.zombies.population", level="DEBUG") as logs:
+            self.run_wait(gm, 1)
+
+        (line,) = [r.getMessage() for r in logs.records if "notices" in r.getMessage()]
+        self.assertIn(zombie.zombie_id, line)
+        self.assertIn("roll", line)
+
     def loop(self, gm: GameManager) -> ZombieLoop:
         return ZombieLoop(gm, random.Random(1), SkillEngine())
 

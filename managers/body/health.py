@@ -1,5 +1,6 @@
 """The player's body: health helpers, wounds, pain, the limp and the zombie infection (health)."""
 
+import logging
 import random
 from collections import defaultdict
 
@@ -24,6 +25,8 @@ from modules.body.parts import (
 )
 from modules.body.stats import CharacterStat, StatusEffect
 from modules.entity.player import PlayerEntity
+
+logger = logging.getLogger(__name__)
 
 HOUR_PER_MINUTE = 1 / 60
 
@@ -116,6 +119,17 @@ def land_wound(
         state.zombie_infected = True
     if kind != body_k.SCRATCH:
         generate_bleeding(state, part, rng)
+    logger.debug(
+        "Wound %s on %s: damage %.2f, part health %.1f, heals over %.1f, bleeding %.1f, "
+        "zombie_infected=%s",
+        kind,
+        part.name,
+        damage,
+        state.health,
+        time,
+        state.bleeding_time,
+        zombie_infected,
+    )
 
 
 def heal_per_hour(levels: dict[StatusEffect, int], *, asleep: bool, fed: bool) -> float:
@@ -401,15 +415,16 @@ class BodyEngine:
             self._lose(player, "bleeding", rate * state.bleeding_time * HOUR_PER_MINUTE)
         if was_bleeding and not state.bleeding:
             facts.append(body_k.STOPPED_BLEEDING_FACT.format(part=name))
-        self._infection(player, state)
+        self._infection(player, state, name)
 
-    def _infection(self, player: PlayerEntity, state: PartState) -> None:
+    def _infection(self, player: PlayerEntity, state: PartState, name: str) -> None:
         if not state.infected_wound:
             state.alcohol = max(
                 0.0, state.alcohol - body_k.ALCOHOL_DECAY_PER_HOUR * HOUR_PER_MINUTE
             )
             if _can_catch_infection(state) and self._rng.random() < infection_chance(state):
                 state.infected_wound = True
+                logger.debug("Wound on %s catches an infection", name)
             return
         treated = False
         if state.alcohol > 0:
@@ -436,6 +451,7 @@ class BodyEngine:
         state.wound_infection = min(body_k.WOUND_INFECTION_MAX, state.wound_infection)
         if state.wound_infection <= 0:
             state.infected_wound = False
+            logger.debug("Wound infection on %s clears", name)
         state.wound_infection = max(body_k.WOUND_INFECTION_FLOOR, state.wound_infection)
 
     def _zombie_infection_onset(self, player: PlayerEntity, hours_survived: float) -> None:
@@ -453,6 +469,7 @@ class BodyEngine:
         if trait_k.PRONE_TO_ILLNESS_ID in player.traits:
             hours *= body_k.ZOMBIE_INFECTION_PRONE_MULT
         player.zombie_infection_hours = hours
+        logger.debug("Zombie infection starts: kills in %.1f hours", hours)
 
     def _zombie_infection_progression(self, player: PlayerEntity, hours_survived: float) -> None:
         if player.zombie_infection_since is None:
@@ -533,6 +550,7 @@ class BodyEngine:
                 0.0, state.bleeding_time - body_k.BLEEDING_DECAY_PER_HOUR[column] * HOUR_PER_MINUTE
             )
         for kind in healed:
+            logger.debug("%s on %s healed", kind, name)
             state.bandage_xp_ready = True
             facts.append(body_k.HEALED_FACT.format(kind=kind, part=name))
         if healed and not state.wounded:
@@ -562,6 +580,7 @@ class BodyEngine:
     def _death_fact(self, player: PlayerEntity) -> str:
         name = player.appearance.forename
         cause = max(self._losses, key=lambda each: self._losses[each], default="wounds")
+        logger.debug("Body death: cause %s, losses this minute %s", cause, dict(self._losses))
         if cause == "bleeding":
             return body_k.DEATH_BLEEDING.format(name=name)
         if cause == "wounds":

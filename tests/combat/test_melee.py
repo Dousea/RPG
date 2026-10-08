@@ -120,6 +120,25 @@ def chance(weapon: MeleeWeaponItem, **kwargs) -> int:
     return crit_chance(weapon, **params)
 
 
+class SwingTraceTests(unittest.TestCase):
+    """melee: a swing is traced at debug with its reach, crit roll and hit numbers."""
+
+    def test_a_swing_logs_the_weapon_targets_crit_roll_and_damage(self):
+        gm = street_game(weapon="item_crowbar")
+        add(gm, make_zombie(1))
+
+        with self.assertLogs("managers.combat.melee", level="DEBUG") as logs:
+            swing(gm)
+
+        text = "\n".join(record.getMessage() for record in logs.records)
+        self.assertIn("HIT", text)
+        self.assertIn(CROWBAR.name, text)
+        self.assertIn("reaches ['z1']", text)
+        self.assertIn("Crit chance", text)
+        self.assertIn("Hit #1 on z1", text)
+        self.assertIn("damage", text)
+
+
 class CritChanceTests(unittest.TestCase):
     """melee: Crits."""
 

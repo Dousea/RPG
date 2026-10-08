@@ -32,6 +32,19 @@ class QuestAdvancementTests(unittest.TestCase):
         self.assertIn("discover:bunker_location", quest.completed_objectives)
         self.assertIn("completed", note)
 
+    def test_a_completed_objective_is_traced(self):
+        gm = GameManager()
+        gm.quests["find_the_bunker"] = QuestState(
+            quest_id="find_the_bunker", objectives=["discover:bunker_location"]
+        )
+
+        with self.assertLogs("managers.simulation", level="DEBUG") as logs:
+            SimulationCore(gm).discover_flag("bunker_location")
+
+        text = "\n".join(record.getMessage() for record in logs.records)
+        self.assertIn("find_the_bunker", text)
+        self.assertIn("discover:bunker_location", text)
+
     def test_defeating_an_npc_completes_a_matching_objective(self):
         gm = GameManager()
         gm.quests["deal_with_marcus"] = QuestState(

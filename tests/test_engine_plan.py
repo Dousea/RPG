@@ -161,6 +161,22 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         self.assertEqual(gm.player.current_location_id, "zone_bodega")
         self.assertFalse([e for e in gm.player.inventory if e.item.id == BAT.id and e.broken])
 
+    def test_the_questions_and_the_picks_that_settle_them_are_traced(self):
+        gm = self.stage("zone_building")
+        self.script("MOVE_TO Your Apartment")
+
+        with self.assertLogs("adapters.engine", level="DEBUG") as logs:
+            self.engine.play("go to the apartment")
+            self.engine.go(["zone_flat_vacant"])
+
+        lines = [record.getMessage() for record in logs.records]
+        asked = next(line for line in lines if line.startswith("Which-one asked"))
+        self.assertIn("destination", asked)
+        self.assertIn("zone_flat_vacant", asked)
+        picks = next(line for line in lines if line.startswith("Plan screen picks"))
+        self.assertIn("zone_flat_vacant", picks)
+        self.assertEqual(gm.player.current_location_id, "zone_flat_vacant")
+
     def test_a_zone_the_parser_picked_for_a_kind_word_asks_and_go_moves_to_the_pick(self):
         gm = self.stage("zone_building")
         self.script("MOVE_TO Your Apartment")

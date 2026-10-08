@@ -4,6 +4,7 @@ import random
 import unittest
 from unittest import mock
 
+from data import carry as carry_k
 from data.body.status_effects import STATUS_EFFECT_THRESHOLDS
 from data.items import ITEMS
 from managers import carry
@@ -55,6 +56,19 @@ NO_EFFECTS: dict[StatusEffect, int] = {}
 
 class CapacityTests(unittest.TestCase):
     """carrying-and-loot: Capacity."""
+
+    def test_a_take_refused_for_weight_is_traced_with_the_numbers(self):
+        gm = GameManager()
+        gm.player.inventory.extend(ItemEntity(item=ITEMS["item_barbell"]) for _ in range(8))
+        gm.current_location.entities.append(ItemEntity(item=ITEMS["item_barbell"]))
+
+        with self.assertLogs("managers.carry", level="DEBUG") as logs:
+            facts = simulate(gm, TakeAction(item_name="barbell"))
+
+        self.assertTrue(facts[0].startswith("Refused"))
+        (line,) = [r.getMessage() for r in logs.records]
+        self.assertIn(f"of {carry_k.MAIN_INVENTORY_CAPACITY} kg", line)
+        self.assertIn(f"adding {carry.rounded(ITEMS['item_barbell'].weight)} kg", line)
 
     def test_strength_zero_to_ten(self):
         got = [carry.max_weight(level, (), NO_EFFECTS) for level in range(11)]

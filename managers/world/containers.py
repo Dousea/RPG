@@ -1,5 +1,6 @@
 """Filling a container from its table when it is first opened (carrying-and-loot)."""
 
+import logging
 import random
 
 from data.items import ITEMS
@@ -16,6 +17,8 @@ from managers import carry
 from modules.entity.item import ItemEntity
 from modules.item import ContainerItem, MedicalItem, MeleeWeaponItem, StackItem
 from modules.world.room import ContainerEntity, RoomEntity
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["fill_bag", "open_container", "pick_procedural", "roll_table"]
 
@@ -76,29 +79,44 @@ def _roll_list(
 
     Entries with no catalogue item are skipped without a roll.
     """
-    for _ in range(max(1, rolls)):
+    for rolled in range(max(1, rolls)):
         for name, chance in entries:
             catalogue = LOOT_CATALOGUE.get(name)
             item = ITEMS.get(catalogue[0]) if catalogue is not None else None
             if catalogue is None or item is None:
                 continue
+
             modifier = 1.0 if junk else LOOT_KIND_MODIFIERS[catalogue[1]]
             mult = container_k.JUNK_CHANCE_MULT if junk else 1.0
             if modifier <= 0:
                 continue
-            if (
-                rng.randrange(container_k.ROLL_DENOMINATOR)
-                >= chance * mult * container_k.CHANCE_PERCENT_SCALE * modifier
-            ):
+
+            draw = rng.randrange(container_k.ROLL_DENOMINATOR)
+            needed = chance * mult * container_k.CHANCE_PERCENT_SCALE * modifier
+            if draw >= needed:
                 continue
+
             entity = ItemEntity(item=item)
             if carry.rounded(held + sum(e.weight for e in found) + entity.weight) > carry.rounded(
                 capacity
             ):
+                logger.debug(
+                    "Loot roll %s: %s (draw %s < %s) does not fit in %s kg, list ends",
+                    rolled + 1,
+                    item.id,
+                    draw,
+                    needed,
+                    capacity,
+                )
                 return
+
+            logger.debug(
+                "Loot roll %s: %s (draw %s < %s) made %s", rolled + 1, name, draw, needed, item.id
+            )
             if randomise and not shop:
                 _randomise(rng, entity)
             found.append(entity)
+
             if isinstance(item, ContainerItem) and not shop and name in bag_tables:
                 entity.contents = roll_table(
                     rng,
@@ -123,6 +141,14 @@ def roll_table(
     The junk list rolls first, then the main list; each stops on its own when an item does not fit.
     """
     found: list[ItemEntity] = []
+    logger.debug(
+        "Rolling a table: %s main rolls, %s junk rolls, shop=%s, capacity %s kg, held %s kg",
+        table.rolls,
+        table.junk_rolls,
+        table.shop,
+        capacity,
+        held,
+    )
     shared = {
         "shop": table.shop,
         "randomise": randomise,
@@ -147,9 +173,12 @@ def open_container(rng: random.Random, room: RoomEntity, container: ContainerEnt
     if source.procedures:
         picked = pick_procedural(rng, room, source.procedures)
         table = PROCEDURAL_TABLES[picked.table] if picked is not None else None
+        logger.debug("Procedural table picked for %s: %s", container.container_id, picked)
+    logger.debug("Opening %s from table %s", container.container_id, container.source)
     if table is not None:
         held = sum(e.weight for e in container.contents)
         container.contents.extend(roll_table(rng, table, capacity=container.capacity, held=held))
+        logger.debug("%s holds %s", container.container_id, [e.item.id for e in container.contents])
 
 
 def fill_bag(rng: random.Random, entity: ItemEntity) -> None:
@@ -180,6 +209,10 @@ def container_weight(container: ContainerEntity) -> float:
 
 def has_room_for(container: ContainerEntity, entity: ItemEntity) -> bool:
     """Whether `entity` fits in the container beside what it already holds."""
-    return carry.rounded(container_weight(container) + entity.weight) <= carry.rounded(
-        container.capacity
-    )
+    would_hold = carry.rounded(container_weight(container) + entity.weight)
+    fits = would_hold <= carry.rounded(container.capacity)
+    if not fits:
+        logger.debug(
+            "%s would hold %s kg of %s kg", container.container_id, would_hold, container.capacity
+        )
+    return fits

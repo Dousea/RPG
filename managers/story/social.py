@@ -4,6 +4,7 @@ Resolution only; the validator decides legality. Every score change goes through
 `RelationshipManager`, with the NPC as source and the player as target.
 """
 
+import logging
 import random
 
 from data.story import social as social_k
@@ -16,6 +17,8 @@ from modules.entity.npc import NpcEntity
 from modules.events.modifier import AffinityModifier
 from modules.item import ConsumableItem
 from modules.story.social import GIVE_KEY, SocialLog
+
+logger = logging.getLogger(__name__)
 
 REQUEST_FOLLOW = "follow"
 REQUEST_GIVE = "give"
@@ -95,6 +98,18 @@ class SocialManager:
             return int(delta * social_k.GUARDED_POSITIVE_FACTOR) if guarded else delta
 
         d_affection, d_trust = scaled(affection), scaled(trust)
+        logger.debug(
+            "Social %s with %s: base affection %s trust %s -> affection %s trust %s "
+            "(repeat #%s, guarded=%s)",
+            key,
+            npc.npc_id,
+            affection,
+            trust,
+            d_affection,
+            d_trust,
+            repeats,
+            guarded,
+        )
         if d_affection:
             self._relationships.apply_affinity_modifier(
                 AffinityModifier(
@@ -155,7 +170,16 @@ class SocialManager:
         self._log().refuse(npc.npc_id, request, self._manager.narrative.minutes)
 
     def request_follow(self, npc: NpcEntity) -> list[str]:
-        if npc.following or self._rng.random() < self.follow_chance(npc):
+        chance = self.follow_chance(npc)
+        roll = self._rng.random() if not npc.following else 0.0
+        logger.debug(
+            "Follow request to %s: chance %.2f roll %.2f (already following=%s)",
+            npc.npc_id,
+            chance,
+            roll,
+            npc.following,
+        )
+        if npc.following or roll < chance:
             npc.following = True
             return [f"{npc.name} agrees to follow {self._name}."]
         self._refuse(npc, REQUEST_FOLLOW)
@@ -169,13 +193,27 @@ class SocialManager:
 
     def request_about(self, npc: NpcEntity, topic: Topic) -> tuple[list[str], str | None]:
         """Tell the topic if trust allows; returns the facts and the flag the telling reveals."""
-        if not trust_at_least(self.trust_band_of(npc), topic.min_trust):
+        band = self.trust_band_of(npc)
+        logger.debug(
+            "Topic %s asked of %s: trust band %s, needs %s",
+            topic.topic_id,
+            npc.npc_id,
+            band.value,
+            topic.min_trust.value,
+        )
+        if not trust_at_least(band, topic.min_trust):
             return [f"{npc.name} deflects the question."], None
         self._manager.narrative.social_log.told_topics.add(topic.topic_id)
+        logger.debug(
+            "Topic %s told by %s, discovers %s", topic.topic_id, npc.npc_id, topic.discovers
+        )
         return [f"{npc.name} tells {self._name}: {topic.fact}"], topic.discovers
 
     def request_give(self, npc: NpcEntity, entity: ItemEntity) -> list[str]:
-        if self._rng.random() < self.give_chance(npc):
+        chance = self.give_chance(npc)
+        roll = self._rng.random()
+        logger.debug("Give request to %s: chance %.2f roll %.2f", npc.npc_id, chance, roll)
+        if roll < chance:
             npc.inventory.remove(entity)
             self._manager.player.inventory.append(entity)
             return [f"{npc.name} hands {self._name} the {entity.item.name}."]

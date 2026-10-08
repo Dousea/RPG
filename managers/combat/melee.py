@@ -211,6 +211,16 @@ class MeleeEngine:
         status_effects = player_status_effect_levels(player)
         close_kill = weapon.is_stab and _hunters(world, player) <= melee_k.CLOSE_KILL_MAX_HUNTERS
         crit = self._roll_crit(kind, weapon, target, levels, status_effects, close_kill)
+        logger.debug(
+            "Swing %s with %s at %s: reaches %s (%s hits), crit=%s, close_kill=%s",
+            kind.name,
+            weapon.name,
+            target_id,
+            [z.zombie_id for z in targets],
+            len(targets),
+            crit,
+            close_kill,
+        )
         swing = _Swing(
             player=player,
             world=world,
@@ -233,6 +243,14 @@ class MeleeEngine:
             if zombie.zombie_id in result.killed:
                 continue
             self._knock(zombie, now, crit=crit, result=result)
+            logger.debug(
+                "%s after the swing: staggered=%s down_until=%s crawling=%s flagged_crawler=%s",
+                zombie.zombie_id,
+                zombie.staggered,
+                zombie.down_until,
+                zombie.crawling,
+                zombie.become_crawler,
+            )
             if zombie.state not in HUNTING:
                 zombie.state = ZombieState.CHASING
             zombie.time_since_seen = 0.0
@@ -354,8 +372,10 @@ class MeleeEngine:
         behind = target.facing_cos < melee_k.BEHIND_FACING_COS
         if weapon.is_stab:
             if not close_kill:
+                logger.debug("No crit: knife without a close kill")
                 return False
             if behind and unaware:
+                logger.debug("Crit: knife from behind on an unaware target")
                 return True
         chance = crit_chance(
             weapon,
@@ -367,7 +387,9 @@ class MeleeEngine:
             behind=behind,
             bare_unaware=weapon is melee_k.BARE_HANDS and unaware,
         )
-        return self._rng.randrange(100) < chance
+        roll = self._rng.randrange(100)
+        logger.debug("Crit chance %s, roll %s", chance, roll)
+        return roll < chance
 
     def _hit(self, swing: _Swing, zombie: ZombieEntity, index: int, was_attacking: bool) -> None:
         kind = swing.kind
@@ -393,6 +415,7 @@ class MeleeEngine:
             self._wear(swing)
         if killed:
             self._kill(swing, zombie)
+            logger.debug("%s killed (kill #%s)", zombie.zombie_id, swing.player.zombie_kills)
         if knife_death:
             self._maybe_stick_knife(swing, zombie, was_attacking)
 
@@ -422,7 +445,8 @@ class MeleeEngine:
         part = hit_part(kind, self._rng)
         if kind in (SwingKind.FLOOR_ATTACK, SwingKind.STOMP) and part == BodyPart.HEAD:
             split *= melee_k.HEAD_HIT_MULTIPLIER
-        split *= 1 - zombie_defence(zombie, part) / 100
+        defence = zombie_defence(zombie, part)
+        split *= 1 - defence / 100
         zombie.hits_taken += 1
         split *= hits_taken_factor(zombie.hits_taken)
         reach = (
@@ -448,6 +472,19 @@ class MeleeEngine:
             dealt *= max(melee_k.FLOOR_ATTACK_MIN_CRIT_MULTIPLIER, crit_multiplier)
         if swing.crit:
             dealt *= max(melee_k.MIN_CRIT_MULTIPLIER, crit_multiplier)
+        logger.debug(
+            "Hit #%s on %s: weapon roll %.2f, part %s, defence %.1f, split %.2f, "
+            "damage %.2f, crit=%s, health %.2f",
+            index,
+            zombie.zombie_id,
+            roll,
+            part.name,
+            defence,
+            split,
+            dealt,
+            swing.crit,
+            zombie.health,
+        )
         return dealt, split
 
     def _roll_crawler(self, swing: _Swing, zombie: ZombieEntity) -> None:
@@ -512,6 +549,7 @@ class MeleeEngine:
                 self._skills.add_xp(player, skill_k.STRENGTH, melee_k.KNOCKBACK_STRENGTH_XP)
             )
         swing.result.facts.extend(facts)
+        logger.debug("Swing XP: split %.2f over %s hits, facts %s", split, swing.hit_count, facts)
 
     def _add_noise(self, swing: _Swing, *, jaw_stab: bool) -> None:
         sounds = swing.result.sounds
@@ -533,6 +571,13 @@ class MeleeEngine:
         odds = weapon.condition_lower_chance + maintenance + weapon_level(player) // 2
         if self._rng.randrange(max(odds, 1)) == 0:
             self._lose_condition(swing, entity)
+            logger.debug(
+                "%s lost condition: now %s of %s (odds 1 in %s)",
+                weapon.name,
+                entity.condition,
+                weapon.condition_max,
+                odds,
+            )
         if (
             not weapon.no_maintenance_xp
             and self._rng.randrange(100) < melee_k.MAINTENANCE_XP_CHANCE

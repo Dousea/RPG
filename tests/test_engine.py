@@ -85,6 +85,28 @@ class TurnTests(EngineTestCase):
         self.assertEqual(result["current_location"], "Your Building")
         self.assertIn("Find a weapon", result["goals"]["short_term"])
 
+    def test_a_turn_traces_its_decisions_at_debug(self):
+        self.llm.actions = "ACTIONS:\nWAIT 5 minutes"
+        started = self.engine.game.narrative.minutes
+
+        with self.assertLogs(level="DEBUG") as logs:
+            self.engine.play("wait a bit")
+
+        lines = [record.getMessage() for record in logs.records if record.levelname == "DEBUG"]
+        spent = self.engine.game.narrative.minutes - started
+        self.assertGreater(spent, 0)
+        self.assertTrue(
+            any(line.startswith("Turn start") and "wait a bit" in line for line in lines)
+        )
+        self.assertTrue(any("Parsed plan" in line and "WaitAction" in line for line in lines))
+        self.assertTrue(
+            any("took" in line and f"{spent} minutes" in line for line in lines),
+            lines,
+        )
+        self.assertTrue(
+            any(line.startswith("Turn end") and f"{spent} minutes" in line for line in lines)
+        )
+
     def test_turn_records_the_event_in_both_tiers(self):
         self.engine.play("go out")
         memory = self.engine.game.memory

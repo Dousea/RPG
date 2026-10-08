@@ -326,6 +326,19 @@ class BeatEvaluationTests(unittest.TestCase):
         again = core.resolve([AddGoalAction("short_term", "y")])
         self.assertNotIn("A door slams somewhere above.", again)
 
+    def test_resolution_traces_the_action_the_beat_and_its_flag(self):
+        beat = Beat("street_noise", PlayerInZone("zone_building"), (SetFlag("heard"),), "x", False)
+        gm = GameManager()
+        core = SimulationCore(gm, rng=random.Random(1), beats={"street_noise": beat})
+
+        with self.assertLogs("managers.simulation", level="DEBUG") as logs:
+            core.resolve([MoveAction(destination="out")])
+
+        lines = [record.getMessage() for record in logs.records]
+        self.assertTrue(any("MoveAction" in line and "minutes" in line for line in lines))
+        self.assertTrue(any("street_noise" in line and "heard" in line for line in lines))
+        self.assertTrue(any(line.startswith("Flag heard set") for line in lines))
+
     def test_a_beat_that_does_not_interrupt_lets_the_plan_run(self):
         beat = Beat("quiet", PlayerInZone("zone_home"), (), "Something stirs.", False)
         gm = GameManager()

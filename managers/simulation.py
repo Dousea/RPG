@@ -352,6 +352,12 @@ class SimulationCore:
                 result = self.validator.validate(action)
 
                 if isinstance(result, Asked):
+                    logger.debug(
+                        "Action %r asks which %s: %s",
+                        action,
+                        result.attr,
+                        [(c.kind, c.id) for c in result.candidates],
+                    )
                     self.asked = result
                     self.pending = plan[index:budget]
                     unattempted = [describe_action(a) for a in self.pending]
@@ -362,6 +368,7 @@ class SimulationCore:
                     break
 
                 if isinstance(result, Rejected):
+                    logger.debug("Action %r refused: %s", action, result.reason)
                     rejected.append((describe_action(result.action), result.reason))
                     rejected_actions.append(result.action)
                     facts.append(f"Refused: {self._name} can't {rejected[-1][0]}: {result.reason}")
@@ -371,12 +378,23 @@ class SimulationCore:
                 self.done_actions.append(action)
                 self._interruption = ""
                 zone_before = self.manager.player.current_location_id
+                clock_before = self.manager.narrative.minutes
+                logger.debug("Action %r resolved to %r", action, result.resolved)
                 action_facts, minutes = self._resolve_one(result)
+                logger.debug(
+                    "Action %r took %s minutes (clock %s -> %s), facts: %s",
+                    action,
+                    minutes,
+                    clock_before,
+                    self.manager.narrative.minutes,
+                    action_facts,
+                )
                 facts.extend(action_facts)
                 total_minutes += minutes
                 if not self.manager.narrative.game_over:
                     facts.extend(self._after_action())
                 if self._interruption:
+                    logger.debug("Plan interrupted by %s after %r", self._interruption, action)
                     cancelled = [describe_action(a) for a in plan[index + 1 : budget]]
                     if cancelled:
                         facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
@@ -408,6 +426,12 @@ class SimulationCore:
         facts = self._net_level_facts(facts, levels_before)
         if total_minutes and total_minutes != self._stated_minutes:
             facts.append(_minutes_fact(total_minutes))
+        logger.debug(
+            "Resolved %s of %s actions in %s minutes",
+            len(self.done_actions),
+            len(self.tried),
+            total_minutes,
+        )
         self.refused_actions = [refusal for refusal in rejected if refusal[0] not in done]
         self.refused_plan = [
             action
@@ -431,6 +455,7 @@ class SimulationCore:
         narrative = self.manager.narrative
         narrative.flags.setdefault(flag, True)
         narrative.discovered_flags.add(flag)
+        logger.debug("Flag %s discovered", flag)
         return self._advance_quests(f"discover:{flag}")
 
     def apply_story_effect(self, effect: Effect) -> str:
@@ -438,6 +463,7 @@ class SimulationCore:
         manager = self.manager
         match effect:
             case StartOutbreak():
+                logger.debug("Outbreak starts at minute %s", manager.narrative.minutes)
                 start_outbreak(
                     manager.world,
                     manager.narrative.minutes,
@@ -447,6 +473,7 @@ class SimulationCore:
                 self._loop.forget_visible()
             case SetFlag(flag=flag):
                 manager.narrative.flags[flag] = True
+                logger.debug("Flag %s set", flag)
             case DiscoverFlag(flag=flag):
                 return self.discover_flag(flag)
             case MoveNpc(npc_id=npc_id, zone_id=zone_id):
@@ -458,15 +485,18 @@ class SimulationCore:
                     logger.warning(f"Beat effect skipped: planks bar {npc_id} from {zone_id}.")
                 else:
                     manager.move_npc(npc, zone)
+                    logger.debug("Beat moved %s to %s", npc_id, zone_id)
             case AddNpcStatus(npc_id=npc_id, status=status):
                 npc = manager.npcs.get(npc_id)
                 if npc is not None and status not in npc.status:
                     npc.status.append(status)
+                    logger.debug("NPC %s gained status %s", npc_id, status)
                     return self._advance_quests(f"npc_status:{npc_id}:{status}")
             case RemoveNpcStatus(npc_id=npc_id, status=status):
                 npc = manager.npcs.get(npc_id)
                 if npc is not None and status in npc.status:
                     npc.status.remove(status)
+                    logger.debug("NPC %s lost status %s", npc_id, status)
         return ""
 
     def _fire_beats(self, *, clock_only: bool) -> list[str]:
@@ -485,6 +515,13 @@ class SimulationCore:
                 continue
             manager.world.fired_beats[beat.beat_id] = manager.narrative.minutes
             facts.append(beat.fact)
+            logger.debug(
+                "Beat %s fired at minute %s, effects %s, interrupts=%s",
+                beat.beat_id,
+                manager.narrative.minutes,
+                list(beat.effects),
+                beat.interrupts,
+            )
             for effect in beat.effects:
                 note = self.apply_story_effect(effect)
                 if note:
@@ -515,11 +552,13 @@ class SimulationCore:
             earned = band in TRUSTS_PLAYER_BANDS
             if earned and TRUSTS_PLAYER not in npc.status:
                 npc.status.append(TRUSTS_PLAYER)
+                logger.debug("NPC %s now trusts the player (%s)", npc.npc_id, band)
                 note = self._advance_quests(f"npc_status:{npc.npc_id}:{TRUSTS_PLAYER}")
                 if note:
                     facts.append(note)
             elif not earned and TRUSTS_PLAYER in npc.status:
                 npc.status.remove(TRUSTS_PLAYER)
+                logger.debug("NPC %s no longer trusts the player (%s)", npc.npc_id, band)
         return facts
 
     def _after_action(self) -> list[str]:
@@ -704,6 +743,9 @@ class SimulationCore:
         level_texts = level_change_fact_texts(self._name)
         kept = [fact for fact in facts if fact not in level_texts]
         after = player_status_effect_levels(self.manager.player)
+        for effect, level in after.items():
+            if level != before[effect]:
+                logger.debug("Status effect %s: level %s -> %s", effect.name, before[effect], level)
         return [*kept, *level_change_facts(self._name, before, after)]
 
     def _coughs(self, stat_facts: list[str]) -> list[Sound]:
@@ -842,6 +884,7 @@ class SimulationCore:
         if narrative.game_over or player.hit_points > 0:
             return fact
         narrative.game_over = True
+        logger.debug("Player died at minute %s: %s", narrative.minutes, fact)
         if player.stats.get(CharacterStat.ZOMBIE_INFECTION) >= body_k.RISE_INFECTION_MIN:
             fact = f"{fact.removesuffix('.')}{body_k.ROSE_AGAIN_SUFFIX}"
         narrative.death_cause = fact[:DEATH_CAUSE_MAX_LENGTH]
@@ -1630,11 +1673,13 @@ class SimulationCore:
             if objective_key in quest.completed_objectives:
                 continue
             quest.completed_objectives.append(objective_key)
+            logger.debug("Quest %s: objective %s done", quest.quest_id, objective_key)
             title = quest.title or quest.quest_id
             label = quest.objective_labels.get(objective_key, objective_key)
             notes.append(f'Quest "{title}": done -- {label}.')
             if quest.is_complete():
                 quest.status = QuestStatus.COMPLETED
+                logger.debug("Quest %s completed", quest.quest_id)
                 notes.append(f'Quest "{title}" completed.')
         return " ".join(notes)
 
@@ -1745,6 +1790,9 @@ class SimulationCore:
         player = self.manager.player
         wanted = span.minutes
         player.asleep = True
+        logger.debug(
+            "Sleep starts at minute %s for up to %s minutes", self.manager.narrative.minutes, wanted
+        )
         spent = 0
         facts: list[str] = []
         wake_fact = ""
@@ -1757,6 +1805,13 @@ class SimulationCore:
             if wake_fact:
                 break
         player.asleep = False
+        logger.debug(
+            "Sleep ends after %s of %s minutes at minute %s: %s",
+            spent,
+            wanted,
+            self.manager.narrative.minutes,
+            wake_fact or "time was up",
+        )
         words = _span_words(spent)
         if span.clamped:
             lead = f"{self._name} sleeps {words}, the most {self._subject} can at once."

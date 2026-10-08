@@ -278,6 +278,18 @@ class EachThumpTests(unittest.TestCase):
                 return elapsed
         return None
 
+    def test_a_thump_is_traced_with_the_damage_and_what_is_left(self):
+        gm = game()
+        thumper(gm, "door_apartment", BUILDING, rate=3.0)
+        thumper(gm, "door_apartment", BUILDING, rate=3.0)
+
+        with self.assertLogs("managers.world.barriers", level="DEBUG") as logs:
+            thumping.minute(gm.world, gm.player, random.Random(1))
+
+        text = "\n".join(record.getMessage() for record in logs.records)
+        self.assertIn("door_apartment", text)
+        self.assertIn("health", text)
+
     def test_one_zombie_never_breaks_a_door_in_48_hours(self):
         gm = game()
         door = gm.world.barriers["door_apartment"]

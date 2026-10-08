@@ -1,5 +1,6 @@
 """Naming an item: the lookup by name, id or describing words, and the labels that tell items apart (carrying-and-loot)."""
 
+import logging
 import re
 from collections.abc import Collection, Iterable
 
@@ -10,6 +11,8 @@ from modules.action.choices import Candidate
 from modules.action.pins import pin_of
 from modules.entity.item import ItemEntity
 from modules.item import MedicalItem, StackItem
+
+logger = logging.getLogger(__name__)
 
 BRACKETED_WORD = re.compile(r"(.+?)\s*\(([^()]+)\)")
 
@@ -111,6 +114,17 @@ def find_named(entities: Iterable[ItemEntity], name: str) -> ItemEntity | list[I
     first; ones that differ give the list. None when nothing matches. A pinned item is the one in `entities` with its instance id.
     """
     pool = list(entities)
+    found = _lookup(pool, name)
+    if logger.isEnabledFor(logging.DEBUG):
+        if isinstance(found, list):
+            chosen = "asks which of %s" % [e.instance_id for e in found]
+        else:
+            chosen = found.instance_id if found else "nothing"
+        logger.debug("Item %r among %s candidates: %s", name, len(pool), chosen)
+    return found
+
+
+def _lookup(pool: list[ItemEntity], name: str) -> ItemEntity | list[ItemEntity] | None:
     if pin := pin_of(name, "item"):
         return next((e for e in pool if e.instance_id == pin.entity_id), None)
     needle = clean_name(name)

@@ -1,9 +1,13 @@
 """Finding rooms and containers by name inside the player's zone (carrying-and-loot)."""
 
+import logging
+
 from managers import naming
 from modules.entity.player import PlayerEntity
 from modules.world.location import Location
 from modules.world.room import ContainerEntity, RoomEntity
+
+logger = logging.getLogger(__name__)
 
 
 def current_room(zone: Location, player: PlayerEntity) -> RoomEntity | None:
@@ -20,6 +24,7 @@ def resolve_room(zone: Location, name: str) -> RoomEntity | None:
         return None
     for room in zone.rooms.values():
         if needle == room.name.casefold() or needle in (a.casefold() for a in room.aliases):
+            logger.debug("Room %r resolved to %s", name, room.name)
             return room
     return None
 
@@ -56,10 +61,17 @@ def resolve_container(
     every = [c for room in zone.rooms.values() for c in room.containers]
     for container in every:
         if needle == container.name.casefold():
+            logger.debug("Container %r matched by full name: %s", name, container.container_id)
             return container
     here = zone.rooms.get(room_id or "")
     pool = here.containers if here is not None else every
     matches = [c for c in pool if needle in (a.casefold() for a in c.aliases)]
+    logger.debug(
+        "Container %r matched by alias in room %s: %s",
+        name,
+        room_id,
+        [c.container_id for c in matches],
+    )
     if not matches:
         return None
     return matches[0] if len(matches) == 1 else matches

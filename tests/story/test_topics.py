@@ -213,6 +213,17 @@ class RequestAboutTests(unittest.TestCase):
         self.assertEqual(gm.narrative.minutes, 5)
         self.assertEqual(facts[-1], "About 5 minutes pass.")
 
+    def test_telling_a_topic_is_traced_with_the_trust_band_it_needed(self):
+        gm = jen_game(trust=10)
+
+        with self.assertLogs("managers.story.social", level="DEBUG") as logs:
+            simulate(gm, REQUEST_NEWS)
+
+        text = "\n".join(record.getMessage() for record in logs.records)
+        self.assertIn("outbreak_news", text)
+        self.assertIn(TENTATIVE.value, text)
+        self.assertIn("told", text)
+
     def test_a_topic_can_be_asked_again(self):
         gm = jen_game()
         simulate(gm, REQUEST_NEWS)

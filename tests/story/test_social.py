@@ -79,6 +79,18 @@ class ApproachTableTests(unittest.TestCase):
                 self.assertEqual(trust(gm, "npc_emma"), 5 + d_trust)
                 self.assertEqual(affection(gm, "player"), 0)
 
+    def test_a_talk_traces_its_scaled_deltas_and_why(self):
+        gm = building_game()
+        simulate(gm, TalkAction(npc_name="Emma", approach="chat"))
+
+        with self.assertLogs("managers.story.social", level="DEBUG") as logs:
+            simulate(gm, TalkAction(npc_name="Emma", approach="chat"))
+
+        (line,) = [r.getMessage() for r in logs.records if "chat" in r.getMessage()]
+        self.assertIn("repeat #2", line)
+        self.assertIn("guarded=False", line)
+        self.assertIn("affection 1", line)
+
     def test_flirting_with_someone_not_romance_eligible_is_minus_one(self):
         gm = building_game()
         simulate(gm, TalkAction(npc_name="Marcus", approach="flirt"))

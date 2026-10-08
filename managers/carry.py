@@ -1,5 +1,6 @@
 """What the player carries: weight, capacity and Heavy Load (carrying-and-loot)."""
 
+import logging
 import random
 from collections.abc import Collection, Iterable, Mapping
 from enum import StrEnum
@@ -13,6 +14,8 @@ from modules.character.equipment import AnyCharacterEquipmentSlot, CharacterArmo
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ContainerItem
+
+logger = logging.getLogger(__name__)
 
 
 class Place(StrEnum):
@@ -172,7 +175,16 @@ def over_the_limit(
     extra: Collection[ItemEntity] = (),
 ) -> bool:
     """Whether the player would carry more than the main inventory holds after the move."""
-    return carried_weight(player, without=without, extra=extra) > carry_k.MAIN_INVENTORY_CAPACITY
+    would_carry = carried_weight(player, without=without, extra=extra)
+    over = would_carry > carry_k.MAIN_INVENTORY_CAPACITY
+    if over:
+        logger.debug(
+            "Over capacity: would carry %s kg of %s kg (adding %s kg)",
+            would_carry,
+            carry_k.MAIN_INVENTORY_CAPACITY,
+            rounded(sum(entity.weight for entity in extra)),
+        )
+    return over
 
 
 def _descendants(entity: ItemEntity) -> list[ItemEntity]:
@@ -261,10 +273,15 @@ def bag_room(bag: ItemEntity, entities: Iterable[ItemEntity]) -> bool:
     if item.max_item_size is not None and any(
         rounded(entity.weight) > item.max_item_size for entity in added
     ):
+        logger.debug(
+            "%s refuses an item over its size limit of %s kg", item.name, item.max_item_size
+        )
         return False
-    return rounded(contents_weight(bag) + sum(entity.weight for entity in added)) <= rounded(
-        effective_capacity(bag)
-    )
+    would_hold = rounded(contents_weight(bag) + sum(entity.weight for entity in added))
+    room = rounded(effective_capacity(bag))
+    if would_hold > room:
+        logger.debug("%s would hold %s kg of %s kg", item.name, would_hold, room)
+    return would_hold <= room
 
 
 def inside(entity: ItemEntity, bag: ItemEntity) -> bool:

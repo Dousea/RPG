@@ -13,6 +13,7 @@ already looked up (the target NPC, the item entity, the destination zone) as a
 re-derive the reason something was legal.
 """
 
+import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, fields
@@ -157,6 +158,8 @@ from modules.world.pace import Pace
 from modules.world.room import ContainerEntity, RoomEntity
 
 GOAL_HORIZONS = GOAL_HORIZON_LABELS
+
+logger = logging.getLogger(__name__)
 
 UNSUPPORTED_REASON = "there is no way to do that yet."  # llm-contract
 ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
@@ -352,6 +355,7 @@ class ActionValidator:
                 return Rejected(action, mention_k.OUT_OF_REACH.format(name=pin))
             return self._enter_room(action, room)
         zone = manager.world.locations.get(pin.entity_id)
+        logger.debug("Move pinned to %s %s: %s", pin.kind, pin.entity_id, zone is not None)
         if zone is None:
             return Rejected(action, mention_k.OUT_OF_REACH.format(name=pin))
         return self._walk_to_zone(action, zone, "")
@@ -530,6 +534,7 @@ class ActionValidator:
         """The container `name` points at, in the player's room or (`any_room`) anywhere in this zone; the question to ask when several match, None when none do."""
         manager = self.manager
         if pin := pin_of(name):
+            logger.debug("Container pin %s", pin)
             return self._pinned_container(pin)
         room_id = None if any_room else manager.player.current_room
         found = resolve_container(manager.current_location, room_id, name)
@@ -763,8 +768,16 @@ class ActionValidator:
         needle = name.strip().casefold()
         seen = perceived_corpses(self.manager)
         if needle in CORPSE_WORDS:
-            return min(seen, key=lambda c: (c.gap, int(c.corpse_id[1:])), default=None)
-        return next((c for c in seen if c.corpse_id == needle), None)
+            found = min(seen, key=lambda c: (c.gap, int(c.corpse_id[1:])), default=None)
+        else:
+            found = next((c for c in seen if c.corpse_id == needle), None)
+        logger.debug(
+            "Body %r among %s perceived: %s",
+            name,
+            [(c.corpse_id, c.gap) for c in seen],
+            found.corpse_id if found else None,
+        )
+        return found
 
     def _validate_drop(self, action: DropAction) -> ValidationResult:
         player = self.manager.player
@@ -1201,6 +1214,12 @@ class ActionValidator:
         else:
             pool = [zombie for zombie in here if zombie.zombie_id == needle]
         pool.sort(key=lambda z: (z.gap, int(z.zombie_id[1:])))
+        logger.debug(
+            "Zombie %r among %s perceived: candidates %s",
+            name,
+            len(here),
+            [(z.zombie_id, z.gap) for z in pool],
+        )
         if not pool:
             return None
         return TargetZombie(

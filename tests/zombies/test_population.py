@@ -106,6 +106,13 @@ class OutbreakFillTests(unittest.TestCase):
         self.assertIsNone(self.gm.world.outbreak_started_at)
         self.assertEqual(self.gm.world.zombies, {})
 
+    def test_each_spawn_is_traced_with_its_zone(self):
+        with self.assertLogs("managers.zombies.population", level="DEBUG") as logs:
+            start_outbreak(self.gm.world, 100, "zone_street", self.rng)
+
+        spawned = [r.getMessage() for r in logs.records if r.getMessage().startswith("Spawned")]
+        self.assertEqual(len(spawned), len(self.gm.world.zombies))
+
     def test_start_outbreak_fills_every_zone_but_home(self):
         start_outbreak(self.gm.world, 100, "zone_street", self.rng)
         counts = self.counts()
@@ -203,6 +210,16 @@ class RedistributionTests(unittest.TestCase):
             },
         )
         self.assertEqual(self.counts()["zone_street"], 9)
+
+    def test_a_move_between_zones_is_traced(self):
+        self.add("zone_street", 20)
+
+        with self.assertLogs("managers.zombies.population", level="DEBUG") as logs:
+            redistribute(self.world, 720, "zone_home", self.rng)
+
+        moves = [r.getMessage() for r in logs.records if "moves" in r.getMessage()]
+        self.assertTrue(moves)
+        self.assertIn("zone_street", moves[0])
 
     def test_busy_zombies_stay_put(self):
         self.add("zone_street", 20)

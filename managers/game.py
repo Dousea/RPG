@@ -245,12 +245,19 @@ class GameManager:
         needle = name.strip().casefold()
         for npc in self.npcs.values():
             if needle in (npc.name.casefold(), npc.npc_id.casefold()):
+                logger.debug("NPC %r resolved to %s", name, npc.npc_id)
                 return npc
+        logger.debug("NPC %r matched nobody", name)
         return None
 
     def resolve_places(self, name: str) -> Location | list[Location] | None:
         """The zone `name` means, or every zone it fits equally well when it fits several."""
-        return locations.resolve_location(name, self.current_location, self.world.locations)
+        found = locations.resolve_location(name, self.current_location, self.world.locations)
+        if isinstance(found, list):
+            logger.debug("Place %r fits several zones: %s", name, [zone.id for zone in found])
+        else:
+            logger.debug("Place %r resolved to %s", name, found.id if found else None)
+        return found
 
     def resolve_location(self, name: str) -> Location | None:
         """The one zone `name` means; None when it means no zone or several (`resolve_places` tells which)."""

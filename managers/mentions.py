@@ -6,6 +6,7 @@ NPCs and rooms and containers of the zone, the barriers on its connections, ever
 instance id. Topics would show what an NPC knows before it is asked.
 """
 
+import logging
 import re
 from collections.abc import Sequence
 from typing import Literal
@@ -33,6 +34,8 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.world.location import Location
 from modules.world.room import ContainerEntity, RoomEntity
+
+logger = logging.getLogger(__name__)
 
 _LOOKS_FILLER = frozenset({"a", "an", "the", "in", "of", "and", "with"})
 _CARRYING = re.compile(r"\b(?:carried|carrying|holding|i carry|in my arms)\b")
@@ -332,4 +335,5 @@ def picked(manager: GameManager, ids: Sequence[str]) -> tuple[list[Mention], lis
             gone.append(mention_id)
         else:
             found.append(mention)
+    logger.debug("@ picks: found %s, gone %s", [m.id for m in found], gone)
     return found, gone

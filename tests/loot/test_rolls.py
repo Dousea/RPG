@@ -213,6 +213,16 @@ class RollChanceTests(unittest.TestCase):
         self.assertEqual(len(containers.roll_table(below, one_in_ten, capacity=50.0)), 1)
         self.assertEqual(len(containers.roll_table(edge, one_in_ten, capacity=50.0)), 0)
 
+    def test_a_roll_that_spawns_is_traced_with_its_draw_and_item(self):
+        one_in_ten = table(("pills", 10.0))
+
+        with self.assertLogs("managers.world.containers", level="DEBUG") as logs:
+            containers.roll_table(ScriptedRandom(randrange=[599]), one_in_ten, capacity=50.0)
+
+        text = "\n".join(record.getMessage() for record in logs.records)
+        self.assertIn("pills", text)
+        self.assertIn("draw 599", text)
+
     def test_every_pass_rolls_every_entry_in_order(self):
         two_passes = table(("water_bottle", 100.0), ("granola_bar", 100.0), rolls=2)
         found = containers.roll_table(ScriptedRandom(), two_passes, capacity=50.0)

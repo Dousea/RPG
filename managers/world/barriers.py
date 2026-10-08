@@ -1,5 +1,6 @@
 """The rules for doors, windows and planks: blocking, vision, damage and distance (doors)."""
 
+import logging
 import random
 from dataclasses import dataclass
 
@@ -10,6 +11,8 @@ from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import MeleeWeaponItem
 from modules.world.location import World
+
+logger = logging.getLogger(__name__)
 
 BARRICADE = "barricade"
 BARRIER = "barrier"
@@ -53,7 +56,9 @@ def find_barrier(world: World, here: str, name: str) -> BarrierEntity | None:
     for barrier in sorted(world.barriers.values(), key=lambda b: here not in b.zones):
         names = (barrier.barrier_id, barrier.name, *barrier.aliases)
         if needle in (n.casefold().removeprefix("the ") for n in names):
+            logger.debug("Barrier %r resolved to %s", name, barrier.barrier_id)
             return barrier
+    logger.debug("Barrier %r matched nothing", name)
     return None
 
 
@@ -105,11 +110,28 @@ def _hurt(barrier: BarrierEntity, target: Target, amount: int) -> Damage:
         broke = planks[-1] == 0
         if broke:
             planks.pop()
+        logger.debug(
+            "Barricade on %s side of %s takes %s: top plank %s left, plank broke=%s",
+            target.side,
+            barrier.barrier_id,
+            amount,
+            planks[-1] if planks else 0,
+            broke,
+        )
         return Damage(target, amount, plank_broke=broke)
     barrier.health = max(0, barrier.health - amount)
     gave = barrier.health == 0
     if gave:
         barrier.broken = True
+    logger.debug(
+        "%s %s takes %s from the %s side: health %s left, gave way=%s",
+        barrier.kind.value,
+        barrier.barrier_id,
+        amount,
+        target.side,
+        barrier.health,
+        gave,
+    )
     return Damage(target, amount, gave=gave)
 
 

@@ -10,7 +10,7 @@ from managers.context import ContextBuilder
 from managers.corpses.search import find_content
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected, ValidationResult
-from managers.world.item_ids import stamp_world
+from managers.world import item_ids
 from modules.action.parser import available_verbs
 from modules.action.pins import Pinned
 from modules.action.schema import build_plan_schema, parse_plan
@@ -54,6 +54,21 @@ class LookupTests(unittest.TestCase):
         for name in ('"my kitchen knife."', "your kitchen knife"):
             self.assertIs(naming.find_named([knife], name), knife, name)
         self.assertIsNone(naming.find_named([knife], "hammer"))
+
+    def test_a_lookup_traces_its_candidates_and_what_it_chose(self):
+        knife = thing(KNIFE)
+        bats = [broken_bat(), thing(BAT)]
+        pool = [knife, *bats]
+        item_ids.stamp(GameManager().world, pool)
+
+        with self.assertLogs("managers.naming", level="DEBUG") as logs:
+            naming.find_named(pool, "kitchen knife")
+            naming.find_named(pool, "baseball bat")
+
+        chosen, asked = [record.getMessage() for record in logs.records]
+        self.assertIn(knife.instance_id, chosen)
+        self.assertIn("asks which", asked)
+        self.assertIn(bats[0].instance_id, asked)
 
     def test_the_words_are_the_condition_and_the_wetness(self):
         self.assertEqual(naming.describing_words(thing(SHIRT)), ("intact",))
@@ -254,7 +269,7 @@ class WhichOneTests(unittest.TestCase):
     def test_a_pin_on_an_item_elsewhere_never_takes_the_bodys_copy(self):
         gm, corpse = with_body(BAT)
         corpse.searched = True
-        stamp_world(gm.world, gm.player)
+        item_ids.stamp_world(gm.world, gm.player)
         elsewhere = Pinned("Baseball Bat", "item", "i999")
         result = ActionValidator(gm).validate(TakeAction(item_name=elsewhere, from_name="c1"))
         self.assertIsInstance(result, Rejected)

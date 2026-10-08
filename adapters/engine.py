@@ -204,13 +204,25 @@ class GameEngine:
                 return self._snapshot(story_text=mention_k.NO_LONGER_IN_REACH)
             typed = player_input
             player_input = render_input(typed, picks, for_parser=False)
+            logger.debug(
+                "Turn start: input=%r picks=%s minute=%s (%s %s) zone=%s",
+                player_input,
+                [pick.id for pick in picks],
+                manager.narrative.minutes,
+                manager.world.date,
+                manager.world.time,
+                manager.player.current_location_id,
+            )
 
             # 1. Ask the parser what the player is trying to do. No prose exists yet.
             try:
                 actions, parse_failures = self._parsed(manager, typed, picks, emit)
             except llm.LLMError as exc:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
-            actions = aimed(actions, player_input)
+            _trace_plan("Parsed plan", actions)
+            aimed_actions = aimed(actions, player_input)
+            _trace_rewrites(actions, aimed_actions)
+            actions = aimed_actions
             kept, dropped, off_request = self._checked_plan(manager, player_input, actions, emit)
             looks = manager.player.appearance
             for failure in parse_failures:
@@ -232,6 +244,7 @@ class GameEngine:
             # 2. A target that fits several things is asked about before anything runs.
             turn.choices = open_choices(manager, kept, player_input)
             if turn.choices:
+                _trace_choices(turn.choices)
                 self._kept = turn
                 return self._snapshot(story_text="")
             return self._run(manager, turn, emit)
@@ -253,6 +266,13 @@ class GameEngine:
             answered = self._answered(turn.choices, now, answers)
             if answered is None:
                 return self._snapshot(story_text=mention_k.ANSWER_NOT_ON_OFFER)
+            logger.debug(
+                "Plan screen picks: %s",
+                [
+                    (choice.index, choice.attr, pick.id)
+                    for choice, pick in zip(now, answered, strict=True)
+                ],
+            )
             turn.plan = bind_choices(turn.plan, now, answered)
             turn.choices = []
             return self._run(manager, turn, emit)
@@ -295,6 +315,7 @@ class GameEngine:
         lore_scores = self.lore_index.scores(player_input)
 
         stamp = event_stamp(manager)
+        minutes_before = manager.narrative.minutes
 
         # 2. Validate and simulate, one action at a time in order. This is
         # where the engine decides what happens -- before the narrator
@@ -317,9 +338,10 @@ class GameEngine:
                 logger.warning(f"Parser failed on the rest of the plan: {exc}")
                 return None
             later_failures.extend(failures)
-            more, dropped, refusals = self._checked_plan(
-                manager, player_input, aimed(more, player_input), emit
-            )
+            _trace_plan("Re-parsed plan at the destination", more)
+            aimed_more = aimed(more, player_input)
+            _trace_rewrites(more, aimed_more)
+            more, dropped, refusals = self._checked_plan(manager, player_input, aimed_more, emit)
             later_dropped.extend(dropped)
             later_refusals.extend(refusals)
             return more
@@ -329,12 +351,14 @@ class GameEngine:
             logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
             outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
         outcome_facts.extend([*turn.extra_facts, *later_refusals])
+        logger.debug("Outcome facts: %s", outcome_facts)
         turn.done.extend(core.done_actions)
         turn.spent |= pinned_ids(core.tried) | pinned_ids(later_dropped)
         if core.asked is not None and not manager.narrative.game_over:
             turn.plan, turn.extra_facts, turn.refused = core.pending, [], 0
             turn.nothing_parsed = False
             turn.choices = open_choices(manager, turn.plan, turn.player_input)
+            _trace_choices(turn.choices)
             self._kept = turn
 
         # 3. Ask the narrator to describe what already happened. A turn the
@@ -353,6 +377,7 @@ class GameEngine:
             finds=core.finds,
             lore=lore,
         )
+        logger.debug("Narrated facts: %s", narrated_facts)
         emit({"type": "step", "step": "narrating"})
         try:
             raw_response = llm.query_narrator(narrator_prompt, on_delta=_story_listener(emit))
@@ -400,6 +425,13 @@ class GameEngine:
         self._run_summarization(manager)
 
         files.save(manager)
+        logger.debug(
+            "Turn end: minute %s -> %s, %s minutes spent, zone=%s",
+            minutes_before,
+            manager.narrative.minutes,
+            manager.narrative.minutes - minutes_before,
+            manager.player.current_location_id,
+        )
         return self._snapshot(story_text=story_text, options=options)
 
     def _parsed(
@@ -421,6 +453,7 @@ class GameEngine:
         prompt = context.build_parser_prompt(
             render_input(typed, picks, for_parser=True), done or (), picks
         )
+        logger.debug("Parser prompt is %d characters", len(prompt))
         actions, failures = llm.read_parser_reply(
             llm.query_parser(prompt, context.build_plan_schema())
         )
@@ -445,6 +478,7 @@ class GameEngine:
         flagged = set(self.factcheck.plan_conflicts(player_input, questions))
         for index in sorted(flagged):
             logger.warning(f"Dropped {actions[index]!r}: not what the player asked for.")
+        logger.debug("Plan check dropped %s of %s actions", len(flagged), len(actions))
         kept = [action for index, action in enumerate(actions) if index not in flagged]
         dropped = [actions[index] for index in sorted(flagged)]
         return kept, dropped, [questions[index].correction for index in sorted(flagged)]
@@ -720,6 +754,27 @@ class GameEngine:
                 for choice in turn.choices
             ],
         }
+
+
+def _trace_plan(label: str, actions: Sequence[AnyAction]) -> None:
+    for index, action in enumerate(actions):
+        logger.debug("%s [%s]: %r", label, index, action)
+
+
+def _trace_rewrites(before: Sequence[AnyAction], after: Sequence[AnyAction]) -> None:
+    for index, (old, new) in enumerate(zip(before, after, strict=True)):
+        if old != new:
+            logger.debug("Rewrote action [%s]: %r -> %r", index, old, new)
+
+
+def _trace_choices(choices: Sequence[OpenChoice]) -> None:
+    for choice in choices:
+        logger.debug(
+            "Which-one asked for action [%s] %s: %s",
+            choice.index,
+            choice.attr,
+            [(c.id, c.name) for c in choice.candidates],
+        )
 
 
 def _inventory(player: PlayerEntity) -> list[dict[str, Any]]:
