@@ -658,6 +658,22 @@ class PlanSplitTests(EngineTestCase):
         self.assertEqual(self.engine.game.narrative.goals["short_term"], ["A", "B", "C", "D"])
         self.assertIn("Refused:", self.llm.narrator_prompts[-1])
 
+    def test_a_blocked_move_the_second_pass_repeats_is_reported_once(self):
+        self.engine.game.player.current_location_id = "zone_street"
+        self.play_split(
+            "ACTIONS:\nMOVE_TO pharmacy\nADD_GOAL short_term Smash",
+            "ACTIONS:\nMOVE_TO pharmacy\nADD_GOAL short_term Smashed",
+        )
+        self.assertEqual(self.llm.narrator_prompts[-1].count("Move to The Pharmacy"), 1)
+        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["Smashed"])
+
+    def test_a_climb_out_is_reported_before_the_blocked_move_it_led_to(self):
+        self.engine.game.player.current_location_id = "zone_supermarket"
+        self.play_split("ACTIONS:\nMOVE_TO pharmacy")
+        prompt = self.llm.narrator_prompts[-1]
+        self.assertIn("Move to The Pharmacy: blocked", prompt)
+        self.assertLess(prompt.index("climbs through"), prompt.index("Move to The Pharmacy"))
+
     def test_both_passes_emit_parsing_steps(self):
         steps: list[str] = []
         self.llm.parser_script = [

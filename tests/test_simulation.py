@@ -20,6 +20,7 @@ from managers.zombies.population import (
 )
 from modules.action.types import (
     AddGoalAction,
+    AnyAction,
     AttackAction,
     BandageAction,
     CloseAction,
@@ -1135,6 +1136,59 @@ class PlanTests(unittest.TestCase):
             [fact for fact in facts if fact.startswith("Refused:")],
             ["Refused: Too much at once; Orton does the first five things."],
         )
+
+    def test_a_blocked_move_the_reparse_repeats_is_not_run_again(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        move = MoveAction(destination="pharmacy")
+        goal = AddGoalAction(horizon="short_term", goal_text="Smashed")
+
+        facts = SimulationCore(gm).resolve([move, goal], reparse=lambda _done, _tried: [move, goal])
+
+        self.assertEqual(len([fact for fact in facts if fact.startswith("Move to")]), 1)
+        self.assertEqual(gm.narrative.goals["short_term"], ["Smashed"])
+
+    def test_a_repeated_move_worded_differently_is_not_run_again(self):
+        for repeat in (
+            MoveAction(destination="The Pharmacy"),
+            MoveAction(destination="pharmacy", run=True),
+        ):
+            with self.subTest(repeat=repeat):
+                self.assertEqual(self._blocked_move_facts_after_repeat(repeat), 1)
+
+    def _blocked_move_facts_after_repeat(self, repeat: MoveAction) -> int:
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        goal = AddGoalAction(horizon="short_term", goal_text="Smashed")
+        again: list[AnyAction] = [repeat, goal]
+
+        facts = SimulationCore(gm).resolve(
+            [MoveAction(destination="pharmacy"), goal], reparse=lambda _done, _tried: again
+        )
+
+        return len([fact for fact in facts if fact.startswith("Move to")])
+
+    def test_a_dropped_repeat_leaves_the_not_yet_fact_for_the_rest(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        move = MoveAction(destination="pharmacy")
+
+        facts = SimulationCore(gm).resolve(
+            [move, TakeAction(item_name="knife")], reparse=lambda _done, _tried: [move]
+        )
+
+        self.assertTrue(any("hasn't yet: take the knife" in fact for fact in facts))
+
+    def test_a_climb_out_comes_before_the_blocked_move_it_led_to(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_supermarket"
+        gm.world.barriers["window_supermarket"].locked = False
+
+        facts = simulate(gm, MoveAction(destination="pharmacy"))
+
+        climb = next(n for n, fact in enumerate(facts) if "climbs through" in fact)
+        blocked = next(n for n, fact in enumerate(facts) if "blocked" in fact)
+        self.assertLess(climb, blocked)
 
     def test_a_refused_action_does_not_stop_the_plan(self):
         gm = GameManager()

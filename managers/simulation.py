@@ -342,6 +342,7 @@ class SimulationCore:
             if len(plan) > budget:
                 facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
             left: list[AnyAction] = []
+            stalled = False
             for index, action in enumerate(plan[:budget]):
                 attempted += 1
                 tried.append(action)
@@ -380,11 +381,15 @@ class SimulationCore:
                     break
                 if self.manager.player.current_location_id != zone_before:
                     left = plan[index + 1 : budget]
+                    if isinstance(result.resolved, MoveBlocked):
+                        stalled = True
                     break
             if not left or self.manager.narrative.game_over:
                 break
             more = reparse(done_words, tried) if reparse is not None else None
             reparse = None
+            if more and stalled and self._repeats_blocked_move(more[0]):
+                more = more[1:]
             if not more:
                 unattempted = [describe_action(a) for a in left]
                 here = self.manager.world.locations[self.manager.player.current_location_id]
@@ -408,6 +413,16 @@ class SimulationCore:
             if words not in done
         ]
         return facts
+
+    def _repeats_blocked_move(self, action: AnyAction) -> bool:
+        """Whether `action` is a move that ends at the barrier the player already stands at."""
+        if not isinstance(action, MoveAction):
+            return False
+
+        result = self.validator.validate(action)
+        resolved = result.resolved if isinstance(result, Accepted) else None
+        barrier = resolved.barrier if isinstance(resolved, MoveBlocked) else None
+        return barrier is not None and barrier.barrier_id == self.manager.player.at_barrier
 
     def discover_flag(self, flag: str) -> str:
         """Mark a world flag as known to the player; returns any quest progress it caused."""
@@ -910,7 +925,7 @@ class SimulationCore:
         if isinstance(resolved, MoveBlocked) and resolved.barrier is not None and not interrupted:
             player.at_barrier = resolved.barrier.barrier_id
         fact = self._walk_fact(resolved, origin_id, interrupted)
-        return [self._check_player_death(fact), *spend_facts], spent
+        return [*spend_facts, self._check_player_death(fact)], spent
 
     def _enter_zone(self, zone_id: str) -> None:
         """Put the player in a zone; every follower who was with them arrives at once."""

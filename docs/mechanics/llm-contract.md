@@ -281,6 +281,8 @@ empty list is `NONE`.
   first pass's not-yet fact is dropped; when the second parse fails (a parser error)
   or comes back empty, the first pass stands and one fact says so: "Orton arrives at the supermarket; he
   hasn't yet: smash the window." That fact also stands at a second zone change. A
+  move the walk left blocked partway, if the second plan opens with the same move, is
+  not run or reported again. The turn's facts keep the order things happened in. A
   move within the zone, or one stopped at a locked door, changes nothing. Both
   parses report the `parsing` step.
 - **A pick is pinned after parsing.** Each pick the player made with `@` is put into the matching target of the parsed actions by the engine, whichever way the parser wrote it or whether it dropped it, and the validator resolves it by id. The second parse of a plan that changed zone carries the picks too. A pick no longer in reach refuses the turn before the parser runs ([entity resolution](../architecture/entity-resolution.md#mentions)).
