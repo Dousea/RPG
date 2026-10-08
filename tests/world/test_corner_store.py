@@ -6,7 +6,7 @@ import random
 import tempfile
 import unittest
 
-from adapters.save import codec, files
+from adapters.save import files
 from data.world.barriers import WINDOW_HEALTH_SINGLE
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -152,9 +152,6 @@ class CornerStoreSaveTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.path = os.path.join(directory.name, "save.json")
-
-    def test_the_schema_is_25(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 25)
 
     def test_the_smashed_window_and_the_store_round_trip(self):
         gm = on_the_street()

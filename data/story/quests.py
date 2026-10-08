@@ -6,7 +6,7 @@ module-level dict would leak one game's progress into the next game after a
 reset.
 
 Objective keys are matched exactly by `SimulationCore._advance_quests` --
-"take:<item_id>", "reach:<zone_id>", "discover:<flag_name>",
+"take:<item_id>", "take:weapon" (any melee weapon), "reach:<zone_id>", "discover:<flag_name>",
 "defeat:<npc_id>", and "npc_status:<npc_id>:<status>". They must line up with
 real ids in `data/items.py`, `data/locations.py`, and `data/npcs.py`, or the
 objective can never complete.
@@ -24,6 +24,8 @@ See docs/architecture/knowledge-firewall.md.
 
 from modules.story.quest import QuestState
 
+TAKE_ANY_WEAPON = "take:weapon"
+
 
 def build_starting_quests() -> dict[str, QuestState]:
     """Build a fresh quest roster. Returns new instances on every call."""
@@ -31,10 +33,10 @@ def build_starting_quests() -> dict[str, QuestState]:
         QuestState(
             quest_id="quest_supply_run",
             title="Make a Supply Run",
-            objectives=["reach:zone_neighborhood", "take:item_crowbar"],
+            objectives=["reach:zone_neighborhood", TAKE_ANY_WEAPON],
             objective_labels={
                 "reach:zone_neighborhood": "Make it out to the neighborhood's shops",
-                "take:item_crowbar": "Find something to defend yourself with",
+                TAKE_ANY_WEAPON: "Find something to defend yourself with",
             },
         ),
         QuestState(

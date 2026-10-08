@@ -31,6 +31,7 @@ from data.character.exercises import find_exercise
 from data.loot import containers as container_k
 from data.story.beats import STORY_BEATS, Beat
 from data.story.npcs import TRUSTS_PLAYER, TRUSTS_PLAYER_BANDS
+from data.story.quests import TAKE_ANY_WEAPON
 from data.story.topics import TOPICS
 from data.time_costs import (
     MAX_PLAN_ACTIONS,
@@ -119,6 +120,7 @@ from modules.body.stats import CharacterStat, StatusEffect
 from modules.character.equipment import CharacterArmorSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.corpse import CorpseEntity
+from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.events.event import (
     ApplyItemEvent,
@@ -1102,7 +1104,7 @@ class SimulationCore:
         if source is None:
             fact = carry_k.TAKE_ALL_GROUND_FACT.format(name=self._name, items=items)
             for entity in transfer.entities:
-                fact = self._with_quest_note(fact, f"take:{entity.item.id}")
+                fact = self._with_take_note(fact, entity)
             return fact
         bag = source.item.name.lower()
         if action.all_items:
@@ -1207,7 +1209,7 @@ class SimulationCore:
         fact = f"Take {entity.item.name}: succeeded."
         if isinstance(entity.item, ClothingItem):
             fact += f" {self._name} carries it; {self._subject} is not wearing it."
-        return self._with_quest_note(fact, f"take:{entity.item.id}")
+        return self._with_take_note(fact, entity)
 
     def _resolve_drop(self, accepted: Accepted) -> str:
         action = accepted.action
@@ -1592,6 +1594,13 @@ class SimulationCore:
             return self._with_quest_note(fact, f"defeat:{npc.npc_id}")
         hurt = injury_words(npc.hit_points, npc.max_hit_points)
         return f"Attack {npc.name} with {weapon.name}: hit, {npc.name} is {hurt}."
+
+    def _with_take_note(self, fact: str, entity: ItemEntity) -> str:
+        """Append quest progress from taking `entity`: its own id, and any-weapon for a melee weapon."""
+        fact = self._with_quest_note(fact, f"take:{entity.item.id}")
+        if isinstance(entity.item, MeleeWeaponItem):
+            fact = self._with_quest_note(fact, TAKE_ANY_WEAPON)
+        return fact
 
     def _with_quest_note(self, fact: str, objective_key: str) -> str:
         """Append any quest progress `objective_key` caused to `fact`.

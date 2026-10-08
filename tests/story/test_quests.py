@@ -3,7 +3,7 @@
 import unittest
 
 from data.items import ITEMS
-from data.story.quests import build_starting_quests
+from data.story.quests import TAKE_ANY_WEAPON, build_starting_quests
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from modules.action.types import (
@@ -12,6 +12,7 @@ from modules.action.types import (
     MoveAction,
     TakeAction,
 )
+from modules.entity.item import ItemEntity
 from modules.story.quest import QuestState, QuestStatus
 from tests.support import adjust_regard, resolve_actions
 
@@ -52,6 +53,30 @@ class QuestAdvancementTests(unittest.TestCase):
         resolve_actions(gm, MoveAction(destination="out"))
         resolve_actions(gm, TakeAction(item_name="Crowbar"))
         self.assertEqual(gm.quests["get_crowbar"].status, QuestStatus.COMPLETED)
+
+    def _weapon_quest_gm(self, item_id):
+        gm = GameManager()
+        gm.quests.clear()
+        gm.quests["quest_supply_run"] = build_starting_quests()["quest_supply_run"]
+        gm.quests["quest_supply_run"].objectives = [TAKE_ANY_WEAPON, "reach:zone_neighborhood"]
+        gm.current_location.entities.append(ItemEntity(item=ITEMS[item_id]))
+        return gm
+
+    def test_taking_any_melee_weapon_ticks_the_weapon_step(self):
+        for item_id, name in (("item_baseball_bat", "Baseball bat"), ("item_crowbar", "Crowbar")):
+            with self.subTest(item_id):
+                gm = self._weapon_quest_gm(item_id)
+                facts = resolve_actions(gm, TakeAction(item_name=name))
+                quest = gm.quests["quest_supply_run"]
+                self.assertIn(TAKE_ANY_WEAPON, quest.completed_objectives)
+                self.assertIn(quest.objective_labels[TAKE_ANY_WEAPON], str(facts))
+                self.assertIn(quest.title, str(facts))
+                self.assertNotIn(TAKE_ANY_WEAPON, str(facts))
+
+    def test_taking_a_non_weapon_does_not_tick_the_weapon_step(self):
+        gm = self._weapon_quest_gm("item_water_bottle")
+        resolve_actions(gm, TakeAction(item_name="Water bottle"))
+        self.assertEqual(gm.quests["quest_supply_run"].completed_objectives, [])
 
     def test_moving_into_a_location_completes_a_matching_objective(self):
         gm = GameManager()
@@ -115,7 +140,7 @@ class StartingQuestContentTests(unittest.TestCase):
     def test_take_objectives_reference_real_items(self):
         for quest in build_starting_quests().values():
             for objective in quest.objectives:
-                if objective.startswith("take:"):
+                if objective.startswith("take:") and objective != TAKE_ANY_WEAPON:
                     self.assertIn(objective.removeprefix("take:"), ITEMS)
 
     def test_reach_objectives_reference_real_locations(self):

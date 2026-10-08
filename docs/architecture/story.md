@@ -152,6 +152,9 @@ take:<item_id>              reach:<location_id>        defeat:<npc_id>
 discover:<flag_name>        npc_status:<npc_id>:<status>
 ```
 
+`take:weapon` is the one `take:` key that is not an item id: taking any melee
+weapon ticks it, alongside the item's own `take:<item_id>`.
+
 `ContextBuilder._quests_section` renders active quests to the narrator as a
 `[QUESTS]` checklist so prose can reference what Orton is working toward.
 The narrator is told it may use this for motivation and may not declare an

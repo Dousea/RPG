@@ -17,7 +17,7 @@ from data.character.traits import TRAITS
 from data.items import ITEMS, WETNESS_MAX
 from data.story.memory import LAST_STORY_MAX_LENGTH
 from data.story.npcs import build_starting_npcs
-from data.story.quests import build_starting_quests
+from data.story.quests import TAKE_ANY_WEAPON, build_starting_quests
 from data.world.barriers import MAX_PLANKS_PER_SIDE, build_starting_barriers
 from data.world.climate import STAGE_PHRASES
 from data.world.clock import WORLD_START_MINUTE_OF_DAY
@@ -62,7 +62,7 @@ from modules.world.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 25  # carrying-and-loot
+SCHEMA_VERSION = 26  # llm-contract: quest objective keys
 
 MAX_ID_LENGTH = 40
 
@@ -877,16 +877,18 @@ def _reconcile_seeded_quests(
     the quest existed would otherwise never tick. This mirrors the checks in
     SimulationCore -- keep the two in step when adding an objective type.
     """
-    held = {
-        entity.item.id
+    carried = [
+        entity
         for entity in [*player.inventory, *player.equipment.values(), *player.worn.values()]
         if entity is not None
-    }
+    ]
+    held = {entity.item.id for entity in carried}
+    holds_weapon = any(isinstance(entity.item, MeleeWeaponItem) for entity in carried)
 
     def is_satisfied(objective: str) -> bool:
         kind, _, rest = objective.partition(":")
         if kind == "take":
-            return rest in held
+            return holds_weapon if objective == TAKE_ANY_WEAPON else rest in held
         if kind == "reach":
             return rest == player.current_location_id
         if kind == "discover":
