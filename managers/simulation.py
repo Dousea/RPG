@@ -271,7 +271,13 @@ class SimulationCore:
     def _subject(self) -> str:
         return self.manager.player.appearance.subject
 
-    def resolve(self, actions: list[AnyAction], *, refused: int = 0) -> list[str]:
+    def resolve(
+        self,
+        actions: list[AnyAction],
+        *,
+        refused: int = 0,
+        reparse: Callable[[list[str]], list[AnyAction] | None] | None = None,
+    ) -> list[str]:
         """Validate and resolve each action in order, one at a time.
 
         Order matters within a turn: an earlier action can change whether a
@@ -284,6 +290,12 @@ class SimulationCore:
 
         `refused` counts the lines the parser already refused: a turn with no
         actions and none of those is a `NONE` turn and costs a minute.
+
+        When a plan stops at a zone change with actions left, `reparse` is
+        called once with the actions done so far, in words, and returns the
+        plan parsed again at the destination, or None if it couldn't. That plan
+        resolves in the same turn under what is left of `MAX_PLAN_ACTIONS`, and
+        the not-yet-done fact is dropped; on None it stays.
 
         Afterwards `refused_actions` holds each action the validator refused and
         no later action of the turn did, in words with the reason, and `found_items` says
@@ -308,38 +320,53 @@ class SimulationCore:
             spent, stat_facts = self._spend(NONE_TURN_MINUTES)
             total_minutes += spent
             facts.extend(stat_facts)
-        if len(actions) > MAX_PLAN_ACTIONS:
-            facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
-        for index, action in enumerate(actions[:MAX_PLAN_ACTIONS]):
-            self._release_vanished_body()
-            result = self.validator.validate(action)
-            if isinstance(result, Rejected):
-                rejected.append((describe_action(result.action), result.reason))
-                rejected_actions.append(result.action)
-                facts.append(f"Refused: {self._name} can't {rejected[-1][0]}: {result.reason}")
-                continue
-            done.add(describe_action(action))
-            self._interruption = ""
-            zone_before = self.manager.player.current_location_id
-            action_facts, minutes = self._resolve_one(result)
-            facts.extend(action_facts)
-            total_minutes += minutes
-            if not self.manager.narrative.game_over:
-                facts.extend(self._after_action())
-            if self._interruption:
-                cancelled = [describe_action(a) for a in actions[index + 1 : MAX_PLAN_ACTIONS]]
-                if cancelled:
-                    facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
+        attempted = 0
+        done_words: list[str] = []
+        plan = actions
+        while True:
+            budget = MAX_PLAN_ACTIONS - attempted
+            if len(plan) > budget:
+                facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
+            left: list[AnyAction] = []
+            for index, action in enumerate(plan[:budget]):
+                attempted += 1
+                self._release_vanished_body()
+                result = self.validator.validate(action)
+                if isinstance(result, Rejected):
+                    rejected.append((describe_action(result.action), result.reason))
+                    rejected_actions.append(result.action)
+                    facts.append(f"Refused: {self._name} can't {rejected[-1][0]}: {result.reason}")
+                    continue
+                done.add(describe_action(action))
+                done_words.append(describe_action(action))
+                self._interruption = ""
+                zone_before = self.manager.player.current_location_id
+                action_facts, minutes = self._resolve_one(result)
+                facts.extend(action_facts)
+                total_minutes += minutes
+                if not self.manager.narrative.game_over:
+                    facts.extend(self._after_action())
+                if self._interruption:
+                    cancelled = [describe_action(a) for a in plan[index + 1 : budget]]
+                    if cancelled:
+                        facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
+                    break
+                if self.manager.player.current_location_id != zone_before:
+                    left = plan[index + 1 : budget]
+                    break
+            if not left or self.manager.narrative.game_over:
                 break
-            if self.manager.player.current_location_id != zone_before:
-                unattempted = [describe_action(a) for a in actions[index + 1 : MAX_PLAN_ACTIONS]]
-                if unattempted and not self.manager.narrative.game_over:
-                    zone = self.manager.world.locations[self.manager.player.current_location_id]
-                    facts.append(
-                        f"{self._name} arrives at {zone.name}; {self._subject} hasn't yet: "
-                        f"{', '.join(unattempted)}."
-                    )
+            more = reparse(done_words) if reparse is not None else None
+            reparse = None
+            if not more:
+                unattempted = [describe_action(a) for a in left]
+                here = self.manager.world.locations[self.manager.player.current_location_id]
+                facts.append(
+                    f"{self._name} arrives at {here.name}; "
+                    f"{self._subject} hasn't yet: {', '.join(unattempted)}."
+                )
                 break
+            plan = more
         if self._shouted and not total_minutes and not self.manager.narrative.game_over:
             spent, stat_facts = self._spend(NONE_TURN_MINUTES)
             total_minutes += spent

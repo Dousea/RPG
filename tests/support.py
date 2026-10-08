@@ -155,10 +155,17 @@ class ScriptedLLM:
         self.narrator_prompts: list[str] = []
         self.summarized: list[str] = []
         self.error: Exception | None = None
+        self.parser_script: list[str | Exception] = []
 
     def query_parser(self, prompt: str, schema: dict | None = None) -> ParserReply:
+        """Answers from `parser_script` first (an Exception is raised), then from `actions`."""
         self.prompts.append(prompt)
         self.schemas.append(schema)
+        if self.parser_script:
+            scripted = self.parser_script.pop(0)
+            if isinstance(scripted, Exception):
+                raise scripted
+            return ParserReply(scripted, structured=self.structured)
         if self.error is not None:
             raise self.error
         return ParserReply(self.actions, structured=self.structured)

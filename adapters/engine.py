@@ -164,27 +164,39 @@ class GameEngine:
             stamp = event_stamp(manager)
 
             # 2. Ask the parser what the player is trying to do. No prose exists yet.
-            context = ContextBuilder(manager)
-            parser_prompt = context.build_parser_prompt(player_input)
-            emit({"type": "step", "step": "parsing"})
             try:
-                reply = llm.query_parser(parser_prompt, context.build_plan_schema())
+                actions, parse_failures = self._parsed(manager, player_input, emit)
             except llm.LLMError as exc:
                 return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
-
-            actions, parse_failures = llm.read_parser_reply(reply)
             kept, off_request = self._checked_plan(manager, player_input, actions, emit)
 
             # 3. Validate and simulate, one action at a time in order. This is
             # where the engine decides what happens -- before the narrator
-            # writes a single word about it.
-            core = SimulationCore(manager)
-            outcome_facts = core.resolve(kept, refused=len(parse_failures) + len(off_request))
+            # writes a single word about it. A plan that changes zone is parsed
+            # once more from the destination.
             looks = manager.player.appearance
-            for failure in parse_failures:
+            core = SimulationCore(manager)
+            later_failures: list[llm.ParseFailure] = []
+            later_refusals: list[str] = []
+
+            def reparse(done: list[str]) -> list[AnyAction] | None:
+                try:
+                    more, failures = self._parsed(manager, player_input, emit, done)
+                except llm.LLMError as exc:
+                    logger.warning(f"Parser failed on the rest of the plan: {exc}")
+                    return None
+                later_failures.extend(failures)
+                more, refusals = self._checked_plan(manager, player_input, more, emit)
+                later_refusals.extend(refusals)
+                return more
+
+            outcome_facts = core.resolve(
+                kept, refused=len(parse_failures) + len(off_request), reparse=reparse
+            )
+            for failure in [*parse_failures, *later_failures]:
                 logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
                 outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
-            outcome_facts.extend(off_request)
+            outcome_facts.extend([*off_request, *later_refusals])
 
             # 4. Ask the narrator to describe what already happened. A turn the
             # parser found nothing in would otherwise be narrated as the input.
@@ -241,6 +253,21 @@ class GameEngine:
 
             files.save(manager)
             return self._snapshot(story_text=story_text, options=options)
+
+    def _parsed(
+        self,
+        manager: GameManager,
+        player_input: str,
+        emit: TurnListener,
+        done: list[str] | None = None,
+    ) -> tuple[list[AnyAction], list[llm.ParseFailure]]:
+        """Ask the parser for the plan in the scene as it stands; `done` is what this turn already did."""
+        context = ContextBuilder(manager)
+        emit({"type": "step", "step": "parsing"})
+        reply = llm.query_parser(
+            context.build_parser_prompt(player_input, done or ()), context.build_plan_schema()
+        )
+        return llm.read_parser_reply(reply)
 
     def _checked_plan(
         self,

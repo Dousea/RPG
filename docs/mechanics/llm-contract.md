@@ -254,10 +254,22 @@ empty list is `NONE`.
 - **An interrupted action stops the plan.** The actions after it are cancelled with
   one fact: "Orton never gets to: take the knife, drop the bag." A story beat that
   interrupts does the same.
-- **A plan ends at its first zone change.** The actions after a `MOVE_TO` that
-  leaves the zone are neither validated nor resolved, and one fact says so: "Orton
-  arrives at the supermarket; he hasn't yet: smash the window." They are not
-  refusals. A move within the zone, or one stopped at a locked door, changes nothing.
+- **A plan ends at its first zone change, and the rest is parsed again there.** The
+  actions after a `MOVE_TO` that leaves the zone are neither validated nor resolved.
+  The plan's closed sets come from the scene before the turn, so the engine asks the
+  parser once more in the new scene: a new prompt and a new schema built from the
+  destination, with the player's full input and, where `[LAST TURN]` sits, a
+  `[THIS TURN]` note ("Already done this turn: go to supermarket. Parse only the rest
+  of the input."). The second plan goes through the same plan check, validator and
+  core in the same turn: its facts, minutes, refusals and finds join the first
+  pass's, and the narrator sees one turn. The cap of 5 actions counts across both
+  plans; the second plan is cut to what is left of it. There is at most one re-parse
+  per turn: a second zone change stops there. When the second plan has actions, the
+  first pass's not-yet fact is dropped; when the second parse fails (a parser error)
+  or comes back empty, the first pass stands and one fact says so: "Orton arrives at the supermarket; he
+  hasn't yet: smash the window." That fact also stands at a second zone change. A
+  move within the zone, or one stopped at a locked door, changes nothing. Both
+  parses report the `parsing` step.
 - **`NONE` still costs a minute.** A turn where the parser proposes nothing costs
   1 minute, so the zombies and the stats still run. A turn whose only lines were
   refused costs 0.
@@ -681,20 +693,6 @@ Found in a full playtest on 2026-10-08 (new game to the third day, 89 turns, one
 entry says what goes wrong and how to fix it.
 
 ### Parser
-
-- **A plan is constrained by the scene it starts in.** The schema's closed sets
-  come from the scene before the turn, so a plan that moves and then acts can't
-  name what is at the destination. "Head to the supermarket and smash the window"
-  swung at the clinic door, the one barrier the clinic offered. Rooms of the same
-  zone are covered: every opened container of the zone is offered
-  ([carrying-and-loot](carrying-and-loot.md#verbs)). *Fix:* split the plan at its
-  first zone-changing `MOVE_TO`. Resolve up to the move, rebuild the scene and the
-  schema, and ask the parser for the rest of the input, with `[LAST TURN]` saying
-  what was done. That changes the turn loop and costs a second parser call, so a
-  first step comes before it, and is in place: the plan ends at its first
-  zone-changing `MOVE_TO` and the narrator gets a fact that the rest was not
-  attempted. That stops actions aimed at the wrong zone's things, and the player
-  repeats the rest at the destination. The split and the second parse are still to do.
 
 ### People
 

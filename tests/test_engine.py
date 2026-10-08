@@ -21,6 +21,7 @@ from adapters.save import files
 from data.character.presets import ORTON
 from data.items import ITEMS
 from data.story.memory import BUDGET_MARGIN_TOKENS
+from data.time_costs import MAX_PLAN_ACTIONS
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
 from modules.body.parts import BodyLocation, BodyPart
@@ -570,6 +571,103 @@ class TurnTests(EngineTestCase):
         result = self.engine.play("do something weird")
         self.assertIn("Survive", result["goals"]["short_term"])
         self.assertIn("Refused:", self.llm.narrator_prompts[-1])
+
+
+class PlanSplitTests(EngineTestCase):
+    """llm-contract: a plan that changes zone is parsed again at the destination, once."""
+
+    def play_split(self, *replies: str | Exception, text: str = "go out and do things") -> dict:
+        self.engine.game.world.barriers["window_supermarket"].locked = False
+        self.llm.parser_script = list(replies)
+        return self.engine.play(text)
+
+    def test_a_plan_without_a_zone_change_calls_the_parser_once(self):
+        self.llm.actions = "ACTIONS:\nADD_GOAL short_term Find water\nADD_GOAL short_term Find food"
+        self.engine.play("plan")
+        self.assertEqual(len(self.llm.prompts), 1)
+
+    def test_a_zone_change_with_actions_left_parses_again_in_the_new_scene(self):
+        result = self.play_split(
+            "ACTIONS:\nMOVE_TO supermarket\nADD_GOAL short_term Smash",
+            "ACTIONS:\nADD_GOAL short_term Smashed it",
+            text="go to the supermarket and smash the window",
+        )
+        self.assertEqual(len(self.llm.prompts), 2)
+        self.assertEqual(self.engine.game.player.current_location_id, "zone_supermarket")
+        self.assertNotIn("supermarket window", json.dumps(self.llm.schemas[0]))
+        self.assertIn("supermarket window", json.dumps(self.llm.schemas[1]))
+        self.assertEqual(result["goals"]["short_term"], ["Smashed it"])
+
+    def test_the_second_prompt_has_the_input_and_the_already_done_note(self):
+        text = "go to the supermarket and smash the window"
+        self.play_split(
+            "ACTIONS:\nMOVE_TO supermarket\nADD_GOAL short_term Smash",
+            "ACTIONS:\nNONE",
+            text=text,
+        )
+        second = self.llm.prompts[1]
+        self.assertIn("Already done this turn: go to supermarket.", second)
+        self.assertIn("only the rest", second)
+        self.assertTrue(second.endswith(f"[PLAYER INPUT]\n{text}"))
+        self.assertNotIn("Already done", self.llm.prompts[0])
+
+    def test_the_second_pass_drops_the_not_yet_fact_and_joins_the_turn(self):
+        self.play_split(
+            "ACTIONS:\nADD_GOAL short_term First\nMOVE_TO out\nADD_GOAL short_term Rest",
+            "ACTIONS:\nADD_GOAL short_term Second\nTAKE Unicorn",
+        )
+        prompt = self.llm.narrator_prompts[-1]
+        self.assertNotIn("hasn't yet", prompt)
+        self.assertIn("Unicorn", prompt)
+        self.assertEqual(len(self.llm.narrator_prompts), 1)
+        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["First", "Second"])
+
+    def test_an_empty_second_plan_keeps_the_not_yet_fact(self):
+        self.play_split("ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Rest", "ACTIONS:\nNONE")
+        prompt = self.llm.narrator_prompts[-1]
+        self.assertEqual(len(self.llm.prompts), 2)
+        self.assertIn("hasn't yet: think about", prompt)
+        self.assertNotIn("Refused:", prompt)
+
+    def test_a_second_parser_error_keeps_the_first_pass_and_its_not_yet_fact(self):
+        result = self.play_split(
+            "ACTIONS:\nADD_GOAL short_term First\nMOVE_TO out\nADD_GOAL short_term Rest",
+            LLMError("down"),
+        )
+        self.assertNotIn("SYSTEM ERROR", result["story_text"])
+        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["First"])
+        self.assertEqual(self.engine.game.player.current_location_id, "zone_building")
+        self.assertIn("hasn't yet", self.llm.narrator_prompts[-1])
+
+    def test_a_second_zone_change_stops_there_without_a_third_parse(self):
+        self.play_split(
+            "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Rest",
+            "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Later",
+        )
+        self.assertEqual(len(self.llm.prompts), 2)
+        self.assertEqual(self.engine.game.narrative.goals["short_term"], [])
+        self.assertIn("hasn't yet", self.llm.narrator_prompts[-1])
+
+    def test_the_action_cap_counts_across_both_plans(self):
+        self.play_split(
+            "ACTIONS:\nADD_GOAL short_term A\nADD_GOAL short_term B\nMOVE_TO out\n"
+            "ADD_GOAL short_term Rest",
+            "ACTIONS:\nADD_GOAL short_term C\nADD_GOAL short_term D\nADD_GOAL short_term E",
+        )
+        self.assertEqual(MAX_PLAN_ACTIONS, 5)
+        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["A", "B", "C", "D"])
+        self.assertIn("Refused:", self.llm.narrator_prompts[-1])
+
+    def test_both_passes_emit_parsing_steps(self):
+        steps: list[str] = []
+        self.llm.parser_script = [
+            "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Rest",
+            "ACTIONS:\nADD_GOAL short_term Next",
+        ]
+        self.engine.play(
+            "go", lambda event: steps.append(event["step"]) if event["type"] == "step" else None
+        )
+        self.assertEqual(steps.count("parsing"), 2)
 
 
 class DeathTests(EngineTestCase):

@@ -222,6 +222,15 @@ class ContextBuilder:
             return ""
         return f"[LAST TURN]\n{zombie_ids_to_words(log[-1])}\n\n"
 
+    @staticmethod
+    def _already_done_section(done: Sequence[str]) -> str:
+        if not done:
+            return ""
+        return (
+            f"[THIS TURN]\nAlready done this turn: {', '.join(done)}. "
+            "Parse only the rest of the input.\n\n"
+        )
+
     def _corrections_section(self) -> str:
         corrections = self.manager.narrative.pending_corrections
         if not corrections:
@@ -693,12 +702,14 @@ reach {looks.object}, though {looks.subject} can still hear them.)
 
     # === Parser prompt ===
 
-    def build_parser_prompt(self, player_input: str) -> str:
+    def build_parser_prompt(self, player_input: str, done: Sequence[str] = ()) -> str:
         """Assemble the minimal-context prompt for the intent parser call.
 
         The parser only needs to know what is reachable/visible right now to
         propose actions -- it does not narrate, so it gets none of the prose
         context (memory, summaries, relationship bands) the narrator needs.
+        `done` is what the turn has already done, when the rest of the input
+        is parsed again at a new zone.
         """
         manager = self.manager
         player = manager.player
@@ -760,7 +771,7 @@ door rather than refusing the move.)
 [AVAILABLE ACTIONS]
 {self.available_actions_section()}
 
-{self._last_turn_section()}[PLAYER INPUT]
+{self._last_turn_section()}{self._already_done_section(done)}[PLAYER INPUT]
 {player_input}"""
 
     # === Narrator prompt ===
