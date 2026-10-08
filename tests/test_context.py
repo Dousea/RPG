@@ -1,6 +1,8 @@
 """ContextBuilder: the knowledge-firewall boundary between state and prompts."""
 
+import random
 import unittest
+from datetime import date
 from unittest import mock
 
 from adapters import llm
@@ -11,10 +13,14 @@ from managers.game import GameManager
 from managers.simulation import SimulationCore
 from modules.action.parser import TALK_APPROACH_LABELS
 from modules.action.types import (
+    CloseAction,
     DropAction,
     Duration,
+    EquipAction,
     MoveAction,
+    PutAction,
     SearchAction,
+    TakeAction,
     WaitAction,
     WearAction,
 )
@@ -30,6 +36,7 @@ from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
 from modules.story.quest import QuestState
+from modules.world.room import ContainerEntity
 from modules.world.weather import WeatherSample
 from tests.support import adjust_regard, npc_of, resolve_actions, set_health
 
@@ -765,15 +772,191 @@ class InViewTests(unittest.TestCase):
     def test_it_lists_each_perceived_zombie_then_each_person_present(self):
         add_zombie(self.gm, 3, ZombieState.CHASING)
         lines = in_view_block(self.prompt()).strip().splitlines()[1:]
-        self.assertEqual(lines, [" - a zombie, close, coming at you", " - Emma", " - Marcus"])
+        self.assertEqual(lines[:3], [" - a zombie, close, coming at you", " - Emma", " - Marcus"])
 
     def test_it_comes_after_the_outcomes(self):
         prompt = self.prompt()
         self.assertLess(prompt.index("[OUTCOMES]"), prompt.index("[IN VIEW]"))
 
-    def test_it_is_left_out_when_no_one_and_nothing_is_in_view(self):
+    def lines(self, core: SimulationCore | None = None) -> list[str]:
+        refused = core.refused_plan if core else ()
+        finds = core.finds if core else ()
+        prompt = ContextBuilder(self.gm).build_narrator_prompt(
+            "look", ["a fact"], refused=refused, finds=finds
+        )
+        return in_view_block(prompt).strip().splitlines()[1:]
+
+    def test_it_is_present_with_nobody_there_and_is_the_last_block_before_continuity(self):
         self.gm.player.current_location_id = "zone_home"
-        self.assertNotIn("[IN VIEW]", self.prompt())
+        prompt = self.prompt()
+        self.assertIn("[IN VIEW]", prompt)
+        self.assertEqual(prompt.split("\n[")[-3].split("\n")[0], "IN VIEW]")
+
+    def test_it_says_the_hands_are_empty_or_what_they_hold(self):
+        name = self.gm.player.appearance.forename
+        self.assertIn(f"{name}'s hands are empty.", self.lines())
+        crowbar = ItemEntity(item=ITEMS["item_crowbar"])
+        self.gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = crowbar
+        self.assertIn(f"{name} holds the crowbar.", self.lines())
+
+    def test_it_gives_the_time_of_day_the_clock_has(self):
+        self.gm.narrative.minutes = 2 * 60
+        weekday = date.fromisoformat(self.gm.world.date).strftime("%A")
+        tod = self.gm.narrative.time_of_day
+        self.assertIn(f"It is {tod} on {weekday}, {self.gm.world.time}.", self.lines())
+
+    def test_it_lists_each_visible_corpse_with_its_sex_word(self):
+        for number, female in enumerate((True, False), 1):
+            self.gm.world.corpses[f"c{number}"] = CorpseEntity(
+                corpse_id=f"c{number}",
+                zone_id="zone_building",
+                gap=3.0,
+                female=female,
+                outfit="generic01",
+                died_at=0,
+                rot_at_death=1,
+            )
+        lines = self.lines()
+        self.assertIn(" - a dead body, close, a woman", lines)
+        self.assertIn(" - a dead body, close, a man", lines)
+
+    def test_a_skeleton_gets_no_sex_word(self):
+        self.gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_building",
+            gap=3.0,
+            female=True,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+            skeleton=True,
+        )
+        self.assertIn(" - a dead body, close", self.lines())
+
+    def test_a_room_search_lists_its_finds_that_turn_and_not_the_next(self):
+        self.gm.player.current_location_id = "zone_home"
+        core = SimulationCore(self.gm)
+        core.resolve([SearchAction(target_name="bedroom")])
+        self.assertTrue(any(line.startswith("Found this turn:") for line in self.lines(core)))
+        core.resolve([WaitAction(duration=Duration(minutes=1))])
+        self.assertFalse(any(line.startswith("Found this turn:") for line in self.lines(core)))
+
+    def test_a_body_search_lists_what_it_turned_up(self):
+        corpse = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_building",
+            gap=0.0,
+            female=False,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+            contents=[ItemEntity(item=ITEMS["item_kitchen_knife"])],
+        )
+        self.gm.world.corpses["c1"] = corpse
+        core = SimulationCore(self.gm, rng=random.Random(1))
+        core.resolve([SearchAction(target_name="c1")])
+        found = [line for line in self.lines(core) if line.startswith("Found this turn:")]
+        self.assertEqual(len(found), 1)
+        self.assertIn("kitchen knife", found[0])
+
+    def refused(self, *actions) -> list[str]:
+        core = SimulationCore(self.gm)
+        core.resolve(list(actions))
+        return self.lines(core)
+
+    def test_a_refused_take_says_where_the_item_is(self):
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents = [ItemEntity(item=ITEMS["item_kitchen_knife"])]
+        self.gm.player.inventory.append(bag)
+        lines = self.refused(TakeAction(item_name="kitchen knife"))
+        self.assertIn("The kitchen knife: in the schoolbag.", lines)
+
+    def test_a_refused_equip_of_a_held_item_says_it_is_in_hand(self):
+        key = ItemEntity(item=ITEMS["item_painkillers"])
+        self.gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = key
+        name = self.gm.player.appearance.forename
+        lines = self.refused(
+            EquipAction(item_name="no such thing"), TakeAction(item_name="painkillers")
+        )
+        self.assertIn(f"The painkillers: in {name}'s hand.", lines)
+
+    def test_a_refused_item_on_the_floor_is_on_the_floor(self):
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_painkillers"]))
+        lines = self.refused(PutAction(item_name="painkillers", target_name="nothing"))
+        self.assertIn("The painkillers: on the floor.", lines)
+
+    def test_a_singular_name_ending_in_s_keeps_a_neutral_phrasing(self):
+        self.gm.current_location.entities.append(ItemEntity(item=ITEMS["item_dress"]))
+        lines = self.refused(PutAction(item_name="dress", target_name="nothing"))
+        self.assertIn("The dress: on the floor.", lines)
+
+    def test_a_refused_item_is_looked_for_in_this_room_before_the_rest_of_the_zone(self):
+        self.gm.player.current_location_id = "zone_home"
+        zone = self.gm.current_location
+        *_, here = zone.rooms.values()
+        other = next(iter(zone.rooms.values()))
+        self.gm.player.current_room = here.room_id
+        for room, tag in ((other, "other"), (here, "here")):
+            room.containers = [
+                ContainerEntity(
+                    container_id=f"box_{tag}",
+                    name=f"{tag} box",
+                    kind="box",
+                    capacity=9.0,
+                    contents=[ItemEntity(item=ITEMS["item_painkillers"])],
+                    opened=True,
+                )
+            ]
+        lines = self.refused(PutAction(item_name="painkillers", target_name="nothing"))
+        self.assertIn("The painkillers: in the here box.", lines)
+
+    def test_a_refused_door_action_states_the_barriers_state(self):
+        self.gm.player.current_location_id = "zone_home"
+        door = self.gm.world.barriers["door_apartment"]
+        door.open = False
+        door.locked = True
+        lines = self.refused(CloseAction(barrier_name="apartment door"))
+        self.assertIn("The apartment door is closed, locked.", lines)
+
+    def test_a_refused_move_says_where_the_character_is(self):
+        self.gm.player.current_location_id = "zone_home"
+        zone = self.gm.current_location.name
+        lines = self.refused(MoveAction(destination="living room"))
+        name = self.gm.player.appearance.forename
+        self.assertIn(f"{name} is still in the living room, {zone}.", lines)
+
+    def test_two_refusals_on_one_target_give_one_line(self):
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents = [ItemEntity(item=ITEMS["item_kitchen_knife"])]
+        self.gm.player.inventory.append(bag)
+        lines = self.refused(
+            TakeAction(item_name="kitchen knife"), TakeAction(item_name="the kitchen knife")
+        )
+        self.assertEqual(sum("kitchen knife" in line for line in lines), 1)
+
+    def test_the_turns_specifics_come_last(self):
+        self.gm.player.current_location_id = "zone_home"
+        core = SimulationCore(self.gm)
+        core.resolve([SearchAction(target_name="bedroom"), MoveAction(destination="bedroom")])
+        lines = self.lines(core)
+        first_find = next(i for i, line in enumerate(lines) if line.startswith("Found this turn:"))
+        self.assertIn("is still in", lines[first_find - 1])
+        self.assertTrue(all(line.startswith("Found this turn:") for line in lines[first_find:]))
+
+    def test_no_line_has_a_digit_besides_the_clock_time(self):
+        add_zombie(self.gm, 3, ZombieState.CHASING)
+        self.gm.world.corpses["c1"] = CorpseEntity(
+            corpse_id="c1",
+            zone_id="zone_building",
+            gap=3.0,
+            female=True,
+            outfit="generic01",
+            died_at=0,
+            rot_at_death=1,
+        )
+        lines = self.refused(MoveAction(destination="nowhere"))
+        text = "\n".join(lines).replace(self.gm.world.time, "")
+        self.assertNotRegex(text, r"\d")
 
 
 def corpses_block(prompt: str) -> str:

@@ -44,6 +44,19 @@ def barriers_of(world: World, zone_id: str) -> list[BarrierEntity]:
     return [barrier for barrier in world.barriers.values() if zone_id in barrier.zones]
 
 
+def find_barrier(world: World, here: str, name: str) -> BarrierEntity | None:
+    """The barrier `name` points at: its id, its name or an alias, those of zone `here` first."""
+    needle = name.strip().strip("\"'.,;:").casefold()
+    needle = needle.removeprefix("the ").removeprefix("my ").strip()
+    if not needle:
+        return None
+    for barrier in sorted(world.barriers.values(), key=lambda b: here not in b.zones):
+        names = (barrier.barrier_id, barrier.name, *barrier.aliases)
+        if needle in (n.casefold().removeprefix("the ") for n in names):
+            return barrier
+    return None
+
+
 def blocks(barrier: BarrierEntity) -> bool:
     """Whether the barrier stops the way: a plank anywhere, or a closed door or window that is whole."""
     if barrier.total_planks:

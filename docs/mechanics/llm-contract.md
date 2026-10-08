@@ -373,7 +373,11 @@ neighbor") stay as they are. Only story beats change them.
 In this order. Memory comes first, so current state and this turn's outcomes win.
 Who is present and what threatens the character sit just before the outcomes, and
 `[IN VIEW]` repeats them after: a small narrator follows what it reads last, and
-without this it left out an approaching zombie or the people in the room.
+without this it left out an approaching zombie or the people in the room. It also
+states, as what is true now and never as what did not happen, the facts the story
+kept getting wrong: what the hands hold, the time of day, each corpse's sex word,
+where the thing each refused action touched now is, and what this turn's searches
+found. Naming a non-event would put the words to avoid last in the prompt.
 
 | Block | Contents |
 | --- | --- |
@@ -389,7 +393,7 @@ without this it left out an approaching zombie or the people in the room.
 | `[NPCS PRESENT]` | each NPC with disposition and trust bands, status, personality, visible intent, and "Following Orton" |
 | `[THREATS]` | perceived zombies |
 | `[OUTCOMES]` | this turn's facts, in order |
-| `[IN VIEW]` | every perceived zombie, then every person present, as the things the story must show; omitted when there are none |
+| `[IN VIEW]` | every perceived zombie, every person present, what the hands hold, the time of day, each visible corpse with its sex word (none for bare bones), one line per thing a refused action touched (an item's place, a door or window's state, where a refused move leaves the character), then this turn's finds; always present, in words with no numbers beyond the clock time |
 | `[CONTINUITY]` | the defensive fallback |
 | `[SCENE]` | what the player typed |
 
@@ -690,26 +694,6 @@ entry says what goes wrong and how to fix it.
 
 ### Narrator
 
-- **Refused actions are narrated as done.** Six times in 89 turns: all three
-  actions refused and the story pockets the key and draws the knife; a `TAKE all`
-  refused and the story bags the loot; one garment worn and the story dresses in
-  four; a door "locked" with no lock action; tap water drunk with no such action.
-  The "Refused didn't happen" rule is in the system prompt only. A fact naming the
-  non-event beat a system-prompt rule in an earlier A/B, but a list of what did not
-  happen ("Orton does not get the knife out") puts the very words to avoid last in
-  the prompt, and a small model may write what it read last. *Fix:* end the prompt
-  with the true state each refused action touched, in `[IN VIEW]`: "Orton holds the
-  key. The knife is in the schoolbag." The [fact check](#the-fact-check) now asks
-  about each refused action and catches the story's claim; the state lines are
-  still to do, so the first story is right more often. This entry and the next two
-  are one change to `[IN VIEW]`.
-- **Found items are denied.** Twice a `SEARCH` that listed finds was narrated as
-  bare ("the floor is bare except for the debris"). The [fact check](#the-fact-check)
-  now asks about it. *Fix:* list the turn's finds in `[IN VIEW]` as well.
-- **Small state slips.** The crowbar held while it is in the pack, the schoolbag
-  set down on a table, a zombie that is a woman one turn and a man two turns later,
-  "a Sunday morning" every day, morning light at 02:00 after a wake. *Fix:* put the
-  held item, the time of day and each corpse's sex word in `[IN VIEW]`.
 - **Paragraphs repeat across turns.** Four combat turns in a row reused Emma's
   "silent scream" and Marcus's "wide, unblinking eyes" nearly word for word.
   `[LAST SCENE]` hands the narrator its own last paragraph word for word, and a

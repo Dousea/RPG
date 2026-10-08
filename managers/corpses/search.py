@@ -156,6 +156,7 @@ class CorpseView:
     skeleton: bool
     looks: str
     contents: tuple[str, ...]
+    sex_word: str  # empty for bare bones
 
     def line(self, *, with_id: bool) -> str:
         """One line for a prompt: a body is only ever dead, never fake-dead or crawling."""
@@ -177,8 +178,12 @@ def _layer(entity: ItemEntity) -> int:
     return LAYER_ORDER[item.body_location]
 
 
+def _sex_word(corpse: CorpseEntity) -> str:
+    return zombie_lore.WOMAN_WORD if corpse.female else zombie_lore.MAN_WORD
+
+
 def _looks(corpse: CorpseEntity) -> str:
-    person = zombie_lore.WOMAN_WORD if corpse.female else zombie_lore.MAN_WORD
+    person = _sex_word(corpse)
     clothes = [e for e in corpse.contents if isinstance(e.item, ClothingItem)]
     garments = sorted(clothes, key=_layer, reverse=True)[: zombie_lore.CORPSE_LOOK_ITEMS]
     names = [with_article(e.item.name.lower()) for e in garments]
@@ -204,6 +209,7 @@ def corpse_views(manager: GameManager) -> list[CorpseView]:
             skeleton=c.skeleton,
             looks=_looks(c),
             contents=tuple(e.item.name.lower() for e in c.contents),
+            sex_word="" if c.skeleton else _sex_word(c),
         )
         for c in perceived_corpses(manager)
     ]

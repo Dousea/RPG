@@ -193,7 +193,12 @@ class GameEngine:
                 narrated_facts = [NOTHING_DONE_FACT.format(name=looks.forename), *outcome_facts]
             context = ContextBuilder(manager)
             narrator_prompt = context.build_narrator_prompt(
-                player_input, narrated_facts, deep_memories, max_chars=self._narrator_budget()
+                player_input,
+                narrated_facts,
+                deep_memories,
+                max_chars=self._narrator_budget(),
+                refused=core.refused_plan,
+                finds=core.finds,
             )
             emit({"type": "step", "step": "narrating"})
             try:
@@ -216,10 +221,10 @@ class GameEngine:
                 manager, narrated_facts, core.refused_actions, core.found_items
             )
             parsed = self._fact_checked(
-                parsed, context, player_input, narrated_facts, deep_memories, questions, emit
+                parsed, context, player_input, narrated_facts, deep_memories, questions, emit, core
             )
             parsed = self._with_options(
-                parsed, context, player_input, narrated_facts, deep_memories, emit
+                parsed, context, player_input, narrated_facts, deep_memories, emit, core
             )
             story_text = str(parsed["story"])
             options = list(parsed["options"])
@@ -264,6 +269,7 @@ class GameEngine:
         deep_memories: list[str],
         questions: list[StateQuestion],
         emit: TurnListener,
+        core: SimulationCore,
     ) -> dict[str, Any]:
         """The narrator's reply, or its one retry when the story conflicts with the engine's state.
 
@@ -286,6 +292,8 @@ class GameEngine:
                 outcome_facts,
                 deep_memories,
                 max_chars=self._narrator_budget() - len(block),
+                refused=core.refused_plan,
+                finds=core.finds,
             )
             + block
         )
@@ -309,6 +317,7 @@ class GameEngine:
         outcome_facts: list[str],
         deep_memories: list[str],
         emit: TurnListener,
+        core: SimulationCore,
     ) -> dict[str, Any]:
         """The reply, with options from one follow-up call when it had no OPTIONS section.
 
@@ -325,6 +334,8 @@ class GameEngine:
                 outcome_facts,
                 deep_memories,
                 max_chars=self._narrator_budget() - len(block),
+                refused=core.refused_plan,
+                finds=core.finds,
             )
             + block
         )

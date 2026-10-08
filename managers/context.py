@@ -13,7 +13,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 
 import logging
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date
 
 from data.body.status_effects import STATUS_EFFECT_MAX_LEVEL
@@ -43,6 +43,7 @@ from managers.character.skills import level_word
 from managers.combat import weapons
 from managers.corpses.search import corpse_views, perceived_corpses
 from managers.game import GameManager
+from managers.story import in_view
 from managers.story.beats import visible_topics
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import describe_weather
@@ -50,6 +51,7 @@ from managers.world.rooms import current_room
 from managers.zombies.population import threat_views
 from modules.action.parser import SceneKey, available_verbs
 from modules.action.schema import JsonObject, SceneChoices, build_plan_schema
+from modules.action.types import AnyAction
 from modules.entity.barrier import BarrierEntity
 from modules.entity.item import ItemEntity
 from modules.item import ClothingItem, ContainerItem, MedicalItem, StackItem
@@ -309,20 +311,35 @@ class ContextBuilder:
             lines.append(f"{room.name}{mark}: {parts}")
         return "\n".join(lines)
 
-    def _in_view_section(self) -> str:
-        """[IN VIEW] after the outcomes: every perceived zombie, then everyone present.
+    def _in_view_section(self, refused: Sequence[AnyAction] = (), finds: Sequence[str] = ()) -> str:
+        """[IN VIEW] after the outcomes: the true state the story must keep, last so a small narrator follows it.
 
-        Placed last so a small narrator that skims the scene blocks still shows them.
+        Every perceived zombie, everyone present, what is held, the time of day, each corpse,
+        where each refused action's target stands and what this turn's searches found.
         """
         manager = self.manager
+        looks = manager.player.appearance
         threats = self._threats_section().splitlines() if threat_views(manager) else []
         people = [
             f" - {npc.name}" for npc in manager.npcs_in_location(manager.player.current_location_id)
         ]
-        if not threats and not people:
-            return ""
-        lines = "\n".join(threats + people)
-        return f"[IN VIEW]\n(Who and what the story must show this turn, however briefly.)\n{lines}\n\n"
+        held = weapons.held_entity(manager.player)
+        hands = (
+            f"{looks.forename} holds the {held.item.name.lower()}."
+            if held is not None
+            else f"{looks.forename}'s hands are empty."
+        )
+        weekday = date.fromisoformat(manager.world.date).strftime("%A")
+        clock = f"It is {manager.narrative.time_of_day} on {weekday}, {manager.world.time}."
+        bodies = [
+            f" - a dead body, {view.distance_word}"
+            + (f", {view.sex_word}" if view.sex_word else "")
+            for view in corpse_views(manager)
+        ]
+        touched = in_view.touched_lines(manager, refused)
+        finds = [f"Found this turn: {items}." for items in finds]
+        lines = "\n".join([*threats, *people, hands, clock, *bodies, *touched, *finds])
+        return f"[IN VIEW]\n(How things stand right now, and who and what the story must show this turn, however briefly.)\n{lines}\n\n"
 
     def _corpses_section(self, *, with_id: bool) -> str:
         """The bodies the player can see, in words: the parser gets ids to aim SEARCH at."""
@@ -747,6 +764,8 @@ door rather than refusing the move.)
         outcome_facts: list[str] | None = None,
         deep_memories: list[str] | None = None,
         max_chars: int | None = None,
+        refused: Sequence[AnyAction] = (),
+        finds: Sequence[str] = (),
     ) -> str:
         """Assemble the full LLM prompt for the narrator call.
 
@@ -757,6 +776,7 @@ door rather than refusing the move.)
         Over `max_chars`, memory is dropped until it fits: deep memories (last first),
         summaries (oldest first), [LAST SCENE], then recent events (oldest first, never
         the newest). Current state, [OUTCOMES] and the player's input are never dropped.
+        `refused` and `finds` are this turn's refused actions and search finds, for [IN VIEW].
         """
         deep = list(deep_memories or [])
         summaries = list(self.manager.memory.summaries)
@@ -765,7 +785,7 @@ door rather than refusing the move.)
         dropped: dict[str, int] = {}
         character = self._character_section()
         last_scene = self._last_scene_section()
-        current = self._narrator_current_state(player_input, outcome_facts)
+        current = self._narrator_current_state(player_input, outcome_facts, refused, finds)
 
         def render() -> str:
             return self._render_narrator(
@@ -832,7 +852,13 @@ door rather than refusing the move.)
 
 {last_scene}{current}"""
 
-    def _narrator_current_state(self, player_input: str, outcome_facts: list[str] | None) -> str:
+    def _narrator_current_state(
+        self,
+        player_input: str,
+        outcome_facts: list[str] | None,
+        refused: Sequence[AnyAction],
+        finds: Sequence[str],
+    ) -> str:
         """The narrator prompt from [TIME AND WEATHER] to the player's input."""
         return f"""[TIME AND WEATHER]
 {self._time_and_weather_section()}
@@ -889,7 +915,7 @@ the player phrased their input.)
 
 {self._outcomes_section(outcome_facts).rstrip()}
 
-{self._in_view_section()}[CONTINUITY]
+{self._in_view_section(refused, finds)}[CONTINUITY]
 (This should normally be empty: outcomes are validated before you narrate
 them, not after. Anything here is a defensive fallback for a state change the
 engine could not decide at all -- treat it the same as [OUTCOMES].)

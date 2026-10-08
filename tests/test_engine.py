@@ -552,6 +552,19 @@ class TurnTests(EngineTestCase):
         self.assertEqual(self.engine.game.narrative.pending_corrections, [])
         self.assertIn("(Nothing to correct)", self.llm.narrator_prompts[-1])
 
+    def test_a_refused_takes_item_state_reaches_the_narrator_prompt(self):
+        bag = ItemEntity(item=ITEMS["item_schoolbag"])
+        bag.contents = [ItemEntity(item=ITEMS["item_kitchen_knife"])]
+        self.engine.game.player.inventory.append(bag)
+        self.llm.actions = "ACTIONS:\nTAKE kitchen knife"
+        self.engine.play("take the knife")
+        self.assertIn("The kitchen knife: in the schoolbag.", self.llm.narrator_prompts[-1])
+
+    def test_a_searchs_finds_reach_the_narrator_prompt(self):
+        self.llm.actions = "ACTIONS:\nSEARCH bedroom"
+        self.engine.play("search the bedroom")
+        self.assertIn("Found this turn:", self.llm.narrator_prompts[-1])
+
     def test_unparseable_action_lines_are_surfaced_but_do_not_abort_the_turn(self):
         self.llm.actions = "ACTIONS:\nFROBNICATE the widget\nADD_GOAL short_term Survive"
         result = self.engine.play("do something weird")

@@ -48,7 +48,12 @@ from managers.corpses.search import find_content, perceived_corpses, with_articl
 from managers.game import MAX_PLACE_LENGTH, GameManager
 from managers.story.beats import visible_topics
 from managers.story.social import locked_out
-from managers.world.barriers import barriers_between, carried_entities, thumpable_for
+from managers.world.barriers import (
+    barriers_between,
+    carried_entities,
+    find_barrier,
+    thumpable_for,
+)
 from managers.world.containers import has_room_for, unopened
 from managers.world.locations import BARE_DIRECTIONS, connection_target
 from managers.world.rooms import (
@@ -809,18 +814,7 @@ class ActionValidator:
     # === Doors, windows and planks ===
 
     def _find_barrier(self, name: str) -> BarrierEntity | None:
-        """The barrier `name` points at: its id, its name or an alias, those of this zone first."""
-        needle = name.strip().strip("\"'.,;:").casefold()
-        needle = needle.removeprefix("the ").removeprefix("my ").strip()
-        if not needle:
-            return None
-        here = self.manager.player.current_location_id
-        barriers = sorted(self.manager.world.barriers.values(), key=lambda b: here not in b.zones)
-        for barrier in barriers:
-            names = (barrier.barrier_id, barrier.name, *barrier.aliases)
-            if needle in (n.casefold().removeprefix("the ") for n in names):
-                return barrier
-        return None
+        return find_barrier(self.manager.world, self.manager.player.current_location_id, name)
 
     def _barrier_here(self, name: str) -> BarrierEntity | str:
         """The barrier of the player's zone `name` points at, or the refusal."""

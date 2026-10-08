@@ -255,6 +255,8 @@ class SimulationCore:
         self._stated_minutes = 0
         self.refused_actions: list[tuple[str, str]] = []
         self.found_items = False
+        self.refused_plan: list[AnyAction] = []
+        self.finds: list[str] = []
         self._social = SocialManager(manager, self._rng)
         self._body = BodyEngine(self._rng)
         self._first_aid = FirstAid(self._rng, self.skill_engine)
@@ -283,12 +285,16 @@ class SimulationCore:
 
         Afterwards `refused_actions` holds each action the validator refused and
         no later action of the turn did, in words with the reason, and `found_items` says
-        whether a search turned anything up; the fact check asks about both.
+        whether a search turned anything up; the fact check asks about both. `refused_plan` holds
+        those same refused actions as actions and `finds` what each search turned up, in words,
+        for the narrator's [IN VIEW].
         """
         facts: list[str] = []
         rejected: list[tuple[str, str]] = []
+        rejected_actions: list[AnyAction] = []
         done: set[str] = set()
         self.found_items = False
+        self.finds = []
         total_minutes = 0
         self._shouted = False
         self._spoke = False
@@ -306,6 +312,7 @@ class SimulationCore:
             result = self.validator.validate(action)
             if isinstance(result, Rejected):
                 rejected.append((describe_action(result.action), result.reason))
+                rejected_actions.append(result.action)
                 facts.append(f"Refused: {self._name} can't {rejected[-1][0]}: {result.reason}")
                 continue
             done.add(describe_action(action))
@@ -327,6 +334,11 @@ class SimulationCore:
         if total_minutes and total_minutes != self._stated_minutes:
             facts.append(_minutes_fact(total_minutes))
         self.refused_actions = [refusal for refusal in rejected if refusal[0] not in done]
+        self.refused_plan = [
+            action
+            for action, (words, _) in zip(rejected_actions, rejected, strict=True)
+            if words not in done
+        ]
         return facts
 
     def discover_flag(self, flag: str) -> str:
@@ -1049,6 +1061,7 @@ class SimulationCore:
         if not items:
             return container_k.SEARCH_EMPTY_FACT.format(name=self._name, container=container.name)
         self.found_items = True
+        self.finds.append(items)
         return container_k.SEARCH_CONTAINER_FACT.format(
             name=self._name, container=container.name, items=items
         )
@@ -1076,7 +1089,9 @@ class SimulationCore:
         spent += search_spent
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             loot_search(corpse, self._rng)
-            self.found_items = self.found_items or bool(corpse.contents)
+            if corpse.contents:
+                self.found_items = True
+                self.finds.append(items_in_words(corpse.contents))
             facts.append(
                 zombie_lore.SEARCH_FACT.format(
                     name=self._name, corpse=corpse.corpse_id, items=contents_in_words(corpse)

@@ -249,8 +249,8 @@ found parser, narrator and rule gaps. Each is recorded, with a suggested fix, in
 the Known limitations section of the doc that owns it:
 [LLM contract](mechanics/llm-contract.md#known-limitations) (plans constrained by
 the starting scene, empty optional fields, the server ignoring `pattern`, questions
-parsed as requests, forced wrong verbs, refused actions narrated as done, finds
-denied, repeated paragraphs, quest ids in facts, bystanders who don't react),
+parsed as requests, forced wrong verbs, repeated paragraphs, quest ids in facts,
+bystanders who don't react),
 [doors](mechanics/doors.md#known-limitations) (one swing per turn, no lock verb),
 [status effects](mechanics/status-effects.md#known-limitations),
 [survival stats](mechanics/survival-stats.md#known-limitations),
