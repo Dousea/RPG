@@ -234,6 +234,14 @@ class RequestAction:
 
 
 @dataclass
+class UnsupportedAction:
+    """What the player asked for when no listed verb does it, in the model's few words."""
+
+    verb: ClassVar[str] = "UNSUPPORTED"
+    text: str
+
+
+@dataclass
 class GiveAction:
     verb: ClassVar[str] = "GIVE"
     item_name: str
@@ -293,4 +301,5 @@ AnyAction = (
     | AddGoalAction
     | RemoveGoalAction
     | AddRelationshipNoteAction
+    | UnsupportedAction
 )

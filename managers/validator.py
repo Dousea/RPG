@@ -96,6 +96,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnsupportedAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -145,6 +146,7 @@ from modules.world.room import ContainerEntity
 
 GOAL_HORIZONS = GOAL_HORIZON_LABELS
 
+UNSUPPORTED_REASON = "there is no way to do that yet."  # llm-contract
 ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
 CORPSE_ID_PATTERN = re.compile(r"c\d+", re.IGNORECASE)
 
@@ -200,6 +202,8 @@ class ActionValidator:
             # than dispatched. SimulationCore._check_player_death is the only
             # place that sets this flag; the LLM cannot trigger it.
             return Rejected(action, f"{self._name} is dead; nothing more can happen.")
+        if isinstance(action, UnsupportedAction):
+            return Rejected(action, UNSUPPORTED_REASON)
         handler = self._VALIDATORS.get(action.verb)
         if handler is None:
             return Rejected(action, f"No validator registered for {type(action).__name__}.")

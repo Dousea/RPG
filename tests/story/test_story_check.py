@@ -7,7 +7,7 @@ import unittest
 from data.story import check as story_check_k
 from managers.game import GameManager
 from managers.story.check import StateQuestion, build_questions, plan_questions
-from modules.action.types import ShoveAction, TalkAction, UseItemAction
+from modules.action.types import ShoveAction, TalkAction, UnsupportedAction, UseItemAction
 from modules.entity.zombie import ZombieEntity, ZombieState
 
 
@@ -194,6 +194,24 @@ class PlanQuestionsTests(unittest.TestCase):
                 "to do what they asked?",
             ],
         )
+
+    def test_an_unsupported_action_is_asked_about_against_the_listed_verbs(self):
+        verbs = "- TAKE <item> -- a thing\n- SHOUT -- call out"
+        (question,) = plan_questions(
+            self.manager, [UnsupportedAction(text="drink from the tap")], verbs
+        )
+        self.assertEqual(
+            question.text,
+            "Given these verbs:\n- TAKE <item> -- a thing\n- SHOUT -- call out\n"
+            'does one of them do "drink from the tap"?',
+        )
+        self.assertEqual([key for key, _ in question.options], ["yes", "no", "unclear"])
+        self.assertEqual(question.allowed, frozenset({"no", "unclear"}))
+        self.assertEqual(
+            question.correction, story_check_k.PLAN_NOT_UNDERSTOOD_FACT.format(name="Orton")
+        )
+        self.assertIn("rephrase", question.correction)
+        self.assertFalse(any(c.isdigit() for c in question.correction))
 
     def test_the_options_and_what_is_allowed(self):
         (question,) = plan_questions(self.manager, [UseItemAction(item_name="Frying Pan")])

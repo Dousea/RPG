@@ -246,6 +246,16 @@ class PromptRuleTests(unittest.TestCase):
             self.assertIn("not listed in [NPCS HERE]", prompt)
             self.assertIn("Input: 'ask Dana to open the gate'", prompt)
 
+    def test_the_parser_is_told_to_use_unsupported_when_no_verb_fits(self):
+        for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
+            self.assertIn("UNSUPPORTED", prompt)
+            self.assertIn("never the nearest verb on an unrelated item", prompt)
+            self.assertIn("Input: 'drink from the tap'", prompt)
+        self.assertIn("UNSUPPORTED drink from the tap", PARSER_SYSTEM_PROMPT)
+        self.assertIn(
+            '{"verb": "UNSUPPORTED", "text": "drink from the tap"}', PARSER_JSON_SYSTEM_PROMPT
+        )
+
     def test_the_parser_sends_a_question_to_talk_chat(self):
         for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
             self.assertIn("question to an NPC", prompt)
@@ -357,7 +367,9 @@ class ParserRequestTests(unittest.TestCase):
             actions, failures = parse_plan_response(example)
             self.assertEqual(failures, [])
             verbs.append([a.verb for a in actions])
-        self.assertEqual(verbs, [["TAKE", "MOVE_TO"], ["TALK"], ["REQUEST"], ["TALK"], []])
+        self.assertEqual(
+            verbs, [["TAKE", "MOVE_TO"], ["TALK"], ["REQUEST"], ["TALK"], [], ["UNSUPPORTED"]]
+        )
 
     def test_a_question_with_no_listed_topic_is_shown_as_talk(self):
         self.assertIn("Input: 'Emma, what's going on downstairs?'", PARSER_JSON_SYSTEM_PROMPT)

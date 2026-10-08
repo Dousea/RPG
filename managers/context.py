@@ -594,10 +594,12 @@ Traits: {_lines(trait_lines) or "None"}
             available_verbs(self.scene_keys()), self.scene_choices(), MAX_PLAN_ACTIONS
         )
 
-    def _available_actions_section(self) -> str:
-        """The verbs the scene lists, each with its argument kinds, gloss and closed labels."""
+    def available_actions_section(self, without: str = "") -> str:
+        """The verbs the scene lists, each with its argument kinds, gloss and closed labels; all but `without`."""
         lines: list[str] = []
         for verb in available_verbs(self.scene_keys()):
+            if verb.name == without:
+                continue
             kinds = "".join(f" <{kind}>" for kind in verb.target_kinds)
             gloss = self._request_gloss() if verb.name == "REQUEST" else verb.gloss
             lines.append(f"- {verb.name}{kinds} -- {gloss}")
@@ -751,7 +753,7 @@ door rather than refusing the move.)
 {self._exercise_section()}
 
 [AVAILABLE ACTIONS]
-{self._available_actions_section()}
+{self.available_actions_section()}
 
 {self._last_turn_section()}[PLAYER INPUT]
 {player_input}"""

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from data.story import check as story_check_k
 from managers.context import ZOMBIE_ID, zombie_ids_to_words
 from managers.game import GameManager
-from modules.action.types import AnyAction
+from modules.action.types import AnyAction, UnsupportedAction
 from modules.action.words import describe_action
 
 logger = logging.getLogger(__name__)
@@ -85,15 +85,28 @@ def _zombie_questions(manager: GameManager, outcome_facts: list[str]) -> list[St
     ]
 
 
-def plan_questions(manager: GameManager, actions: Sequence[AnyAction]) -> list[StateQuestion]:
+def plan_questions(
+    manager: GameManager, actions: Sequence[AnyAction], verbs: str = ""
+) -> list[StateQuestion]:
     """One question per parsed action, in order: did the player ask for it?
 
-    A conflict's correction is the refusal fact that replaces the action.
+    An `UNSUPPORTED` action is asked instead whether one of the listed `verbs`
+    does it. A conflict's correction is the refusal fact that replaces the action.
     """
     name = manager.player.appearance.forename
     questions = []
     for action in actions:
         words = zombie_ids_to_words(describe_action(action))
+        if isinstance(action, UnsupportedAction):
+            questions.append(
+                StateQuestion(
+                    story_check_k.UNSUPPORTED_QUESTION.format(verbs=verbs, action=words),
+                    story_check_k.UNSUPPORTED_OPTIONS,
+                    frozenset({"no", "unclear"}),
+                    story_check_k.PLAN_NOT_UNDERSTOOD_FACT.format(name=name),
+                )
+            )
+            continue
         questions.append(
             StateQuestion(
                 story_check_k.PLAN_QUESTION.format(action=words),

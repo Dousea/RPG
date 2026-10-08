@@ -12,11 +12,13 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from adapters import llm  # noqa: E402
+from data.items import ITEMS  # noqa: E402
 from managers.context import ContextBuilder  # noqa: E402
 from managers.game import GameManager  # noqa: E402
 from managers.world.locations import connection_target  # noqa: E402
 from modules.action.parser import parse_action_plan  # noqa: E402
-from modules.action.types import AnyAction, MoveAction, TalkAction  # noqa: E402
+from modules.action.types import AnyAction, MoveAction, TalkAction, UnsupportedAction  # noqa: E402
+from modules.entity.item import ItemEntity  # noqa: E402
 
 CASES_FILE = Path(__file__).resolve().parent.parent / "evals" / "parser_cases.yaml"
 
@@ -25,6 +27,7 @@ def scene(case: dict) -> GameManager:
     manager = GameManager()
     manager.player.current_location_id = case.get("zone", manager.player.current_location_id)
     manager.player.sneaking = bool(case.get("sneaking", False))
+    manager.player.inventory.extend(ItemEntity(item=ITEMS[i]) for i in case.get("carrying", []))
     if case.get("outbreak"):
         manager.world.outbreak_started_at = 0
     return manager
@@ -34,6 +37,8 @@ def _reached(manager: GameManager, action: AnyAction) -> object:
     """A move as the zone it reaches, so "In" and an alias match; a talk by whether words came with it; other actions as they are."""
     if isinstance(action, TalkAction):
         return (TalkAction.verb, action.npc_name, action.approach, bool(action.speech))
+    if isinstance(action, UnsupportedAction):
+        return UnsupportedAction.verb
     if not isinstance(action, MoveAction):
         return action
     folded = action.destination.casefold()

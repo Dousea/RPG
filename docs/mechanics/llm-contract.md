@@ -83,7 +83,7 @@ kinds of target it takes (in argument order), a parse function, a one-line gloss
 its fixed cost in minutes (none when the time is spent as the action runs). The
 validator and the resolver for each verb live in `managers/validator.py` and
 `managers/simulation.py`, in tables keyed by verb name. A test fails when a verb in
-`VERBS` lacks either.
+`VERBS` lacks either, except `UNSUPPORTED`, which the validator refuses outright.
 
 The parser's system prompt is built from `VERBS`, so the prompt and the parser can't
 drift apart.
@@ -113,6 +113,7 @@ drift apart.
 | `GIVE` | item, NPC | 5 per turn |
 | `ADD_GOAL` / `REMOVE_GOAL` | horizon, free text | 0 |
 | `ADD_RELATIONSHIP_NOTE` | NPC, free text | 0 |
+| `UNSUPPORTED` | free text, at most 80 characters | 0 |
 
 A verb of a later mechanic is absent from `VERBS` until that mechanic lands. A line
 that uses one is a `ParseFailure`.
@@ -135,6 +136,22 @@ talking for the survival stats, so they lower boredom.
 
 With them go the story vocabulary lists, `narrative.player_status` and the
 incapacitated-status check. `player.conditions` stays, written only by item effects.
+
+### `UNSUPPORTED`
+
+The plan has no other way to say "the player asked for something the engine can't
+do", and a schema that offers only real verbs forces the model onto the nearest one
+("drink from the tap" as `USE_ITEM` on the frying pan). `UNSUPPORTED <text>` is that
+way out: `text` is what the player asked for in a few words ("drink from the tap"),
+capped at `UNSUPPORTED_TEXT_MAX_CHARS` characters. It is listed in every scene, and the
+parser's rules tell the model to use it when no listed verb does what was asked, never
+the nearest verb on an unrelated item.
+
+The engine never validates or resolves it. It is refused like any refusal, in the
+character's name: "Refused: Orton can't drink from the tap: there is no way to do that
+yet." It costs 0 minutes, appears in `refused_actions` (so the [fact check](#the-fact-check)
+asks about it) and adds nothing to `[IN VIEW]`, since it touches nothing. The branch is
+an easy way out, so the [plan check](#the-plan-check) guards it.
 
 ### `SHOUT`
 
@@ -178,7 +195,7 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 
 | Verb | Listed when | Key present when |
 | --- | --- | --- |
-| `MOVE_TO`, `STANCE`, `WAIT`, `SLEEP`, `EXERCISE`, `SHOUT`, `ADD_GOAL`, `ADD_RELATIONSHIP_NOTE` | always | n/a |
+| `MOVE_TO`, `STANCE`, `WAIT`, `SLEEP`, `EXERCISE`, `SHOUT`, `ADD_GOAL`, `ADD_RELATIONSHIP_NOTE`, `UNSUPPORTED` | always | n/a |
 | `REMOVE_GOAL` | `goals` | the player has a goal |
 | `TAKE` | `items_here`, `loot` | an item lies here, or a searched corpse in view holds something |
 | `SEARCH` | `corpses` | a corpse is in view |
@@ -190,7 +207,7 @@ Each verb has a `listed_when` tuple of scene keys. It is listed when any key is 
 | `OPEN`, `CLOSE`, `BARRICADE`, `UNBARRICADE` | `barriers` | the zone has a door or window ([doors](doors.md)) |
 | `BANDAGE`, `REMOVE_BANDAGE`, `DISINFECT` | `hurt` | a body part is injured or bandaged ([health](health.md)) |
 
-With nothing present, the block lists the eight always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. `EAT` and `DRINK` parse as `USE_ITEM`. Closed labels inside a listed verb are printed in full.
+With nothing present, the block lists the nine always-listed verbs. Filtering decides what the model sees, not what it may say: a verb that isn't listed still parses, and the validator refuses it as usual. `EAT` and `DRINK` parse as `USE_ITEM`. Closed labels inside a listed verb are printed in full.
 
 ### Plans
 
@@ -463,6 +480,14 @@ can't do that here, and does not use the Frying Pan." The other actions resolve 
 usual, so the narrator tells the player honestly that what they asked for didn't
 happen instead of narrating an unrelated action. A plan whose every action is ruled
 out is a turn of refusals, not a turn of nothing. A failed request keeps the action.
+
+An `UNSUPPORTED` action gets a different question, since "did the player ask for it"
+is true by construction: given the verbs in `[AVAILABLE ACTIONS]` (without
+`UNSUPPORTED`), does one of them do this? The options are yes, no and unclear; no and
+unclear are allowed. Answered yes at or above the threshold, the action is dropped
+and the turn's refusal fact says the request wasn't understood as an action and the
+player can rephrase it. There is no re-parse. Without the fact check, the `UNSUPPORTED`
+refusal stands.
 The check only takes actions away; it never adds or changes one. It runs whenever the
 fact check is enabled and the plan has an action, and reports the `checking_plan` step.
 
@@ -663,23 +688,6 @@ entry says what goes wrong and how to fix it.
   the [duration grammar](clock.md#actions) read a bare time of day or `HH:MM` as
   `until` it, so the schema's pattern no longer has to hold. A time already past
   today lands tomorrow, as `WAIT until <time>` does ([edge cases](clock.md#edge-cases)).
-- **When no verb fits, the schema forces a wrong one.** The schema has no way to
-  say "the player asked for something the engine can't do", so the model picks the
-  nearest branch: "lock the door" became `BARRICADE`, "drink from the tap" became
-  `USE_ITEM` on the frying pan, "put on the jacket" with nothing wearable became
-  `EQUIP` on the key, "put on the schoolbag" became `PUT` the bag into itself, "pocket
-  the key" became `PUT` the knife in the bag. The [plan check](#the-plan-check) rules
-  out most such actions (the frying pan, the knife, an attack on a door when the
-  player meant a zombie), but it accepted `CLOSE` and `OPEN` for "close and lock the
-  door" and holding the schoolbag for "put on the schoolbag", and a refusal it makes
-  can't say what was asked. *Fix:* an `UNSUPPORTED <text>` branch that the engine
-  refuses in words ("Orton can't lock the door: there is no way to yet."), so the
-  narrator gets an honest refusal that names it. The branch is an easy way out, so
-  the model may pick it for things the engine can do: eval cases must cover both
-  directions, and the [plan check](#the-plan-check) rules out an `UNSUPPORTED`
-  when a real verb fits the request. The missing verbs themselves are in
-  [doors](doors.md#known-limitations) (locking) and
-  [status effects](status-effects.md#known-limitations) (tap water).
 
 ### Narrator
 

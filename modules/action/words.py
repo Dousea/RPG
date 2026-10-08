@@ -31,6 +31,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnsupportedAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -132,6 +133,8 @@ def describe_action(action: AnyAction) -> str:
             return f"ask {npc} for the {item}"
         case RequestAction(npc_name=npc, request="about", argument=topic):
             return f"ask {npc} about the {topic.replace('_', ' ')}"
+        case UnsupportedAction(text=text):
+            return text
         case GiveAction(item_name=item, npc_name=npc):
             return f"give the {item} to {npc}"
     return action.verb.lower().replace("_", " ")

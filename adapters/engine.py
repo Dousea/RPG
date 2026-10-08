@@ -253,7 +253,11 @@ class GameEngine:
         if not actions or not self.factcheck.enabled:
             return actions, []
         emit({"type": "step", "step": "checking_plan"})
-        questions = plan_questions(manager, actions)
+        questions = plan_questions(
+            manager,
+            actions,
+            ContextBuilder(manager).available_actions_section(without="UNSUPPORTED"),
+        )
         flagged = set(self.factcheck.plan_conflicts(player_input, questions))
         for index in sorted(flagged):
             logger.warning(f"Dropped {actions[index]!r}: not what the player asked for.")

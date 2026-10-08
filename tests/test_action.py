@@ -10,6 +10,7 @@ from modules.action.parser import (
     REQUEST_LABELS,
     TALK_APPROACH_LABELS,
     TALK_SPEECH_MAX_CHARS,
+    UNSUPPORTED_TEXT_MAX_CHARS,
     VERBS,
     ParseFailure,
     available_verbs,
@@ -30,6 +31,7 @@ from modules.action.types import (
     TakeAction,
     TakeOffAction,
     TalkAction,
+    UnsupportedAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -273,8 +275,9 @@ class VerbRegistryTests(unittest.TestCase):
         self.assertTrue(set(VERBS) >= self.EXPECTED)
 
     def test_every_verb_in_the_registry_has_a_validator_and_a_resolver(self):
-        self.assertEqual(set(VERBS), set(ActionValidator._VALIDATORS))
-        self.assertEqual(set(VERBS), set(SimulationCore._RESOLVERS))
+        resolved = set(VERBS) - {"UNSUPPORTED"}
+        self.assertEqual(resolved, set(ActionValidator._VALIDATORS))
+        self.assertEqual(resolved, set(SimulationCore._RESOLVERS))
 
     def test_each_removed_verb_is_a_parse_failure(self):
         for verb in self.REMOVED:
@@ -432,6 +435,7 @@ ALWAYS_LISTED = [
     "SHOUT",
     "ADD_GOAL",
     "ADD_RELATIONSHIP_NOTE",
+    "UNSUPPORTED",
 ]
 
 
@@ -441,7 +445,7 @@ class SceneFilteringTests(unittest.TestCase):
     def names(self, *keys: str) -> list[str]:
         return [verb.name for verb in available_verbs(frozenset(keys))]  # type: ignore[arg-type]
 
-    def test_an_empty_scene_lists_the_eight_always_listed_verbs(self):
+    def test_an_empty_scene_lists_the_nine_always_listed_verbs(self):
         self.assertEqual(self.names(), ALWAYS_LISTED)
 
     def test_each_key_adds_exactly_its_verbs_in_registry_order(self):
@@ -513,3 +517,27 @@ class SocialActionWordsTests(unittest.TestCase):
         self.assertEqual(
             describe_action(GiveAction("Water Bottle", "Jen")), "give the Water Bottle to Jen"
         )
+
+
+class UnsupportedParseTests(unittest.TestCase):
+    """llm-contract: Verbs: UNSUPPORTED."""
+
+    def test_the_text_is_what_follows_the_verb(self):
+        self.assertEqual(
+            parse_action_line("UNSUPPORTED lock the door"),
+            UnsupportedAction(text="lock the door"),
+        )
+
+    def test_it_is_listed_in_every_scene_and_costs_nothing(self):
+        self.assertIn("UNSUPPORTED", [verb.name for verb in available_verbs(frozenset())])
+        self.assertEqual(VERBS["UNSUPPORTED"].minutes, 0)
+
+    def test_the_text_is_capped(self):
+        action = parse_action_line("UNSUPPORTED " + "x" * (UNSUPPORTED_TEXT_MAX_CHARS + 50))
+        self.assertEqual(action, UnsupportedAction(text="x" * UNSUPPORTED_TEXT_MAX_CHARS))
+
+    def test_it_needs_text(self):
+        self.assertIsInstance(parse_action_line("UNSUPPORTED"), ParseFailure)
+
+    def test_it_is_described_by_its_text(self):
+        self.assertEqual(describe_action(UnsupportedAction("lock the door")), "lock the door")

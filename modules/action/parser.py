@@ -42,6 +42,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnsupportedAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -357,6 +358,7 @@ TALK_APPROACH_LABELS = (
 REQUEST_LABELS = ("follow", "stay", "give", "about")
 GOAL_HORIZON_LABELS = ("short_term", "long_term")
 TALK_SPEECH_MAX_CHARS = 300  # llm-contract: the words of a TALK that reach the narrator
+UNSUPPORTED_TEXT_MAX_CHARS = 80  # llm-contract: the request an UNSUPPORTED names, in a few words
 TALK_TURN_MINUTES = 5  # llm-contract: one cost per turn, shared by TALK, REQUEST and GIVE
 
 
@@ -381,6 +383,13 @@ def _parse_talk(args: str) -> TalkAction:
     return TalkAction(
         npc_name=" ".join(words[:index]), approach=normalize_key(words[index]), speech=speech
     )
+
+
+def _parse_unsupported(args: str) -> UnsupportedAction:
+    text = args.strip()[:UNSUPPORTED_TEXT_MAX_CHARS].strip()
+    if not text:
+        raise _ActionParseError("UNSUPPORTED needs a few words saying what was asked for.")
+    return UnsupportedAction(text=text)
 
 
 def _parse_request(args: str) -> RequestAction:
@@ -694,6 +703,13 @@ VERBS: dict[str, Verb] = dict(
             ("npc", "text"),
             _parse_add_relationship_note,
             "an NPC name, then the character's own impression of them",
+            0,
+        ),
+        _verb(
+            "UNSUPPORTED",
+            ("text",),
+            _parse_unsupported,
+            "when no other verb here does what the player asked, a few words saying what they asked for; does nothing",
             0,
         ),
     ]

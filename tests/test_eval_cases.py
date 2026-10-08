@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from data.items import ITEMS
 from managers.game import GameManager
 from modules.action.parser import parse_action_plan
 
@@ -25,6 +26,21 @@ class ParserCaseFileTests(unittest.TestCase):
         zones = GameManager().world.locations
         for case in CASES:
             self.assertIn(case["zone"], zones, case["name"])
+
+    def test_every_carried_item_exists(self):
+        for case in CASES:
+            for item_id in case.get("carrying", []):
+                self.assertIn(item_id, ITEMS, case["name"])
+
+    def test_the_unsupported_cases_are_present_in_both_directions(self):
+        expected = {
+            ("drink from the tap", ("UNSUPPORTED drink from the tap",)),
+            ("put on the schoolbag", ("UNSUPPORTED put on the schoolbag",)),
+            ("eat the chocolate bar", ("USE_ITEM Chocolate Bar",)),
+            ("go outside", ("MOVE_TO out",)),
+        }
+        present = {(case["input"], tuple(case["expect"])) for case in CASES}
+        self.assertTrue(expected <= present)
 
     def test_the_cases_the_spec_names_are_present(self):
         expected = {

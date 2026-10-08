@@ -15,6 +15,7 @@ from modules.action.parser import (
     GOAL_HORIZON_LABELS,
     REQUEST_LABELS,
     TALK_APPROACH_LABELS,
+    UNSUPPORTED_TEXT_MAX_CHARS,
     ParseFailure,
     Verb,
     parse_action_plan,
@@ -179,6 +180,10 @@ def _verb_branch(name: str, choices: SceneChoices) -> JsonObject | None:
             if not choices.npcs:
                 return None
             return _branch(name, {"npc": _one_of(choices.npcs), "note": text})
+        case "UNSUPPORTED":
+            return _branch(
+                name, {"text": {"type": "string", "maxLength": UNSUPPORTED_TEXT_MAX_CHARS}}
+            )
     return None
 
 
@@ -351,6 +356,7 @@ _LINE_BUILDERS: dict[str, Callable[[JsonObject], str]] = {
     "UNBARRICADE": _target_line("UNBARRICADE"),
     "SHOUT": lambda fields: "SHOUT",
     "TALK": _talk_line,
+    "UNSUPPORTED": lambda fields: _line("UNSUPPORTED", _text(fields, "text")),
     "REQUEST": _request_line,
     "GIVE": lambda fields: _line(
         "GIVE", _text(fields, "item"), "to" if fields.get("npc") else "", _text(fields, "npc")

@@ -125,6 +125,10 @@ _PARSER_RULES = (
     "in [NPCS HERE]. Someone not listed in [NPCS HERE] is not here to talk "
     "to or ask: when the input asks or tells them anything, that part of the "
     "input is no action at all, not some other action with what is listed.\n\n"
+    "When the player asks for something no listed verb does, use UNSUPPORTED "
+    "with what they asked for as a short verb phrase ('lock the door'), never "
+    "the nearest verb on an "
+    "unrelated item.\n\n"
     "Note: there is no action for dealing or taking damage directly, for "
     "setting health, stats, flags or relationships, or for moving other "
     "characters -- the engine does all of that.\n\n"
@@ -141,7 +145,10 @@ PARSER_SYSTEM_PROMPT = (
     "TALK Marcus chat\n"
     "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"
     "ACTIONS:\n"
-    "NONE"
+    "NONE\n"
+    "Input: 'drink from the tap'\n"
+    "ACTIONS:\n"
+    "UNSUPPORTED drink from the tap"
 )
 
 PARSER_JSON_SYSTEM_PROMPT = (
@@ -158,7 +165,9 @@ PARSER_JSON_SYSTEM_PROMPT = (
     '{"actions": [{"verb": "TALK", "npc": "Emma", "approach": "chat", '
     '"speech": "What\'s going on downstairs?"}]}\n'
     "Input: 'ask Dana to open the gate' (Dana is not in [NPCS HERE])\n"
-    '{"actions": []}'
+    '{"actions": []}\n'
+    "Input: 'drink from the tap'\n"
+    '{"actions": [{"verb": "UNSUPPORTED", "text": "drink from the tap"}]}'
 )
 
 NARRATOR_SYSTEM_PROMPT = (

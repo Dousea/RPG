@@ -88,7 +88,7 @@ the validator's resolved data and returns whole minutes.
 | `MOVE_TO` with no destination, or to the spot the player is already at | 0 |
 | `WAIT`, `SLEEP` | the time actually spent |
 | `EXERCISE` | the minutes chosen (10 to 60 in steps of 10, default 10), or the minutes run when it stops early |
-| goals, notes, flags, relationships, NPC verbs, condition and status edits | 0 |
+| `UNSUPPORTED`, goals, notes, flags, relationships, NPC verbs, condition and status edits | 0 |
 
 Further rules.
 

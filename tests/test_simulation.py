@@ -33,6 +33,7 @@ from modules.action.types import (
     StanceAction,
     TakeAction,
     TakeOffAction,
+    UnsupportedAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -147,6 +148,20 @@ class FactCheckRecordTests(unittest.TestCase):
         self.assertIn(
             f"Refused: Orton can't {action}: {reason}", core.resolve([BandageAction("left hand")])
         )
+
+    def test_an_unsupported_request_is_refused_by_name_and_costs_nothing(self):
+        gm = GameManager()
+        core = SimulationCore(gm)
+        facts = core.resolve([UnsupportedAction(text="lock the door")])
+        self.assertEqual(
+            facts,
+            ["Refused: Orton can't lock the door: there is no way to do that yet."],
+        )
+        self.assertEqual(gm.narrative.minutes, 0)
+        self.assertEqual(
+            core.refused_actions, [("lock the door", "there is no way to do that yet.")]
+        )
+        self.assertEqual(core.refused_plan, [UnsupportedAction(text="lock the door")])
 
     def test_an_action_done_later_in_the_turn_is_not_recorded_as_refused(self):
         gm = GameManager()

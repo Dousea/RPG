@@ -1479,6 +1479,7 @@ ALWAYS = {
     "SHOUT",
     "ADD_GOAL",
     "ADD_RELATIONSHIP_NOTE",
+    "UNSUPPORTED",
 }
 
 

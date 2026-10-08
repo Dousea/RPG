@@ -1249,6 +1249,33 @@ class PlanCheckTests(EngineTestCase):
         self.engine.play("go out", on_event=events.append)
         self.assertEqual(steps(events)[:3], ["parsing", "checking_plan", "narrating"])
 
+    def unsupported_turn(self) -> str:
+        self.llm.actions = "ACTIONS:\nUNSUPPORTED lock the door"
+        self.engine.play("lock the door")
+        return self.llm.narrator_prompts[0]
+
+    def test_an_unsupported_action_asks_whether_a_listed_verb_does_it(self):
+        self.unsupported_turn()
+        ((_, questions),) = self.checker().plan_calls
+        self.assertIn('does one of them do "lock the door"?', questions[0].text)
+        self.assertIn("- MOVE_TO", questions[0].text)
+
+    def test_an_unsupported_action_nothing_fits_is_refused_by_name(self):
+        prompt = self.unsupported_turn()
+        self.assertIn("Refused: Orton can't lock the door: there is no way to do that yet.", prompt)
+        self.assertNotIn("rephrase", prompt)
+
+    def test_an_unsupported_action_a_verb_fits_is_not_understood(self):
+        self.checker().plan_results = [[0]]
+        prompt = self.unsupported_turn()
+        self.assertIn("rephrase", prompt)
+        self.assertNotIn("no way to do that yet", prompt)
+
+    def test_an_unsupported_action_stands_without_the_check(self):
+        self.checker().enabled = False
+        prompt = self.unsupported_turn()
+        self.assertIn("Orton can't lock the door", prompt)
+
     def test_a_disabled_checker_skips_the_step(self):
         self.checker().enabled = False
         events: list[dict] = []

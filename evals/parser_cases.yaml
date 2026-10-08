@@ -1,7 +1,8 @@
 # Parser quality cases for scripts/eval_parser.py. Run by hand; not part of the test suite.
 # Each case: the scene (`zone`, optional `outbreak`, `sneaking`), the player's `input`,
 # and the `expect`ed ACTIONS lines in order. `[]` means NONE. A TALK line is judged by
-# whether it carries words (`"words"` stands for any), not by what they are.
+# whether it carries words (`"words"` stands for any), not by what they are; an UNSUPPORTED
+# line by its verb alone. `carrying` lists item ids in the inventory.
 - name: creep to the lobby
   zone: zone_home
   input: I creep down to the lobby
@@ -140,3 +141,25 @@
   zone: zone_building
   input: chat with Emma
   expect: [TALK Emma chat]
+
+- name: tap water has no verb
+  zone: zone_home
+  input: drink from the tap
+  expect: [UNSUPPORTED drink from the tap]
+
+- name: a bag that cannot be worn
+  zone: zone_home
+  carrying: [item_schoolbag]
+  input: put on the schoolbag
+  expect: [UNSUPPORTED put on the schoolbag]
+
+- name: eating is not unsupported
+  zone: zone_home
+  carrying: [item_chocolate_bar]
+  input: eat the chocolate bar
+  expect: [USE_ITEM Chocolate Bar]
+
+- name: going outside is not unsupported
+  zone: zone_home
+  input: go outside
+  expect: [MOVE_TO out]

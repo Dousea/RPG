@@ -41,6 +41,7 @@ from modules.action.types import (
     TalkAction,
     UnbarricadeAction,
     UnequipAction,
+    UnsupportedAction,
     UseItemAction,
     WaitAction,
     WearAction,
@@ -193,6 +194,7 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     AddGoalAction: 0,
     RemoveGoalAction: 0,
     AddRelationshipNoteAction: 0,
+    UnsupportedAction: 0,
 }
 
 

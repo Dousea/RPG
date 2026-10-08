@@ -8,6 +8,7 @@ from managers.context import ContextBuilder
 from managers.game import GameManager
 from modules.action.parser import (
     TALK_APPROACH_LABELS,
+    UNSUPPORTED_TEXT_MAX_CHARS,
     VERBS,
     ParseFailure,
     available_verbs,
@@ -126,6 +127,16 @@ class SchemaShapeTests(unittest.TestCase):
         names = branches(ContextBuilder(gm).build_plan_schema())
         for verb in ("DROP", "TALK", "REQUEST", "GIVE", "UNEQUIP", "BANDAGE", "ATTACK", "SHOVE"):
             self.assertNotIn(verb, names)
+
+    def test_unsupported_is_offered_with_a_required_capped_text(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        gm.player.inventory.clear()
+        gm.world.barriers.clear()
+        branch = branches(ContextBuilder(gm).build_plan_schema())["UNSUPPORTED"]
+        self.assertEqual(branch["required"], ["verb", "text"])
+        self.assertEqual(branch["properties"]["text"]["type"], "string")
+        self.assertEqual(branch["properties"]["text"]["maxLength"], UNSUPPORTED_TEXT_MAX_CHARS)
 
     def test_a_scene_with_no_verb_at_all_allows_only_an_empty_list(self):
         schema = build_plan_schema([], SceneChoices(), MAX_ACTIONS)
@@ -356,6 +367,7 @@ EQUIVALENTS = [
     ({"verb": "BARRICADE", "target": "lobby door"}, "BARRICADE lobby door"),
     ({"verb": "UNBARRICADE", "target": "lobby door"}, "UNBARRICADE lobby door"),
     ({"verb": "SHOUT"}, "SHOUT"),
+    ({"verb": "UNSUPPORTED", "text": "lock the door"}, "UNSUPPORTED lock the door"),
     (
         {"verb": "TALK", "npc": "Emma", "approach": "chat", "speech": "Hi there, how are you?"},
         'TALK Emma chat "Hi there, how are you?"',
