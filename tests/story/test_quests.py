@@ -10,6 +10,7 @@ from modules.action.types import (
     AddGoalAction,
     AttackAction,
     MoveAction,
+    SearchAction,
     TakeAction,
 )
 from modules.entity.item import ItemEntity
@@ -165,6 +166,28 @@ class StartingQuestContentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WhereItStartedTests(unittest.TestCase):
+    """world-lore: The quest."""
+
+    def test_the_quest_is_seeded_and_names_nothing_the_player_has_not_learned(self):
+        quest = build_starting_quests()["quest_where_it_started"]
+        self.assertEqual(quest.objectives, ["discover:trial_truth"])
+        text = " ".join([quest.title, *quest.objective_labels.values()]).lower()
+        for word in ("clinic", "study", "drug", "binder", "velloran"):
+            self.assertNotIn(word, text)
+
+    def test_taking_the_binder_completes_it(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_clinic"
+        gm.player.current_room = "office"
+        resolve_actions(
+            gm,
+            SearchAction(target_name="filing cabinet"),
+            TakeAction(item_name="Study Binder", from_name="filing cabinet"),
+        )
+        self.assertEqual(gm.quests["quest_where_it_started"].status, QuestStatus.COMPLETED)
 
 
 class QuestFactTests(unittest.TestCase):

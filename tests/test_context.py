@@ -2,6 +2,7 @@
 
 import random
 import unittest
+from dataclasses import replace
 from datetime import date
 from unittest import mock
 
@@ -11,6 +12,7 @@ from managers.character import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
 from managers.simulation import SimulationCore
+from managers.story.lore import LoreHit, select_lore
 from modules.action.parser import TALK_APPROACH_LABELS
 from modules.action.types import (
     CloseAction,
@@ -35,43 +37,62 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import AttackSide, ZombieEntity, ZombieState
 from modules.item import ClothingItem
+from modules.story.lore import LoreEntry, Position
 from modules.story.quest import QuestState
 from modules.world.room import ContainerEntity
 from modules.world.weather import WeatherSample
 from tests.support import adjust_regard, npc_of, resolve_actions, set_health
 
 
-class WorldFlagFirewallTests(unittest.TestCase):
-    """The knowledge-firewall doc's complaint: every world flag went out unfiltered,
-    whether or not anything in the story ever revealed it to the player."""
+def lore_hit(entry_id: str, order: int, content: str, *, stage: bool = False) -> LoreHit:
+    entry = LoreEntry(
+        entry_id=entry_id,
+        content=content,
+        position=Position.WORLD,
+        constant=True,
+        order=order,
+        stage=stage,
+    )
+    return LoreHit(entry, "constant")
+
+
+class WorldBlockTests(unittest.TestCase):
+    """world-lore: The [WORLD] block, and the knowledge firewall for world flags."""
 
     def setUp(self):
         self.gm = GameManager()
         self.builder = ContextBuilder(self.gm)
 
-    def test_an_undiscovered_flag_never_reaches_the_narrator_prompt(self):
+    def location_block(self, lore: list[LoreHit]) -> str:
+        prompt = self.builder.build_narrator_prompt("look", lore=lore)
+        return prompt.split("[CURRENT LOCATION]")[1].split("[ITEMS IN CURRENT LOCATION]")[0]
+
+    def test_world_sits_in_the_location_block_and_lists_the_shown_lines(self):
+        hits = [lore_hit("a", 10, "alpha line"), lore_hit("b", 20, "beta line")]
+        block = self.location_block(hits)
+        self.assertIn("[WORLD]", block)
+        self.assertLess(block.index("Sheltered:"), block.index("[WORLD]"))
+        self.assertLess(block.index("alpha line"), block.index("beta line"))
+        self.assertNotIn("Flags:", block)
+
+    def test_a_dropped_hit_is_not_listed(self):
+        hits = [
+            lore_hit("a", 10, "alpha line"),
+            replace(lore_hit("b", 20, "beta line"), shown=False),
+        ]
+        block = self.location_block(hits)
+        self.assertIn("alpha line", block)
+        self.assertNotIn("beta line", block)
+
+    def test_no_raw_flag_text_reaches_the_narrator_prompt(self):
         self.gm.narrative.flags["power_grid_stable"] = False
-        prompt = self.builder.build_narrator_prompt("look")
+        SimulationCore(self.gm).discover_flag("power_grid_stable")
+        prompt = self.builder.build_narrator_prompt("look", lore=select_lore(self.gm, "look", {}))
         self.assertNotIn("power_grid_stable", prompt)
+        self.assertNotIn("=False", prompt)
 
-    def test_a_discovered_flag_reaches_the_narrator_prompt(self):
-        self.gm.narrative.flags["power_grid_stable"] = False
-        SimulationCore(self.gm).discover_flag("power_grid_stable")
-        prompt = self.builder.build_narrator_prompt("look")
-        self.assertIn("power_grid_stable=False", prompt)
-
-    def test_discovering_a_flag_that_was_never_set_is_harmless(self):
-        self.gm.narrative.discovered_flags.add("never_set")
-        prompt = self.builder.build_narrator_prompt("look")
-        # Nothing to show -- the flag has no value -- but this must not raise.
-        self.assertIn("Flags: None", prompt)
-
-    def test_setting_the_same_flag_twice_does_not_undiscover_it(self):
-        self.gm.narrative.flags["power_grid_stable"] = False
-        SimulationCore(self.gm).discover_flag("power_grid_stable")
-        self.gm.narrative.flags["power_grid_stable"] = True
-        prompt = self.builder.build_narrator_prompt("look")
-        self.assertIn("power_grid_stable=True", prompt)
+    def test_the_parser_never_sees_the_block(self):
+        self.assertNotIn("[WORLD]", self.builder.build_parser_prompt("look"))
 
 
 class ParserPromptFirewallTests(unittest.TestCase):
@@ -1621,10 +1642,16 @@ class ParserSystemPromptTests(unittest.TestCase):
         for label in (*TALK_APPROACH_LABELS, "follow", "stay"):
             self.assertIn(label, actions)
 
+    def test_ask_offers_about_when_someone_here_has_a_topic(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_building"
+        self.assertIn("about", request_line(ContextBuilder(gm).build_parser_prompt("look")))
+
     def test_ask_lists_only_the_requests_the_scene_offers(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_building"
-        ask = request_line(ContextBuilder(gm).build_parser_prompt("look"))
+        with mock.patch("managers.story.beats.TOPICS", {}):
+            ask = request_line(ContextBuilder(gm).build_parser_prompt("look"))
         self.assertIn("follow", ask)
         self.assertNotIn("give", ask)
         self.assertNotIn("about", ask)
@@ -1635,7 +1662,8 @@ class ParserSystemPromptTests(unittest.TestCase):
         gm.player.current_location_id = "zone_building"
         npc = gm.npcs_in_location("zone_building")[0]
         npc.inventory.append(ItemEntity(item=ITEMS["item_water_bottle"]))
-        ask = request_line(ContextBuilder(gm).build_parser_prompt("look"))
+        with mock.patch("managers.story.beats.TOPICS", {}):
+            ask = request_line(ContextBuilder(gm).build_parser_prompt("look"))
         self.assertIn("give <item>", ask)
         self.assertNotIn("about", ask)
 
@@ -1739,6 +1767,55 @@ class NarratorBudgetTests(unittest.TestCase):
         with mock.patch("managers.context.logger") as log:
             self.prompt(len(self.prompt()))
         log.warning.assert_not_called()
+
+
+class LoreBudgetTests(unittest.TestCase):
+    """world-lore: Selection and the cap: the prompt budget drops lore between deep memory and summaries."""
+
+    def setUp(self):
+        self.gm = GameManager()
+        memory = self.gm.memory
+        memory.summaries = ["summark " + "d" * 150]
+        memory.recent_events = ["evmark newest"]
+        self.hits = [
+            lore_hit("stage", 0, "stagemark " + "s" * 100, stage=True),
+            lore_hit("low", 10, "lowmark " + "l" * 100),
+            lore_hit("high", 90, "highmark " + "h" * 100),
+        ]
+
+    def prompt(self, max_chars: int | None = None) -> str:
+        return ContextBuilder(self.gm).build_narrator_prompt(
+            "look", ["The wind rises."], ["deepmark " + "a" * 150], max_chars, lore=self.hits
+        )
+
+    def test_lore_goes_after_deep_memory_and_before_summaries_in_drop_order(self):
+        markers = ("deepmark", "highmark", "lowmark", "summark")
+        gone: list[str] = []
+        prompt = self.prompt()
+        with self.assertLogs("managers.context", level="WARNING"):
+            while True:
+                prompt = self.prompt(len(prompt) - 1)
+                vanished = [m for m in markers if m not in prompt and m not in gone]
+                if not vanished:
+                    break
+                self.assertEqual(len(vanished), 1)
+                gone.extend(vanished)
+        self.assertEqual(gone, list(markers))
+
+    def test_the_stage_line_is_never_dropped_and_the_turns_hits_are_untouched(self):
+        with self.assertLogs("managers.context", level="WARNING"):
+            prompt = self.prompt(0)
+        self.assertIn("stagemark", prompt)
+        self.assertTrue(all(hit.shown for hit in self.hits))
+
+    def test_the_warning_counts_lore_lines(self):
+        full = self.prompt()
+        with self.assertLogs("managers.context", level="WARNING") as logged:
+            self.prompt(len(full) - 1)
+        self.assertIn("deep memory", logged.records[0].getMessage())
+        with self.assertLogs("managers.context", level="WARNING") as logged:
+            self.prompt(len(full) - 200)
+        self.assertIn("lore lines", logged.records[0].getMessage())
 
 
 class BarrierBlockTests(unittest.TestCase):
@@ -1929,7 +2006,7 @@ class CarryContextTests(unittest.TestCase):
         self.gm.player.inventory.append(self.entity("item_barbell"))
         builder = ContextBuilder(self.gm)
         for prompt in (builder.build_parser_prompt("look"), builder.build_narrator_prompt("look")):
-            self.assertNotIn("kg", prompt)
+            self.assertNotRegex(prompt, r"\d\s*kg")
 
     def test_heavy_load_is_in_the_condition_block_by_name_and_level(self):
         self.gm.player.skills["strength"] = SkillState(level=0)

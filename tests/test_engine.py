@@ -20,10 +20,12 @@ from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
 from data.character.presets import ORTON
 from data.items import ITEMS
+from data.story.beats import EVACUATION_MINUTE
 from data.story.memory import BUDGET_MARGIN_TOKENS
 from data.time_costs import MAX_PLAN_ACTIONS
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
+from managers.story.lorebook import get_lorebook
 from managers.zombies.population import ThreatView
 from modules.body.parts import BodyLocation, BodyPart
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
@@ -37,6 +39,7 @@ from tests.support import (
     FakeMemory,
     IsolatedSaveTestCase,
     ScriptedLLM,
+    adjust_regard,
     make_dying,
     npc_of,
     stream,
@@ -1555,6 +1558,94 @@ class MissingOptionsTests(EngineTestCase):
             steps(events), ["parsing", "checking_plan", "narrating", "options", "saving"]
         )
         self.assertEqual(stories(events)[-1], "You walk out.")
+
+
+class LoreTests(EngineTestCase):
+    """world-lore: Selection and the cap: [WORLD] is selected after the turn resolves."""
+
+    NO_OPTIONS = "STORY:\nYou walk out."
+    OPTIONS_ONLY = "OPTIONS:\n- Check the mailboxes"
+
+    def content(self, entry_id: str) -> str:
+        return get_lorebook().entries[entry_id].content
+
+    def world_block(self) -> str:
+        prompt = self.llm.narrator_prompts[-1]
+        return prompt.split("[WORLD]")[1].split("[ITEMS IN CURRENT LOCATION]")[0]
+
+    def test_a_stage_fired_by_this_turns_wait_is_in_the_world_block(self):
+        self.engine.game.advance_clock(EVACUATION_MINUTE - 5)
+        self.llm.actions = "ACTIONS:\nWAIT 30m"
+        self.engine.play("wait a while")
+        block = self.world_block()
+        self.assertIn(self.content("stage_evacuation"), block)
+        self.assertNotIn(self.content("stage_broadcast"), block)
+
+    def test_the_zone_the_turn_ends_in_is_in_the_world_block(self):
+        self.engine.game.narrative.discovered_flags.add("roof_tank")
+        self.engine.game.npcs["npc_marcus"].current_location_id = "zone_street"
+        self.engine.play("go out")
+        self.assertEqual(self.engine.game.player.current_location_id, "zone_building")
+        self.assertIn(self.content("roof_tank"), self.world_block())
+
+    def test_a_flag_discovered_this_turn_is_in_the_world_block(self):
+        gm = self.engine.game
+        gm.player.current_location_id = "zone_neighborhood"
+        gm.world.outbreak_started_at = 0
+        adjust_regard(gm, "npc_jen", trust=8)
+        self.llm.actions = "ACTIONS:\nREQUEST Jen about outbreak_news"
+        self.engine.play("ask Jen about the news")
+        self.assertIn("apocalypse_cause", gm.narrative.discovered_flags)
+        self.assertIn(self.content("apocalypse_cause"), self.world_block())
+
+    def test_the_hits_are_selected_once_after_the_plan_resolves(self):
+        order: list[str] = []
+        real_resolve = engine_module.SimulationCore.resolve
+        real_select = engine_module.select_lore
+
+        def resolve(core, *args, **kwargs):
+            order.append("resolve")
+            return real_resolve(core, *args, **kwargs)
+
+        def select(*args, **kwargs):
+            order.append("select")
+            return real_select(*args, **kwargs)
+
+        with (
+            mock.patch.object(engine_module.SimulationCore, "resolve", resolve),
+            mock.patch.object(engine_module, "select_lore", select),
+        ):
+            self.engine.play("go out")
+        self.assertEqual(order, ["resolve", "select"])
+
+    def test_the_retry_and_options_prompts_get_the_same_hits(self):
+        self.llm = SequencedNarrator(
+            [self.NO_OPTIONS, "STORY:\nA retry.", self.OPTIONS_ONLY],
+            actions=MOVE_OUT_ACTIONS,
+        )
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
+        cast(FakeFactChecker, self.engine.factcheck).results = [["a conflict"], []]
+        with (
+            mock.patch.object(
+                engine_module.SimulationCore, "resolve", return_value=["z1 staggers back."]
+            ),
+            mock.patch.object(
+                engine_module.ContextBuilder,
+                "build_narrator_prompt",
+                autospec=True,
+                return_value="prompt",
+            ) as build,
+        ):
+            self.engine.play("go out")
+
+        calls = build.call_args_list
+        self.assertEqual(len(calls), 3)
+        first = calls[0].kwargs["lore"]
+        self.assertTrue(first)
+
+        for call in calls[1:]:
+            self.assertIs(call.kwargs["lore"], first)
 
 
 def steps(events: list[dict]) -> list[str]:

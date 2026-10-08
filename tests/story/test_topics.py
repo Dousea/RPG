@@ -2,6 +2,7 @@
 
 import unittest
 
+from data.story.beats import STORY_BEATS
 from data.story.quests import build_starting_quests
 from data.story.topics import TOPICS
 from managers.game import GameManager
@@ -9,14 +10,11 @@ from managers.validator import ActionValidator, Rejected
 from modules.action.parser import parse_action_line
 from modules.action.types import RequestAction
 from modules.character.state import CharacterTrust
-from modules.story.beats import OutbreakStarted
+from modules.story.beats import DiscoverFlag, FlagDiscovered, OutbreakStarted
 from modules.story.quest import QuestStatus
 from tests.support import adjust_regard, simulate
 
-NEWS = (
-    "The news is calling it the zombie infection. Bites spread it, and the ones who "
-    "die from it get back up."
-)
+NEWS = "The news calls it the Ashby fever. Bites spread it, and the ones who die of it get back up."
 
 
 def jen_game(*, outbreak: bool = True, trust: int = 10) -> GameManager:
@@ -32,8 +30,101 @@ def jen_game(*, outbreak: bool = True, trust: int = 10) -> GameManager:
 REQUEST_NEWS = RequestAction(npc_name="Jen", request="about", argument="outbreak_news")
 
 
+TENTATIVE, SOLID = CharacterTrust.TENTATIVE, CharacterTrust.SOLID
+FACT_CLINIC_REGULARS = (
+    "The clinic's study people came in on payday, a bandage in the crook of every arm. "
+    "Lately they'd looked grey, and one fell asleep at the counter."
+)
+FACT_EMMA_BROTHER = (
+    "Her brother Danny took the clinic's paid study for rent money. "
+    "He stopped answering two days before the sirens."
+)
+FACT_ROOF_TANK = (
+    "The roof tank holds the building's water after the mains go. "
+    "The valve's in the boiler room; he has the key."
+)
+FACT_JEN_MOTHER = (
+    "Her mother is a nurse at St. Agnes. Her last texts said the first fever patients all had "
+    "the same bandage in the crook of the arm, and that staff were told to say nothing. "
+    "Then they stopped."
+)
+FACT_MARCUS_PORT = (
+    "He worked the container terminal for twenty years. A friend still there says the "
+    "quarantined ship's crew had a common flu, and not one of them has turned."
+)
+FACT_MARCUS_TENANTS = (
+    "The Novaks down the hall left in a hurry the week before the sirens: Tomas had a fever "
+    "that wouldn't break, and his wife drove him to St. Agnes. They never came back."
+)
+FACT_EMMA_FLYERS = (
+    "She designed the study's recruitment flyers for a client called Velloran: "
+    '"Paid volunteers wanted. Earn while you heal." Danny saw them on her desk and signed up.'
+)
+
+# topic id: (npc, requires, min trust, gloss, fact, flag it discovers)
+WIDER_TOPICS = {
+    "outbreak_news": ("npc_jen", OutbreakStarted(), TENTATIVE, None, NEWS, "apocalypse_cause"),
+    "clinic_regulars": (
+        "npc_jen",
+        None,
+        TENTATIVE,
+        "what Jen has noticed about the clinic's regulars",
+        FACT_CLINIC_REGULARS,
+        "clinic_odd",
+    ),
+    "emma_brother": (
+        "npc_emma",
+        OutbreakStarted(),
+        SOLID,
+        "Emma's brother",
+        FACT_EMMA_BROTHER,
+        "trial_rumour",
+    ),
+    "roof_tank": (
+        "npc_marcus",
+        FlagDiscovered("cordon"),
+        SOLID,
+        "the building's water tank",
+        FACT_ROOF_TANK,
+        "roof_tank",
+    ),
+    "jen_mother": (
+        "npc_jen",
+        OutbreakStarted(),
+        TENTATIVE,
+        "Jen's mother at the hospital",
+        FACT_JEN_MOTHER,
+        "hospital_texts",
+    ),
+    "marcus_port": (
+        "npc_marcus",
+        FlagDiscovered("apocalypse_cause"),
+        TENTATIVE,
+        "what Marcus heard from the port",
+        FACT_MARCUS_PORT,
+        "ship_doubt",
+    ),
+    "marcus_tenants": (
+        "npc_marcus",
+        None,
+        TENTATIVE,
+        "the neighbours who left",
+        FACT_MARCUS_TENANTS,
+        "novaks_left",
+    ),
+    "emma_flyers": (
+        "npc_emma",
+        FlagDiscovered("trial_rumour"),
+        SOLID,
+        "the work Emma did for the study",
+        FACT_EMMA_FLYERS,
+        "study_flyers",
+    ),
+}
+
+
 class TopicRowTests(unittest.TestCase):
-    """llm-contract: Topics: the one starting topic."""
+    """llm-contract: Topics: the starting topic."""
 
     def test_outbreak_news_is_jens_and_needs_the_outbreak_and_tentative_trust(self):
         topic = TOPICS["outbreak_news"]
@@ -43,8 +134,24 @@ class TopicRowTests(unittest.TestCase):
         self.assertEqual(topic.fact, NEWS)
         self.assertEqual(topic.discovers, "apocalypse_cause")
 
-    def test_the_registry_has_exactly_one_row(self):
-        self.assertEqual(list(TOPICS), ["outbreak_news"])
+    def test_the_registry_holds_the_eight_topics(self):
+        self.assertEqual(list(TOPICS), list(WIDER_TOPICS))
+
+    def test_each_topic_holds_its_npc_requirement_trust_fact_and_flag(self):
+        for topic_id, (npc, requires, trust, gloss, fact, flag) in WIDER_TOPICS.items():
+            with self.subTest(topic_id):
+                topic = TOPICS[topic_id]
+                self.assertEqual(topic.npc_id, npc)
+                self.assertEqual(topic.requires, requires)
+                self.assertEqual(topic.min_trust, trust)
+                if gloss is not None:
+                    self.assertEqual(topic.gloss, gloss)
+                self.assertEqual(topic.fact, fact)
+                self.assertEqual(topic.discovers, flag)
+
+    def test_no_fact_holds_a_number(self):
+        for topic in TOPICS.values():
+            self.assertNotRegex(topic.fact, r"\d", topic.topic_id)
 
     def test_the_parser_reads_an_about_request_with_a_topic_id(self):
         self.assertEqual(parse_action_line("REQUEST Jen about outbreak_news"), REQUEST_NEWS)
@@ -121,8 +228,13 @@ class RequestAboutTests(unittest.TestCase):
 class QuestKeysAreProducedTests(unittest.TestCase):
     """The starting quests can only complete through the engine's own producers."""
 
-    def test_every_discover_objective_is_revealed_by_a_topic(self):
-        revealed = {topic.discovers for topic in TOPICS.values()}
+    def test_every_discover_objective_is_revealed_by_a_topic_or_a_beat(self):
+        revealed = {topic.discovers for topic in TOPICS.values()} | {
+            effect.flag
+            for beat in STORY_BEATS.values()
+            for effect in beat.effects
+            if isinstance(effect, DiscoverFlag)
+        }
         for quest in build_starting_quests().values():
             for objective in quest.objectives:
                 if objective.startswith("discover:"):

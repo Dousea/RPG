@@ -59,6 +59,7 @@ KITCHEN_COUNTER_CONTENTS = (  # carrying-and-loot: the home kitchen counter
     "item_frying_pan",
 )
 WARDROBE_CONTENTS = ("item_black_jacket", "item_schoolbag")  # carrying-and-loot: the home wardrobe
+STUDY_BINDER_CONTENTS = ("item_study_binder",)  # world-lore: the clinic's filing cabinet
 
 ROOM_LAYOUTS: dict[str, tuple[RoomSpec, ...]] = {  # carrying-and-loot
     "zone_home": (
@@ -504,6 +505,13 @@ ROOM_LAYOUTS.update(  # carrying-and-loot: The rooms
                         "counter",
                         _COUNTER,
                         ("medicaloffice", "counter"),
+                    ),
+                    ContainerSpec(
+                        "clinic_filing_cabinet",
+                        "filing cabinet",
+                        "cabinet",
+                        ("cabinet", "files"),
+                        fixed=STUDY_BINDER_CONTENTS,
                     ),
                 ),
             ),

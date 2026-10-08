@@ -129,8 +129,17 @@ class AliasTests(unittest.TestCase):
         neighborhood = self.locations["zone_neighborhood"].aliases
         for word in ("pharmacy", "drugstore", "supermarket", "grocery store", "clinic"):
             self.assertNotIn(word, neighborhood)
-        for word in ("hospital", "coffee shop", "park", "shops"):
+        for word in ("coffee shop", "park", "shops"):
             self.assertIn(word, neighborhood)
+
+    def test_the_hospital_and_downtown_are_across_the_river_and_name_no_zone(self):
+        neighborhood = self.locations["zone_neighborhood"].aliases
+        for word in ("hospital", "downtown"):
+            self.assertNotIn(word, neighborhood)
+        for phrase in ("the hospital", "go to the hospital", "downtown"):
+            with self.subTest(phrase):
+                self.assertIsNone(self.resolve(phrase, "zone_neighborhood"))
+                self.assertIsNone(self.resolve(phrase, "zone_home"))
 
     def test_each_phrase_resolves_to_its_zone_from_the_neighborhood(self):
         phrases = {
@@ -143,7 +152,6 @@ class AliasTests(unittest.TestCase):
             "the hardware store": "zone_hardware",
             "the tool store": "zone_hardware",
             "the coffee shop": "zone_neighborhood",
-            "the hospital": "zone_neighborhood",
             "the park": "zone_neighborhood",
         }
         for phrase, zone_id in phrases.items():
@@ -233,7 +241,7 @@ ROOMS = {
     },
     "zone_clinic": {
         "exam_room": ["exam counter", "exam desk", "side table"],
-        "office": ["office desk", "office counter"],
+        "office": ["office desk", "office counter", "filing cabinet"],
         "supply_room": [
             "supply counter",
             "supply shelves",

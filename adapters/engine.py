@@ -39,6 +39,7 @@ from managers.mentions import labels, mentionables, picked
 from managers.plan import OpenChoice, bind_choices, open_choices, steps_of
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion, build_questions, plan_questions
+from managers.story.lore import LoreHit, select_lore
 from managers.world import item_ids
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import weather_summary
@@ -339,6 +340,7 @@ class GameEngine:
         if turn.nothing_parsed:
             narrated_facts = [NOTHING_DONE_FACT.format(name=looks.forename), *outcome_facts]
         context = ContextBuilder(manager)
+        lore = select_lore(manager, player_input, {})
         narrator_prompt = context.build_narrator_prompt(
             player_input,
             narrated_facts,
@@ -346,6 +348,7 @@ class GameEngine:
             max_chars=self._narrator_budget(),
             refused=core.refused_plan,
             finds=core.finds,
+            lore=lore,
         )
         emit({"type": "step", "step": "narrating"})
         try:
@@ -366,10 +369,18 @@ class GameEngine:
         parsed = self._reply(raw_response)
         questions = build_questions(manager, narrated_facts, core.refused_actions, core.found_items)
         parsed = self._fact_checked(
-            parsed, context, player_input, narrated_facts, deep_memories, questions, emit, core
+            parsed,
+            context,
+            player_input,
+            narrated_facts,
+            deep_memories,
+            questions,
+            emit,
+            core,
+            lore,
         )
         parsed = self._with_options(
-            parsed, context, player_input, narrated_facts, deep_memories, emit, core
+            parsed, context, player_input, narrated_facts, deep_memories, emit, core, lore
         )
         story_text = str(parsed["story"])
         options = list(parsed["options"])
@@ -444,6 +455,7 @@ class GameEngine:
         questions: list[StateQuestion],
         emit: TurnListener,
         core: SimulationCore,
+        lore: list[LoreHit],
     ) -> dict[str, Any]:
         """The narrator's reply, or its one retry when the story conflicts with the engine's state.
 
@@ -468,6 +480,7 @@ class GameEngine:
                 max_chars=self._narrator_budget() - len(block),
                 refused=core.refused_plan,
                 finds=core.finds,
+                lore=lore,
             )
             + block
         )
@@ -492,6 +505,7 @@ class GameEngine:
         deep_memories: list[str],
         emit: TurnListener,
         core: SimulationCore,
+        lore: list[LoreHit],
     ) -> dict[str, Any]:
         """The reply, with options from one follow-up call when it had no OPTIONS section.
 
@@ -510,6 +524,7 @@ class GameEngine:
                 max_chars=self._narrator_budget() - len(block),
                 refused=core.refused_plan,
                 finds=core.finds,
+                lore=lore,
             )
             + block
         )

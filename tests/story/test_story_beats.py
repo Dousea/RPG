@@ -4,7 +4,17 @@ import random
 import unittest
 from unittest import mock
 
-from data.story.beats import OUTBREAK_BEGINS_MINUTE, STORY_BEATS, Beat
+from data.items import ITEMS
+from data.story.beats import (
+    BROADCAST_LOOP_MINUTE,
+    CORDON_MINUTE,
+    EVACUATION_MINUTE,
+    OUTBREAK_BEGINS_MINUTE,
+    POWER_OUT_MINUTE,
+    STORY_BEATS,
+    WATER_OUT_MINUTE,
+    Beat,
+)
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.story.beats import holds
@@ -12,11 +22,15 @@ from modules.action.types import (
     AddGoalAction,
     Duration,
     MoveAction,
+    SearchAction,
     SleepAction,
+    TakeAction,
     TalkAction,
     WaitAction,
 )
 from modules.body.stats import CharacterStat
+from modules.character.equipment import CharacterHoldableSlot
+from modules.entity.item import ItemEntity
 from modules.story.beats import (
     AddNpcStatus,
     AllOf,
@@ -24,6 +38,7 @@ from modules.story.beats import (
     ClockAtOrPast,
     DiscoverFlag,
     FlagDiscovered,
+    ItemHeld,
     MoveNpc,
     OutbreakStarted,
     PlayerInZone,
@@ -47,7 +62,6 @@ class OutbreakBeatTests(unittest.TestCase):
         self.assertEqual(beat.effects, (StartOutbreak(),))
         self.assertEqual(beat.fact, SIRENS)
         self.assertTrue(beat.interrupts)
-        self.assertEqual(list(STORY_BEATS), ["outbreak_begins"])
 
     def test_minute_2760_is_day_three_at_six(self):
         gm = GameManager()
@@ -119,6 +133,133 @@ class OutbreakBeatTests(unittest.TestCase):
         facts = simulate(gm, AddGoalAction(horizon="short_term", goal_text="Rest"))
         self.assertEqual(gm.world.outbreak_started_at, 3000)
         self.assertIn(SIRENS, facts)
+
+
+STAGES = (
+    ("evacuation_announced", "evacuation", EVACUATION_MINUTE, 4260),
+    ("cordon", "cordon", CORDON_MINUTE, 7020),
+    ("broadcast_loop", "broadcast_loop", BROADCAST_LOOP_MINUTE, 11760),
+    ("power_out", "power_out", POWER_OUT_MINUTE, 19380),
+    ("water_out", "water_out", WATER_OUT_MINUTE, 28920),
+)
+
+
+class StageBeatTests(unittest.TestCase):
+    """world-lore: Stages."""
+
+    def test_the_registry_holds_the_outbreak_the_stages_and_the_binder(self):
+        self.assertEqual(
+            list(STORY_BEATS),
+            ["outbreak_begins", *(beat_id for beat_id, *_ in STAGES), "trial_files"],
+        )
+
+    def test_each_stage_is_a_quiet_clock_beat_that_sets_and_discovers_its_flag(self):
+        for beat_id, flag, constant, minute in STAGES:
+            with self.subTest(beat_id):
+                beat = STORY_BEATS[beat_id]
+                self.assertEqual(constant, minute)
+                self.assertEqual(beat.when, ClockAtOrPast(minute))
+                self.assertEqual(beat.effects, (SetFlag(flag), DiscoverFlag(flag)))
+                self.assertFalse(beat.interrupts)
+
+    def test_every_due_stage_fires_in_order_in_one_turn_without_interrupting(self):
+        gm = GameManager()
+        gm.advance_clock(WATER_OUT_MINUTE + 5)
+        gm.world.outbreak_started_at = 0
+        gm.world.fired_beats["outbreak_begins"] = 0
+        facts = simulate(gm, AddGoalAction("short_term", "rest"), rng=random.Random(1))
+        told = [STORY_BEATS[beat_id].fact for beat_id, *_ in STAGES]
+        positions = [facts.index(fact) for fact in told]
+        self.assertEqual(positions, sorted(positions))
+        for _, flag, *_ in STAGES:
+            self.assertIn(flag, gm.narrative.discovered_flags)
+            self.assertIs(gm.narrative.flags[flag], True)
+        self.assertFalse(any("interrupted" in fact for fact in facts))
+
+    def test_a_stage_fires_at_its_own_minute_inside_a_wait(self):
+        gm = GameManager()
+        gm.advance_clock(EVACUATION_MINUTE - 5)
+        simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
+        self.assertEqual(gm.world.fired_beats["evacuation_announced"], EVACUATION_MINUTE)
+        self.assertNotIn("cordon", gm.world.fired_beats)
+
+
+def clinic_office_game() -> GameManager:
+    gm = GameManager()
+    gm.player.current_location_id = "zone_clinic"
+    gm.player.current_room = "office"
+    simulate(gm, SearchAction(target_name="filing cabinet"))
+    return gm
+
+
+TAKE_BINDER = TakeAction(item_name="Study Binder", from_name="filing cabinet")
+
+
+class TrialFilesTests(unittest.TestCase):
+    """world-lore: The binder."""
+
+    def test_the_cabinet_holds_the_binder_alone(self):
+        gm = clinic_office_game()
+        office = gm.world.locations["zone_clinic"].rooms["office"]
+        cabinet = next(c for c in office.containers if c.container_id == "clinic_filing_cabinet")
+        self.assertEqual([e.item.id for e in cabinet.contents], ["item_study_binder"])
+        self.assertTrue(cabinet.fixed)
+
+    def test_taking_the_binder_fires_the_beat_and_discovers_the_truth(self):
+        gm = clinic_office_game()
+        facts = simulate(gm, TAKE_BINDER)
+        self.assertIn(STORY_BEATS["trial_files"].fact, facts)
+        self.assertIn("trial_truth", gm.narrative.discovered_flags)
+        self.assertIn("trial_files", gm.world.fired_beats)
+        self.assertFalse(STORY_BEATS["trial_files"].interrupts)
+
+    def test_the_beat_is_quiet_until_the_binder_is_taken(self):
+        gm = clinic_office_game()
+        simulate(gm, AddGoalAction("short_term", "look around"))
+        self.assertNotIn("trial_files", gm.world.fired_beats)
+
+    def test_dropping_the_binder_later_undoes_nothing(self):
+        gm = clinic_office_game()
+        simulate(gm, TAKE_BINDER)
+        gm.player.inventory.clear()
+        self.assertFalse(holds(ItemHeld("item_study_binder"), gm))
+        self.assertIn("trial_truth", gm.narrative.discovered_flags)
+
+
+class ItemHeldTests(unittest.TestCase):
+    """world-lore: The binder: `ItemHeld`."""
+
+    def test_it_holds_for_the_pack_a_bag_the_hands_and_worn_things(self):
+        binder = ITEMS["item_study_binder"]
+        wanted = ItemHeld("item_study_binder")
+        gm = GameManager()
+        self.assertFalse(holds(wanted, gm))
+
+        gm.player.inventory.append(ItemEntity(item=binder))
+        self.assertTrue(holds(wanted, gm))
+
+        gm.player.inventory.clear()
+        bag = ItemEntity(item=ITEMS["item_paper_bag"])
+        bag.contents.append(ItemEntity(item=binder))
+        gm.player.inventory.append(bag)
+        self.assertTrue(holds(wanted, gm))
+
+        gm.player.inventory.clear()
+        gm.player.equipment[CharacterHoldableSlot.RIGHT_HAND] = ItemEntity(item=binder)
+        self.assertTrue(holds(wanted, gm))
+
+        gm.player.equipment.clear()
+        jacket = ITEMS["item_black_jacket"]
+        gm.player.worn.clear()
+        self.assertFalse(holds(ItemHeld(jacket.id), gm))
+        gm.player.worn[jacket.body_location] = ItemEntity(item=jacket)  # type: ignore[attr-defined]
+        self.assertTrue(holds(ItemHeld(jacket.id), gm))
+
+    def test_a_save_that_holds_the_binder_already_satisfies_the_beat(self):
+        gm = GameManager()
+        gm.player.inventory.append(ItemEntity(item=ITEMS["item_study_binder"]))
+        simulate(gm, AddGoalAction("short_term", "rest"))
+        self.assertIn("trial_truth", gm.narrative.discovered_flags)
 
 
 class BeatEvaluationTests(unittest.TestCase):

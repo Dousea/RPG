@@ -383,7 +383,9 @@ says, and the flag it reveals.
 
 | Topic | NPC | Requires | Min trust | Fact | Reveals |
 | --- | --- | --- | --- | --- | --- |
-| `outbreak_news` | Jen | the outbreak has started | Tentative | "The news is calling it the zombie infection. Bites spread it, and the ones who die from it get back up." | `apocalypse_cause` |
+| `outbreak_news` | Jen | the outbreak has started | Tentative | "The news calls it the Ashby fever. Bites spread it, and the ones who die of it get back up." | `apocalypse_cause` |
+
+Seven more topics, with the lore they reveal, are in [world-lore](world-lore.md#topics).
 
 ## Story beats
 
@@ -391,8 +393,8 @@ says, and the flag it reveals.
 interrupts. Each beat fires once, and `World.fired_beats` records the minute.
 
 - **Conditions:** the clock at or past a minute; the player in a zone; a flag
-  discovered; the outbreak started; a named beat fired at least N minutes ago; all of
-  a list.
+  discovered; the outbreak started; a named beat fired at least N minutes ago; the
+  player carrying a named item (in the pack, a bag, the hands or worn); all of a list.
 - **Effects:** start the outbreak; set a flag; discover a flag; move an NPC; add or
   remove an NPC status. Moving an NPC checks nothing: whoever calls it applies the
   rules about who may go where.
@@ -407,6 +409,8 @@ interrupts. Each beat fires once, and `World.fired_beats` records the minute.
 | Beat | When | Effects | Fact | Interrupts |
 | --- | --- | --- | --- | --- |
 | `outbreak_begins` | day 3, 06:00 (minute 2760) | start the outbreak | "Sirens start up across the city and don't stop." | yes |
+
+The five stage beats and `trial_files` are in [world-lore](world-lore.md); none interrupts.
 
 The narrator's time block says "before the outbreak" or "outbreak day N" from the
 world's outbreak start.
@@ -444,7 +448,7 @@ found. Naming a non-event would put the words to avoid last in the prompt.
 | `[DEEP MEMORY]` / `[SUMMARY OF PAST EVENTS]` / `[RECENT EVENTS]` | memory |
 | `[LAST SCENE]` | the lines spoken in the story the player last read, one per line with the speaker when the sentence names one, with a note that the outcomes and current blocks win; omitted when nobody spoke |
 | `[TIME AND WEATHER]` | day and clock time, time of day, "before the outbreak" or "outbreak day N", the weather in words |
-| `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, discovered flags |
+| `[CURRENT LOCATION]` | zone, spot, description, sheltered or not, and `[WORLD]` ([world-lore](world-lore.md)) |
 | `[ITEMS IN CURRENT LOCATION]` / `[NEARBY LOCATIONS]` | items and exits |
 | `[DOORS AND WINDOWS]` | as the parser sees it |
 | `[CONDITION]` | status effects by name and level, asleep, sneaking, conditions an item put on the character |
@@ -623,10 +627,11 @@ it decided and saved.
   reply cap - 200) x characters per token - the system prompt's length`. The ratio is
   the latest reply's characters sent over its reported prompt tokens, 3.5 before any
   reply has one, and unchanged by a reply without usage. Over budget, the prompt
-  drops deep-memory entries (last recalled first), then summaries (oldest first),
+  drops deep-memory entries (last recalled first), then lore lines (see
+  [world-lore](world-lore.md#selection-and-the-cap)), then summaries (oldest first),
   then `[LAST SCENE]`, then recent events (oldest first, never the newest), checking
-  after each drop. Current-state blocks, `[OUTCOMES]` and the player's input are never
-  dropped; an emptied section keeps its header and placeholder. One warning per
+  after each drop. The rest of the current state (the stage line included),
+  `[OUTCOMES]` and the player's input are never dropped; an emptied section keeps its header and placeholder. One warning per
   prompt lists what was dropped, and another says when it still does not fit.
 - `[WORN]` lists only worn clothing; what is held shows as "(in hands)" in
   `[INVENTORY]` and on the narrator's Equipment line.

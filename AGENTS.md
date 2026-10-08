@@ -45,7 +45,7 @@ in one doc; the others point to it.
 | zombies, corpses | `zombies`, `zombie-lifecycle` | `managers/zombies/`, `managers/corpses/` |
 | combat | `melee` | `managers/combat/` |
 | loot, carry | `carrying-and-loot` | `managers/world/containers.py`, `managers/carry.py` |
-| story | `llm-contract` | `managers/story/`, `adapters/llm.py` |
+| story | `llm-contract`, `world-lore` | `managers/story/`, `adapters/llm.py` |
 
 `data/zombies/{clothing,outfits,loot}.py` and `data/loot/tables.py` are
 generated: change the generator's output, not the file by hand.

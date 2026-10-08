@@ -1,0 +1,773 @@
+{
+  "entries": [
+    {
+      "id": "canon_city",
+      "comment": "canon: the city",
+      "keys": [],
+      "content": "The game is set in Calder, a river port city of a few hundred thousand on the Sallow River, in early October.",
+      "constant": true,
+      "order": 10,
+      "position": "system"
+    },
+    {
+      "id": "canon_neighbourhood",
+      "comment": "canon: Ashby",
+      "keys": [],
+      "content": "The player lives in Ashby, an old neighbourhood of brick walk-ups on the east bank, cut off from downtown and the west bank by the river and its three bridges.",
+      "constant": true,
+      "order": 20,
+      "position": "system"
+    },
+    {
+      "id": "canon_shops",
+      "comment": "canon: Ashby's shops, the names the zones don't carry",
+      "keys": [],
+      "content": "Ashby's shops are Haddad's corner store, Halfmoon Coffee, Pell's Pharmacy, the Ashby Community Clinic, a FreshWay supermarket and Dunmore Hardware.",
+      "constant": true,
+      "order": 30,
+      "position": "system"
+    },
+    {
+      "id": "canon_hospital",
+      "comment": "canon: the hospital",
+      "keys": [],
+      "content": "St. Agnes, the city hospital, is downtown, across the river.",
+      "constant": true,
+      "order": 40,
+      "position": "system"
+    },
+    {
+      "id": "canon_no_rescue",
+      "comment": "canon: nobody is coming",
+      "keys": [],
+      "content": "There is no cure, no rescue coming for one person, and no one in charge who knows more than the radio says.",
+      "constant": true,
+      "order": 50,
+      "position": "system"
+    },
+    {
+      "id": "canon_offmap",
+      "comment": "canon: places off the map",
+      "keys": [],
+      "content": "Places in [WORLD] that are not in [NEARBY LOCATIONS] can be heard of, seen from a distance or talked about, never reached this turn.",
+      "constant": true,
+      "order": 60,
+      "position": "system"
+    },
+    {
+      "id": "canon_cause",
+      "comment": "canon: the cause is unknown unless [WORLD] says",
+      "keys": [],
+      "content": "Nobody in the story knows why the dead get up unless [WORLD] says so.",
+      "constant": true,
+      "order": 70,
+      "position": "system"
+    },
+
+    {
+      "id": "stage_news",
+      "comment": "stage: the start",
+      "keys": [],
+      "content": "Calder's news is full of the \"Ashby fever\": high fevers, confusion, and patients biting staff at St. Agnes. The mayor calls it a bad flu season.",
+      "constant": true,
+      "order": 0,
+      "position": "world",
+      "replaced_by": "stage_broadcast",
+      "stage": true
+    },
+    {
+      "id": "stage_broadcast",
+      "comment": "stage: the sirens",
+      "keys": [],
+      "content": "The emergency broadcast says to stay indoors, lock the doors and keep away from anyone feverish. The police have stopped answering.",
+      "constant": true,
+      "order": 0,
+      "position": "world",
+      "when": {"outbreak": true},
+      "replaced_by": "stage_evacuation",
+      "stage": true
+    },
+    {
+      "id": "stage_evacuation",
+      "comment": "stage: the evacuation point",
+      "keys": [],
+      "content": "The radio names Calder Stadium on the west bank as the evacuation point; buses are to cross the bridges.",
+      "constant": true,
+      "order": 0,
+      "position": "world",
+      "when": {"flag": "evacuation"},
+      "replaced_by": "stage_cordon",
+      "stage": true
+    },
+    {
+      "id": "stage_cordon",
+      "comment": "stage: the bridges close",
+      "keys": [],
+      "content": "The bridges are closed by the army. The east bank is cut off, and the radio calls the evacuation \"suspended\".",
+      "constant": true,
+      "order": 0,
+      "position": "world",
+      "when": {"flag": "cordon"},
+      "replaced_by": "stage_loop",
+      "stage": true
+    },
+    {
+      "id": "stage_loop",
+      "comment": "stage: the recorded message",
+      "keys": [],
+      "content": "The radio repeats one recorded message: stay indoors, wait for instructions. No live voice has come on in days.",
+      "constant": true,
+      "order": 0,
+      "position": "world",
+      "when": {"flag": "broadcast_loop"},
+      "stage": true
+    },
+    {
+      "id": "power_out",
+      "comment": "additive: the power",
+      "keys": [],
+      "content": "The power is out across the city.",
+      "constant": true,
+      "order": 10,
+      "position": "world",
+      "when": {"flag": "power_out"}
+    },
+    {
+      "id": "water_out",
+      "comment": "additive: the water",
+      "keys": [],
+      "content": "The taps are dry.",
+      "constant": true,
+      "order": 10,
+      "position": "world",
+      "when": {"flag": "water_out"}
+    },
+
+    {
+      "id": "apocalypse_cause",
+      "comment": "secret 1: Jen's outbreak_news",
+      "keys": [],
+      "content": "The news calls it the Ashby fever. Bites spread it, and the ones who die of it get back up.",
+      "constant": true,
+      "order": 20,
+      "position": "world",
+      "when": {"flag": "apocalypse_cause"}
+    },
+    {
+      "id": "trial_truth",
+      "comment": "secret: the study binder",
+      "keys": ["zone_clinic", "Velloran", "VX-7", "study", "binder", "ship"],
+      "content": "The clinic's study binder: Velloran Biologics' drug VX-7 keeps nerves firing after death, and the first fevers were its volunteers.",
+      "constant": false,
+      "order": 30,
+      "position": "world",
+      "when": {"flag": "trial_truth"},
+      "sticky": 5
+    },
+    {
+      "id": "danny_in_binder",
+      "comment": "secret: Emma's brother is on the list (needs both pieces)",
+      "keys": ["npc_emma", "Danny", "Hale", "brother"],
+      "content": "Danny Hale, Emma's brother, is on the binder's list of volunteers, among the first to start the drug.",
+      "constant": false,
+      "order": 32,
+      "position": "world",
+      "when": {"all": [{"flag": "trial_truth"}, {"flag": "trial_rumour"}]},
+      "sticky": 3
+    },
+    {
+      "id": "novak_in_binder",
+      "comment": "secret: the neighbour who left is on the list (needs both pieces)",
+      "keys": ["zone_flat_tenant", "Novak", "Novaks"],
+      "content": "Tomas Novak from down the hall is on the binder's list too; his fever chart starts a week before the sirens.",
+      "constant": false,
+      "order": 33,
+      "position": "world",
+      "when": {"all": [{"flag": "trial_truth"}, {"flag": "novaks_left"}]},
+      "sticky": 3
+    },
+    {
+      "id": "velloran_memo",
+      "comment": "secret: Velloran knew; replaces the public Velloran entry",
+      "keys": ["Velloran", "memo", "company", "knew"],
+      "content": "In the binder's back pocket is a Velloran memo telling the clinic to stop enrolling and tell no one, sent a week before the sirens.",
+      "constant": false,
+      "order": 34,
+      "position": "world",
+      "when": {"flag": "trial_truth"},
+      "sticky": 3
+    },
+    {
+      "id": "imrie_truth",
+      "comment": "secret: the clinic's doctor; replaces clinic_public",
+      "keys": ["zone_clinic", "Imrie", "doctor"],
+      "content": "Dr. Imrie signed the clinic up for Velloran's study. Her last pages in the binder are her own temperatures, written in a shaking hand.",
+      "constant": false,
+      "order": 36,
+      "position": "world",
+      "when": {"flag": "trial_truth"},
+      "sticky": 3
+    },
+    {
+      "id": "merrow_star",
+      "comment": "public: the ship before anyone blames it",
+      "keys": ["ship", "Merrow", "quarantine", "port"],
+      "content": "The news keeps showing the container ship Merrow Star, held at anchor off the terminal since the week before, with figures in white suits on its deck.",
+      "constant": false,
+      "order": 40,
+      "position": "world",
+      "replaced_by": "ship_story"
+    },
+    {
+      "id": "ship_story",
+      "comment": "public story: the ship (after apocalypse_cause)",
+      "keys": ["zone_street", "zone_neighborhood", "ship", "port", "Merrow"],
+      "content": "Most people blame the container ship held at the port; it was the first thing the news showed.",
+      "constant": false,
+      "order": 40,
+      "position": "world",
+      "when": {"flag": "apocalypse_cause"},
+      "replaced_by": "ship_story_wrong",
+      "sticky": 3
+    },
+    {
+      "id": "ship_story_wrong",
+      "comment": "the ship story, once the binder is found",
+      "keys": ["zone_street", "zone_neighborhood", "ship", "port", "Merrow"],
+      "content": "The ship was a story. It started at the Ashby clinic.",
+      "constant": false,
+      "order": 40,
+      "position": "world",
+      "when": {"flag": "trial_truth"},
+      "sticky": 3
+    },
+    {
+      "id": "ship_doubt",
+      "comment": "Marcus's marcus_port: the ship's crew never turned",
+      "keys": ["npc_marcus", "ship", "Merrow", "crew", "port"],
+      "content": "Marcus's friend at the terminal says the Merrow Star's crew had a common flu, and not one of them has turned.",
+      "constant": false,
+      "order": 45,
+      "position": "world",
+      "when": {"flag": "ship_doubt"},
+      "sticky": 3
+    },
+    {
+      "id": "hospital_texts",
+      "comment": "Jen's jen_mother: the nurse's texts",
+      "keys": ["npc_jen", "Agnes", "hospital", "nurse", "mother"],
+      "content": "Jen's mother, a nurse at St. Agnes, texted that the first fever patients all had the same bandage in the crook of the arm, and that staff were told to say nothing. Then her texts stopped.",
+      "constant": false,
+      "order": 45,
+      "position": "world",
+      "when": {"flag": "hospital_texts"},
+      "sticky": 3
+    },
+    {
+      "id": "clinic_odd",
+      "comment": "Jen's clinic_regulars",
+      "keys": ["zone_clinic", "npc_jen", "clinic", "study"],
+      "content": "Jen says the people from the clinic's paid study came in for coffee on payday, arms bandaged at the elbow.",
+      "constant": false,
+      "order": 50,
+      "position": "world",
+      "when": {"flag": "clinic_odd"},
+      "sticky": 3
+    },
+    {
+      "id": "trial_rumour",
+      "comment": "Emma's emma_brother",
+      "keys": ["npc_emma", "zone_clinic", "Danny", "study"],
+      "content": "Emma's younger brother Danny signed up for the clinic's paid study for rent money and stopped answering two days before the sirens.",
+      "constant": false,
+      "order": 50,
+      "position": "world",
+      "when": {"flag": "trial_rumour"},
+      "sticky": 3
+    },
+    {
+      "id": "study_flyers",
+      "comment": "Emma's emma_flyers: her guilt",
+      "keys": ["npc_emma", "flyer", "flyers", "Velloran", "Danny"],
+      "content": "Emma designed the study's recruitment flyers for a client called Velloran: \"Paid volunteers wanted. Earn while you heal.\" Danny saw them on her desk and signed up.",
+      "constant": false,
+      "order": 50,
+      "position": "world",
+      "when": {"flag": "study_flyers"},
+      "sticky": 3
+    },
+    {
+      "id": "novaks_left",
+      "comment": "Marcus's marcus_tenants: the flat left in a hurry",
+      "keys": ["zone_flat_tenant", "Novak", "Novaks", "neighbours"],
+      "content": "The Novaks down the hall left in a hurry the week before the sirens: Tomas had a fever that wouldn't break, and his wife drove him to St. Agnes. They never came back.",
+      "constant": false,
+      "order": 55,
+      "position": "world",
+      "when": {"flag": "novaks_left"},
+      "sticky": 3
+    },
+    {
+      "id": "roof_tank",
+      "comment": "Marcus's roof_tank",
+      "keys": ["zone_building", "npc_marcus", "water", "roof", "tank"],
+      "content": "Marcus says the building's roof tank holds water after the mains go, if someone opens the valve.",
+      "constant": false,
+      "order": 60,
+      "position": "world",
+      "when": {"flag": "roof_tank"},
+      "sticky": 3
+    },
+
+    {
+      "id": "fever_news",
+      "comment": "public: the fever's signs, before the cause is known",
+      "keys": ["fever", "symptoms", "flu", "sick", "infected"],
+      "content": "The news lists the Ashby fever's signs: a fever that won't break, grey skin, confusion, and biting that doctors put down to delirium.",
+      "constant": false,
+      "order": 70,
+      "position": "world",
+      "replaced_by": "apocalypse_cause"
+    },
+    {
+      "id": "the_dead",
+      "comment": "public: what people call them",
+      "keys": ["biter", "biters", "undead", "the dead", "infected"],
+      "content": "People on the east bank call them biters. The radio says \"the infected\" and tells everyone not to approach the sick, not even family.",
+      "constant": false,
+      "order": 72,
+      "position": "world",
+      "when": {"outbreak": true}
+    },
+    {
+      "id": "calder_city",
+      "comment": "public: the city",
+      "keys": ["Calder", "downtown", "university", "west bank"],
+      "content": "Calder is a working river city: the container terminal and rail yards on the east bank, downtown's towers and the university on the west bank.",
+      "constant": false,
+      "order": 80,
+      "position": "world"
+    },
+    {
+      "id": "ashby_history",
+      "comment": "public: Ashby's past",
+      "keys": ["Ashby", "cannery", "history", "east bank"],
+      "content": "Ashby grew up around the docks and the old cannery. Its walk-ups were built for dockworkers, the cannery is lofts now, and the west bank calls Ashby the wrong side of the river.",
+      "constant": false,
+      "order": 82,
+      "position": "world"
+    },
+    {
+      "id": "the_building",
+      "comment": "public: the player's building",
+      "keys": ["landlord", "radiator", "radiators", "lift", "elevator", "rent"],
+      "content": "The building is an old brick walk-up with a lift that sticks, radiators that knock all winter and a landlord nobody has met; the super keeps it running.",
+      "constant": false,
+      "order": 84,
+      "position": "world"
+    },
+    {
+      "id": "vacant_flat",
+      "comment": "public: the empty flat",
+      "keys": ["zone_flat_vacant"],
+      "content": "The vacant flat has stood empty since the summer, when its last tenant stopped paying and left one night.",
+      "constant": false,
+      "order": 86,
+      "position": "world"
+    },
+    {
+      "id": "corner_store",
+      "comment": "public: the corner store",
+      "keys": ["zone_bodega", "Haddad", "bodega", "corner store"],
+      "content": "Mr. Haddad chained the corner store's door from inside after a crowd stripped half his shelves, and left by the back to his daughter's. He hasn't been back.",
+      "constant": false,
+      "order": 86,
+      "position": "world"
+    },
+    {
+      "id": "halfmoon",
+      "comment": "public: the coffee shop",
+      "keys": ["Halfmoon", "coffee", "cafe", "coffee shop"],
+      "content": "Halfmoon Coffee opened last year, the first sign Ashby was getting expensive. Dockworkers come in at dawn and students after the morning rush.",
+      "constant": false,
+      "order": 86,
+      "position": "world"
+    },
+    {
+      "id": "pharmacy",
+      "comment": "public: the pharmacy",
+      "keys": ["zone_pharmacy", "Pell", "pharmacist"],
+      "content": "Old Mrs. Pell pulled the pharmacy's shutters down after a crowd came for fever medicine and paracetamol ran out, and went home to wait it out.",
+      "constant": false,
+      "order": 86,
+      "position": "world"
+    },
+    {
+      "id": "supermarket",
+      "comment": "public: the supermarket",
+      "keys": ["zone_supermarket", "FreshWay"],
+      "content": "The FreshWay locked its doors after shoppers fought over bottled water; the staff went out the loading bay and the manager took the keys.",
+      "constant": false,
+      "order": 86,
+      "position": "world"
+    },
+    {
+      "id": "hardware",
+      "comment": "public: the hardware store",
+      "keys": ["zone_hardware", "Dunmore"],
+      "content": "Dunmore Hardware has been in the same family since the docks were busy. Old Walt Dunmore locked up and drove upriver to his son's before the sirens.",
+      "constant": false,
+      "order": 86,
+      "position": "world"
+    },
+    {
+      "id": "clinic_public",
+      "comment": "public: the clinic; replaced once the binder is found",
+      "keys": ["zone_clinic", "Imrie", "doctor"],
+      "content": "Dr. Ruth Imrie has run the Ashby Community Clinic for as long as anyone remembers; people who can't pay go to her.",
+      "constant": false,
+      "order": 86,
+      "position": "world",
+      "replaced_by": "imrie_truth"
+    },
+    {
+      "id": "velloran_public",
+      "comment": "public: Velloran, before the memo",
+      "keys": ["Velloran", "drug company"],
+      "content": "Velloran Biologics is Calder's big drug company, with a glass campus on the west bank and its name across the stadium scoreboard.",
+      "constant": false,
+      "order": 86,
+      "position": "world",
+      "replaced_by": "velloran_memo"
+    },
+    {
+      "id": "river",
+      "comment": "public: the river, before the cordon",
+      "keys": ["river", "Sallow", "swim", "boat", "ferry"],
+      "content": "The Sallow is wide and brown here, cold in October and too fast to swim. Barges and the old river ferry crossed it all day.",
+      "constant": false,
+      "order": 80,
+      "position": "world",
+      "replaced_by": "river_cordon"
+    },
+    {
+      "id": "river_cordon",
+      "comment": "the river after the cordon",
+      "keys": ["river", "Sallow", "swim", "boat", "ferry"],
+      "content": "Nothing moves on the Sallow now but army boats with searchlights, and things floating downstream that nobody looks at twice.",
+      "constant": false,
+      "order": 80,
+      "position": "world",
+      "when": {"flag": "cordon"}
+    },
+    {
+      "id": "bridges",
+      "comment": "public: the bridges, before the evacuation",
+      "keys": ["bridge", "bridges", "Ferry Street", "Harbour Bridge", "rail bridge"],
+      "content": "Three bridges join Ashby to the rest of Calder: the old iron Ferry Street Bridge, the Harbour Bridge with the highway on it, and the rail bridge.",
+      "constant": false,
+      "order": 74,
+      "position": "world",
+      "replaced_by": "bridges_evacuation"
+    },
+    {
+      "id": "bridges_evacuation",
+      "comment": "the bridges during the evacuation",
+      "keys": ["bridge", "bridges", "Ferry Street", "Harbour Bridge", "rail bridge"],
+      "content": "All three bridges are jammed with cars heading west for the stadium; people are walking between them with suitcases.",
+      "constant": false,
+      "order": 74,
+      "position": "world",
+      "when": {"flag": "evacuation"},
+      "replaced_by": "bridges_cordon"
+    },
+    {
+      "id": "bridges_cordon",
+      "comment": "the bridges after the cordon",
+      "keys": ["bridge", "bridges", "Ferry Street", "Harbour Bridge", "rail bridge"],
+      "content": "Soldiers hold the bridges behind trucks and wire. The radio says anyone crossing will be turned back; people say worse.",
+      "constant": false,
+      "order": 74,
+      "position": "world",
+      "when": {"flag": "cordon"},
+      "replaced_by": "bridges_burnt",
+      "sticky": 2
+    },
+    {
+      "id": "bridges_burnt",
+      "comment": "the bridges, three days into the cordon",
+      "keys": ["bridge", "bridges", "Ferry Street", "Harbour Bridge", "rail bridge"],
+      "content": "The Ferry Street Bridge burned in the middle after the cordon, and the army let it. The other two are held and lit all night.",
+      "constant": false,
+      "order": 74,
+      "position": "world",
+      "when": {"beat": "cordon", "minutes": 4320},
+      "sticky": 2
+    },
+    {
+      "id": "army_evac",
+      "comment": "the army during the evacuation",
+      "keys": ["army", "soldier", "soldiers", "military", "troops"],
+      "content": "Army trucks escort the stadium buses. Soldiers in masks wave cars across the bridges and take temperatures on the far side.",
+      "constant": false,
+      "order": 76,
+      "position": "world",
+      "when": {"flag": "evacuation"},
+      "replaced_by": "army_cordon"
+    },
+    {
+      "id": "army_cordon",
+      "comment": "the army after the cordon",
+      "keys": ["army", "soldier", "soldiers", "military", "troops", "gunfire", "shots"],
+      "content": "The soldiers at the bridges wear masks and talk to no one. At night, gunfire from the Harbour Bridge carries across Ashby in short bursts.",
+      "constant": false,
+      "order": 76,
+      "position": "world",
+      "when": {"flag": "cordon"}
+    },
+    {
+      "id": "helicopters",
+      "comment": "helicopters, the first days of the cordon",
+      "keys": ["helicopter", "helicopters", "chopper", "rescue"],
+      "content": "Helicopters cross the river low at dawn and dusk. None has ever landed on the east bank.",
+      "constant": false,
+      "order": 78,
+      "position": "world",
+      "when": {"flag": "cordon"},
+      "replaced_by": "helicopters_gone"
+    },
+    {
+      "id": "helicopters_gone",
+      "comment": "helicopters, later",
+      "keys": ["helicopter", "helicopters", "chopper", "rescue"],
+      "content": "No helicopter has crossed the river in days. The sky over Ashby is empty except for birds and smoke.",
+      "constant": false,
+      "order": 78,
+      "position": "world",
+      "when": {"beat": "cordon", "minutes": 7200}
+    },
+    {
+      "id": "st_agnes",
+      "comment": "public: the hospital, before it falls",
+      "keys": ["hospital", "Agnes", "ambulance", "ambulances"],
+      "content": "St. Agnes is a big old hospital with a new glass wing. The news shows ambulances queued around it and police at the doors.",
+      "constant": false,
+      "order": 76,
+      "position": "world",
+      "replaced_by": "st_agnes_smoke"
+    },
+    {
+      "id": "st_agnes_smoke",
+      "comment": "the hospital, a day after the sirens",
+      "keys": ["hospital", "Agnes", "ambulance", "ambulances", "smoke", "downtown"],
+      "content": "Smoke has risen from downtown near St. Agnes since the day after the sirens. Nobody on the radio says what happened there.",
+      "constant": false,
+      "order": 76,
+      "position": "world",
+      "when": {"beat": "outbreak_begins", "minutes": 1440}
+    },
+    {
+      "id": "stadium",
+      "comment": "public: the stadium, before the evacuation",
+      "keys": ["stadium", "Rivermen", "football", "evacuation"],
+      "content": "Calder Stadium, home of the Calder Rivermen, stands on the west bank under a scoreboard with Velloran's name across it.",
+      "constant": false,
+      "order": 78,
+      "position": "world",
+      "replaced_by": "stadium_evac"
+    },
+    {
+      "id": "stadium_evac",
+      "comment": "the stadium during the evacuation",
+      "keys": ["stadium", "Rivermen", "football", "evacuation", "buses"],
+      "content": "People who reached the stadium texted at first: long queues, tents on the pitch, soldiers checking every arm for bites.",
+      "constant": false,
+      "order": 78,
+      "position": "world",
+      "when": {"flag": "evacuation"},
+      "replaced_by": "stadium_silent"
+    },
+    {
+      "id": "stadium_silent",
+      "comment": "the stadium after the cordon: never says what happened",
+      "keys": ["stadium", "Rivermen", "football", "evacuation", "buses"],
+      "content": "Nobody has heard from anyone at the stadium since the bridges closed. Its floodlights still burn across the river at night.",
+      "constant": false,
+      "order": 78,
+      "position": "world",
+      "when": {"flag": "cordon"},
+      "replaced_by": "stadium_dark"
+    },
+    {
+      "id": "stadium_dark",
+      "comment": "the stadium after the power goes",
+      "keys": ["stadium", "Rivermen", "football", "evacuation", "buses"],
+      "content": "Even the stadium's floodlights went out with the power. Whatever happened there, the west bank is black at night now.",
+      "constant": false,
+      "order": 78,
+      "position": "world",
+      "when": {"flag": "power_out"}
+    },
+    {
+      "id": "tanner_park",
+      "comment": "public: the park",
+      "keys": ["park", "Tanner", "bandstand"],
+      "content": "Tanner Park is a strip of grass and plane trees with a bandstand, where Ashby walks its dogs and drinks on summer nights.",
+      "constant": false,
+      "order": 86,
+      "position": "world",
+      "replaced_by": "park_buses"
+    },
+    {
+      "id": "park_buses",
+      "comment": "the park during and after the evacuation",
+      "keys": ["park", "Tanner", "bandstand", "buses", "bus"],
+      "content": "The stadium buses loaded at Tanner Park until the bridges closed. The last ones left half empty, honking for anyone still coming.",
+      "constant": false,
+      "order": 86,
+      "position": "world",
+      "when": {"flag": "evacuation"}
+    },
+    {
+      "id": "subway",
+      "comment": "public: the subway, before the sirens",
+      "keys": ["subway", "train", "trains", "tunnel", "Blue Line"],
+      "content": "The Blue Line runs from Ashby station under the river to downtown, the quickest way across.",
+      "constant": false,
+      "order": 86,
+      "position": "world",
+      "replaced_by": "subway_closed"
+    },
+    {
+      "id": "subway_closed",
+      "comment": "the subway after the sirens",
+      "keys": ["subway", "train", "trains", "tunnel", "Blue Line"],
+      "content": "The Blue Line stopped the morning of the sirens. The gates at Ashby station are pulled shut, and something on the other side rattles them.",
+      "constant": false,
+      "order": 86,
+      "position": "world",
+      "when": {"outbreak": true}
+    },
+    {
+      "id": "mayor",
+      "comment": "public: the mayor, before the sirens",
+      "keys": ["mayor", "Strand", "city hall", "government"],
+      "content": "Mayor Helen Strand keeps calling the fever a bad flu season and asks people not to crowd the hospitals.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "replaced_by": "mayor_gone"
+    },
+    {
+      "id": "mayor_gone",
+      "comment": "the mayor after the sirens",
+      "keys": ["mayor", "Strand", "city hall", "government"],
+      "content": "The mayor hasn't spoken since the sirens. A colonel's flat voice reads the announcements now.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "when": {"outbreak": true}
+    },
+    {
+      "id": "police",
+      "comment": "public: the police, before the sirens",
+      "keys": ["police", "cops", "officer", "officers"],
+      "content": "Calder's police are stretched thin: their cars wait outside St. Agnes, and the Dock Road station sends nobody for break-ins.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "replaced_by": "police_gone"
+    },
+    {
+      "id": "police_gone",
+      "comment": "the police after the evacuation",
+      "keys": ["police", "cops", "officer", "officers"],
+      "content": "Nobody answers at the Dock Road police station. The officers who still work went to the bridges with the army.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "when": {"flag": "evacuation"}
+    },
+    {
+      "id": "radio_before",
+      "comment": "public: the radio, before the sirens",
+      "keys": ["radio", "River FM", "broadcast"],
+      "content": "River FM, Calder's talk station, runs call-in shows about the fever between the traffic news and the football.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "replaced_by": "stage_broadcast"
+    },
+    {
+      "id": "tv_news",
+      "comment": "public: TV and the internet, before they fail",
+      "keys": ["TV", "television", "news", "internet", "online"],
+      "content": "The TV news runs the same footage on a loop: the ship at anchor, the queue at St. Agnes, the mayor at her podium.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "replaced_by": "tv_dead"
+    },
+    {
+      "id": "tv_dead",
+      "comment": "TV and the internet, two days after the sirens",
+      "keys": ["TV", "television", "news", "internet", "online"],
+      "content": "The TV channels went to test cards one by one, and the internet loads nothing but error pages.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "when": {"beat": "outbreak_begins", "minutes": 2880}
+    },
+    {
+      "id": "phones_jammed",
+      "comment": "phones after the sirens",
+      "keys": ["phone", "phones", "signal", "text", "mobile", "cell"],
+      "content": "Calls drop all over the city; the networks are jammed with people checking on family, and only some texts get through.",
+      "constant": false,
+      "order": 84,
+      "position": "world",
+      "when": {"outbreak": true},
+      "replaced_by": "phones_dead"
+    },
+    {
+      "id": "phones_dead",
+      "comment": "phones after the cordon",
+      "keys": ["phone", "phones", "signal", "text", "mobile", "cell"],
+      "content": "Since the cordon there's no signal on the east bank: no bars, and messages sit unsent.",
+      "constant": false,
+      "order": 84,
+      "position": "world",
+      "when": {"flag": "cordon"}
+    },
+    {
+      "id": "looting",
+      "comment": "the night after the evacuation call",
+      "keys": ["loot", "looting", "looters", "Dock Road"],
+      "content": "The night the evacuation was called, the shop windows along Dock Road went in. People took food, water, fuel and televisions.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "when": {"beat": "evacuation_announced", "minutes": 720}
+    },
+    {
+      "id": "stayers",
+      "comment": "the ones who stayed, after the cordon",
+      "keys": ["survivors", "anyone else", "other people", "stayed"],
+      "content": "Some of Ashby never left: a curtain moving on an upper floor, a radio playing low, a car alarm someone silences fast.",
+      "constant": false,
+      "order": 88,
+      "position": "world",
+      "when": {"flag": "cordon"}
+    },
+    {
+      "id": "nights_dark",
+      "comment": "nights after the power goes",
+      "keys": ["night", "dark", "fire", "fires", "skyline"],
+      "content": "With the power gone, Ashby is black at night. From a roof you can see fires on the west bank and the army's lights on the bridges.",
+      "constant": false,
+      "order": 82,
+      "position": "world",
+      "when": {"flag": "power_out"}
+    }
+  ]
+}

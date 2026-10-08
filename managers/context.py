@@ -14,6 +14,7 @@ prose context plus this turn's already-decided [OUTCOMES].
 import logging
 import re
 from collections.abc import Collection, Iterable, Sequence
+from dataclasses import replace
 from datetime import date
 
 from data.body.status_effects import STATUS_EFFECT_MAX_LEVEL
@@ -49,6 +50,7 @@ from managers.corpses.search import corpse_views, looks_words, perceived_corpses
 from managers.game import GameManager
 from managers.story import in_view
 from managers.story.beats import visible_topics
+from managers.story.lore import LoreHit, drop_order, world_lines
 from managers.story.spoken import spoken_lines
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import describe_weather
@@ -399,19 +401,6 @@ class ContextBuilder:
             return "(No actions were taken this turn)"
         return "\n".join(f" - {zombie_ids_to_words(fact)}" for fact in outcome_facts)
 
-    def _discovered_flags_section(self) -> str:
-        """Only flags the player has discovered, so the engine can hold ground truth the
-        player doesn't know yet: setting a flag and discovering it are separate acts."""
-        narrative = self.manager.narrative
-        visible = {
-            name: value
-            for name, value in narrative.flags.items()
-            if name in narrative.discovered_flags
-        }
-        if not visible:
-            return "None"
-        return ", ".join(f"{k}={v}" for k, v in visible.items())
-
     def _quests_section(self) -> str:
         """Active quest objectives, in plain language.
 
@@ -690,14 +679,22 @@ Traits: {_lines(trait_lines) or "None"}
             line += f"Long-term: {', '.join(goals['long_term'])}."
         return line
 
-    def _location_section(self) -> str:
+    def _world_section(self, lore: Sequence[LoreHit]) -> str:
+        """How things stand in the city, as far as the player knows (world-lore)."""
+        lines = world_lines(list(lore))
+        body = _lines(f" - {line}" for line in lines) if lines else "(Nothing to add.)"
+        return f"""[WORLD]
+(How things stand in the city, as far as {self._name} knows. Background: mention it when it fits, never recite it.)
+{body}"""
+
+    def _location_section(self, lore: Sequence[LoreHit] = ()) -> str:
         manager = self.manager
         return f"""
 Current Location: {manager.current_location.name}
 Specific spot: {manager.player.current_place or "(nowhere in particular)"}
 Description: {manager.current_location.description}
 Sheltered: {"yes" if manager.current_location.indoors else "no"}
-Flags: {self._discovered_flags_section()}
+{self._world_section(lore)}
 """
 
     @staticmethod
@@ -830,6 +827,7 @@ door rather than refusing the move.)
         max_chars: int | None = None,
         refused: Sequence[AnyAction] = (),
         finds: Sequence[str] = (),
+        lore: Sequence[LoreHit] = (),
     ) -> str:
         """Assemble the full LLM prompt for the narrator call.
 
@@ -838,9 +836,11 @@ door rather than refusing the move.)
         already decided this turn; the narrator describes them and decides nothing.
         `deep_memories` are semantically retrieved past events supplied by the memory layer.
         Over `max_chars`, memory is dropped until it fits: deep memories (last first),
-        summaries (oldest first), [LAST SCENE], then recent events (oldest first, never
-        the newest). Current state, [OUTCOMES] and the player's input are never dropped.
+        lore lines for [WORLD] (in `drop_order`, never the stage line), summaries (oldest
+        first), [LAST SCENE], then recent events (oldest first, never the newest). The rest
+        of the current state, [OUTCOMES] and the player's input are never dropped.
         `refused` and `finds` are this turn's refused actions and search finds, for [IN VIEW].
+        `lore` is the turn's hits from `select_lore`; the drops never change that list.
         """
         deep = list(deep_memories or [])
         summaries = list(self.manager.memory.summaries)
@@ -849,7 +849,8 @@ door rather than refusing the move.)
         dropped: dict[str, int] = {}
         character = self._character_section()
         last_scene = self._last_scene_section()
-        current = self._narrator_current_state(player_input, outcome_facts, refused, finds)
+        hits = list(lore)
+        current = self._narrator_current_state(player_input, outcome_facts, refused, finds, hits)
 
         def render() -> str:
             return self._render_narrator(
@@ -861,6 +862,12 @@ door rather than refusing the move.)
             if deep:
                 deep.pop()
                 kind = "deep memory entries"
+            elif next_lore := drop_order(hits):
+                hits[hits.index(next_lore[0])] = replace(next_lore[0], shown=False)
+                current = self._narrator_current_state(
+                    player_input, outcome_facts, refused, finds, hits
+                )
+                kind = "lore lines"
             elif summaries:
                 summaries.pop(0)
                 kind = "summaries"
@@ -922,13 +929,14 @@ door rather than refusing the move.)
         outcome_facts: list[str] | None,
         refused: Sequence[AnyAction],
         finds: Sequence[str],
+        lore: Sequence[LoreHit],
     ) -> str:
         """The narrator prompt from [TIME AND WEATHER] to the player's input."""
         return f"""[TIME AND WEATHER]
 {self._time_and_weather_section()}
 
 [CURRENT LOCATION]
-{self._location_section()}
+{self._location_section(lore)}
 
 [ITEMS IN CURRENT LOCATION]
 

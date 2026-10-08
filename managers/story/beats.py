@@ -1,6 +1,7 @@
 """Reading story conditions against the game (llm-contract: Story beats and Topics)."""
 
 from data.story.topics import TOPICS, Topic
+from managers import carry
 from managers.game import GameManager
 from modules.entity.npc import NpcEntity
 from modules.story.beats import (
@@ -9,6 +10,7 @@ from modules.story.beats import (
     ClockAtOrPast,
     Condition,
     FlagDiscovered,
+    ItemHeld,
     OutbreakStarted,
     PlayerInZone,
 )
@@ -27,6 +29,10 @@ def holds(condition: Condition, manager: GameManager) -> bool:
         case BeatFiredAgo(beat_id=beat_id, minutes=minutes):
             fired = manager.world.fired_beats.get(beat_id)
             return fired is not None and manager.narrative.minutes - fired >= minutes
+        case ItemHeld(item_id=item_id):
+            player = manager.player
+            things = [*carry.carried_items(player), *carry.on_body(player)]
+            return any(entity.item.id == item_id for entity in things)
         case AllOf(conditions=conditions):
             return all(holds(part, manager) for part in conditions)
 

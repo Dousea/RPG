@@ -1,6 +1,6 @@
 # Documentation
 
-Three folders, one job each. A fact lives in one of them; the others point to it.
+Four folders, one job each. A fact lives in one of them; the others point to it.
 
 - **[`mechanics/`](mechanics/)**: the game rules as built, with their numbers.
   Code and tests cite a mechanic by its id, the file name
@@ -9,6 +9,9 @@ Three folders, one job each. A fact lives in one of them; the others point to it
   turn, the layers, context, saves, the UI. A *Partial* banner says where a
   document's built part stops.
 - **[`design/`](design/)**: intent that is not built, kept as a target.
+- **[`lore/`](lore/README.md)**: the story of the game's world as prose: the
+  city, the people, the secret behind the outbreak. The narrator's lorebook
+  is drawn from it.
 
 **Start at [Implementation Status](status.md).** It maps every document to the
 code that implements it, states where the built system diverges from the
@@ -42,6 +45,7 @@ simulation level of detail) is still intent.
 - **[Doors, Thumping and Barricades](mechanics/doors.md)** (`doors`)
 - **[The Zombie Lifecycle](mechanics/zombie-lifecycle.md)** (`zombie-lifecycle`)
 - **[Carrying, Containers and Loot](mechanics/carrying-and-loot.md)** (`carrying-and-loot`)
+- **[World Lore](mechanics/world-lore.md)** (`world-lore`)
 
 ## Architecture
 

@@ -196,6 +196,8 @@ class BindingTests(unittest.TestCase):
 
     def test_a_shop_container_is_built_only_if_a_table_can_drop_a_catalogue_item(self):
         for container in self.containers(self.SHOP_ZONES):
+            if container.fixed:
+                continue
             assert container.source is not None
             source = ROOM_TABLES[container.source[0]][container.source[1]]
             tables = [PROCEDURAL_TABLES[e.table] for e in source.procedures]

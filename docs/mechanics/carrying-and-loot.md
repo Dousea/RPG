@@ -438,7 +438,7 @@ unique inside a zone.
 | The Tenant's Flat | the apartment's rooms, every container stocked from tables: kitchen (counter, cupboards, fridge, freezer), bedroom (wardrobe, dresser, bedside table), bathroom (medicine cabinet, bathroom counter), living room (side table, living room shelves) |
 | The Vacant Flat | kitchen (counter, cupboards), bedroom (wardrobe), bathroom (medicine cabinet), an empty living room |
 | The Pharmacy | shop floor: pharmacy counter, left shelves, right shelves, shop fridge. Back room: dispensing counter, medicine fridge, supply crates |
-| The Clinic | exam room: exam counter, exam desk, side table. Office: office desk, office counter. Supply room: supply counter, supply shelves, supply fridge, supply crates, supply desk |
+| The Clinic | exam room: exam counter, exam desk, side table. Office: office desk, office counter, filing cabinet (fixed: the study binder, see [world-lore](world-lore.md#the-binder)). Supply room: supply counter, supply shelves, supply fridge, supply crates, supply desk |
 | The Supermarket | aisles: checkout counter, four aisle shelf units (first to fourth), drinks fridge. Stockroom: stockroom fridge, two stock crates |
 | The Hardware Store | shop floor: tool counter, three shelf units, shop crates. Storeroom: two storeroom crates |
 

@@ -187,11 +187,14 @@ no director consuming faction state. Those remain out of scope at the current si
 ### Decided direction
 
 Story content will come in three layers, all producing the engine-owned state
-above; none is built yet.
+above; the first is partly built.
 
 - **A small authored main arc:** what the outbreak is, where the player
   character's story goes, and a goal or ending, written as data like today's
-  quests and beats.
+  quests and beats. Its first part is built: the stages of the outbreak, the
+  secret behind it and the topics that reveal it, and the lorebook the narrator
+  reads ([world-lore](../mechanics/world-lore.md)); the story is written in
+  [`docs/lore/`](../lore/README.md). A goal or ending is not.
 - **Per-NPC stories generated once, as data.** At a new game, or when the
   player first meets an NPC, one LLM call fills a fixed schema: backstory, a
   want, a secret, and one to three quest hooks built only from the objective

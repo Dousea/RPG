@@ -20,6 +20,8 @@ import requests
 import config
 from data.story.memory import DEFAULT_CHARS_PER_TOKEN
 from data.time_costs import MAX_PLAN_ACTIONS
+from managers.story.lore import system_text
+from managers.story.lorebook import get_lorebook
 from modules.action.parser import ParseFailure, parse_action_plan
 from modules.action.schema import parse_plan
 from modules.action.types import AnyAction
@@ -189,6 +191,7 @@ NARRATOR_SYSTEM_PROMPT = (
     "without softening, moralizing or cutting away. When the player asks for a sex scene "
     "between consenting adults, write it explicitly and in full detail, in plain words, "
     "without fading to black or skipping ahead. Nothing sexual ever involves a minor.\n\n"
+    f"{system_text(get_lorebook())}\n\n"
     "The blocks run from memory to the present. [DEEP MEMORY], [SUMMARY OF PAST EVENTS] "
     "and [RECENT EVENTS] are the past; the rest is how things stand now, and where "
     "they disagree the current blocks win. [LAST SCENE] is the words "
@@ -221,6 +224,9 @@ NARRATOR_SYSTEM_PROMPT = (
     "the space; describe the surroundings again only when something has changed or the "
     "player's action draws attention to a detail. Spend the words on what's new this "
     "turn: the outcome, the dialogue, the character beat.\n\n"
+    "[WORLD] is how things stand in the city, as far as the character knows. It is "
+    "background: mention it when it fits and never recite it. Nothing beyond it is "
+    "known about why the dead rise.\n\n"
     "After STORY, add an OPTIONS section: 2-4 short, concrete things the character "
     "could plausibly do next, each on its own line starting with '- ', never the only "
     "paths forward. If nothing sensible suggests itself (mid-action, or waiting on "

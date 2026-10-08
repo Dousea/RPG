@@ -2,6 +2,7 @@
 
 import re
 import unittest
+from unittest import mock
 
 from data.items import ITEMS
 from managers.context import ContextBuilder
@@ -289,7 +290,8 @@ class ClosedFieldTests(unittest.TestCase):
         )
 
     def test_ask_offers_only_the_requests_the_scene_can_fill(self):
-        asks = request_branches(ContextBuilder(building_scene()).build_plan_schema())
+        with mock.patch("managers.story.beats.TOPICS", {}):
+            asks = request_branches(ContextBuilder(building_scene()).build_plan_schema())
         self.assertEqual(len(asks), 1)
         self.assertEqual(enum_of(asks[0], "request"), ["follow", "stay"])
         self.assertEqual(asks[0]["required"], ["verb", "npc", "request"])

@@ -274,6 +274,38 @@ class WellFedSaveTests(IsolatedSaveTestCase):
         self.assertIsNone(files.load(self.save_path))
 
 
+class WorldLoreSaveTests(IsolatedSaveTestCase):
+    """world-lore: Saves: the cabinet, the beats and the discovered flags."""
+
+    def cabinet(self, gm: GameManager) -> ContainerEntity:
+        office = gm.world.locations["zone_clinic"].rooms["office"]
+        return next(c for c in office.containers if c.container_id == "clinic_filing_cabinet")
+
+    def test_a_version_26_save_is_discarded(self):
+        files.save(GameManager(), self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["version"] = 26
+        with open(self.save_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        self.assertIsNone(files.load(self.save_path))
+
+    def test_a_version_27_save_keeps_the_beats_the_flags_and_the_cabinet(self):
+        gm = GameManager()
+        gm.world.fired_beats["trial_files"] = 90
+        gm.narrative.discovered_flags.add("trial_truth")
+        files.save(gm, self.save_path)
+        with open(self.save_path, encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle)["version"], 27)
+        loaded = files.load(self.save_path)
+        assert loaded is not None
+        self.assertEqual(loaded.world.fired_beats, {"trial_files": 90})
+        self.assertEqual(loaded.narrative.discovered_flags, {"trial_truth"})
+        cabinet = self.cabinet(loaded)
+        self.assertEqual([e.item.id for e in cabinet.contents], ["item_study_binder"])
+        self.assertTrue(cabinet.fixed)
+
+
 class RoomSaveTests(IsolatedSaveTestCase):
     """carrying-and-loot: Saves: each container's opened flag and contents, each room's proc_spawned, current_room."""
 
@@ -376,8 +408,8 @@ class NewZoneSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """clock: Saves."""
 
-    def test_schema_version_is_26(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 26)
+    def test_schema_version_is_27(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 27)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()

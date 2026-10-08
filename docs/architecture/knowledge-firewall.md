@@ -66,12 +66,19 @@ and `get_trust_level_from_trust` — so the thresholds live in one file rather t
 being re-invented by each consumer.
 
 **World flags only leave once discovered.** `NarrativeState.flags` is the
-engine's ground truth; `NarrativeState.discovered_flags` is a separate set,
-and `ContextBuilder._discovered_flags_section` only renders a flag that is in
-both. Setting a flag's value and marking it known to the player (a topic an NPC
+engine's ground truth; `NarrativeState.discovered_flags` is a separate set of
+what the player has learned, and the narrator reads the second, never raw flag
+names. Setting a flag's value and marking it known to the player (a topic an NPC
 tells, or a story beat) are two different steps, so the engine can hold a fact
 that is simulation-true before the story has revealed it — the case this
 document's example (`traveler_is_heir`) is actually about.
+
+**Lore entries are a third filter.** What the narrator reads about the world
+comes from the lorebook, in words, and each entry carries a condition for when
+the player could know it, usually a discovered flag. An entry that is locked,
+or replaced by a later one, is never shown, whatever the player types or
+wherever they stand. This replaced the old `_discovered_flags_section`, which
+printed `name=True`. See [world-lore](../mechanics/world-lore.md).
 
 **NPC goals are shown as visible intent, not private knowledge.**
 `NpcEntity.goals` renders as `Visible intent: ...` — the kind of thing Orton

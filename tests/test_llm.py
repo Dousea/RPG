@@ -20,6 +20,8 @@ from adapters.llm import (
     parse_plan_response,
 )
 from data.story.memory import DEFAULT_CHARS_PER_TOKEN
+from managers.story.lore import system_text
+from managers.story.lorebook import get_lorebook
 
 
 class ParseActionResponseTests(unittest.TestCase):
@@ -210,6 +212,20 @@ class PromptRuleTests(unittest.TestCase):
     def test_the_narrator_may_only_use_listed_zombies_corpses_and_people(self):
         for block in ("[THREATS]", "[CORPSES]", "[NPCS PRESENT]"):
             self.assertIn(block, NARRATOR_SYSTEM_PROMPT)
+
+    def test_the_canon_follows_the_style_rules_and_precedes_the_blocks(self):
+        canon = system_text(get_lorebook())
+        style_end = NARRATOR_SYSTEM_PROMPT.index("NARRATIVE STYLE:")
+        blocks = NARRATOR_SYSTEM_PROMPT.index("The blocks run from memory to the present")
+        self.assertGreater(NARRATOR_SYSTEM_PROMPT.index(canon), style_end)
+        self.assertLess(NARRATOR_SYSTEM_PROMPT.index(canon), blocks)
+
+    def test_only_the_system_entries_are_in_the_system_prompt(self):
+        for entry in get_lorebook().world_entries():
+            self.assertNotIn(entry.content, NARRATOR_SYSTEM_PROMPT, entry.entry_id)
+
+    def test_the_narrator_is_told_what_the_world_block_is(self):
+        self.assertIn("[WORLD]", NARRATOR_SYSTEM_PROMPT.replace(system_text(get_lorebook()), ""))
 
     def test_the_narrator_is_told_state_wins_over_memory(self):
         self.assertIn("current blocks win", NARRATOR_SYSTEM_PROMPT)
@@ -597,8 +613,9 @@ class SamplerTests(unittest.TestCase):
 
 
 class NarratorPromptLengthTests(unittest.TestCase):
-    def test_the_system_prompt_fits_three_thousand_six_hundred_fifty_characters(self):
-        self.assertLessEqual(len(NARRATOR_SYSTEM_PROMPT), 3650)
+    def test_the_rules_without_the_canon_fit_three_thousand_eight_hundred_fifty_characters(self):
+        canon = system_text(get_lorebook())
+        self.assertLessEqual(len(NARRATOR_SYSTEM_PROMPT) - len(canon), 3850)
 
 
 def chunk(delta: dict | None = None, usage: dict | None = None) -> str:

@@ -12,8 +12,9 @@ real ids in `data/items.py`, `data/locations.py`, and `data/npcs.py`, or the
 objective can never complete.
 
 `discover:` and `npc_status:` objectives are produced by the engine alone: a topic
-that discovers a flag (`data/topics.py`) and a derived status (`trusts_player`,
-llm-contract), so their names must match those producers (tests/test_quests.py).
+or a beat that discovers a flag (`data/story/topics.py`, `data/story/beats.py`) and a
+derived status (`trusts_player`, llm-contract), so their names must match those
+producers (tests/story/test_topics.py).
 
 Quest titles and objective labels are rendered into the narrator prompt
 unconditionally, with no check for who is in the room -- unlike every other
@@ -55,6 +56,14 @@ def build_starting_quests() -> dict[str, QuestState]:
             objectives=["discover:apocalypse_cause"],
             objective_labels={
                 "discover:apocalypse_cause": "Find out what's really going on outside",
+            },
+        ),
+        QuestState(
+            quest_id="quest_where_it_started",
+            title="Find Where It Started",
+            objectives=["discover:trial_truth"],
+            objective_labels={
+                "discover:trial_truth": "Find out where the fever really came from",
             },
         ),
     ]

@@ -62,7 +62,7 @@ from modules.world.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 26  # llm-contract: quest objective keys
+SCHEMA_VERSION = 27  # world-lore: the clinic filing cabinet
 
 MAX_ID_LENGTH = 40
 

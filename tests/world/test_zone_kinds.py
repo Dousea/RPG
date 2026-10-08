@@ -66,7 +66,7 @@ class KindWordTests(unittest.TestCase):
         )
 
     def test_a_unique_whole_word_match_is_unchanged(self):
-        found = self.resolve("back to the hospital", "zone_home")
+        found = self.resolve("back to the park", "zone_home")
         assert isinstance(found, Location)
         self.assertEqual(found.id, "zone_neighborhood")
 

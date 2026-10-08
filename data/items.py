@@ -323,6 +323,15 @@ BAGS: dict[str, ContainerItem] = dict(  # carrying-and-loot
     ]
 )
 
+STUDY_BINDER = BaseItem(  # world-lore: The binder
+    id="item_study_binder",
+    name="Study Binder",
+    description="A ring binder with the clinic's logo on the cover.",
+    max_hit_points=BAG_HIT_POINTS,
+    tags=["paper"],
+    weight=0.3,
+)
+
 ITEMS: dict[str, BaseItem] = {
     "item_crowbar": MeleeWeaponItem(
         id="item_crowbar",
@@ -732,6 +741,7 @@ ITEMS: dict[str, BaseItem] = {
         weight=0.25,
         unit_weight=0.05,
     ),
+    "item_study_binder": STUDY_BINDER,
     **MEDICAL_ITEMS,
     **BAGS,
     **LOOT_ITEMS,

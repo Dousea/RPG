@@ -34,11 +34,24 @@ class BeatFiredAgo:
 
 
 @dataclass(frozen=True)
+class ItemHeld:
+    item_id: str
+
+
+@dataclass(frozen=True)
 class AllOf:
     conditions: tuple["Condition", ...]
 
 
-Condition = ClockAtOrPast | PlayerInZone | FlagDiscovered | OutbreakStarted | BeatFiredAgo | AllOf
+Condition = (
+    ClockAtOrPast
+    | PlayerInZone
+    | FlagDiscovered
+    | OutbreakStarted
+    | BeatFiredAgo
+    | ItemHeld
+    | AllOf
+)
 
 
 @dataclass(frozen=True)

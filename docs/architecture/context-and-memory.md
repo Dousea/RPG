@@ -165,9 +165,11 @@ deep memory and the last scene are capped, and only the summary list grows —
 one paragraph per ten turns. The narrator prompt is also held to a character
 budget (see [the llm-roles doc](llm-roles.md)). Over it, memory is dropped until the
 prompt fits, re-measuring after each drop: deep-memory entries (last recalled
-first), then summaries (oldest first), then `[LAST SCENE]`, then recent events
-(oldest first, never the newest). Current-state blocks, `[OUTCOMES]` and the
-player's input are never dropped. A section that loses everything keeps its header
+first), then lore lines (see
+[world-lore](../mechanics/world-lore.md#selection-and-the-cap)), then summaries
+(oldest first), then `[LAST SCENE]`, then recent events (oldest first, never the
+newest). The rest of the current state (the stage line included), `[OUTCOMES]` and
+the player's input are never dropped. A section that loses everything keeps its header
 and its empty placeholder. Each over-budget prompt logs one warning saying what
 went.
 
@@ -228,9 +230,12 @@ two deep memories.
 before they reach the prompt; nothing else is filtered by what the player could
 know. See [the knowledge-firewall doc](knowledge-firewall.md).
 
-**Global, zone and location memory do not exist.** World-scale truths live in
-the world's outbreak start (`World.outbreak_started_at`) and `flags` (booleans). There is
-no per-zone or per-location memory of any kind.
+**Global memory exists as `[WORLD]`; zone and location memory do not.**
+World-scale truths are the lorebook's entries ([world-lore](../mechanics/world-lore.md)):
+a fixed canon in the system prompt, and a `[WORLD]` block in `[CURRENT LOCATION]`
+chosen each turn from the state of the game, under its own character cap and
+dropped before summaries when the prompt is over budget. There is no per-zone or
+per-location memory of any kind.
 
 ---
 
