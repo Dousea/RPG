@@ -61,31 +61,50 @@ class FactChecker:
         """The indexes of the questions about the player's input answered confidently and wrongly."""
         return self._conflicting(PLAYER_INPUT_STATE.format(input=player_input), questions)
 
+    def plan_answer(self, player_input: str, question: StateQuestion) -> tuple[str, float] | None:
+        """The option key the model picks for one question about the player's input and its scene, and its probability.
+
+        None when the check is disabled or the request fails.
+        """
+        if not self.enabled:
+            return None
+        state = PLAYER_INPUT_STATE.format(input=player_input)
+        return self._answer(f"{state}\n{question.scene}" if question.scene else state, question)
+
     def _conflicting(self, state: str, questions: list[StateQuestion]) -> list[int]:
         if not self.enabled or not questions:
             return []
         conflicting = []
         for index, question in enumerate(questions):
-            try:
-                probabilities = self._ask(state, question)
-            except (
-                requests.exceptions.RequestException,
-                KeyError,
-                IndexError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                logger.warning(f"Fact check failed, skipping the question: {exc!r}")
+            answer = self._answer(state, question)
+            if answer is None:
                 continue
-            key, probability = max(probabilities.items(), key=lambda item: item[1])
-            conflict = key not in question.allowed and probability >= self._threshold
-            logger.debug(
-                f"Fact check {question.text!r}: {probabilities}, answer {key} at {probability:.2f}, "
-                f"allowed {sorted(question.allowed)}, conflict {conflict}"
-            )
-            if conflict:
+            key, probability = answer
+            if key not in question.allowed and probability >= self._threshold:
                 conflicting.append(index)
         return conflicting
+
+    def _answer(self, state: str, question: StateQuestion) -> tuple[str, float] | None:
+        try:
+            probabilities = self._ask(state, question)
+        except (
+            requests.exceptions.RequestException,
+            KeyError,
+            IndexError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            logger.warning(f"Fact check failed, skipping the question: {exc!r}")
+            return None
+        key, probability = max(probabilities.items(), key=lambda item: item[1])
+        verdict = (
+            f"Fact check {question.text!r}: {probabilities}, answer {key} at {probability:.2f}"
+        )
+        if question.allowed:
+            conflict = key not in question.allowed and probability >= self._threshold
+            verdict += f", allowed {sorted(question.allowed)}, conflict {conflict}"
+        logger.debug(verdict)
+        return key, probability
 
     def _ask(self, state: str, question: StateQuestion) -> dict[str, float]:
         """The probability of each option key for one question."""

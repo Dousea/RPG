@@ -257,10 +257,14 @@ class RequestAction:
 
 @dataclass
 class UnsupportedAction:
-    """What the player asked for when no listed verb does it, in the model's few words."""
+    """What the player asked for when no listed verb does it, in the model's few words.
+
+    `reason` is why the request is refused, set by the plan check; empty when it didn't run.
+    """
 
     verb: ClassVar[str] = "UNSUPPORTED"
     text: str
+    reason: str = ""
 
 
 @dataclass

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from data.story import check as story_check_k
-from managers.context import CORPSE_ID, ZOMBIE_ID, zombie_ids_to_words
+from managers.context import CORPSE_ID, ZOMBIE_ID, ContextBuilder, zombie_ids_to_words
 from managers.game import GameManager
 from managers.mentions import seen_by_looks
 from modules.action.types import AnyAction, UnsupportedAction
@@ -23,6 +23,7 @@ class StateQuestion:
     options: tuple[tuple[str, str], ...]
     allowed: frozenset[str]
     correction: str
+    scene: str = ""
 
 
 def build_questions(
@@ -87,28 +88,15 @@ def _zombie_questions(manager: GameManager, outcome_facts: list[str]) -> list[St
     ]
 
 
-def plan_questions(
-    manager: GameManager, actions: Sequence[AnyAction], verbs: str = ""
-) -> list[StateQuestion]:
-    """One question per parsed action, in order: did the player ask for it?
+def plan_questions(manager: GameManager, actions: Sequence[AnyAction]) -> list[StateQuestion]:
+    """One question per action, in order: did the player ask for it?
 
-    An `UNSUPPORTED` action is asked instead whether one of the listed `verbs`
-    does it. A conflict's correction is the refusal fact that replaces the action.
+    A conflict's correction is the refusal fact that replaces the action.
     """
     name = manager.player.appearance.forename
     questions = []
     for action in actions:
         words = _action_words(manager, action)
-        if isinstance(action, UnsupportedAction):
-            questions.append(
-                StateQuestion(
-                    story_check_k.UNSUPPORTED_QUESTION.format(verbs=verbs, action=words),
-                    story_check_k.UNSUPPORTED_OPTIONS,
-                    frozenset({"no", "unclear"}),
-                    story_check_k.PLAN_NOT_UNDERSTOOD_FACT.format(name=name),
-                )
-            )
-            continue
         questions.append(
             StateQuestion(
                 story_check_k.PLAN_QUESTION.format(action=words),
@@ -118,6 +106,22 @@ def plan_questions(
             )
         )
     return questions
+
+
+def reach_question(manager: GameManager, action: UnsupportedAction, verbs: str) -> StateQuestion:
+    """Why an `UNSUPPORTED` request fails: asked against the listed `verbs` and what is in reach.
+
+    The answer picks the refusal's reason, so no option conflicts and there is no correction.
+    """
+    return StateQuestion(
+        story_check_k.UNSUPPORTED_QUESTION.format(
+            verbs=verbs, action=_action_words(manager, action)
+        ),
+        story_check_k.UNSUPPORTED_OPTIONS,
+        frozenset(),
+        "",
+        ContextBuilder(manager).in_reach_section(),
+    )
 
 
 def _action_words(manager: GameManager, action: AnyAction) -> str:

@@ -22,6 +22,7 @@ from data.character.occupations import OCCUPATIONS
 from data.character.skills import SKILLS
 from data.character.traits import TRAITS
 from data.items import item_condition_word, wetness_word
+from data.story import check as story_check_k
 from data.story import mentions as mention_k
 from data.story.memory import BUDGET_MARGIN_TOKENS
 from managers import carry, naming
@@ -39,7 +40,7 @@ from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.mentions import labels, mentionables, picked
 from managers.plan import OpenChoice, bind_choices, open_choices, steps_in_this_scene, steps_of
 from managers.simulation import SimulationCore
-from managers.story.check import StateQuestion, build_questions, plan_questions
+from managers.story.check import StateQuestion, build_questions, plan_questions, reach_question
 from managers.story.lore import LoreHit, record_turn, select_lore
 from managers.world import item_ids
 from managers.world.barriers import barriers_of, state_word
@@ -48,7 +49,7 @@ from managers.world.rooms import current_room
 from managers.zombies.population import threat_views
 from modules.action.choices import Candidate
 from modules.action.pins import Mention, bind, pinned_ids, render_input
-from modules.action.types import AnyAction
+from modules.action.types import AnyAction, UnsupportedAction
 from modules.action.words import describe_action, refusal_in_words
 from modules.body.stats import StatusEffect
 from modules.character.build import CharacterBuild
@@ -544,7 +545,8 @@ class GameEngine:
         """The actions the decision model doesn't rule out, the ones it does, and a refusal fact for each of those.
 
         Only the actions up to the plan's first predicted zone change are asked about and kept:
-        the ones after it were parsed in the wrong scene.
+        the ones after it were parsed in the wrong scene. An `UNSUPPORTED` action is always kept,
+        with the reason the model picks for refusing it.
         """
         steps = steps_in_this_scene(manager, actions)
         cut = steps < len(actions)
@@ -552,20 +554,37 @@ class GameEngine:
         if not actions or not self.factcheck.enabled:
             return _Check(actions, list(range(len(actions))), [], cut)
         emit({"type": "step", "step": "checking_plan"})
-        questions = plan_questions(
-            manager,
-            actions,
-            ContextBuilder(manager).available_actions_section(without="UNSUPPORTED"),
-        )
-        flagged = set(self.factcheck.plan_conflicts(player_input, questions))
+        self._give_reasons(manager, player_input, actions)
+        asked = [i for i, action in enumerate(actions) if not isinstance(action, UnsupportedAction)]
+        questions = plan_questions(manager, [actions[i] for i in asked])
+        conflicts = self.factcheck.plan_conflicts(player_input, questions)
+        flagged = {asked[i] for i in conflicts}
+        correction = {asked[i]: questions[i].correction for i in conflicts}
         for index in sorted(flagged):
             logger.warning(f"Dropped {actions[index]!r}: not what the player asked for.")
         logger.debug("Plan check dropped %s of %s actions", len(flagged), len(actions))
         kept_at = [index for index in range(len(actions)) if index not in flagged]
-        dropped = [
-            (index, actions[index], questions[index].correction) for index in sorted(flagged)
-        ]
+        dropped = [(index, actions[index], correction[index]) for index in sorted(flagged)]
         return _Check([actions[index] for index in kept_at], kept_at, dropped, cut)
+
+    def _give_reasons(
+        self, manager: GameManager, player_input: str, actions: list[AnyAction]
+    ) -> None:
+        """Sets the reason each `UNSUPPORTED` action is refused for, from what the model picks."""
+        verbs = ContextBuilder(manager).available_actions_section(without="UNSUPPORTED")
+        for action in actions:
+            if not isinstance(action, UnsupportedAction):
+                continue
+            answer = self.factcheck.plan_answer(
+                player_input, reach_question(manager, action, verbs)
+            )
+            key = "none"
+            if answer is not None and answer[1] >= config.factcheck.conflict_threshold:
+                key = answer[0]
+            action.reason = story_check_k.UNSUPPORTED_REASONS.get(
+                key, story_check_k.UNSUPPORTED_DEFAULT_REASON
+            )
+            logger.debug(f"Refusing {action.text!r} as {key}: {action.reason}")
 
     def _fact_checked(
         self,

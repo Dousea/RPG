@@ -26,6 +26,7 @@ from data.character import exercises as exercise_k
 from data.clothing.locations import EXCLUSIVE_LOCATIONS
 from data.items import ITEMS
 from data.loot import containers as container_k
+from data.story import check as story_check_k
 from data.story import mentions as mention_k
 from data.story.topics import TOPICS
 from data.world import barriers as barrier_k
@@ -161,7 +162,6 @@ GOAL_HORIZONS = GOAL_HORIZON_LABELS
 
 logger = logging.getLogger(__name__)
 
-UNSUPPORTED_REASON = "there is no way to do that yet."  # llm-contract
 ZOMBIE_ID_PATTERN = re.compile(r"z\d+", re.IGNORECASE)
 CORPSE_ID_PATTERN = re.compile(r"c\d+", re.IGNORECASE)
 
@@ -223,7 +223,7 @@ class ActionValidator:
             # place that sets this flag; the LLM cannot trigger it.
             return Rejected(action, f"{self._name} is dead; nothing more can happen.")
         if isinstance(action, UnsupportedAction):
-            return Rejected(action, UNSUPPORTED_REASON)
+            return Rejected(action, action.reason or story_check_k.UNSUPPORTED_DEFAULT_REASON)
         handler = self._VALIDATORS.get(action.verb)
         if handler is None:
             return Rejected(action, f"No validator registered for {type(action).__name__}.")

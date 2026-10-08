@@ -6,8 +6,11 @@ from pathlib import Path
 import yaml
 
 from data.items import ITEMS
+from data.story import check as story_check_k
 from managers.game import GameManager
 from modules.action.parser import parse_action_plan
+from scripts.eval_plan_check import run_case
+from tests.support import FakeFactChecker
 
 CASES = yaml.safe_load(
     (Path(__file__).resolve().parent.parent / "evals" / "parser_cases.yaml").read_text("utf-8")
@@ -111,3 +114,31 @@ class KindWordCaseTests(unittest.TestCase):
         inputs = {case["input"] for case in CASES}
         self.assertIn("run to the apartment and hit the zombie", inputs)
         self.assertLessEqual({"go to the apartment", "go to the store"}, inputs)
+
+
+PLAN_CASES = yaml.safe_load(
+    (Path(__file__).resolve().parent.parent / "evals" / "plan_check_cases.yaml").read_text("utf-8")
+)
+
+
+class PlanCheckCaseFileTests(unittest.TestCase):
+    """llm-contract: Checking the models: the plan-check cases are well formed."""
+
+    def test_every_case_names_a_zone_items_and_a_reason_key(self):
+        zones = GameManager().world.locations
+        for case in PLAN_CASES:
+            with self.subTest(case=case["name"]):
+                self.assertIn(case["zone"], zones)
+                self.assertTrue(set(case.get("carrying", [])) <= set(ITEMS))
+                self.assertIn(case["reason"], story_check_k.UNSUPPORTED_REASONS)
+                self.assertTrue(case["input"] and case["unsupported"])
+
+    def test_each_reason_has_a_case(self):
+        self.assertEqual(
+            {case["reason"] for case in PLAN_CASES}, set(story_check_k.UNSUPPORTED_REASONS)
+        )
+
+    def test_a_scene_builds_for_every_case(self):
+        for case in PLAN_CASES:
+            with self.subTest(case=case["name"]):
+                self.assertEqual(run_case(case, FakeFactChecker()), "none")

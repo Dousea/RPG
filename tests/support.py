@@ -130,6 +130,8 @@ class FakeFactChecker:
     `plan_results` each plan check; once spent, nothing conflicts. Every story
     check is recorded as (story, questions), with the name the story's "you"
     stands for in `player_names`, and every plan check as (input, questions).
+    `plan_answers` scripts the answer (key, probability) of each reach question,
+    recorded as (input, question) in `answer_calls`; once spent, it answers "none" with certainty.
     """
 
     def __init__(self):
@@ -139,6 +141,14 @@ class FakeFactChecker:
         self.player_names: list[str] = []
         self.plan_results: list[list[int]] = []
         self.plan_calls: list[tuple[str, list[StateQuestion]]] = []
+        self.plan_answers: list[tuple[str, float] | None] = []
+        self.answer_calls: list[tuple[str, StateQuestion]] = []
+
+    def plan_answer(self, player_input: str, question: StateQuestion) -> tuple[str, float] | None:
+        if not self.enabled:
+            return None
+        self.answer_calls.append((player_input, question))
+        return self.plan_answers.pop(0) if self.plan_answers else ("none", 1.0)
 
     def plan_conflicts(self, player_input: str, questions: list[StateQuestion]) -> list[int]:
         self.plan_calls.append((player_input, list(questions)))

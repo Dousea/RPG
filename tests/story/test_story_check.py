@@ -4,10 +4,11 @@ import dataclasses
 import logging
 import unittest
 
+from data.items import ITEMS
 from data.story import check as story_check_k
 from managers.game import GameManager
 from managers.mentions import seen_by_looks
-from managers.story.check import StateQuestion, build_questions, plan_questions
+from managers.story.check import StateQuestion, build_questions, plan_questions, reach_question
 from modules.action.types import (
     AttackAction,
     SearchAction,
@@ -17,6 +18,7 @@ from modules.action.types import (
     UseItemAction,
 )
 from modules.entity.corpse import CorpseEntity
+from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieEntity, ZombieState
 from tests.test_simulation import add_zombie, zombie_game
 
@@ -205,24 +207,6 @@ class PlanQuestionsTests(unittest.TestCase):
             ],
         )
 
-    def test_an_unsupported_action_is_asked_about_against_the_listed_verbs(self):
-        verbs = "- TAKE <item> -- a thing\n- SHOUT -- call out"
-        (question,) = plan_questions(
-            self.manager, [UnsupportedAction(text="drink from the tap")], verbs
-        )
-        self.assertEqual(
-            question.text,
-            "Given these verbs:\n- TAKE <item> -- a thing\n- SHOUT -- call out\n"
-            'does one of them do "drink from the tap"?',
-        )
-        self.assertEqual([key for key, _ in question.options], ["yes", "no", "unclear"])
-        self.assertEqual(question.allowed, frozenset({"no", "unclear"}))
-        self.assertEqual(
-            question.correction, story_check_k.PLAN_NOT_UNDERSTOOD_FACT.format(name="Orton")
-        )
-        self.assertIn("rephrase", question.correction)
-        self.assertFalse(any(c.isdigit() for c in question.correction))
-
     def test_the_options_and_what_is_allowed(self):
         (question,) = plan_questions(self.manager, [UseItemAction(item_name="Frying Pan")])
         self.assertEqual(
@@ -282,3 +266,39 @@ class PlanQuestionsTests(unittest.TestCase):
         (question,) = plan_questions(self.manager, [ShoveAction(target_name="z3")])
         self.assertIn('"shove the zombie"', question.text)
         self.assertNotIn("z3", question.correction)
+
+
+class ReachQuestionTests(unittest.TestCase):
+    """llm-contract: The plan check: an UNSUPPORTED request is asked against what is in reach."""
+
+    def setUp(self):
+        self.manager = zombie_game("zone_building")
+        self.manager.player.inventory.append(ItemEntity(item=ITEMS["item_water_bottle"]))
+        self.manager.current_location.entities.append(ItemEntity(item=ITEMS["item_crowbar"]))
+        self.npc = self.manager.npcs_in_location("zone_building")[0].name
+        self.zombie = add_zombie(self.manager, gap=2, state=ZombieState.CHASING).zombie_id
+        self.question = reach_question(
+            self.manager, UnsupportedAction(text="drink the water"), "- USE_ITEM <item> -- use"
+        )
+
+    def test_the_question_names_the_request_and_the_verbs(self):
+        self.assertIn('"drink the water"', self.question.text)
+        self.assertIn("- USE_ITEM", self.question.text)
+
+    def test_the_options_are_the_reasons(self):
+        self.assertEqual(
+            [key for key, _ in self.question.options], ["here", "missing", "none", "unclear"]
+        )
+        self.assertEqual(set(story_check_k.UNSUPPORTED_REASONS), {"here", "missing", "none"})
+
+    def test_the_scene_holds_what_is_in_reach_by_name_and_looks(self):
+        looks = seen_by_looks(self.manager)[self.zombie][1]
+        for word in (ITEMS["item_water_bottle"].name, ITEMS["item_crowbar"].name, self.npc, looks):
+            self.assertIn(word, self.question.scene)
+
+    def test_the_scene_has_no_id(self):
+        self.assertNotRegex(self.question.scene, r"\b(?:z|c)\d+\b|item_|npc_|zone_")
+
+    def test_the_scene_is_not_in_the_question_of_another_action(self):
+        (other,) = plan_questions(self.manager, [UseItemAction(item_name="Frying Pan")])
+        self.assertEqual(other.scene, "")

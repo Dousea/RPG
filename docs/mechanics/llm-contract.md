@@ -36,6 +36,7 @@ parser.
 | Parse-failure facts, the page payload | `adapters/engine.py` |
 | Saving | `adapters/save/codec.py` |
 | Hand-run parser quality check | `evals/parser_cases.yaml`, `scripts/eval_parser.py` |
+| Hand-run plan-check reason check | `evals/plan_check_cases.yaml`, `scripts/eval_plan_check.py` |
 
 ## The rule
 
@@ -149,7 +150,8 @@ capped at `UNSUPPORTED_TEXT_MAX_CHARS` characters. It is listed in every scene, 
 parser's rules tell the model to use it when no listed verb does what was asked, never
 the nearest verb on an unrelated item.
 
-The engine never validates or resolves it. It is refused like any refusal, in the
+The engine never resolves it. The validator refuses it at 0 minutes with a reason the
+plan check picked (see [the plan check](#the-plan-check)); it is refused like any refusal, in the
 character's name: "Refused: Orton can't drink from the tap: there is no way to do that
 yet." It costs 0 minutes, appears in `refused_actions` (so the [fact check](#the-fact-check)
 asks about it) and adds nothing to `[IN VIEW]`, since it touches nothing. The branch is
@@ -536,13 +538,21 @@ usual, so the narrator tells the player honestly that what they asked for didn't
 happen instead of narrating an unrelated action. A plan whose every action is ruled
 out is a turn of refusals, not a turn of nothing. A failed request keeps the action.
 
-An `UNSUPPORTED` action gets a different question, since "did the player ask for it"
-is true by construction: given the verbs in `[AVAILABLE ACTIONS]` (without
-`UNSUPPORTED`), does one of them do this? The options are yes, no and unclear; no and
-unclear are allowed. Answered yes at or above the threshold, the action is dropped
-and the turn's refusal fact says the request wasn't understood as an action and the
-player can rephrase it. There is no re-parse. Without the fact check, the `UNSUPPORTED`
-refusal stands.
+An `UNSUPPORTED` action is never dropped by the check, since "did the player ask for
+it" is true by construction. It gets a different question, whose state is the player's
+input plus what is in reach, in words and without ids (what the character carries,
+holds and wears, the items here, the containers, doors and windows, the NPCs, the
+zombies by their looks and the bodies): given the verbs in `[AVAILABLE ACTIONS]`
+(without `UNSUPPORTED`) and what is in reach, could one of them do this? The options
+are `here` (a listed verb does it with what is in reach), `missing` (a verb would, but
+what it needs isn't in reach), `none` (no listed verb does it) and `unclear`. The
+answer picks the refusal's reason, and every reason names the request: `here` says it
+wasn't understood as an action and the player can rephrase it, `missing` says nothing in
+reach does it, and `none`, `unclear`, an answer under the threshold, a failed request or a
+disabled check say there is no way to do that yet. The action then goes to the
+validator with that reason and is refused there at 0 minutes, so the story check asks
+about it like any refusal. There is no re-parse. After the plan's first zone change an
+`UNSUPPORTED` action is cut like any other and gets no question.
 The check only takes actions away; it never adds or changes one. It runs whenever the
 fact check is enabled and the plan has an action, and reports the `checking_plan` step.
 
@@ -563,8 +573,9 @@ off. A turn gets, in this order:
   down and dead, it split its answer between them and fell under the threshold.
 - **Each refused action.** "Does the story say that Orton managed to take the Kitchen
   Knife?", with yes, no and unclear; no and unclear are allowed. An action refused and
-  then done later in the same turn is not asked about. A line the parser couldn't read,
-  and an action the plan check ruled out, get no question.
+  then done later in the same turn is not asked about, and an `UNSUPPORTED` request is asked
+  about like any refusal. A line the parser couldn't read, and an action the plan check
+  ruled out, get no question.
 - **Finds.** A turn whose search turned anything up asks "Does the story say that
   Orton's search found nothing at all?"; no and unclear are allowed.
 
@@ -665,7 +676,8 @@ scream for help" gives `SHOUT`). A request the scene can't fulfil, such as askin
 someone who isn't there, expects no actions. `scripts/eval_parser.py` runs them against the
 configured model and prints a pass rate; a move matches when it reaches the same zone,
 so `MOVE_TO lobby` passes for `MOVE_TO building`, and `MOVE_TO apartment` for `MOVE_TO the apartment` (both are the same zones). It is run by hand when the prompt or the
-model changes.
+model changes. The plan check's reason pick has its own cases, `evals/plan_check_cases.yaml`
+(a scene, the request and the expected reason), run by `scripts/eval_plan_check.py` the same way.
 
 ## Hooks into other mechanics
 

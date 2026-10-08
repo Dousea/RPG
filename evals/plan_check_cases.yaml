@@ -1,0 +1,43 @@
+# Plan-check cases for scripts/eval_plan_check.py. Run by hand; not part of the test suite.
+# Each case: the scene (`zone`, optional `outbreak`, `carrying` item ids, `downed_zombies`
+# the count lying on the ground here), the player's `input`, the `unsupported` text the
+# parser wrote, and the expected `reason` key: here, missing or none.
+- name: drink from the tap
+  zone: zone_home
+  input: drink from the tap
+  unsupported: drink from the tap
+  reason: none
+
+- name: drink the water bottle with none to drink
+  zone: zone_home
+  input: drink the water bottle
+  unsupported: drink the water bottle
+  reason: missing
+
+- name: drink the water bottle that is carried
+  zone: zone_home
+  carrying: [item_water_bottle]
+  input: drink the water bottle
+  unsupported: drink the water bottle
+  reason: here
+
+- name: stomp the downed zombies
+  zone: zone_street
+  outbreak: true
+  downed_zombies: 2
+  input: stomp the ones on the floor
+  unsupported: stomp the zombies on the floor
+  reason: here
+
+- name: light a fire
+  zone: zone_home
+  input: light a fire
+  unsupported: light a fire
+  reason: none
+
+- name: put on the schoolbag
+  zone: zone_home
+  carrying: [item_schoolbag]
+  input: put on the schoolbag
+  unsupported: put on the schoolbag
+  reason: none

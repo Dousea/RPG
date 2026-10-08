@@ -254,3 +254,42 @@ class PlanConflictTests(unittest.TestCase):
             self.assertLogs("adapters.factcheck", "WARNING"),
         ):
             self.assertEqual(checker().plan_conflicts("x", [ASKED]), [])
+
+
+class PlanAnswerTests(unittest.TestCase):
+    """llm-contract: The plan check: the answer to one question, not a conflict."""
+
+    WITH_SCENE = StateQuestion("Reason?", OPTIONS, frozenset(), "", "[ITEMS HERE]\n - Crowbar")
+
+    def test_the_top_key_and_its_probability_come_back(self):
+        with mock.patch.object(
+            factcheck.requests, "post", return_value=reply({"B": 0.8, "A": 0.1})
+        ):
+            key, probability = checker().plan_answer("x", self.WITH_SCENE) or ("", 0.0)
+        self.assertEqual(key, "down")
+        self.assertAlmostEqual(probability, 0.8)
+
+    def test_the_state_holds_the_input_and_the_scene(self):
+        with mock.patch.object(factcheck.requests, "post", return_value=reply({"A": 0.97})) as post:
+            checker().plan_answer("drink the water", self.WITH_SCENE)
+        state = json.loads(post.call_args.kwargs["json"]["messages"][1]["content"])["state"]
+        self.assertIn("drink the water", state)
+        self.assertIn("Crowbar", state)
+
+    def test_no_answer_when_disabled_or_the_request_fails(self):
+        with mock.patch.object(factcheck.requests, "post") as post:
+            self.assertIsNone(checker(enabled=False).plan_answer("x", self.WITH_SCENE))
+        post.assert_not_called()
+        with (
+            mock.patch.object(factcheck.requests, "post", side_effect=requests.Timeout("slow")),
+            self.assertLogs("adapters.factcheck", "WARNING"),
+        ):
+            self.assertIsNone(checker().plan_answer("x", self.WITH_SCENE))
+
+    def test_the_answer_is_logged_at_debug(self):
+        with (
+            mock.patch.object(factcheck.requests, "post", return_value=reply({"A": 0.97})),
+            self.assertLogs("adapters.factcheck", "DEBUG") as logs,
+        ):
+            checker().plan_answer("x", self.WITH_SCENE)
+        self.assertIn("answer standing at 0.97", "\n".join(logs.output))

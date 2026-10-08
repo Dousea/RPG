@@ -32,6 +32,7 @@ from data.character.skills import SKILLS
 from data.character.traits import TRAITS
 from data.items import ITEMS, item_condition_word, wetness_word
 from data.loot import containers as container_k
+from data.story import check as story_check_k
 from data.story.memory import LAST_SCENE_MAX_CHARS, LAST_SCENE_MAX_LINES
 from data.story.social import TALK_APPROACHES
 from data.time_costs import MAX_PLAN_ACTIONS
@@ -48,6 +49,7 @@ from managers.character.skills import level_word
 from managers.combat import weapons
 from managers.corpses.search import corpse_views, looks_words, perceived_corpses, person_word
 from managers.game import GameManager
+from managers.mentions import mentionables
 from managers.story import in_view
 from managers.story.beats import visible_topics
 from managers.story.lore import LoreHit, drop_order, world_lines
@@ -650,6 +652,42 @@ Traits: {_lines(trait_lines) or "None"}
             if verb.name == "TALK":
                 lines.extend(f"  {label}: {row.gloss}" for label, row in TALK_APPROACHES.items())
         return "\n".join(lines)
+
+    def in_reach_section(self) -> str:
+        """What the player carries, wears and can see here, in words and without ids: the parser's sections, less what only an id can aim at."""
+        manager = self.manager
+        npcs = [
+            f" - {npc.name}" for npc in manager.npcs_in_location(manager.player.current_location_id)
+        ]
+        zombies = [
+            story_check_k.REACH_ZOMBIE_LINE.format(looks=mention.name, state=mention.description)
+            for mention in mentionables(manager)
+            if mention.kind == "zombie"
+        ]
+        inventory = "\n".join(self._inventory_lines()) or "Empty"
+        return f"""[INVENTORY]
+{inventory}
+
+[WORN]
+{self._worn_section()}
+
+[ITEMS HERE]
+{self._current_items_section().rstrip()}
+
+[ROOMS]
+{self._rooms_section()}
+
+[DOORS AND WINDOWS]
+{self._barriers_section()}
+
+[NPCS HERE]
+{chr(10).join(npcs) or "No one else is here."}
+
+[THREATS]
+{chr(10).join(zombies) or "None"}
+
+[CORPSES]
+{self._corpses_section(with_id=False)}"""
 
     def _request_gloss(self) -> str:
         """The REQUEST requests this scene can fill, so the model never picks one it can't complete."""

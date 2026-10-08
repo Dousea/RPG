@@ -33,15 +33,22 @@ PLAN_OPTIONS: tuple[tuple[str, str], ...] = (
     ("no", "It is something else: the player did not ask for it and it does not lead there."),
     ("unclear", "Cannot tell."),
 )
-UNSUPPORTED_QUESTION = 'Given these verbs:\n{verbs}\ndoes one of them do "{action}"?'
+UNSUPPORTED_QUESTION = (
+    'Given these verbs:\n{verbs}\nand what is in reach, could one of them do "{action}"?'
+)
 UNSUPPORTED_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("yes", "One of the listed verbs does what is described."),
-    ("no", "None of the listed verbs does it."),
+    ("here", "A listed verb does it with what is in reach."),
+    ("missing", "A listed verb would do it, but what it needs is not in reach."),
+    ("none", "No listed verb does it."),
     ("unclear", "Cannot tell."),
 )
-PLAN_NOT_UNDERSTOOD_FACT = (
-    "Refused: {name}'s request wasn't understood as an action; the player can rephrase it."
-)
+UNSUPPORTED_DEFAULT_REASON = "there is no way to do that yet."
+UNSUPPORTED_REASONS = {
+    "here": "it wasn't understood as an action; the player can rephrase it.",
+    "missing": "nothing in reach does it.",
+    "none": UNSUPPORTED_DEFAULT_REASON,
+}
+REACH_ZOMBIE_LINE = " - the zombie ({looks}): {state}"
 PLAN_REFUSED_FACT = "Refused: {name} can't do that here, and does not {action}."
 SEEN_BY_LOOKS = "{noun} ({looks})"
 ZOMBIE_NOUN = "the zombie"

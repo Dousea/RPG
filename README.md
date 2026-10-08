@@ -216,7 +216,8 @@ first run downloads it.
 
 Model quality is measured separately, by hand, against LM Studio:
 `python scripts/eval_parser.py` runs the parser cases in
-`evals/parser_cases.yaml`.
+`evals/parser_cases.yaml`, and `python scripts/eval_plan_check.py` the plan
+check's reason cases in `evals/plan_check_cases.yaml`.
 
 ### Saves
 

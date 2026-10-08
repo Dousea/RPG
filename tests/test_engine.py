@@ -21,6 +21,7 @@ from adapters.memory import DEFAULT_RECALL
 from adapters.save import files
 from data.character.presets import ORTON
 from data.items import ITEMS
+from data.story import check as story_check_k
 from data.story.beats import EVACUATION_MINUTE
 from data.story.memory import BUDGET_MARGIN_TOKENS
 from data.story.mentions import REST_NOT_REACHED_FACT
@@ -1634,29 +1635,83 @@ class PlanCheckTests(EngineTestCase):
     def unsupported_turn(self) -> str:
         self.llm.actions = "ACTIONS:\nUNSUPPORTED light a fire"
         self.engine.play("light a fire")
-        return self.llm.narrator_prompts[0]
+        return self.llm.narrator_prompts[-1]
 
-    def test_an_unsupported_action_asks_whether_a_listed_verb_does_it(self):
+    def reason_of(self, answer: tuple[str, float] | None) -> str:
+        self.checker().plan_answers = [answer]
+        return self.unsupported_turn()
+
+    def test_an_unsupported_action_asks_why_with_what_is_in_reach(self):
         self.unsupported_turn()
-        ((_, questions),) = self.checker().plan_calls
-        self.assertIn('does one of them do "light a fire"?', questions[0].text)
-        self.assertIn("- MOVE_TO", questions[0].text)
+        ((player_input, question),) = self.checker().answer_calls
+        self.assertEqual(player_input, "light a fire")
+        self.assertIn('could one of them do "light a fire"?', question.text)
+        self.assertIn("- MOVE_TO", question.text)
+        self.assertIn("[INVENTORY]", question.scene)
+        self.assertEqual([q for _, q in self.checker().plan_calls], [[]])
 
-    def test_an_unsupported_action_nothing_fits_is_refused_by_name(self):
-        prompt = self.unsupported_turn()
-        self.assertIn("Refused: Orton can't light a fire: there is no way to do that yet.", prompt)
-        self.assertNotIn("rephrase", prompt)
+    def test_each_answer_gives_its_reason_naming_the_request(self):
+        for key, reason in story_check_k.UNSUPPORTED_REASONS.items():
+            with self.subTest(key=key):
+                prompt = self.reason_of((key, 1.0))
+                self.assertIn(f"Refused: Orton can't light a fire: {reason}", prompt)
 
-    def test_an_unsupported_action_a_verb_fits_is_not_understood(self):
-        self.checker().plan_results = [[0]]
-        prompt = self.unsupported_turn()
-        self.assertIn("rephrase", prompt)
-        self.assertNotIn("no way to do that yet", prompt)
+    def test_here_says_to_rephrase_and_missing_says_nothing_in_reach(self):
+        self.assertIn("rephrase", self.reason_of(("here", 1.0)))
+        self.assertIn("nothing in reach", self.reason_of(("missing", 1.0)))
 
-    def test_an_unsupported_action_stands_without_the_check(self):
+    def test_no_pick_gives_no_way_to_do_that_yet(self):
+        threshold = config.factcheck.conflict_threshold
+        for answer in (("unclear", 1.0), ("here", threshold - 0.01), None):
+            with self.subTest(answer=answer):
+                prompt = self.reason_of(answer)
+                self.assertIn("Orton can't light a fire: there is no way to do that yet", prompt)
+
+    def test_a_disabled_checker_gives_no_way_to_do_that_yet(self):
         self.checker().enabled = False
         prompt = self.unsupported_turn()
+        self.assertIn("Orton can't light a fire: there is no way to do that yet", prompt)
+
+    def test_an_unsupported_action_is_refused_at_no_cost_and_the_story_is_checked(self):
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                self.checker().enabled = enabled
+                minutes = self.engine.game.narrative.minutes
+                self.unsupported_turn()
+                self.assertEqual(self.engine.game.narrative.minutes, minutes)
+                questions = self.checker().calls[-1][1]
+                self.assertTrue(any("managed to light a fire" in q.text for q in questions))
+
+    def test_an_unsupported_action_after_the_zone_change_is_cut_without_a_question(self):
+        self.llm.actions = "ACTIONS:\nMOVE_TO out\nUNSUPPORTED light a fire"
+        self.engine.play("go out and light a fire")
+        self.assertEqual(self.checker().answer_calls, [])
+        self.assertNotIn("can't light a fire", self.llm.narrator_prompts[0])
+
+    def test_a_flagged_action_gets_its_own_refusal_next_to_an_unsupported_one(self):
+        self.llm.actions = "ACTIONS:\nUNSUPPORTED light a fire\nWAIT 5m"
+        self.checker().plan_results = [[0]]
+        self.engine.play("light a fire and wait")
+        prompt = self.llm.narrator_prompts[-1]
         self.assertIn("Orton can't light a fire", prompt)
+        self.assertRegex(prompt, r"Refused: Orton can't do that here, and does not wait")
+
+    def test_flagged_indexes_map_back_across_unsupported_actions(self):
+        self.llm.actions = "ACTIONS:\nWAIT 5m\nUNSUPPORTED light a fire\nADD_GOAL short_term Find a weapon\nWAIT 9m"
+        self.checker().plan_results = [[0, 1]]
+        self.engine.play("wait, light a fire, plan, wait")
+        ((_, questions),) = self.checker().plan_calls
+        self.assertEqual(len(questions), 3)
+        first, second = (q.correction for q in questions[:2])
+        self.assertNotEqual(first, second)
+        prompt = self.llm.narrator_prompts[-1]
+        self.assertIn("does not wait", first)
+        self.assertIn("goals", second)
+        self.assertIn(first, prompt)
+        self.assertIn(second, prompt)
+        self.assertLess(prompt.index(first), prompt.index(second))
+        self.assertIn("Orton can't light a fire", prompt)
+        self.assertNotIn("Find a weapon", self.engine.game.narrative.goals["short_term"])
 
     def test_a_disabled_checker_skips_the_step(self):
         self.checker().enabled = False
