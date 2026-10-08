@@ -5,12 +5,12 @@ from typing import Literal
 
 from modules.action.pins import Pinned
 
-CandidateKind = Literal["item", "zone", "container"]
+CandidateKind = Literal["item", "zone", "container", "corpse"]
 
 
 @dataclass(frozen=True)
 class Candidate:
-    """One thing a name could mean, by id: a zone, a container or an item (its instance id)."""
+    """One thing a name could mean, by id: a zone, a container, a body or an item (its instance id)."""
 
     kind: CandidateKind
     id: str

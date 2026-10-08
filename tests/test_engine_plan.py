@@ -15,9 +15,10 @@ from modules.action.pins import MENTION_MARK, pin_of
 from modules.action.types import AnyAction, AttackAction, MoveAction
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
-from modules.resolution import TargetContainer, TargetZombie
+from modules.resolution import TargetContainer, TargetCorpse, TargetZombie
 from tests.support import FakeFactChecker
 from tests.test_engine import EngineTestCase
+from tests.test_plan import two_bodies
 from tests.test_simulation import add_zombie, zombie_game
 
 STORY = "STORY:\nIt happens.\n\nEVENT:\nSomething happened\n\nOPTIONS:\nNONE"
@@ -198,6 +199,44 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         self.engine.go(["bathroom_counter"])
         (search,) = [a for a in seen if isinstance(a.resolved, TargetContainer)]
         self.assertEqual(search.expect(TargetContainer).container.container_id, "bathroom_counter")
+
+    def test_two_bodies_ask_which_one_and_go_searches_the_pick(self):
+        gm = two_bodies("item_jacket_police", "item_jeans")
+        self.engine.manager = gm
+        seen = self.accepted()
+        for reply in ("SEARCH corpse", "SEARCH c1"):
+            with self.subTest(reply):
+                gm.world.corpses["c2"].searched = False
+                self.llm.narrator_prompts.clear()
+                self.script(reply)
+                minutes = gm.narrative.minutes
+                result = self.engine.play("search the body")
+                self.assertEqual(self.choices(result["plan"]), ["c1", "c2"])
+                self.assert_nothing_ran(gm, minutes, result)
+                self.engine.go(["c2"])
+                self.assertEqual(seen[-1].expect(TargetCorpse).corpse_id, "c2")
+                self.assertTrue(gm.world.corpses["c2"].searched)
+                self.assertFalse(gm.world.corpses["c1"].searched)
+
+    def test_words_naming_one_body_or_one_body_ask_nothing(self):
+        gm = two_bodies("item_jacket_police", "item_jeans")
+        self.engine.manager = gm
+        self.script("SEARCH c2")
+        result = self.engine.play("search the man in jeans")
+        self.assertIsNone(result["plan"])
+        self.assertTrue(gm.world.corpses["c2"].searched)
+
+        gm = two_bodies("item_jeans")
+        self.engine.manager = gm
+        self.script("SEARCH corpse")
+        self.assertIsNone(self.engine.play("search the body")["plan"])
+
+    def test_two_zombies_still_default_to_the_nearest_without_asking(self):
+        gm = self.stage("zone_street")
+        add_zombie(gm, gap=3, state=ZombieState.CHASING)
+        add_zombie(gm, gap=9)
+        self.script("ATTACK zombie")
+        self.assertIsNone(self.engine.play("hit the zombie")["plan"])
 
     def test_a_clear_plan_runs_as_before(self):
         self.stage("zone_street")

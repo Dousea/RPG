@@ -11,11 +11,19 @@ from dataclasses import dataclass, replace
 
 from data.story import mentions as mention_k
 from data.time_costs import MAX_PLAN_ACTIONS
+from managers import naming
 from managers.game import GameManager
-from managers.mentions import mentionables, zone_candidate
-from managers.validator import ZOMBIE_WORDS, Accepted, ActionValidator, Asked
+from managers.mentions import body_candidates, body_named, mentionables, zone_candidate
+from managers.validator import (
+    CORPSE_ID_PATTERN,
+    ZOMBIE_WORDS,
+    Accepted,
+    ActionValidator,
+    Asked,
+)
 from managers.world import locations
 from modules.action.choices import Candidate
+from modules.action.parser import CORPSE_WORDS
 from modules.action.pins import pin_of
 from modules.action.types import AnyAction, AttackAction, MoveAction, ShoveAction
 from modules.action.words import describe_action
@@ -60,7 +68,8 @@ def open_choices(
     """The targets of `actions`, up to the first zone change, that fit several things in this scene.
 
     `player_input` is the player's words (picks as their names): a move to the one zone the
-    parser picked is open too when those words only gave a kind word that fits several zones.
+    parser picked is open too when those words only gave a kind word that fits several zones,
+    and so is a body target when several bodies are perceived and those words name none.
     """
     validator = ActionValidator(manager)
     found: list[OpenChoice] = []
@@ -69,6 +78,10 @@ def open_choices(
             candidates = tuple(zone_candidate(manager, zone, True) for zone in zones)
             found.append(OpenChoice(index, "destination", candidates))
             break
+
+        if body := _body_choice(manager, action, player_input):
+            found.append(OpenChoice(index, *body))
+            continue
 
         result = validator.validate(action)
         if isinstance(result, Asked):
@@ -90,6 +103,31 @@ def _kind_zones(
     return locations.kind_choice(
         player_input, target, manager.current_location, manager.world.locations
     )
+
+
+_BODY_FIELDS = {"SEARCH": "target_name", "CARRY": "corpse_name", "TAKE": "from_name"}
+
+
+def _body_choice(
+    manager: GameManager, action: AnyAction, player_input: str
+) -> tuple[str, tuple[Candidate, ...]] | None:
+    """The field and the bodies a body target leaves open: the generic body or an id the parser picked, with several perceived and none named."""
+    attr = _BODY_FIELDS.get(action.verb)
+    target = getattr(action, attr, None) if attr else None
+    if attr is None or not isinstance(target, str) or pin_of(target, "corpse"):
+        return None
+    if not (
+        naming.clean_name(target) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(target.strip())
+    ):
+        return None
+
+    candidates = body_candidates(manager)
+    if len(candidates) < 2:
+        return None
+    chosen = ActionValidator(manager).corpse_target(target)
+    if chosen is None or body_named(manager, player_input, chosen.corpse_id):
+        return None
+    return attr, tuple(candidates)
 
 
 def _ends_the_scene(result: object) -> bool:

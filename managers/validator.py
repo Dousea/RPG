@@ -615,7 +615,7 @@ class ActionValidator:
 
     def _take_from_corpse(self, action: TakeAction, source: str) -> ValidationResult:
         player = self.manager.player
-        corpse = self._corpse_target(source)
+        corpse = self.corpse_target(source)
         if corpse is None:
             return Rejected(action, zombie_lore.NO_SUCH_CORPSE.format(target=source))
         if not corpse.searched:
@@ -700,7 +700,7 @@ class ActionValidator:
             return refusal
         if player.carrying_corpse is not None:
             return Rejected(action, carry_k.ALREADY_CARRYING.format(name=self._name))
-        corpse = self._corpse_target(action.corpse_name)
+        corpse = self.corpse_target(action.corpse_name)
         if corpse is None:
             return Rejected(action, zombie_lore.NO_SUCH_CORPSE.format(target=action.corpse_name))
         if any(player.equipment[slot] is not None for slot in CharacterHoldableSlot):
@@ -717,7 +717,7 @@ class ActionValidator:
             naming.clean_name(name) in CORPSE_WORDS or CORPSE_ID_PATTERN.fullmatch(name.strip())
         ):
             return self._search_place(action)
-        corpse = self._corpse_target(action.target_name)
+        corpse = self.corpse_target(action.target_name)
         if corpse is None:
             return Rejected(action, zombie_lore.NO_SUCH_CORPSE.format(target=action.target_name))
         if corpse.searched:
@@ -759,7 +759,7 @@ class ActionValidator:
             return Rejected(action, label)
         return Accepted(action, TargetContainer(owner, container, walk=owner is not here))
 
-    def _corpse_target(self, name: str) -> CorpseEntity | None:
+    def corpse_target(self, name: str) -> CorpseEntity | None:
         """The perceived body `name` points at: its id, or the nearest for "corpse"."""
         needle = name.strip().casefold()
         seen = perceived_corpses(self.manager)

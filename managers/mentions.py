@@ -6,6 +6,7 @@ NPCs and rooms and containers of the zone, the barriers on its connections, ever
 instance id. Topics would show what an NPC knows before it is asked.
 """
 
+import re
 from collections.abc import Sequence
 from typing import Literal
 
@@ -23,13 +24,18 @@ from managers.corpses.search import (
 )
 from managers.game import GameManager
 from managers.world.barriers import barriers_of, blocks, state_word
+from managers.world.locations import WORD
 from managers.world.rooms import current_room, room_holding
 from managers.zombies.population import threat_views
 from modules.action.choices import Candidate
 from modules.action.pins import Mention, MentionKind
+from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.world.location import Location
 from modules.world.room import ContainerEntity, RoomEntity
+
+_LOOKS_FILLER = frozenset({"a", "an", "the", "in", "of", "and", "with"})
+_CARRYING = re.compile(r"\b(?:carried|carrying|holding|i carry|in my arms)\b")
 
 
 def _named_by_looks(
@@ -91,6 +97,51 @@ def _corpses(manager: GameManager) -> list[Mention]:
             for view in corpse_views(manager)
         ],
     )
+
+
+def body_candidates(manager: GameManager) -> list[Candidate]:
+    """Every perceived body as an answer to a which-one question, named as the `@` list names it."""
+    listed = _corpses(manager)
+    return [
+        Candidate("corpse", mention.id, label, mention.description, pinned_as=mention.id)
+        for mention, label in zip(listed, labels(listed), strict=True)
+    ]
+
+
+def body_named(manager: GameManager, text: str, corpse_id: str) -> bool:
+    """Whether `text` names the body `corpse_id` among the perceived ones.
+
+    It does when it holds, as whole words, the body's label unless another body's label holds
+    it too, or a looks word no other perceived body shows, or, for the body in the player's
+    arms, a phrase for carrying it.
+    """
+    listed = _corpses(manager)
+    spoken = WORD.findall(text.casefold())
+    names = {
+        m.id: WORD.findall(label.casefold())
+        for m, label in zip(listed, labels(listed), strict=True)
+    }
+    label = names.get(corpse_id)
+    shared = label is not None and any(
+        _contains(other, label) for id_, other in names.items() if id_ != corpse_id
+    )
+    if label and _contains(spoken, label) and not shared:
+        return True
+
+    looks = {c.corpse_id: _looks_words(c) for c in perceived_corpses(manager)}
+    others = set().union(*(words for id_, words in looks.items() if id_ != corpse_id))
+    if (looks.get(corpse_id, set()) - others) & set(spoken):
+        return True
+
+    return corpse_id == manager.player.carrying_corpse and bool(_CARRYING.search(text.casefold()))
+
+
+def _contains(words: list[str], phrase: list[str]) -> bool:
+    return any(words[i : i + len(phrase)] == phrase for i in range(len(words)))
+
+
+def _looks_words(corpse: CorpseEntity) -> set[str]:
+    return set(WORD.findall(looks_words(corpse_person(corpse), corpse.contents))) - _LOOKS_FILLER
 
 
 def seen_by_looks(manager: GameManager) -> dict[str, tuple[MentionKind, str]]:

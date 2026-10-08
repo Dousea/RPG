@@ -49,7 +49,7 @@ MIN_WHOLE_WORD_NAME_LENGTH = 4
 _KIND_WORDS = frozenset(word for words in ZONE_KINDS.values() for word in words)
 _EXIT_WORDS = r"outside(?: of)?|out of|leaving|leave|exiting|exit"
 _EXIT_WORD = re.compile(rf"\b(?:{_EXIT_WORDS})\b")
-_WORD = re.compile(r"[a-z0-9']+")
+WORD = re.compile(r"[a-z0-9']+")
 _ARTICLES = frozenset({"the", "a", "an", "this", "that"})
 _EXIT_PHRASE = re.compile(
     rf"^(?:{_EXIT_WORDS})\s+"
@@ -88,7 +88,7 @@ def resolve_location(
         return target
     exit_match = _EXIT_PHRASE.match(needle)
     if exit_match:
-        words = _WORD.findall(exit_match.group(1))
+        words = WORD.findall(exit_match.group(1))
         named = _exit_noun_prefix(words)
         if named is not None:
             return _walk_out(named, words, current, locations)
@@ -183,7 +183,7 @@ def _exit_noun_prefix(words: list[str]) -> tuple[str, int] | None:
 
 def kind_word(needle: str) -> str:
     """`needle` without its leading articles: the word that may name a kind of place."""
-    words = _WORD.findall(needle)
+    words = WORD.findall(needle)
     while words and words[0] in _ARTICLES:
         words = words[1:]
     return " ".join(words)
@@ -291,7 +291,7 @@ def _match_whole_words(
 
 def _words(text: str) -> list[str]:
     """`text`'s words with any trailing possessive 's removed."""
-    return [word.removesuffix("'s") for word in _WORD.findall(text)]
+    return [word.removesuffix("'s") for word in WORD.findall(text)]
 
 
 def _first_contiguous_match(haystack: list[str], needle: list[str]) -> int | None:
