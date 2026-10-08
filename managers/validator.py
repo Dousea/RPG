@@ -274,8 +274,9 @@ class ActionValidator:
         walk is gated hop by hop so a lock can't be skipped, yet it never
         dead-ends in "you can't do that."
 
-        Anything that isn't a recognized zone, connection, or bare direction
-        becomes a free-text spot inside the zone the player is already in.
+        A container of this zone moves the player into its room. Anything
+        that isn't a recognized zone, room, container, connection, or bare
+        direction becomes a free-text spot inside the zone the player is already in.
         The result is one of the five `MoveOutcome` types.
         """
         manager = self.manager
@@ -303,6 +304,15 @@ class ActionValidator:
         if target is None:
             if folded in BARE_DIRECTIONS:
                 return Accepted(action, ShuffleInZone(current, raw))
+
+            held = self._container_named(action.destination, any_room=True)
+            if isinstance(held, Question):
+                return Rejected(action, held)
+            if held is not None:
+                room = room_holding(current, held)
+                if room is not None:
+                    return self._enter_room(action, room)
+
             target = manager.resolve_places(raw)
 
         if isinstance(target, list):
@@ -515,12 +525,15 @@ class ActionValidator:
                 return container
         return None
 
-    def _container_named(self, name: str) -> ContainerEntity | Question | None:
-        """The container `name` points at in this zone; the question to ask when several match, None when none do."""
+    def _container_named(
+        self, name: str, *, any_room: bool = False
+    ) -> ContainerEntity | Question | None:
+        """The container `name` points at, in the player's room or (`any_room`) anywhere in this zone; the question to ask when several match, None when none do."""
         manager = self.manager
         if pin := pin_of(name):
             return self._pinned_container(pin)
-        found = resolve_container(manager.current_location, manager.player.current_room, name)
+        room_id = None if any_room else manager.player.current_room
+        found = resolve_container(manager.current_location, room_id, name)
         if isinstance(found, list):
             names = " or ".join(c.name for c in found)
             options = tuple(container_candidate(manager, c) for c in found)

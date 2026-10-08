@@ -4,10 +4,12 @@ import unittest
 from dataclasses import replace
 
 from data.items import ITEMS
+from data.loot import containers as container_k
 from data.world.locations import ZONE_KIND_NAMES
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Asked, Rejected, ValidationResult
 from modules.action.choices import Question
+from modules.action.pins import Pinned
 from modules.action.types import (
     AttackAction,
     CloseAction,
@@ -689,6 +691,46 @@ class RoomVerbTests(unittest.TestCase):
         resolved = self.accepted(MoveAction(destination="the bedroom"))
         assert isinstance(resolved, MoveToRoom)
         self.assertEqual(resolved.room.room_id, "bedroom")
+
+    def clinic_exam_room(self):
+        self.gm.player.current_location_id = "zone_clinic"
+        self.gm.player.current_room = "exam_room"
+
+    def test_a_container_name_moves_to_the_room_holding_it(self):
+        self.clinic_exam_room()
+        resolved = self.accepted(MoveAction(destination="the office desk"))
+        assert isinstance(resolved, MoveToRoom)
+        self.assertEqual(resolved.room.room_id, "office")
+
+    def test_a_container_of_the_players_own_room_is_refused_as_a_room_move_is(self):
+        self.clinic_exam_room()
+        self.assertEqual(
+            self.reason(MoveAction(destination="the exam desk")),
+            container_k.ALREADY_IN_ROOM.format(name="Orton", room="exam room"),
+        )
+
+    def test_a_pinned_container_pick_moves_to_its_room_whatever_its_text(self):
+        self.clinic_exam_room()
+        office = self.gm.current_location.rooms["office"]
+        desk = next(c for c in office.containers if "desk" in c.name)
+        pick = Pinned("desk", "container", desk.container_id)
+        resolved = self.accepted(MoveAction(destination=pick))
+        assert isinstance(resolved, MoveToRoom)
+        self.assertEqual(resolved.room.room_id, "office")
+
+    def test_a_kind_word_fitting_one_container_of_the_zone_moves_to_its_room(self):
+        resolved = self.accepted(MoveAction(destination="dresser"))
+        assert isinstance(resolved, MoveToRoom)
+        self.assertEqual(resolved.room.room_id, "bedroom")
+
+    def test_a_kind_word_fitting_containers_in_several_rooms_asks_which_one(self):
+        self.clinic_exam_room()
+        result = self.validator.validate(MoveAction(destination="desk"))
+        assert isinstance(result, Asked), result
+        self.assertGreater(len(result.candidates), 1)
+
+    def test_a_free_spot_that_is_no_container_stays_a_spot(self):
+        self.assertIsInstance(self.accepted(MoveAction(destination="the window")), MoveToSpot)
 
     def test_the_room_the_player_is_in_is_refused(self):
         self.assertEqual(

@@ -530,7 +530,10 @@ its transfer time.
 - **`MOVE_TO <room>`:** a name that is a room of the current zone moves the
   player there in 1 minute and sets their room and spot to its name; rooms are
   tried before zones. Refused for the room they are in ("<name> is already in the
-  living room."). A name that is no room falls to the usual zone and spot rules.
+  living room."). A name that is a container of the current zone (its full name,
+  or a kind word that fits one) is a move to the room holding it, with the same
+  cost, fact and refusal; a kind word that fits several containers of the zone
+  asks which one. A name that is neither falls to the usual zone and spot rules.
   Leaving for another zone puts the player in that zone's entry room.
 - **`SEARCH <room or container>`:** opening a container takes 1 minute. A
   container in another room costs 1 minute more to get to its room. `SEARCH
