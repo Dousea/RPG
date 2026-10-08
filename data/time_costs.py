@@ -5,6 +5,7 @@ validator resolved for it, so a function never re-derives what the check
 already decided.
 """
 
+import math
 from collections.abc import Callable
 
 from data.carry import CARRY_CORPSE_MIN
@@ -51,10 +52,8 @@ from modules.item import ConsumableItem
 from modules.resolution import (
     ExercisePlan,
     HeldItem,
-    MoveBlocked,
     MoveToRoom,
     MoveToSpot,
-    MoveToZone,
     Resolution,
     ShuffleInZone,
     TargetCorpse,
@@ -76,25 +75,36 @@ WINDOW_CLIMB_MIN = 1  # clock
 WEAR_MINUTES = 1  # clock
 TAKE_OFF_MINUTES = 1  # clock
 FIRST_AID_MINUTES = 1  # health
-ZONE_HOP_MIN = 10  # clock
-ZONE_HOP_RUNNING_MIN = 5  # clock
-ZONE_HOP_SNEAKING_MIN = 20  # clock
 MAX_PLAN_ACTIONS = 5  # llm-contract: actions resolved per turn
 NONE_TURN_MINUTES = 1  # llm-contract
 
 CostFunction = Callable[[AnyAction, Resolution], int]
 
 
-HOP_MINUTES_BY_PACE = {  # zombies
-    Pace.WALK: ZONE_HOP_MIN,
-    Pace.RUN: ZONE_HOP_RUNNING_MIN,
-    Pace.SNEAK: ZONE_HOP_SNEAKING_MIN,
+WALK_MINUTES_BY_CONNECTION = {  # clock
+    frozenset(("zone_home", "zone_building")): 1,
+    frozenset(("zone_building", "zone_flat_vacant")): 1,
+    frozenset(("zone_building", "zone_flat_tenant")): 1,
+    frozenset(("zone_building", "zone_street")): 2,
+    frozenset(("zone_street", "zone_bodega")): 1,
+    frozenset(("zone_street", "zone_neighborhood")): 5,
+    frozenset(("zone_neighborhood", "zone_pharmacy")): 10,
+    frozenset(("zone_neighborhood", "zone_clinic")): 10,
+    frozenset(("zone_neighborhood", "zone_supermarket")): 10,
+    frozenset(("zone_neighborhood", "zone_hardware")): 10,
+}
+
+HOP_MINUTES_FACTOR_BY_PACE = {  # zombies
+    Pace.WALK: 1.0,
+    Pace.RUN: 0.5,
+    Pace.SNEAK: 2.0,
 }
 
 
-def zone_hop_minutes(pace: Pace = Pace.WALK) -> int:
-    """Minutes one zone hop takes at a pace."""
-    return HOP_MINUTES_BY_PACE[pace]
+def zone_hop_minutes(from_id: str, to_id: str, pace: Pace = Pace.WALK) -> int:
+    """Minutes one hop between connected zones takes at a pace: rounded up, at least 1."""
+    walking = WALK_MINUTES_BY_CONNECTION[frozenset((from_id, to_id))]
+    return max(1, math.ceil(walking * HOP_MINUTES_FACTOR_BY_PACE[pace]))
 
 
 def _attack_minutes(action: AnyAction, resolved: Resolution) -> int:
@@ -137,10 +147,6 @@ def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 def _move_minutes(action: AnyAction, resolved: Resolution) -> int:
     match resolved:
-        case MoveToZone(hops=hops, pace=pace):
-            return hops * zone_hop_minutes(pace)
-        case MoveBlocked(hops=hops, pace=pace):
-            return max(hops * zone_hop_minutes(pace), WALK_TO_BARRIER_MIN)
         case MoveToRoom():
             return MOVE_ROOM_MIN
         case MoveToSpot(place=place):

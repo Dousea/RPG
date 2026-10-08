@@ -133,7 +133,7 @@ class ShopWindowTests(unittest.TestCase):
         self.assertTrue(gm.world.barriers[WINDOW].broken)
         self.assertTrue(any("Glass shatters" in fact for fact in facts), facts)
         _, minutes = run(gm, MoveAction(destination="store"))
-        self.assertEqual(minutes, 11)
+        self.assertEqual(minutes, 2)
         self.assertEqual(gm.player.current_location_id, STORE)
 
 

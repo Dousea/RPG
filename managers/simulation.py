@@ -444,10 +444,10 @@ class SimulationCore:
         """Pain, mood and cold slow timed actions (health)."""
         return action_time_multiplier(self.manager.player)
 
-    def _hop_minutes(self, pace: Pace) -> int:
+    def _hop_minutes(self, from_id: str, to_id: str, pace: Pace) -> int:
         """Minutes one zone hop takes at a pace, stretched by a limp (health)."""
         factor = limp_factor(self.manager.player)
-        return max(1, round(zone_hop_minutes(pace) / factor))
+        return max(1, round(zone_hop_minutes(from_id, to_id, pace) / factor))
 
     def _stat_context(
         self,
@@ -872,8 +872,8 @@ class SimulationCore:
         manager = self.manager
         player = manager.player
         motion = Motion(pace)
-        hop = self._hop_minutes(pace)
         previous_id = player.current_location_id
+        hop = self._hop_minutes(previous_id, zone_id, pace)
         crossing = barriers_between(manager.world, previous_id, zone_id)
         active = self._loop.active()
         spent, facts = (self._spend(hop - 1, action, motion=motion)) if active else (0, [])

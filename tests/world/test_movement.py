@@ -227,25 +227,39 @@ class PaceTests(unittest.TestCase):
         simulate(gm, *actions)
         return gm.narrative.minutes - before
 
-    def test_walking_hop_is_ten_minutes(self):
-        self.assertEqual(self.minutes_for(GameManager(), MoveAction(destination="out")), 10)
-
-    def test_running_hop_is_five_minutes(self):
+    def at_neighborhood(self) -> GameManager:
         gm = GameManager()
-        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out", run=True)), 5)
-        self.assertEqual(gm.player.current_location_id, "zone_building")
+        gm.player.current_location_id = "zone_neighborhood"
+        return gm
 
-    def test_a_three_hop_run_is_fifteen_minutes(self):
+    def test_walking_a_long_hop_is_ten_minutes(self):
+        gm = self.at_neighborhood()
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="zone_clinic")), 10)
+
+    def test_running_a_long_hop_is_five_minutes(self):
+        gm = self.at_neighborhood()
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="zone_clinic", run=True)), 5)
+        self.assertEqual(gm.player.current_location_id, "zone_clinic")
+
+    def test_a_run_over_several_hops_rounds_each_hop_up(self):
         gm = GameManager()
         self.assertEqual(
-            self.minutes_for(gm, MoveAction(destination="zone_neighborhood", run=True)), 15
+            self.minutes_for(gm, MoveAction(destination="zone_neighborhood", run=True)), 1 + 1 + 3
         )
 
-    def test_sneaking_hop_is_twenty_minutes(self):
-        gm = GameManager()
+    def test_sneaking_a_long_hop_is_twenty_minutes(self):
+        gm = self.at_neighborhood()
         simulate(gm, StanceAction(sneaking=True))
         self.assertTrue(gm.player.sneaking)
-        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out")), 20)
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="zone_clinic")), 20)
+
+    def test_a_short_hop_runs_in_a_minute_and_sneaks_in_two(self):
+        self.assertEqual(
+            self.minutes_for(GameManager(), MoveAction(destination="out", run=True)), 1
+        )
+        gm = GameManager()
+        simulate(gm, StanceAction(sneaking=True))
+        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out")), 2)
 
     def test_stance_costs_no_time(self):
         gm = GameManager()
@@ -256,7 +270,7 @@ class PaceTests(unittest.TestCase):
     def test_running_ends_sneaking(self):
         gm = GameManager()
         simulate(gm, StanceAction(sneaking=True))
-        self.assertEqual(self.minutes_for(gm, MoveAction(destination="out", run=True)), 5)
+        self.minutes_for(gm, MoveAction(destination="out", run=True))
         self.assertFalse(gm.player.sneaking)
 
     def test_a_blocked_walk_is_still_a_minute_at_least(self):

@@ -789,7 +789,7 @@ class MemoryFactsTests(EngineTestCase):
         self.assertTrue(
             entry.startswith('Day 1, 08:00 AM, Your Apartment. Orton tries: "go out" '), entry
         )
-        self.assertTrue(entry.endswith("About 10 minutes pass."), entry)
+        self.assertTrue(entry.endswith("About 1 minute passes."), entry)
         self.assertNotIn("Orton entered the building", entry)
         self.assertIn("Move to Your Building", entry)
         self.assertIn("Find a weapon", entry)

@@ -82,8 +82,8 @@ the validator's resolved data and returns whole minutes.
 | `OPEN`, `CLOSE` | 0 |
 | `BARRICADE`, `UNBARRICADE`, `ATTACK` on a door, window or plank | 1 |
 | walking to a door or window the player isn't at | 1, before the action |
-| `MOVE_TO` another zone | 10 per hop, +1 through a window |
-| `MOVE_TO` stopped at a locked door | 10 per hop walked, at least 1 |
+| `MOVE_TO` another zone | the walking minutes of each connection crossed (below), +1 through a window |
+| `MOVE_TO` stopped at a locked door | the same for each hop walked, at least 1 |
 | `MOVE_TO` within a zone to a named spot, or a bare direction | 1 |
 | `MOVE_TO` with no destination, or to the spot the player is already at | 0 |
 | `WAIT`, `SLEEP` | the time actually spent |
@@ -104,8 +104,11 @@ Further rules.
 - Every spent minute is also handed to the survival stat engine
   ([survival stats](survival-stats.md#turn-flow)). If the player dies part
   way through, only the minutes up to that point pass.
-- Running and sneaking hops cost 5 and 20 minutes each (`ZONE_HOP_RUNNING_MIN`,
-  `ZONE_HOP_SNEAKING_MIN`); see [Zombies](zombies.md#pace).
+- Each connection between zones has its own walking minutes, the same both ways
+  (`WALK_MINUTES_BY_CONNECTION`): home to building 1, building to a flat 1,
+  building to street 2, street to bodega 1, street to neighborhood 5, and
+  neighborhood to each shop 10. Running takes half of them and sneaking double,
+  rounded up and never under 1 minute; see [Zombies](zombies.md#pace).
 
 Other rows named in `data/time_costs.py` (`SWING_MIN`, `QUICK_ACTION_MIN`,
 `WALK_TO_BARRIER_MIN`, `WINDOW_CLIMB_MIN`, `WEAR_MINUTES`, `TAKE_OFF_MINUTES`,
@@ -146,16 +149,6 @@ game starts.
 - Durations over the cap are clamped, and the fact says so.
 - `WAIT until night` from 08:00 lands on 22:00 the same day. `WAIT until morning`
   at 07:00 lands on 06:00 the next day.
-
-## Known limitations
-
-Found in the 2026-10-08 playtest.
-
-- **Every zone hop costs the same.** Stepping from the apartment into its own
-  hallway takes 10 minutes, as long as crossing the neighborhood, and a walk home
-  from the supermarket took 41. *Fix:* minutes per connection in
-  `data/world/locations.py` (apartment to building 1, building to street 2), with
-  running and sneaking scaling them as now.
 
 ## Testing
 

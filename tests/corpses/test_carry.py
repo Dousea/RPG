@@ -295,4 +295,4 @@ class CarryEnduranceTests(unittest.TestCase):
         plain.player.stats.set(CharacterStat.ENDURANCE, 1.0)
         simulate(plain, MoveAction(destination="Your Building"), rng=random.Random(1))
         without_drop = 1.0 - plain.player.stats.get(CharacterStat.ENDURANCE)
-        self.assertGreater(with_body_drop, without_drop + 0.1)
+        self.assertGreater(with_body_drop, without_drop + 0.05)

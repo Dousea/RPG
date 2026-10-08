@@ -554,12 +554,12 @@ class WindowCrossingTests(unittest.TestCase):
 
     def test_a_smashed_window_is_climbed_through_for_a_minute_more(self):
         self.gm.world.barriers["window_test"].broken = True
-        self.assertEqual(self.move(), 11)
+        self.assertEqual(self.move(), 2)
         self.assertEqual(self.gm.player.current_location_id, BUILDING)
         self.assertEqual(self.gm.player.at_barrier, "window_test")
 
     def test_a_closed_window_is_opened_first_and_stays_open(self):
-        self.assertEqual(self.move(), 11)
+        self.assertEqual(self.move(), 2)
         self.assertTrue(self.gm.world.barriers["window_test"].open)
 
     def test_an_open_window_stays_open(self):

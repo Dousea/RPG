@@ -778,10 +778,12 @@ class StrengthXpTests(unittest.TestCase):
 
     def test_above_half_capacity_a_walk_pays_two_xp_a_hit(self):
         gm = bare_game(0, "item_hammer", "item_hammer", "item_bandage")  # 3.1 of 6
+        gm.player.current_location_id = "zone_clinic"
         before = gm.player.skills["strength"].xp
         hits = self.walk(gm, MoveAction(destination="out"))
         hits.assert_called_once()
-        self.assertEqual(hits.call_args.args[1], 10)  # one hop is ten minutes of walking
+        # the clinic is ten minutes' walk from the neighborhood
+        self.assertEqual(hits.call_args.args[1], 10)
         self.assertEqual(gm.player.skills["strength"].xp - before, 4.0)
 
     def test_at_half_capacity_or_less_there_is_nothing(self):

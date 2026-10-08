@@ -90,7 +90,8 @@ Zombies ignore NPCs.
 `chunks` counts 8×8-tile chunks. `zombie_intensity` is a byte, 0 to 255.
 
 Every connection between zones is **40 tiles** (`HOP_TILES`), the distance the
-player covers in one 10-minute hop at walking pace.
+player covers in a 10-minute hop at walking pace; shorter connections take
+fewer minutes ([clock](clock.md)).
 
 ## Population
 
@@ -193,11 +194,11 @@ Redistribution is checked at the start of each minute.
 
 ## Pace
 
-| Pace | Speed | Minutes per hop | Footsteps | Spotting factor |
+| Pace | Speed | Minutes per hop, as a share of the walking minutes | Footsteps | Spotting factor |
 | --- | --- | --- | --- | --- |
-| walk (default) | 4 tiles per minute | 10 | walk | 1.0 |
-| run | 8 tiles per minute | 5 | run | 1.5 |
-| sneak | 2 tiles per minute | 20 | sneak | 0.8 |
+| walk (default) | 4 tiles per minute | 1× | walk | 1.0 |
+| run | 8 tiles per minute | ½× | run | 1.5 |
+| sneak | 2 tiles per minute | 2× | sneak | 0.8 |
 | standing still (any other action) | 0 | | none | 0.8 |
 
 - `MOVE_TO <place> run` runs. Any other `MOVE_TO` walks, or sneaks while the
@@ -520,3 +521,11 @@ and `player.sneaking`. A zombie in an unknown zone is dropped on load.
   nothing.
 - **Determinism.** Every roll uses the simulation's own random source, in loop
   order, so a seeded test replays exactly.
+
+## Known limitations
+
+- **A short connection does not slow a chaser.** A hop is still 40 tiles for
+  sound and path distance, while a connection can now take as little as 1 minute
+  ([clock](clock.md)), so a chaser keeps up with the player over a short
+  connection. *Fix:* give each connection its own length in tiles, together with
+  positions inside zones.

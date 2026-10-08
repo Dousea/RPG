@@ -509,6 +509,7 @@ class TickWiringTests(unittest.TestCase):
 
     def test_the_boundary_hook_knows_whether_the_player_was_walking(self):
         gm = GameManager()
+        gm.player.current_location_id = "zone_clinic"
         core = SimulationCore(gm)
         seen: list[bool] = []
 
@@ -518,7 +519,7 @@ class TickWiringTests(unittest.TestCase):
 
         core.skill_engine.tick = record  # type: ignore[method-assign]
         core.resolve([WaitAction(duration=Duration(minutes=10))])
-        core.resolve([MoveAction(destination="the kitchen")])
+        core.resolve([MoveAction(destination="north")])
         self.assertEqual(seen, [False])
         core.resolve([MoveAction(destination="out")])
         self.assertEqual(seen, [False, True])
@@ -635,21 +636,21 @@ class ZombieMinuteLoopTests(unittest.TestCase):
         self.assertEqual(gm.player.current_location_id, "zone_building")
 
     def test_walking_away_from_a_shambler_opens_the_gap_and_it_forgets(self):
-        gm = zombie_game("zone_building")
+        gm = zombie_game("zone_neighborhood")
         shambler = add_zombie(gm, gap=10, state=ZombieState.CHASING, facing_cos=1.0, speed_mod=0.6)
         shambler.time_since_seen = 0
-        minutes, _ = self.spent(gm, MoveAction(destination="zone_neighborhood"))
-        self.assertEqual(minutes, 20)
+        minutes, _ = self.spent(gm, MoveAction(destination="zone_clinic"))
+        self.assertEqual(minutes, 10)
         self.assertEqual(shambler.state, ZombieState.IDLE)
         self.assertGreater(shambler.gap, 20)
 
     def test_a_lunger_keeps_the_gap(self):
-        gm = zombie_game("zone_building")
+        gm = zombie_game("zone_neighborhood")
         lunger = add_zombie(
             gm, gap=10, state=ZombieState.CHASING, facing_cos=1.0, speed_mod=0.9, lunger=True
         )
         lunger.time_since_seen = 0
-        self.spent(gm, MoveAction(destination="zone_neighborhood"))
+        self.spent(gm, MoveAction(destination="zone_clinic"))
         self.assertEqual(lunger.state, ZombieState.CHASING)
         self.assertGreater(lunger.gap, 14)
         self.assertLess(lunger.gap, 20)
@@ -697,13 +698,13 @@ class ZombieMinuteLoopTests(unittest.TestCase):
         self.assertGreater(gm.player.skills["sneaking"].xp, 0)
 
     def test_a_chaser_left_behind_stays_in_the_zone_the_player_left(self):
-        gm = zombie_game("zone_street")
+        gm = zombie_game("zone_neighborhood")
         shambler = add_zombie(gm, gap=15, state=ZombieState.CHASING, speed_mod=0.6)
         shambler.time_since_seen = 0
-        self.spent(gm, MoveAction(destination="zone_building"))
-        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.spent(gm, MoveAction(destination="zone_clinic"))
+        self.assertEqual(gm.player.current_location_id, "zone_clinic")
         self.assertGreater(shambler.gap, 20)
-        self.assertEqual(shambler.zone_id, "zone_street")
+        self.assertEqual(shambler.zone_id, "zone_neighborhood")
 
     def test_a_chaser_keeping_pace_follows_the_player_into_the_new_zone(self):
         gm = zombie_game("zone_street")
@@ -1308,6 +1309,7 @@ class LimpWiringTests(unittest.TestCase):
 
     def hop_minutes(self, **wound) -> int:
         gm = GameManager()
+        gm.player.current_location_id = "zone_clinic"
         for name, value in wound.items():
             setattr(gm.player.body[BodyPart.LOWERLEG_L], name, value)
         before = gm.narrative.minutes
@@ -1386,6 +1388,7 @@ class WeakeningInterruptionTests(unittest.TestCase):
 
     def test_a_move_is_not_stopped_by_the_weakening_rule(self):
         gm = GameManager()
+        gm.player.current_location_id = "zone_clinic"
         core = SimulationCore(gm)
         real = core._body.minute
         calls = []
@@ -1519,7 +1522,7 @@ class DoorSimulationTests(unittest.TestCase):
         gm = shut_game("zone_building")
         minutes, facts = self.spent(gm, MoveAction(destination="in"))
         self.assertEqual(gm.player.current_location_id, "zone_home")
-        self.assertEqual(minutes, 10)
+        self.assertEqual(minutes, 1)
         door = gm.world.barriers["door_apartment"]
         self.assertFalse(door.open)
         self.assertEqual(gm.player.at_barrier, "door_apartment")

@@ -4,6 +4,7 @@ import random
 import unittest
 from unittest.mock import patch
 
+from data import time_costs as time_cost_k
 from data.items import ITEMS
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -23,6 +24,7 @@ from modules.action.types import (
 )
 from modules.body.stats import CharacterStat
 from modules.entity.item import ItemEntity
+from modules.world.pace import Pace
 from tests.support import make_dying, simulate
 
 
@@ -72,19 +74,68 @@ class TimeCostTests(unittest.TestCase):
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_canned_beans"]))
         self.assertEqual(spent_with_double(gm, UseItemAction(item_name="Canned Beans")), 10)
         self.assertEqual(spent_with_double(gm, WaitAction(duration=Duration(minutes=7))), 7)
-        self.assertEqual(spent_with_double(gm, MoveAction(destination="zone_building")), 10)
+        self.assertEqual(spent_with_double(gm, MoveAction(destination="zone_building")), 2)
         gm.player.current_location_id = "zone_building"
         self.assertEqual(spent_with_double(gm, AttackAction(target_name="Emma")), 1)
 
-    def test_a_zone_hop_costs_ten_minutes_per_hop(self):
-        gm = GameManager()
-        self.assertEqual(_spent(gm, MoveAction(destination="out")), 10)
-        self.assertEqual(_spent(gm, MoveAction(destination="zone_street")), 10)
+    def test_each_connection_has_its_walking_minutes(self):
+        expected = {
+            ("zone_home", "zone_building"): 1,
+            ("zone_building", "zone_flat_vacant"): 1,
+            ("zone_building", "zone_flat_tenant"): 1,
+            ("zone_building", "zone_street"): 2,
+            ("zone_street", "zone_bodega"): 1,
+            ("zone_street", "zone_neighborhood"): 5,
+            ("zone_neighborhood", "zone_pharmacy"): 10,
+            ("zone_neighborhood", "zone_clinic"): 10,
+            ("zone_neighborhood", "zone_supermarket"): 10,
+            ("zone_neighborhood", "zone_hardware"): 10,
+        }
+        for (a, b), minutes in expected.items():
+            self.assertEqual(time_cost_k.zone_hop_minutes(a, b), minutes)
+            self.assertEqual(time_cost_k.zone_hop_minutes(b, a), minutes)
 
-    def test_a_walk_over_several_hops_costs_ten_per_hop(self):
+    def test_every_connection_has_an_entry(self):
         gm = GameManager()
-        self.assertEqual(_spent(gm, MoveAction(destination="zone_street")), 20)
-        self.assertEqual(_spent(gm, MoveAction(destination="The Neighborhood")), 10)
+        for zone in gm.world.locations.values():
+            for other in zone.connections.values():
+                self.assertIn(frozenset((zone.id, other)), time_cost_k.WALK_MINUTES_BY_CONNECTION)
+
+    def test_pace_scales_the_walking_minutes_rounding_up_with_a_floor_of_one(self):
+        hop = time_cost_k.zone_hop_minutes
+        self.assertEqual(hop("zone_home", "zone_building", Pace.RUN), 1)
+        self.assertEqual(hop("zone_home", "zone_building", Pace.SNEAK), 2)
+        self.assertEqual(hop("zone_street", "zone_bodega", Pace.RUN), 1)
+        self.assertEqual(hop("zone_building", "zone_street", Pace.RUN), 1)
+        self.assertEqual(hop("zone_street", "zone_neighborhood", Pace.RUN), 3)
+        self.assertEqual(hop("zone_street", "zone_neighborhood", Pace.SNEAK), 10)
+        self.assertEqual(hop("zone_neighborhood", "zone_pharmacy", Pace.RUN), 5)
+        self.assertEqual(hop("zone_neighborhood", "zone_pharmacy", Pace.SNEAK), 20)
+
+    def test_a_zone_hop_costs_its_connection_minutes(self):
+        gm = GameManager()
+        self.assertEqual(_spent(gm, MoveAction(destination="out")), 1)
+        self.assertEqual(_spent(gm, MoveAction(destination="zone_street")), 2)
+
+    def test_a_walk_over_several_hops_sums_its_connections(self):
+        gm = GameManager()
+        self.assertEqual(_spent(gm, MoveAction(destination="zone_street")), 3)
+        self.assertEqual(_spent(gm, MoveAction(destination="The Neighborhood")), 5)
+
+    def test_a_walk_from_the_supermarket_home_sums_ten_five_two_one_and_the_window_climb(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_supermarket"
+        self.assertEqual(_spent(gm, MoveAction(destination="zone_home")), 10 + 5 + 2 + 1 + 1)
+
+    def test_a_walk_stopped_at_a_locked_door_counts_the_hops_walked(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_supermarket"
+        gm.world.barriers["door_apartment"].locked = True
+        gm.player.inventory.clear()
+        self.assertEqual(
+            _spent(gm, MoveAction(destination="zone_home")),
+            10 + 5 + 2 + time_cost_k.WINDOW_CLIMB_MIN,
+        )
 
     def test_a_move_within_a_zone_costs_one_minute(self):
         gm = GameManager()
@@ -133,8 +184,8 @@ class TimeCostTests(unittest.TestCase):
             MoveAction(destination="out"),
             WaitAction(duration=Duration(minutes=30)),
         )
-        self.assertEqual(gm.narrative.minutes, 40)
-        self.assertEqual(facts[-1], "About 40 minutes pass.")
+        self.assertEqual(gm.narrative.minutes, 31)
+        self.assertEqual(facts[-1], "About 31 minutes pass.")
         self.assertEqual(len(facts), 3)
 
     def test_a_turn_over_an_hour_gives_its_total_in_hours_and_minutes(self):
@@ -144,7 +195,7 @@ class TimeCostTests(unittest.TestCase):
             MoveAction(destination="out"),
             WaitAction(duration=Duration(minutes=120)),
         )
-        self.assertEqual(facts[-1], "About 2 hours 10 minutes pass.")
+        self.assertEqual(facts[-1], "About 2 hours 1 minute pass.")
 
     def test_a_lone_wait_states_its_time_once(self):
         gm = GameManager()
@@ -175,7 +226,7 @@ class TimeCostTests(unittest.TestCase):
 
         core.stats_engine.advance = spy
         core.resolve([MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5))])
-        self.assertEqual(handed, [10, 5])
+        self.assertEqual(handed, [1, 5])
 
 
 class ClockEdgeCaseTests(unittest.TestCase):
