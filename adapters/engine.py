@@ -567,9 +567,10 @@ class GameEngine:
             return [], self._snapshot(story_text="")
 
     def state(self) -> dict[str, Any]:
-        """Current state with no story text, for the initial page load."""
+        """Current state with the last scene's story, for the initial page load."""
         with self._lock:
-            return self._snapshot(story_text="")
+            manager = self.manager
+            return self._snapshot(story_text=manager.memory.last_story if manager else "")
 
     def export_save(self) -> dict[str, Any]:
         """The current game as a save-file dict, for the player to download."""
@@ -592,7 +593,7 @@ class GameEngine:
             self._kept = None
             self.memory.rebuild(manager.memory.full_event_log)
             files.save(manager)
-            return self._snapshot(story_text="")
+            return self._snapshot(story_text=manager.memory.last_story)
 
     # === Presentation ===
 

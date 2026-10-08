@@ -129,6 +129,12 @@ class StateTests(RouteTestCase):
         self.assertIn("Emma", payload["npcs_present"])
         self.assertEqual(payload["story_text"], "")
 
+    def test_state_carries_the_last_story_after_a_turn(self):
+        self.client.post("/play", json={"input": "go out"})
+        payload = self.client.get("/state").get_json()
+        self.assertEqual(payload["story_text"], "You walk out into the building.")
+        self.assertEqual(payload["options"], [])
+
     def test_inventory_is_a_list(self):
         # The frontend iterates this.
         payload = self.client.get("/state").get_json()
@@ -324,6 +330,7 @@ class SaveLoadRouteTests(RouteTestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["current_location"], "Your Building")
+        self.assertEqual(payload["story_text"], "You walk out into the building.")
 
     def test_import_rejects_a_non_json_file(self):
         response = self.client.post(

@@ -69,7 +69,7 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 | --- | --- | --- |
 | Header chips | when and what the sky is doing | `day`, `time_of_day`, `weather`, `outbreak_day` (`llm-contract`) |
 | Death banner | the character's death and its cause | `game_over`, `death_cause`, `character.name` |
-| Story log | each turn's input echo and prose, appended | `story_text` |
+| Story log | each turn's input echo and prose, appended; on load, the last scene's prose with no echo and no options (the options aren't saved) | `story_text` |
 | Location | where the player stands | `current_location`, `current_place`, `location_description` |
 | Tabs | the screens below | everything else |
 | Plan screen | in place of a story when a plan has an open choice: each step in words (done ones ticked), a picker with each candidate's name and description under a step that waits on an answer, a default target beside a step that has one (a step after a zone change says its target is decided on arrival instead), Go (enabled once every picker has a choice) and Cancel | `plan` ([Which one](entity-resolution.md#which-one)) |
@@ -78,6 +78,11 @@ snapshot is `{needs_creation: true}` and the page opens the creation screen.
 The story column holds the scene: where the player stands, what happened and
 what they do next, kept to a readable measure. The tabs take the full height
 beside it.
+
+A reload or a return to the tab shows the last scene's prose from `/state`
+(`memory.last_story`, already in the save), and so does a loaded save file
+after its "Save loaded." line, so the story area is never blank in a running
+game; a new game shows nothing.
 
 Once `game_over` is set the input and option buttons are disabled; only reset
 and load bring the page back.
@@ -134,7 +139,7 @@ with `weapon-upkeep`). Then the equipped slots, empty ones marked empty; an
 item that fills both hands is one "Both Hands" row reading "Two-handed grip"
 (the payload's `both_hands`), not its name and condition again. Then
 carried items by name. The carried weight shows against what the
-character can carry, in kilograms, and each bag shows its place and contents
+character can carry, in kilograms, with a gap before the first carried row, and each bag shows its place and contents
 (`carry`, see `mechanics/carrying-and-loot.md`).
 
 ### Clothing
@@ -204,7 +209,8 @@ What else changes on a narrow window:
   button beside the input opens the sidebar sheet; the sheet closes by the same
   button, Escape, or a swipe down that starts on its handle or tab bar.
 - The option buttons scroll sideways in one row above the input, which stays
-  pinned to the bottom.
+  pinned to the bottom. The input's placeholder is shorter (still saying `@`
+  picks things) so it isn't cut; the input stays one line at every width.
 - The creation screen's trait columns stack into one, and its fieldsets
   stack full width.
 

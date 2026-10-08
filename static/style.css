@@ -352,6 +352,7 @@ main {
 }
 #player-input:focus { outline: none; }
 #player-input:empty::before { content: attr(data-placeholder); color: var(--ash); pointer-events: none; }
+#player-input:empty { overflow-x: hidden; }
 #player-input[contenteditable="false"] { opacity: 0.6; }
 .mention-chip {
     background: var(--rule);
@@ -444,6 +445,7 @@ main {
 }
 
 .empty-note { color: var(--ash); font-size: 0.875rem; }
+#carry-load { margin: 0 0 0.6rem; }
 
 /* Rows: a name on the left, words or tags on the right */
 .row-list { list-style: none; margin: 0; padding: 0; }
@@ -588,6 +590,7 @@ main {
     .choice-option { flex-shrink: 0; white-space: nowrap; }
     #input-form { padding-left: 0.8rem; }
     #player-input { font-size: 1rem; }
+    #player-input:empty::before { content: attr(data-placeholder-short); }
     #sheet-button { display: inline-block; flex-shrink: 0; }
     #submit-button { padding: 0.6rem 1rem; }
 }

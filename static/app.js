@@ -1118,6 +1118,7 @@ async function handleLoadFile() {
         }
         storyDisplay.innerHTML = '';
         appendStory(null, 'Save loaded.');
+        if (data.story_text) appendStory('', data.story_text);
         updatePanel(data);
     } catch (error) {
         console.error('Error loading save:', error);
@@ -1130,7 +1131,9 @@ async function loadState() {
     try {
         const response = await fetch('/state');
         if (!response.ok) return;
-        updatePanel(await response.json());
+        const data = await response.json();
+        if (data.story_text) appendStory('', data.story_text);
+        updatePanel(data);
     } catch (error) {
         console.error('Could not load game state:', error);
     }
