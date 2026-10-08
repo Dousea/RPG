@@ -55,7 +55,7 @@ class IndexTests(RouteTestCase):
     def test_index_renders(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Local LLM RPG", response.data)
+        self.assertIn(b"Over the River", response.data)
 
     def test_index_markup_matches_the_ids_the_script_expects(self):
         response = self.client.get("/")

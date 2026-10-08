@@ -1,4 +1,4 @@
-# Local LLM RPG
+# Over the River
 
 A text RPG in a zombie apocalypse. A local LLM (LM Studio) parses the player's
 intent and narrates; the Python engine owns every rule and every outcome. The
