@@ -252,11 +252,11 @@ the starting scene, empty optional fields, the server ignoring `pattern`, questi
 parsed as requests, forced wrong verbs, refused actions narrated as done, finds
 denied, repeated paragraphs, quest ids in facts, bystanders who don't react),
 [doors](mechanics/doors.md#known-limitations) (one swing per turn, no lock verb),
-[carrying and loot](mechanics/carrying-and-loot.md#known-limitations),
 [status effects](mechanics/status-effects.md#known-limitations),
 [survival stats](mechanics/survival-stats.md#known-limitations),
 [clock](mechanics/clock.md#known-limitations) (a flat 10 minutes per zone hop) and
-[zombie lifecycle](mechanics/zombie-lifecycle.md#known-limitations).
+[zombie lifecycle](mechanics/zombie-lifecycle.md#known-limitations). The
+carrying-and-loot findings (take all, counted and grouped items) are fixed.
 
 ---
 

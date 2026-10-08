@@ -528,18 +528,24 @@ Found in the 2026-10-08 playtest.
   five times" each parsed to one `ATTACK`. *Fix:* an optional count or "until it
   gives" on `ATTACK <barrier>`, resolved as a multi-minute action like a room
   `SEARCH`: one swing a minute, ending when the barrier breaks, on an interruption
-  (a zombie notices, Endurance runs low) or at a cap of 30 swings.
+  (a zombie notices, Endurance runs low) or at a cap of 30 swings. The count is for
+  barriers only: a fight with a zombie stays one swing per turn, so the player
+  decides each blow.
 - **No way to lock a door.** Opening the apartment door from inside unlocks it
   for good, and no verb locks it again, so after the first trip out home is never
   locked. "Close and lock the door" parsed to `CLOSE` plus `BARRICADE`. *Fix:*
   `LOCK <barrier>` and `UNLOCK <barrier>`, 0 minutes like `OPEN`: from inside
-  always, from outside with the barrier's key.
+  always, from outside with the barrier's key. An explicit verb, not a lock on
+  every close, since the player says "lock" when they mean it and the parser then
+  has somewhere to put it.
 - **A blocked move names a door for a window.** "Move to The Corner Store:
   blocked -- the door to The Corner Store is locked" when the barrier is the shop
   window. *Fix:* use the barrier's kind word in the fact.
 - **Smashing glass by hand is free.** A bare-handed window smash breaks the glass
-  with no injury. *Fix, if wanted:* a chance of a hand laceration from the
-  [health](health.md) wounds, lower with gloves.
+  with no injury. *Set aside:* the hand cut from smashing glass, the cuts from
+  climbing through a smashed window and glass left on the floor are planned
+  together with the other injuries, and come with that mechanic rather than as a
+  fix here.
 
 ## Testing
 

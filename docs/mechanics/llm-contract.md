@@ -644,22 +644,32 @@ entry says what goes wrong and how to fix it.
   ([carrying-and-loot](carrying-and-loot.md#verbs)). *Fix:* split the plan at its
   first zone-changing `MOVE_TO`. Resolve up to the move, rebuild the scene and the
   schema, and ask the parser for the rest of the input, with `[LAST TURN]` saying
-  what was done.
+  what was done. That changes the turn loop and costs a second parser call, so a
+  first step comes before it: end the plan at its first zone-changing `MOVE_TO`
+  and give the narrator a fact that the rest was not attempted. That stops actions
+  aimed at the wrong zone's things, and the player repeats the rest at the
+  destination.
 - **Optional fields stay empty.** The model never fills an optional field: `TAKE`'s
   `from` (the validator now falls back to the room's opened containers) and `TALK`'s
   `speech`, so the narrator invents what was said. *Fix:* make a field required
   wherever the engine needs it (`speech` as a possibly empty string), and add
-  parser eval cases for quoted and reported speech.
+  parser eval cases for quoted and reported speech. Leave `TAKE`'s `from`
+  optional: the fallback already finds the container, and a required field would
+  make the model guess one.
 - **The server ignores `pattern`.** LM Studio accepted `"morning"` and `"07:00"`
   for a duration, and the grammar refused both ("it wasn't clear how"). *Fix:* let
   the [duration grammar](clock.md#actions) read a bare time of day or `HH:MM` as
-  `until` it, so the schema's pattern no longer has to hold.
+  `until` it, so the schema's pattern no longer has to hold. A time already past
+  today lands tomorrow, as `WAIT until <time>` does ([edge cases](clock.md#edge-cases)).
 - **Questions to an NPC become requests.** "Ask Marcus what he's reading" and
   "ask Marcus if he has a hammer" parsed as `ASK follow`; "ask Emma if she's okay"
   as `ASK stay`. The [plan check](#the-plan-check) now rules these out, so the
-  question goes unasked instead of becoming a request. *Fix:* a parser rule with an
-  example sending a question to `TALK` `chat` with its `speech` (a rule plus example
-  fixed the absent-NPC misparse), and eval cases in `evals/parser_cases.yaml`.
+  question goes unasked instead of becoming a request. The verb's name is the trap:
+  the model maps the player's word "ask" onto the `ASK` branch. *Fix:* rename the
+  branch to `REQUEST`, so "ask" no longer points at it, and keep a parser rule with
+  an example sending a question to `TALK` `chat` with its `speech` (a rule plus
+  example fixed the absent-NPC misparse), with eval cases in
+  `evals/parser_cases.yaml`.
 - **When no verb fits, the schema forces a wrong one.** The schema has no way to
   say "the player asked for something the engine can't do", so the model picks the
   nearest branch: "lock the door" became `BARRICADE`, "drink from the tap" became
@@ -671,7 +681,10 @@ entry says what goes wrong and how to fix it.
   door" and holding the schoolbag for "put on the schoolbag", and a refusal it makes
   can't say what was asked. *Fix:* an `UNSUPPORTED <text>` branch that the engine
   refuses in words ("Orton can't lock the door: there is no way to yet."), so the
-  narrator gets an honest refusal that names it. The missing verbs themselves are in
+  narrator gets an honest refusal that names it. The branch is an easy way out, so
+  the model may pick it for things the engine can do: eval cases must cover both
+  directions, and the [plan check](#the-plan-check) rules out an `UNSUPPORTED`
+  when a real verb fits the request. The missing verbs themselves are in
   [doors](doors.md#known-limitations) (locking) and
   [status effects](status-effects.md#known-limitations) (tap water).
 
@@ -681,13 +694,15 @@ entry says what goes wrong and how to fix it.
   actions refused and the story pockets the key and draws the knife; a `TAKE all`
   refused and the story bags the loot; one garment worn and the story dresses in
   four; a door "locked" with no lock action; tap water drunk with no such action.
-  The "Refused didn't happen" rule is in the system prompt only. *Fix:* end the
-  prompt with what must not be shown, the way `[IN VIEW]` ends it with what must:
-  a `[DID NOT HAPPEN]` list naming each refused action and its non-event ("Orton
-  does not get the knife out; he still holds the key"). A fact naming the non-event
-  beat a system-prompt rule in an earlier A/B. The [fact check](#the-fact-check) now
-  asks about each refused action and catches the story's claim; the list is still to do,
-  so the first story is right more often.
+  The "Refused didn't happen" rule is in the system prompt only. A fact naming the
+  non-event beat a system-prompt rule in an earlier A/B, but a list of what did not
+  happen ("Orton does not get the knife out") puts the very words to avoid last in
+  the prompt, and a small model may write what it read last. *Fix:* end the prompt
+  with the true state each refused action touched, in `[IN VIEW]`: "Orton holds the
+  key. The knife is in the schoolbag." The [fact check](#the-fact-check) now asks
+  about each refused action and catches the story's claim; the state lines are
+  still to do, so the first story is right more often. This entry and the next two
+  are one change to `[IN VIEW]`.
 - **Found items are denied.** Twice a `SEARCH` that listed finds was narrated as
   bare ("the floor is bare except for the debris"). The [fact check](#the-fact-check)
   now asks about it. *Fix:* list the turn's finds in `[IN VIEW]` as well.
@@ -696,19 +711,27 @@ entry says what goes wrong and how to fix it.
   "a Sunday morning" every day, morning light at 02:00 after a wake. *Fix:* put the
   held item, the time of day and each corpse's sex word in `[IN VIEW]`.
 - **Paragraphs repeat across turns.** Four combat turns in a row reused Emma's
-  "silent scream" and Marcus's "wide, unblinking eyes" nearly word for word. *Fix:*
-  a rule tied to `[LAST SCENE]` ("write no sentence it already has"), or a
-  repetition sampler (DRY) where the server offers one.
+  "silent scream" and Marcus's "wide, unblinking eyes" nearly word for word.
+  `[LAST SCENE]` hands the narrator its own last paragraph word for word, and a
+  model copies prose it is shown; a rule against repeating it is weak, since models
+  are poor at spotting their own repetition. *Fix:* give `[LAST SCENE]` as a short
+  summary of where things stand at its end (who is where, what was just said), not
+  the prose, so the continuity it exists for stays and there is nothing to copy. A
+  repetition sampler (DRY) would help as well, but the game's samplers stop at
+  `repeat_penalty`, and whether LM Studio offers one is unchecked.
 - **Outcome facts leak internal ids.** A quest fact reads "Quest
   'quest_supply_run' objective complete: take:item_crowbar." *Fix:* render it from
-  the quest's title and the objective's text in `data/story/quests.py`.
+  the quest's title and the objective's text in `data/story/quests.py`, and add a
+  test that no outcome fact holds a snake_case id (`item_…`, `quest_…`), so the
+  next leak fails a test instead of a playtest.
 
 ### People
 
 - **Bystanders don't react.** Jen watched Orton smash two shop windows and beat on
   a door, and nothing changed; Emma and Marcus watched him fight and kill a zombie
   in the hallway, did nothing, and then "respond warmly" to small talk. NPCs have
-  no witness reactions and no part in a fight. *Fix:* witnessed events (a break-in,
+  no witness reactions and no part in a fight. *Set aside:* this is a feature, not
+  a fix, and belongs with the NPC and story design: witnessed events (a break-in,
   a fight, a kill) as relationship modifiers with a reaction fact, and a fight
   reaction per NPC (flee, help, freeze) from their personality.
 

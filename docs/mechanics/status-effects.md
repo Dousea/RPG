@@ -167,11 +167,15 @@ Found in the 2026-10-08 playtest.
   per turn, so a plan of two quick actions reports every step: eating a chocolate
   bar and drinking a soda gave "Peckish, Hungry, Bored, Peckish, Well Fed, Bit
   Bored, no longer Well Fed". *Fix:* net the level changes over the whole turn and
-  report each status effect once, at the level it ended on.
+  report each status effect once, at the level it ended on. A crossing that
+  triggers something during the turn (passing out, a story beat) still reports
+  when it happens.
 - **No water source but bottles.** The player asked to drink from the tap twice;
-  there is no tap, and the parser picked an unrelated item. *Fix:* a sink or tap
-  in the apartment's kitchen and bathroom as a drink source for `USE_ITEM` (or a
-  `DRINK <source>` form).
+  there is no tap, and the parser picked an unrelated item. *Set aside until
+  designed:* a sink or tap in the apartment's kitchen and bathroom as a drink
+  source for `USE_ITEM` (or a `DRINK <source>` form). A tap that never runs dry
+  ends thirst as a pressure for the whole game, so it needs a decided rule for when
+  the water supply fails first, and no mechanic has one yet.
 
 ## Testing
 
