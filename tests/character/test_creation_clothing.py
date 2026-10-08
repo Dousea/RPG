@@ -7,7 +7,7 @@ from data.character.occupations import OCCUPATIONS
 from data.character.traits import TRAITS
 from data.clothing.selection import DEFAULT_CLOTHING, OCCUPATION_CLOTHING, TRAIT_CLOTHING
 from data.items import ITEMS
-from data.zombies.clothing import ZOMBIE_CLOTHING
+from data.zombies.clothing_names import DISPLAY_CLOTHING
 from managers.character.creation import _random_outfit
 from modules.body.parts import BodyLocation
 from modules.character.appearance import Gender
@@ -435,7 +435,7 @@ class ClothingListRowTests(unittest.TestCase):
         names = [
             item.name.casefold()
             for item_id, item in ITEMS.items()
-            if item is not ZOMBIE_CLOTHING.get(item_id)
+            if item is not DISPLAY_CLOTHING.get(item_id)
         ]
         self.assertEqual(len(names), len(set(names)))
 

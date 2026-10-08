@@ -14,7 +14,7 @@ from data.clothing.selection import (
     GenderedClothing,
 )
 from data.items import ITEMS
-from data.zombies.clothing import ZOMBIE_CLOTHING
+from data.zombies.clothing_names import DISPLAY_CLOTHING
 from managers.character import creation
 from modules.character.appearance import Appearance, Gender
 from modules.character.build import CharacterBuild
@@ -112,7 +112,7 @@ def creation_screen() -> dict[str, Any]:
         "clothing_items": {
             item_id: {"name": item.name, "location": item.body_location.value}
             for item_id, item in ITEMS.items()
-            if isinstance(item, ClothingItem) and item is not ZOMBIE_CLOTHING.get(item_id)
+            if isinstance(item, ClothingItem) and item is not DISPLAY_CLOTHING.get(item_id)
         },
         "min_points_to_accept": creation_k.MIN_POINTS_TO_ACCEPT,
         "presets": {

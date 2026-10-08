@@ -3,7 +3,7 @@ from data.clothing.coverage import covered_parts
 from data.clothing.items import STARTING_CLOTHES
 from data.loot.items import LOOT_ITEMS
 from data.world import barriers as barrier_k
-from data.zombies.clothing import ZOMBIE_CLOTHING
+from data.zombies.clothing_names import DISPLAY_CLOTHING
 from modules.body.parts import BodyLocation
 from modules.character.equipment import (
     AnyCharacterEquipmentSlot,
@@ -720,7 +720,7 @@ ITEMS: dict[str, BaseItem] = {
     **MEDICAL_ITEMS,
     **BAGS,
     **LOOT_ITEMS,
-    **ZOMBIE_CLOTHING,
+    **DISPLAY_CLOTHING,
     **STARTING_CLOTHES,
 }
 

@@ -26,6 +26,7 @@ Four facts shape the rest:
 | --- | --- |
 | The outfit pool and each outfit's item references | `data/zombies/outfits.py` |
 | The clothing items the outfits can produce | `data/zombies/clothing.py` |
+| Display names for those items (variant first, with overrides by item id) | `data/zombies/clothing_names.py` |
 | Pocket tables, attached weapon definitions, loot multipliers | `data/zombies/loot.py` |
 | Every number below | `data/zombies/lore.py` |
 | Sex, outfit, worn items, attached weapon, the crawler flags | `modules/entity/zombie.py` |
@@ -480,21 +481,12 @@ worn item saves its holes.
   references in table order, then the attached weapon; pockets in table order;
   the minute loop's corpse steps in id order.
 
-## Known limitations
-
-Found in the 2026-10-08 playtest.
-
-- **Clothing names read like catalogue rows.** A searched body held "t-shirt -
-  striped polo" and "baseball cap - state", and those strings reach the facts and
-  the screen. *Fix:* have the generator emit a display name ("striped polo shirt",
-  "baseball cap"); `data/zombies/clothing.py` is generated, so change its output,
-  not the file.
-
 ## Testing
 
 | Module | What it covers |
 | --- | --- |
 | `tests/zombies/test_outfits.py` | the pool, references, the catalogue items, attached weapons, zombie defence, the hit part, the armour step |
+| `tests/zombies/test_clothing_names.py` | the display-name rule, its overrides, no dashes in built names |
 | `tests/zombies/test_crawlers.py` | the crawler roll, going down, speed, posture, thumping, crawler attacks, `attackers` |
 | `tests/corpses/test_corpses.py` | kill corpses, outbreak corpses, rot and removal, fake-dead rising |
 | `tests/corpses/test_loot.py` | `SEARCH`, `TAKE ... from`, pocket chances, unhappiness |
