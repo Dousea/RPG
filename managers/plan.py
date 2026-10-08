@@ -12,12 +12,15 @@ from dataclasses import dataclass, replace
 from data.story import mentions as mention_k
 from data.time_costs import MAX_PLAN_ACTIONS
 from managers.game import GameManager
-from managers.mentions import mentionables
+from managers.mentions import mentionables, zone_candidate
 from managers.validator import ZOMBIE_WORDS, Accepted, ActionValidator, Asked
+from managers.world import locations
 from modules.action.choices import Candidate
-from modules.action.types import AnyAction, AttackAction, ShoveAction
+from modules.action.pins import pin_of
+from modules.action.types import AnyAction, AttackAction, MoveAction, ShoveAction
 from modules.action.words import describe_action
 from modules.resolution import MoveBlocked, MoveToZone, TargetZombie
+from modules.world.location import Location
 
 _ENTITY_ID = re.compile(r"\b[zc]\d+\b")
 _SOMETHING = "something"
@@ -51,11 +54,22 @@ def _changes_zone(result: Accepted | Asked) -> bool:
     )
 
 
-def open_choices(manager: GameManager, actions: Sequence[AnyAction]) -> list[OpenChoice]:
-    """The targets of `actions`, up to the first zone change, that fit several things in this scene."""
+def open_choices(
+    manager: GameManager, actions: Sequence[AnyAction], player_input: str = ""
+) -> list[OpenChoice]:
+    """The targets of `actions`, up to the first zone change, that fit several things in this scene.
+
+    `player_input` is the player's words (picks as their names): a move to the one zone the
+    parser picked is open too when those words only gave a kind word that fits several zones.
+    """
     validator = ActionValidator(manager)
     found: list[OpenChoice] = []
     for index, action in enumerate(actions[:MAX_PLAN_ACTIONS]):
+        if zones := _kind_zones(manager, action, player_input):
+            candidates = tuple(zone_candidate(manager, zone, True) for zone in zones)
+            found.append(OpenChoice(index, "destination", candidates))
+            break
+
         result = validator.validate(action)
         if isinstance(result, Asked):
             found.append(OpenChoice(index, result.attr, result.candidates))
@@ -63,6 +77,19 @@ def open_choices(manager: GameManager, actions: Sequence[AnyAction]) -> list[Ope
         if _ends_the_scene(result):
             break
     return found
+
+
+def _kind_zones(
+    manager: GameManager, action: AnyAction, player_input: str
+) -> list[Location] | None:
+    if not isinstance(action, MoveAction) or pin_of(action.destination, "zone", "room"):
+        return None
+    target = manager.resolve_location(action.destination)
+    if target is None:
+        return None
+    return locations.kind_choice(
+        player_input, target, manager.current_location, manager.world.locations
+    )
 
 
 def _ends_the_scene(result: object) -> bool:

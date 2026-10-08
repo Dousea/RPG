@@ -224,7 +224,7 @@ class GameEngine:
             )
 
             # 2. A target that fits several things is asked about before anything runs.
-            turn.choices = open_choices(manager, kept)
+            turn.choices = open_choices(manager, kept, player_input)
             if turn.choices:
                 self._kept = turn
                 return self._snapshot(story_text="")
@@ -243,7 +243,7 @@ class GameEngine:
                 return self._snapshot(story_text="")
             if turn is None or manager.narrative.game_over:
                 return self._snapshot(story_text=mention_k.NO_PLAN_WAITING)
-            now = open_choices(manager, turn.plan)
+            now = open_choices(manager, turn.plan, turn.player_input)
             answered = self._answered(turn.choices, now, answers)
             if answered is None:
                 return self._snapshot(story_text=mention_k.ANSWER_NOT_ON_OFFER)
@@ -325,7 +325,7 @@ class GameEngine:
         if core.asked is not None and not manager.narrative.game_over:
             turn.plan, turn.extra_facts, turn.refused = core.pending, [], 0
             turn.nothing_parsed = False
-            turn.choices = open_choices(manager, turn.plan)
+            turn.choices = open_choices(manager, turn.plan, turn.player_input)
             self._kept = turn
 
         # 3. Ask the narrator to describe what already happened. A turn the

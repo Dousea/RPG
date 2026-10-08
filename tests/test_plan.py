@@ -9,6 +9,7 @@ from data.story.mentions import DECIDED_ON_ARRIVAL
 from managers.game import GameManager
 from managers.plan import bind_choices, open_choices, steps_of
 from managers.validator import Accepted, ActionValidator
+from modules.action.pins import Pinned
 from modules.action.types import AddGoalAction, AttackAction, MoveAction, TakeAction
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
@@ -47,6 +48,26 @@ class OpenChoiceTests(unittest.TestCase):
         gm = two_bats_on_the_street()
         plan = [AddGoalAction(horizon="short_term", goal_text="Find water")]
         self.assertEqual(open_choices(gm, plan), [])
+
+    def test_a_zone_the_parser_picked_for_a_kind_word_is_an_open_choice(self):
+        gm = zombie_game("zone_building")
+        plan = [MoveAction(destination="Your Apartment")]
+        (choice,) = open_choices(gm, plan, "go to the apartment")
+        self.assertEqual((choice.index, choice.attr), (0, "destination"))
+        self.assertEqual(
+            {c.id for c in choice.candidates},
+            {"zone_home", "zone_building", "zone_flat_vacant", "zone_flat_tenant"},
+        )
+        pick = next(c for c in choice.candidates if c.id == "zone_flat_vacant")
+        (bound,) = bind_choices(plan, [choice], [pick])
+        self.assertEqual(open_choices(gm, [bound], "go to the apartment"), [])
+
+    def test_a_pinned_zone_asks_nothing(self):
+        gm = zombie_game("zone_building")
+        pinned = Pinned("Your Apartment", "zone", "zone_home")
+        self.assertEqual(
+            open_choices(gm, [MoveAction(destination=pinned)], "go to the apartment"), []
+        )
 
     def test_checking_changes_nothing(self):
         gm = two_bats_on_the_street()

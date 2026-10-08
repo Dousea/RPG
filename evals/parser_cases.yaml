@@ -167,7 +167,7 @@
 - name: a place word that fits two zones is copied
   zone: zone_street
   input: run to the apartment and hit the zombie
-  expect: [MOVE_TO the apartment, ATTACK zombie]
+  expect: ["MOVE_TO the apartment, run", ATTACK zombie]
 
 - name: a place word that fits several shops is copied
   zone: zone_neighborhood
@@ -178,3 +178,13 @@
   zone: zone_building
   input: go to my place
   expect: [MOVE_TO home]
+
+- name: a place word that fits several homes is copied from the building
+  zone: zone_building
+  input: go to the apartment
+  expect: [MOVE_TO the apartment]
+
+- name: a place word that fits several shops is copied from home
+  zone: zone_home
+  input: go to the store
+  expect: [MOVE_TO the store]

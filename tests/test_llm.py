@@ -258,8 +258,8 @@ class PromptRuleTests(unittest.TestCase):
 
     def test_the_parser_copies_place_words_that_fit_several_zones(self):
         for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):
-            self.assertIn("more than one zone", prompt)
-            self.assertIn("their own words as the MOVE_TO destination", prompt)
+            self.assertIn("MOVE_TO destination is the player's own words", prompt)
+            self.assertIn("exactly one zone", prompt)
 
     def test_the_parser_sends_a_question_to_talk_chat(self):
         for prompt in (PARSER_SYSTEM_PROMPT, PARSER_JSON_SYSTEM_PROMPT):

@@ -110,3 +110,4 @@ class KindWordCaseTests(unittest.TestCase):
     def test_the_kind_word_cases_are_in_the_file(self):
         inputs = {case["input"] for case in CASES}
         self.assertIn("run to the apartment and hit the zombie", inputs)
+        self.assertLessEqual({"go to the apartment", "go to the store"}, inputs)

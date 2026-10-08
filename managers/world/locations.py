@@ -7,7 +7,7 @@ Pure functions over the zone map: they read `Location`s and never change them.
 import re
 from collections import deque
 
-from data.world.locations import ZONE_EXIT_NOUNS
+from data.world.locations import ZONE_EXIT_NOUNS, ZONE_KINDS
 from modules.world.location import Location
 
 # Words the model reaches for in place of a bare connection direction. Applied
@@ -46,10 +46,13 @@ BARE_DIRECTIONS = frozenset(
 # easily to be matched inside a longer phrase.
 MIN_WHOLE_WORD_NAME_LENGTH = 4
 
+_KIND_WORDS = frozenset(word for words in ZONE_KINDS.values() for word in words)
+_EXIT_WORDS = r"outside(?: of)?|out of|leaving|leave|exiting|exit"
+_EXIT_WORD = re.compile(rf"\b(?:{_EXIT_WORDS})\b")
 _WORD = re.compile(r"[a-z0-9']+")
 _ARTICLES = frozenset({"the", "a", "an", "this", "that"})
 _EXIT_PHRASE = re.compile(
-    r"^(?:outside(?: of)?|out of|leaving|leave|exiting|exit)\s+"
+    rf"^(?:{_EXIT_WORDS})\s+"
     r"(?:(?:the|my|your|this|orton's)\s+)?(.+)$"
 )
 
@@ -184,6 +187,48 @@ def kind_word(needle: str) -> str:
     while words and words[0] in _ARTICLES:
         words = words[1:]
     return " ".join(words)
+
+
+def kind_choice(
+    text: str, target: Location, current: Location, locations: dict[str, Location]
+) -> list[Location] | None:
+    """The zones the player's `text` leaves open when the parser wrote the one zone `target`, or None.
+
+    Open means `text` holds a kind word ("the apartment") that fits several zones
+    `current` reaches, `target` among them, and nothing in `text` names `target`:
+    its name, an alias, an exit phrase or a connection direction.
+    """
+    words = _words(text.casefold())
+    if _names_zone(text.casefold(), words, target, current):
+        return None
+    for word in words:
+        if word not in _KIND_WORDS:
+            continue
+        zones = _match_kind(word, current, locations)
+        if isinstance(zones, list) and target in zones:
+            return zones
+    return None
+
+
+def _names_zone(text: str, words: list[str], target: Location, current: Location) -> bool:
+    if _EXIT_WORD.search(text):
+        return True
+
+    directed = [DIRECTION_SYNONYMS.get(word, word) for word in words]
+    for name, loc_id in current.connections.items():
+        if (
+            loc_id == target.id
+            and _first_contiguous_match(directed, _words(name.casefold())) is not None
+        ):
+            return True
+
+    for candidate in (target.name, *target.aliases):
+        named = _words(candidate.casefold())
+        if named[:1] == ["the"]:
+            named = named[1:]
+        if named and _first_contiguous_match(words, named) is not None:
+            return True
+    return False
 
 
 def _match_kind(

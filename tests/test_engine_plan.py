@@ -143,6 +143,38 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         self.assertEqual(gm.player.current_location_id, "zone_bodega")
         self.assertFalse([e for e in gm.player.inventory if e.item.id == BAT.id and e.broken])
 
+    def test_a_zone_the_parser_picked_for_a_kind_word_asks_and_go_moves_to_the_pick(self):
+        gm = self.stage("zone_building")
+        self.script("MOVE_TO Your Apartment")
+        minutes = gm.narrative.minutes
+        result = self.engine.play("go to the apartment")
+        self.assertEqual(
+            set(self.choices(result["plan"])),
+            {"zone_home", "zone_building", "zone_flat_vacant", "zone_flat_tenant"},
+        )
+        self.assert_nothing_ran(gm, minutes, result)
+        self.engine.go(["zone_flat_vacant"])
+        self.assertEqual(gm.player.current_location_id, "zone_flat_vacant")
+
+        gm = self.stage("zone_home")
+        self.script("MOVE_TO The Corner Store")
+        result = self.engine.play("go to the store")
+        self.assertEqual(len(self.choices(result["plan"])), 4)
+        self.assertEqual(gm.player.current_location_id, "zone_home")
+
+    def test_words_that_name_the_zone_move_without_a_question(self):
+        for text, reply, start, end in (
+            ("go to my apartment", "Your Apartment", "zone_building", "zone_home"),
+            ("go to the supermarket", "The Supermarket", "zone_neighborhood", "zone_supermarket"),
+            ("go to the stockroom", "The Corner Store", "zone_street", "zone_bodega"),
+        ):
+            with self.subTest(text):
+                gm = self.stage(start)
+                self.script(f"MOVE_TO {reply}")
+                result = self.engine.play(text)
+                self.assertIsNone(result["plan"])
+                self.assertEqual(gm.player.current_location_id, end)
+
     def test_an_unclear_container_is_picked_and_searched(self):
         gm = self.stage("zone_home")
         gm.player.current_room = None

@@ -216,7 +216,7 @@ An item name is a closed label. When several listed items share a name and do no
 
 ### Place words
 
-A `MOVE_TO` destination is read in this order: a connection direction of the current zone, a zone's id, name or alias, an exit phrase ("leave the building"), a **kind word** and, last, the zone whose name or alias appears earliest in the phrase as whole words (the longer name wins a tie, so "the street outside my apartment" is the street). A kind word ("apartment" and "flat", which are one kind every home has, "store", "shop"; `ZONE_KINDS`) names every zone of that kind that `zone_path` reaches, the current one included. One reachable zone is the answer; several, and several zones tied in the whole-word match, are a question: the plan screen asks which one before anything runs ([entity resolution](../architecture/entity-resolution.md#which-one)). The parser's rule is to write the player's own words as the destination when they fit more than one zone, not the name of a zone it picked; the engine knows the player was unclear only when it sees those words. A phrase that names nothing is a spot in the current zone.
+A `MOVE_TO` destination is read in this order: a connection direction of the current zone, a zone's id, name or alias, an exit phrase ("leave the building"), a **kind word** and, last, the zone whose name or alias appears earliest in the phrase as whole words (the longer name wins a tie, so "the street outside my apartment" is the street). A kind word ("apartment" and "flat", which are one kind every home has, "store", "shop"; `ZONE_KINDS`) names every zone of that kind that `zone_path` reaches, the current one included. One reachable zone is the answer; several, and several zones tied in the whole-word match, are a question: the plan screen asks which one before anything runs ([entity resolution](../architecture/entity-resolution.md#which-one)). The parser's rule is to write the player's own words as the destination whenever they don't name exactly one zone, not the name of a zone it picked. The model doesn't always keep it, so the engine checks the player's words too: when they hold a kind word, the parsed destination is one zone that nothing in them names (its name, an alias, an exit phrase or a direction), and the kind word fits several reachable zones including that one, the move is the same question as if the parser had copied the words. "Go to my apartment", "go home", "go to the supermarket", a pinned zone and a kind word that fits one reachable zone move without a question; words that only resemble a kind word ("storeroom") never count. A phrase that names nothing is a spot in the current zone.
 
 ### Plans
 
@@ -649,7 +649,7 @@ input and the expected plan ("I creep down to the lobby" gives `STANCE sneak` an
 scream for help" gives `SHOUT`). A request the scene can't fulfil, such as asking
 someone who isn't there, expects no actions. `scripts/eval_parser.py` runs them against the
 configured model and prints a pass rate; a move matches when it reaches the same zone,
-so `MOVE_TO lobby` passes for `MOVE_TO building`. It is run by hand when the prompt or the
+so `MOVE_TO lobby` passes for `MOVE_TO building`, and `MOVE_TO apartment` for `MOVE_TO the apartment` (both are the same zones). It is run by hand when the prompt or the
 model changes.
 
 ## Hooks into other mechanics
