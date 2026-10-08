@@ -56,9 +56,10 @@ the level.
 `status_effect_level(status_effect, value)` returns 0 to 4. `StatsEngine` compares every
 status effect's level before and after each chunk and reports one fact per change, in
 table order ("Orton is now Peckish.", "Orton is no longer Peckish."). A change between
-two levels with the same name gives no fact. Over one span of time (a wait, a sleep, a
-walk) the facts are netted: each status effect is reported once, at the level it ended
-on, so a long wait says "Orton is now Extremely Bored." and not every step up to it.
+two levels with the same name gives no fact. The facts are netted over the whole turn:
+each status effect is reported once, at the level it ended on, after the turn's other
+facts and before the minutes fact. A long wait says "Orton is now Extremely Bored." and
+not every step up to it; a status effect that went up and came back gives no fact.
 
 ## What status effects do
 
@@ -163,13 +164,6 @@ discarded.
 
 Found in the 2026-10-08 playtest.
 
-- **Level changes churn within a turn.** Facts are netted per span of time, not
-  per turn, so a plan of two quick actions reports every step: eating a chocolate
-  bar and drinking a soda gave "Peckish, Hungry, Bored, Peckish, Well Fed, Bit
-  Bored, no longer Well Fed". *Fix:* net the level changes over the whole turn and
-  report each status effect once, at the level it ended on. A crossing that
-  triggers something during the turn (passing out, a story beat) still reports
-  when it happens.
 - **No water source but bottles.** The player asked to drink from the tap twice;
   there is no tap, and the parser picked an unrelated item. *Set aside until
   designed:* a sink or tap in the apartment's kitchen and bathroom as a drink

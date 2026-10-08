@@ -292,6 +292,7 @@ class SimulationCore:
         for the narrator's [IN VIEW].
         """
         facts: list[str] = []
+        levels_before = player_status_effect_levels(self.manager.player)
         rejected: list[tuple[str, str]] = []
         rejected_actions: list[AnyAction] = []
         done: set[str] = set()
@@ -333,6 +334,7 @@ class SimulationCore:
             spent, stat_facts = self._spend(NONE_TURN_MINUTES)
             total_minutes += spent
             facts.extend(stat_facts)
+        facts = self._net_level_facts(facts, levels_before)
         if total_minutes and total_minutes != self._stated_minutes:
             facts.append(_minutes_fact(total_minutes))
         self.refused_actions = [refusal for refusal in rejected if refusal[0] not in done]
@@ -549,7 +551,6 @@ class SimulationCore:
         facts: list[str] = []
         spent = 0
         started = manager.narrative.minutes
-        span_levels = player_status_effect_levels(manager.player)
         self._zombies_seen_this_chunk = 0
         weakens = isinstance(action, WaitAction | SleepAction | ExerciseAction)
         resting = isinstance(action, WaitAction | SleepAction)
@@ -604,7 +605,7 @@ class SimulationCore:
             self._pending_sounds.extend(self._coughs(stat_facts))
         if not manager.narrative.game_over:
             facts.extend(self._run_ticks(started, spent, walking=isinstance(action, MoveAction)))
-        return spent, self._net_level_facts(facts, span_levels)
+        return spent, facts
 
     def _carry_strength_xp(self, minutes: int) -> list[str]:
         """Strength XP for minutes of walking loaded past half the capacity."""
@@ -618,9 +619,9 @@ class SimulationCore:
         return self.skill_engine.add_xp(player, skill_k.STRENGTH, hits * carry_k.CARRY_XP_AMOUNT)
 
     def _net_level_facts(self, facts: list[str], before: dict[StatusEffect, int]) -> list[str]:
-        """The span's facts with its status-effect changes reported once each, at their final level."""
-        level_facts = level_change_fact_texts(self._name)
-        kept = [fact for fact in facts if fact not in level_facts]
+        """The turn's facts with its status-effect changes reported once each, at their final level."""
+        level_texts = level_change_fact_texts(self._name)
+        kept = [fact for fact in facts if fact not in level_texts]
         after = player_status_effect_levels(self.manager.player)
         return [*kept, *level_change_facts(self._name, before, after)]
 
@@ -1219,7 +1220,7 @@ class SimulationCore:
         else:
             hurt = injury_words(player.hit_points, player.max_hit_points)
             lead = f"Use {item.name}: succeeded, {self._name} is {hurt}."
-        return " ".join([lead, *consume_facts])
+        return [lead, *consume_facts]
 
     def _consume(self, item: ConsumableItem) -> list[str]:
         """Apply every food field once, feed the well-fed timer and add alcohol (status-effects).

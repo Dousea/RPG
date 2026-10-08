@@ -288,8 +288,9 @@ fever." A death says "Orton died of starvation.", "Orton died of thirst." or
 
 ## What the narrator and the player see
 
-- The `[OUTCOMES]` block gets one fact per status effect change: "Orton is now
-  Peckish." or "Orton is no longer Peckish." It never holds a stat value.
+- The `[OUTCOMES]` block gets one fact per status effect change, netted over the
+  turn: "Orton is now Peckish." or "Orton is no longer Peckish." It never holds a
+  stat value.
 - The narrator and parser prompts carry a `[CONDITION]` block with the active
   status effects ([`status-effects`](status-effects.md#what-the-narrator-and-the-player-see)).
 - `/play` carries `effects: [{type, level, name}]` for status effects above level 0. The

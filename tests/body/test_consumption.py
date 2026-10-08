@@ -234,7 +234,7 @@ class ConsumingTests(unittest.TestCase):
 
     def test_eating_reports_the_status_effect_it_clears(self):
         gm, facts = _eat(_food(hunger_change=-0.5), hunger=0.5)
-        self.assertIn("Orton is no longer Very Hungry.", facts[0])
+        self.assertIn("Orton is no longer Very Hungry.", facts)
 
     def test_water_is_a_drink_with_a_thirst_change_only(self):
         gm, _ = _eat(_food("Water", thirst_change=-0.5), thirst=0.8)
