@@ -30,6 +30,7 @@ from managers.game import (
     MemoryState,
     NarrativeState,
 )
+from managers.story.lorebook import get_lorebook
 from managers.story.relationship import RelationshipManager
 from managers.world import item_ids
 from managers.world.climate import ClimateEngine
@@ -62,7 +63,7 @@ from modules.world.weather import AirFront, PeriodStage, WeatherPeriod
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 27  # world-lore: the clinic filing cabinet
+SCHEMA_VERSION = 28  # world-lore: lore_sticky
 
 MAX_ID_LENGTH = 40
 
@@ -79,6 +80,19 @@ def _slot_from_value(value: str):
         except ValueError:
             continue
     return None
+
+
+def _lore_sticky_from_dict(data: dict[str, Any]) -> dict[str, int]:
+    entries = get_lorebook().entries
+    kept: dict[str, int] = {}
+    for entry_id, turns in data.items():
+        if entry_id not in entries:
+            logger.warning(f"Dropping unknown lore entry '{entry_id}'.")
+        elif isinstance(turns, bool) or not isinstance(turns, int) or turns <= 0:
+            logger.warning(f"Dropping lore entry '{entry_id}' with turns left {turns!r}.")
+        else:
+            kept[entry_id] = turns
+    return kept
 
 
 def _as_bool(value: Any) -> bool:
@@ -734,6 +748,7 @@ def to_dict(manager: GameManager) -> dict[str, Any]:
             "goals": {k: list(v) for k, v in narrative.goals.items()},
             "flags": dict(narrative.flags),
             "discovered_flags": sorted(narrative.discovered_flags),
+            "lore_sticky": dict(narrative.lore_sticky),
             "pending_corrections": list(narrative.pending_corrections),
             "game_over": narrative.game_over,
             "death_cause": narrative.death_cause,
@@ -836,6 +851,7 @@ def from_dict(data: dict[str, Any]) -> GameManager:
         goals={**default_goals, **narrative_data.get("goals", {})},
         flags=narrative_data.get("flags", {}),
         discovered_flags=set(narrative_data.get("discovered_flags", [])),
+        lore_sticky=_lore_sticky_from_dict(narrative_data.get("lore_sticky", {})),
         pending_corrections=narrative_data.get("pending_corrections", []),
         game_over=_as_bool(narrative_data.get("game_over", False)),
         death_cause=_as_text(narrative_data.get("death_cause", ""), DEATH_CAUSE_MAX_LENGTH),

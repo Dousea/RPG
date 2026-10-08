@@ -39,7 +39,7 @@ from managers.mentions import labels, mentionables, picked
 from managers.plan import OpenChoice, bind_choices, open_choices, steps_of
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion, build_questions, plan_questions
-from managers.story.lore import LoreHit, select_lore
+from managers.story.lore import LoreHit, record_turn, select_lore
 from managers.world import item_ids
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import weather_summary
@@ -382,6 +382,7 @@ class GameEngine:
         parsed = self._with_options(
             parsed, context, player_input, narrated_facts, deep_memories, emit, core, lore
         )
+        record_turn(manager, lore)
         story_text = str(parsed["story"])
         options = list(parsed["options"])
         entry = build_event_entry(manager, stamp, player_input, outcome_facts)

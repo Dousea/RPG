@@ -58,6 +58,10 @@ def _trigger(entry: LoreEntry, manager: GameManager, player_input: str) -> LoreR
     return None
 
 
+def _sticky_active(entry: LoreEntry, manager: GameManager) -> bool:
+    return bool(entry.keys) and manager.narrative.lore_sticky.get(entry.entry_id, 0) > 0
+
+
 def drop_order(hits: list[LoreHit]) -> list[LoreHit]:
     """The shown hits in the order the cap and the prompt budget drop them.
 
@@ -86,7 +90,8 @@ def world_lines(hits: list[LoreHit]) -> list[str]:
 def select_lore(manager: GameManager, player_input: str, scores: dict[str, float]) -> list[LoreHit]:
     """Every `world` entry that triggered this turn, with the cap applied; changes nothing.
 
-    `scores` is for the semantic step, which is not built yet.
+    `scores` is for the semantic step, which is not built yet. A keyed entry with turns left
+    in `lore_sticky` is a `sticky` hit.
     """
     book = get_lorebook()
     entries = sorted(book.world_entries(), key=lambda e: (e.order, e.entry_id))
@@ -96,6 +101,8 @@ def select_lore(manager: GameManager, player_input: str, scores: dict[str, float
         if not _known(entry, manager) or _replaced(entry, book, manager):
             continue
         reason = _trigger(entry, manager, player_input)
+        if reason is None and _sticky_active(entry, manager):
+            reason = "sticky"
         if reason is not None:
             hits.append(LoreHit(entry, reason))
 
@@ -104,6 +111,31 @@ def select_lore(manager: GameManager, player_input: str, scores: dict[str, float
         logger.debug("Lore %s %s (shown: %s)", hit.entry.entry_id, hit.reason, hit.shown)
 
     return hits
+
+
+def record_turn(manager: GameManager, hits: list[LoreHit]) -> None:
+    """Count the sticky stays once for a turn: restart the triggered, age the rest, drop the gone."""
+    book = get_lorebook()
+    state = manager.narrative.lore_sticky
+
+    triggered = {
+        hit.entry.entry_id: hit.entry.sticky
+        for hit in hits
+        if hit.reason in ("key", "semantic") and hit.entry.sticky
+    }
+    for entry_id in list(state):
+        entry = book.entries.get(entry_id)
+        if entry is None or not _known(entry, manager) or _replaced(entry, book, manager):
+            del state[entry_id]
+        elif entry_id not in triggered:
+            state[entry_id] -= 1
+            if state[entry_id] <= 0:
+                del state[entry_id]
+
+    for entry_id, turns in triggered.items():
+        entry = book.entries[entry_id]
+        if _known(entry, manager) and not _replaced(entry, book, manager):
+            state[entry_id] = turns
 
 
 def _capped(hits: list[LoreHit]) -> list[LoreHit]:

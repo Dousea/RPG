@@ -4,6 +4,7 @@ import json
 import random
 import unittest
 from pathlib import Path
+from typing import Any
 
 from adapters.save import codec, files
 from data.items import ITEMS
@@ -281,29 +282,56 @@ class WorldLoreSaveTests(IsolatedSaveTestCase):
         office = gm.world.locations["zone_clinic"].rooms["office"]
         return next(c for c in office.containers if c.container_id == "clinic_filing_cabinet")
 
-    def test_a_version_26_save_is_discarded(self):
+    def test_a_version_27_save_is_discarded(self):
         files.save(GameManager(), self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
             data = json.load(handle)
-        data["version"] = 26
+        data["version"] = 27
         with open(self.save_path, "w", encoding="utf-8") as handle:
             json.dump(data, handle)
         self.assertIsNone(files.load(self.save_path))
 
-    def test_a_version_27_save_keeps_the_beats_the_flags_and_the_cabinet(self):
+    def test_a_version_28_save_keeps_the_beats_the_flags_the_stays_and_the_cabinet(self):
         gm = GameManager()
         gm.world.fired_beats["trial_files"] = 90
         gm.narrative.discovered_flags.add("trial_truth")
+        gm.narrative.lore_sticky["trial_truth"] = 4
         files.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:
-            self.assertEqual(json.load(handle)["version"], 27)
+            self.assertEqual(json.load(handle)["version"], 28)
         loaded = files.load(self.save_path)
         assert loaded is not None
         self.assertEqual(loaded.world.fired_beats, {"trial_files": 90})
         self.assertEqual(loaded.narrative.discovered_flags, {"trial_truth"})
+        self.assertEqual(loaded.narrative.lore_sticky, {"trial_truth": 4})
         cabinet = self.cabinet(loaded)
         self.assertEqual([e.item.id for e in cabinet.contents], ["item_study_binder"])
         self.assertTrue(cabinet.fixed)
+
+    def test_an_unknown_id_in_the_saved_stays_is_dropped_with_a_warning(self):
+        gm = GameManager()
+        gm.narrative.lore_sticky.update({"trial_truth": 4, "gone_entry": 2})
+        files.save(gm, self.save_path)
+
+        with self.assertLogs("adapters.save.codec", level="WARNING") as logs:
+            loaded = files.load(self.save_path)
+
+        assert loaded is not None
+        self.assertEqual(loaded.narrative.lore_sticky, {"trial_truth": 4})
+        self.assertIn("gone_entry", logs.output[0])
+
+    def test_a_saved_stay_that_is_not_a_positive_count_is_dropped_with_a_warning(self):
+        gm = GameManager()
+        hand_edited: dict[str, Any] = {"trial_truth": 4, "ship_story": "3", "clinic_odd": 0}
+        gm.narrative.lore_sticky.update(hand_edited)
+        files.save(gm, self.save_path)
+
+        with self.assertLogs("adapters.save.codec", level="WARNING") as logs:
+            loaded = files.load(self.save_path)
+
+        assert loaded is not None
+        self.assertEqual(loaded.narrative.lore_sticky, {"trial_truth": 4})
+        self.assertEqual(len(logs.output), 2)
 
 
 class RoomSaveTests(IsolatedSaveTestCase):
@@ -408,8 +436,8 @@ class NewZoneSaveTests(IsolatedSaveTestCase):
 class ClockSaveTests(IsolatedSaveTestCase):
     """clock: Saves."""
 
-    def test_schema_version_is_27(self):
-        self.assertEqual(codec.SCHEMA_VERSION, 27)
+    def test_schema_version_is_28(self):
+        self.assertEqual(codec.SCHEMA_VERSION, 28)
 
     def test_a_v4_round_trip_keeps_minutes_and_drops_derived_fields(self):
         gm = GameManager()

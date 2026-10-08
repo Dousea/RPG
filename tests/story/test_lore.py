@@ -6,7 +6,14 @@ from unittest import mock
 
 from data.story import lore as lore_k
 from managers.game import GameManager
-from managers.story.lore import LoreHit, drop_order, select_lore, system_text, world_lines
+from managers.story.lore import (
+    LoreHit,
+    drop_order,
+    record_turn,
+    select_lore,
+    system_text,
+    world_lines,
+)
 from managers.story.lorebook import Lorebook, get_lorebook, holds_number, known_ids
 from modules.action.types import AddGoalAction
 from modules.story.lore import LoreEntry, Position
@@ -285,6 +292,94 @@ class SystemTextTests(unittest.TestCase):
         text = system_text(get_lorebook()).lower()
         for secret in ("velloran", "vx-7", "study", "binder"):
             self.assertNotIn(secret, text)
+
+
+class StickyTests(unittest.TestCase):
+    """world-lore: Sticky: a keyed entry stays on after its last trigger."""
+
+    def turn(self, gm: GameManager, text: str = "") -> list[str]:
+        hits = select_lore(gm, text, {})
+        record_turn(gm, hits)
+        return [hit.entry.entry_id for hit in hits if hit.shown]
+
+    def ship_manager(self) -> GameManager:
+        gm = GameManager()
+        discover(gm, "apocalypse_cause")
+        return gm
+
+    def test_an_entry_shows_on_the_trigger_turn_and_the_turns_after_it(self):
+        gm = self.ship_manager()
+        stay = 3
+        self.assertEqual(get_lorebook().entries["ship_story"].sticky, stay)
+        seen = [
+            "ship_story" in self.turn(gm, "the ship" if turn == 0 else "")
+            for turn in range(stay + 2)
+        ]
+        self.assertEqual(seen, [True, True, True, True, False])
+        self.assertEqual(gm.narrative.lore_sticky, {})
+
+    def test_a_new_match_resets_the_count(self):
+        gm = self.ship_manager()
+        self.turn(gm, "the ship")
+        self.turn(gm)
+        self.turn(gm, "the ship")
+        self.assertEqual(gm.narrative.lore_sticky["ship_story"], 3)
+        self.assertTrue(all("ship_story" in self.turn(gm) for _ in range(3)))
+        self.assertNotIn("ship_story", self.turn(gm))
+
+    def test_a_replaced_entry_is_gone_at_once_and_leaves_the_state(self):
+        gm = self.ship_manager()
+        self.turn(gm, "the ship")
+        self.assertIn("ship_story", gm.narrative.lore_sticky)
+        discover(gm, "trial_truth")
+        ids = self.turn(gm)
+        self.assertNotIn("ship_story", ids)
+        self.assertNotIn("ship_story", gm.narrative.lore_sticky)
+
+    def test_an_entry_whose_condition_turned_false_leaves_the_state(self):
+        gm = self.ship_manager()
+        self.turn(gm, "the ship")
+        gm.narrative.discovered_flags.clear()
+        self.assertNotIn("ship_story", self.turn(gm))
+        self.assertNotIn("ship_story", gm.narrative.lore_sticky)
+
+    def test_a_locked_entry_never_shows_through_sticky(self):
+        gm = GameManager()
+        gm.narrative.lore_sticky["trial_truth"] = 5
+        self.assertNotIn("trial_truth", [h.entry.entry_id for h in select_lore(gm, "", {})])
+        record_turn(gm, [])
+        self.assertEqual(gm.narrative.lore_sticky, {})
+
+    def test_an_entry_the_cap_drops_still_counts_down(self):
+        def keyed(entry_id: str, order: int) -> LoreEntry:
+            return LoreEntry(
+                entry_id, "y" * 1000, Position.WORLD, keys=("alpha",), order=order, sticky=3
+            )
+
+        book = Lorebook({"low": keyed("low", 10), "high": keyed("high", 80)})
+        gm = GameManager()
+        with mock.patch("managers.story.lore.get_lorebook", return_value=book):
+            hits = select_lore(gm, "alpha", {})
+            self.assertEqual([h.shown for h in hits], [True, False])
+            record_turn(gm, hits)
+            self.assertEqual(gm.narrative.lore_sticky, {"low": 3, "high": 3})
+            record_turn(gm, select_lore(gm, "", {}))
+        self.assertEqual(gm.narrative.lore_sticky, {"low": 2, "high": 2})
+
+    def test_a_semantic_hit_starts_the_stay(self):
+        gm = self.ship_manager()
+        entry_ = get_lorebook().entries["ship_story"]
+        record_turn(gm, [LoreHit(entry_, "semantic", 0.9)])
+        self.assertEqual(gm.narrative.lore_sticky, {"ship_story": entry_.sticky})
+        hits = select_lore(gm, "", {})
+        self.assertEqual([h.reason for h in hits if h.entry is entry_], ["sticky"])
+
+    def test_selecting_changes_nothing(self):
+        gm = self.ship_manager()
+        gm.narrative.lore_sticky["ship_story"] = 2
+        select_lore(gm, "the ship", {})
+        select_lore(gm, "", {})
+        self.assertEqual(gm.narrative.lore_sticky, {"ship_story": 2})
 
 
 class ContentTests(unittest.TestCase):

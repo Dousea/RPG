@@ -87,6 +87,8 @@ class NarrativeState:
     # narrator prompt (managers/context.py) -- the knowledge firewall
     # applied to world flags, not just relationship scores.
     discovered_flags: set[str] = field(default_factory=set[str])
+    # Lorebook entry id to turns left of its sticky stay (world-lore: Sticky).
+    lore_sticky: dict[str, int] = field(default_factory=dict[str, int])
     # Defensive fallback only, never the normal path: actions are validated
     # and simulated *before* narration, so a refusal already reaches the
     # narrator as an [OUTCOMES] fact (managers/context.py). This holds the one

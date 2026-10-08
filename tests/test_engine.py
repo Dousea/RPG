@@ -1648,6 +1648,46 @@ class LoreTests(EngineTestCase):
             self.assertIs(call.kwargs["lore"], first)
 
 
+class LoreStickyTests(EngineTestCase):
+    """world-lore: Sticky: the stays are counted once per turn, after the last narrator call."""
+
+    NO_OPTIONS = "STORY:\nYou walk out."
+    OPTIONS_ONLY = "OPTIONS:\n- Check the mailboxes"
+
+    def setUp(self):
+        super().setUp()
+        self.engine.game.narrative.discovered_flags.add("apocalypse_cause")
+        self.engine.game.narrative.lore_sticky["ship_story"] = 3
+
+    def script(self, replies: list[str | LLMError]) -> None:
+        self.llm = SequencedNarrator(replies, actions=MOVE_OUT_ACTIONS)
+        engine_module.llm.query_parser = self.llm.query_parser
+        engine_module.llm.query_narrator = self.llm.query_narrator
+
+    def sticky(self) -> dict[str, int]:
+        return self.engine.game.narrative.lore_sticky
+
+    def test_a_turn_counts_down_once_however_many_prompts_it_builds(self):
+        self.script([self.NO_OPTIONS, "STORY:\nA retry.", self.OPTIONS_ONLY])
+        cast(FakeFactChecker, self.engine.factcheck).results = [["a conflict"], []]
+        with mock.patch.object(
+            engine_module.SimulationCore, "resolve", return_value=["z1 staggers back."]
+        ):
+            self.engine.play("go out")
+        self.assertEqual(len(self.llm.narrator_prompts), 3)
+        self.assertEqual(self.sticky(), {"ship_story": 2})
+
+    def test_a_first_narrator_failure_leaves_the_stays_as_they_were(self):
+        self.script([LLMError("down")])
+        self.engine.play("go out")
+        self.assertEqual(self.sticky(), {"ship_story": 3})
+
+    def test_a_failed_options_call_still_counts_the_turn(self):
+        self.script([self.NO_OPTIONS, LLMError("dropped")])
+        self.engine.play("go out")
+        self.assertEqual(self.sticky(), {"ship_story": 2})
+
+
 def steps(events: list[dict]) -> list[str]:
     return [event["step"] for event in events if event["type"] == "step"]
 

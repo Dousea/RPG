@@ -1,12 +1,11 @@
 # World Lore
 
 > **Status: Partial.** Built: the lorebook file and its loader, the `[WORLD]`
-> block, the system entries, the stages, the secrets, the topics and the binder.
-> **Not built yet:** sticky entries (a keyed entry staying on for a few turns
-> after its trigger) and similarity retrieval (an entry chosen because the
-> player's words are close in meaning to it). The `sticky` and `semantic` fields
-> are read and checked today; nothing acts on them. Keys, constants and the cap
-> work as described.
+> block, the system entries, the stages, the secrets, the topics, the binder and
+> sticky entries.
+> **Not built yet:** similarity retrieval (an entry chosen because the
+> player's words are close in meaning to it). The `semantic` field is read and
+> checked today; nothing acts on it.
 
 The narrator knows the tone of the game and, without this, nothing about its
 world: the city's name, what the news says, what the player has found out, or
@@ -53,7 +52,7 @@ entry, what replaces it, and which line is the stage line.
 | `when` | none | A condition: the entry is known to the player while it holds. None means always. |
 | `replaced_by` | none | Hidden once that entry's `when` holds. |
 | `stage` | `false` | This is a stage line. |
-| `sticky` | none | 1 to 10 turns a keyed entry stays after its trigger. Read and checked; not acted on yet. |
+| `sticky` | none | 1 to 10 turns a keyed entry stays after its trigger. See [Sticky](#sticky). |
 | `semantic` | `true` | A keyed entry may also be chosen by similarity; `false` opts out. Read and checked; not acted on yet. |
 
 ### Position and the prompt cache
@@ -147,10 +146,11 @@ reads. It changes nothing. For each `world` entry:
 3. Keep a `constant` entry; keep a keyed one when a key matches: a zone key
    against the player's zone, an NPC key against the NPCs in that zone, any
    other key as a word or phrase in the player's input (whole words, case
-   ignored: "ship" matches "the ship" and not "relationship").
+   ignored: "ship" matches "the ship" and not "relationship"), or when it is
+   sticky-active ([Sticky](#sticky)): no key matches now but it has turns left.
 
 Each hit is `(entry, reason, score, shown)`, and each is logged at debug with
-its id and reason. Today the reasons are `constant` and `key`.
+its id and reason. Today the reasons are `constant`, `key` and `sticky`.
 
 **The cap.** While the shown lines total over 1800 characters, the next hit in
 `drop_order` is marked not shown; the stage entry never is. `drop_order` is the
@@ -163,6 +163,39 @@ retrieval doesn't change it.
 go: deep memories, then lore lines in `drop_order` (on a copy; the turn's hits
 are untouched), then summaries, the last scene and older events. The stage
 line is current state and never goes. The warning counts "lore lines".
+
+### Sticky
+
+A keyed `world` entry may set `sticky` (1 to 10 turns). A key match is brief:
+the player says "ship" once, and the next turn the narrator would have forgotten
+what the city thinks of the ship. Sticky keeps the entry on for a few more
+turns.
+
+- **State.** `lore_sticky`, entry id to turns left, on the narrative state
+  beside `discovered_flags`. An id is in it only while its turns left are above
+  0. It is saved with the game.
+- **Counting.** Once per turn, in `_run`, after the last narrator call (the
+  reply, a retry and the options follow-up all share one `hits` list),
+  `record_turn(manager, hits)` runs with the turn's hits from before the cap,
+  `shown` or not. It sets the turns left of every `key` or `semantic` hit on an
+  entry with a `sticky` to that `sticky`, and takes 1 off every other id in the
+  state, removing it at 0. A turn that was refused or only narrated still
+  counts. A turn with no narrator call doesn't, and neither does a turn whose
+  first narrator call raised `LLMError`: the player got no prose, so
+  `lore_sticky` stays as it was. A failed retry or options call keeps the first
+  story, so that turn still counts. Building the prompt never changes the
+  state, so the budget's drop loop can rebuild `[WORLD]` any number of times.
+- **Shown.** A keyed entry shows when a key matches or its turns left are above
+  0, so a `sticky` of 3 shows it on the trigger turn and the three turns after
+  it. A new trigger inside the stay resets the count.
+- **`replaced_by` and `when`.** An entry that is replaced, or whose `when` is
+  false, is hidden whatever its turns left, and `record_turn` removes its
+  state. So `ship_story` stops the moment `trial_truth` is found, even
+  mid-stay. Sticky never lifts a secret's lock.
+- **The cap.** A sticky entry competes under the cap like any other, by its
+  `order`. If the cap drops it, its turns still count down: it was triggered.
+- **On load.** An id in a saved `lore_sticky` that is no longer an entry is
+  dropped with a warning.
 
 ### Stages
 
@@ -256,8 +289,10 @@ the source of the wording.
 
 The lorebook is data and is not saved. What it reads (`discovered_flags`,
 `fired_beats`, the clock, the zone, where the NPCs are) is saved already. The
-clinic's filing cabinet is part of the saved rooms, so adding it bumped the
-schema version; older saves are discarded.
+clinic's filing cabinet is part of the saved rooms. The one field this adds is
+`lore_sticky`, saved with the narrative state and read back as `{}` when absent;
+an id that is no longer an entry is dropped with a warning. Each addition
+bumped the schema version; older saves are discarded.
 
 ## What the narrator and the player see
 
@@ -269,8 +304,6 @@ stage facts in the story, and the quest. No lore line is shown raw.
 
 ## Not built yet
 
-- **Sticky entries:** a keyed entry staying on for a few turns after its last
-  trigger, with its state saved.
 - **Similarity retrieval:** up to two entries chosen because the player's input
   is close in meaning to them, ranked after the key matches and dropped first.
 
@@ -286,5 +319,5 @@ stage facts in the story, and the quest. No lore line is shown raw.
 - `tests/test_context.py`: `[WORLD]` and the drop order in the budget.
 - `tests/test_llm.py`: the canon in the system prompt.
 - `tests/test_engine.py`: `[WORLD]` after the turn resolves; the same hits in the
-  retry and options prompts.
-- `tests/test_persistence.py`: the schema version, the cabinet.
+  retry and options prompts; the stays counted once per turn.
+- `tests/test_persistence.py`: the schema version, the cabinet, `lore_sticky`.
