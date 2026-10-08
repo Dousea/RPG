@@ -78,6 +78,14 @@ never contain numbers (HP, damage, odds). See `docs/architecture/engine-authorit
   or leave commented-out code; that belongs in the commit message. Docstrings
   state what a function guarantees, briefly. When editing a file, delete such
   comments in the code you touch.
+- **Blank lines:** a function body reads in paragraphs. Put a blank line
+  between its steps: after the guard clauses that return early, between
+  gathering what it needs and acting on it, before a loop or a block that
+  starts the next step, before the final return when steps come before it.
+  Lines that do one thing together stay together; don't space every line.
+  Ruff's formatter only sets the blank lines between definitions and never
+  adds one inside a body, so this is on the writer. When editing a function
+  that stacks its steps, space the code you touch.
 - **Modules:** one module, one job. Split a module once it holds two jobs
   that can be read apart (types and their parser, a save format and its file
   I/O, a stat engine and its drivers), and group a family of two or more such

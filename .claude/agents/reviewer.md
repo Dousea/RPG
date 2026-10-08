@@ -28,8 +28,10 @@ conventions). The prompt may name a base commit; diff against it when given.
 2. **Conventions.** Layers (`mise run lint` passes), injected `rng`, game
    clock only, tuning numbers as named constants in `data/`, logging not
    print, outcome facts free of numbers, no baseline growth, comments per
-   AGENTS.md (no history or restating), one module one job. Run
-   `mise run check`; any failure is blocking.
+   AGENTS.md (no history or restating), blank lines between a function's
+   steps per AGENTS.md (a new or rewritten function body over 15 lines with
+   no blank line is blocking), one module one job. Run `mise run check`;
+   any failure is blocking.
 3. **Tracked files.** Nothing git-excluded (`.git/info/exclude`) is staged,
    tracked or linked from a tracked file; the rules in the `CLAUDE*.md`
    files about what tracked files may name hold for every new line.
