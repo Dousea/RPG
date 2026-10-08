@@ -509,6 +509,19 @@ class TurnTests(EngineTestCase):
             ],
         )
 
+    def test_an_infected_wound_stays_infected_under_a_bandage(self):
+        """health: Wound infection."""
+        forearm = self.engine.game.player.body[BodyPart.FOREARM_L]
+        forearm.bite_time = 60.0
+        forearm.infected_wound = True
+        forearm.bandage = "item_bandage"
+        forearm.bandage_life = 50.0
+
+        [entry] = self.engine.state()["body"]
+
+        self.assertTrue(entry["bandaged"])
+        self.assertTrue(entry["infected"])
+
     def test_snapshot_body_never_carries_zombie_infection_or_a_number(self):
         player = self.engine.game.player
         player.body[BodyPart.HAND_R].scratch_time = 6.0

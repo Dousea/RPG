@@ -851,7 +851,7 @@ def _body(player: PlayerEntity) -> list[dict[str, Any]]:
                 "bleeding": state.bleeding,
                 "bandaged": state.bandaged,
                 "dirty": state.bandaged and state.bandage_life <= 0,
-                "infected": state.infected_wound and state.wounded and not state.bandaged,
+                "infected": state.infected_wound and state.wounded,
             }
         )
     return entries

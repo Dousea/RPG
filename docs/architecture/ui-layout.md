@@ -122,7 +122,9 @@ There is no health bar and no health number.
 
 One row per body part that has something to show, in head-to-feet order. Each
 row lists its wound words (`health` and `injuries`'s kinds) and the flags as words:
-bleeding, bandaged, dirty, infected, stitched, splinted. No times, no pain
+bleeding, bandaged, dirty, infected, stitched, splinted. An infected wound stays
+"infected" under a bandage, since only disinfectant, an alcohol bandage or
+antibiotics bring it down (`health`, Wound infection). No times, no pain
 level, no healing progress.
 
 ### Inventory

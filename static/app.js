@@ -331,8 +331,8 @@ function renderBody(data) {
     clearAndFill(bodyList, parts.map(part => {
         const tags = part.wounds.map(wound => tag(wound));
         if (part.bleeding) tags.push(tag('bleeding', 'bad'));
-        if (part.infected) tags.push(tag('infected', 'bad'));
         if (part.bandaged) tags.push(part.dirty ? tag('dirty bandage', 'warn') : tag('bandaged', 'good'));
+        if (part.infected) tags.push(tag('infected', 'bad'));
         const li = el('li', 'row-item');
         li.appendChild(el('span', null, capitalised(part.part)));
         const row = el('span', 'tag-row');
