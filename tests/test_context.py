@@ -174,7 +174,8 @@ class QuestVisibilityTests(unittest.TestCase):
                 "take:item_crowbar": "Find something to defend yourself with",
             },
         )
-        resolve_actions(self.gm, MoveAction(destination="out"), MoveAction(destination="out"))
+        resolve_actions(self.gm, MoveAction(destination="out"))
+        resolve_actions(self.gm, MoveAction(destination="out"))
         prompt = self.builder.build_narrator_prompt("look")
         self.assertIn("[x] Get to the street", prompt)
         self.assertIn("[ ] Find something to defend yourself with", prompt)

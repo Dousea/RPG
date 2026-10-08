@@ -16,7 +16,8 @@ class LiveWorldLockedDoorTests(unittest.TestCase):
 
     def test_leaving_and_returning_succeeds_with_the_key(self):
         gm = GameManager()  # starts holding item_apartment_key
-        facts = simulate(gm, MoveAction(destination="out"), MoveAction(destination="in"))
+        facts = simulate(gm, MoveAction(destination="out"))
+        facts += simulate(gm, MoveAction(destination="in"))
         self.assertFalse(any(f.startswith("Refused:") for f in facts))
         self.assertEqual(gm.player.current_location_id, "zone_home")
 

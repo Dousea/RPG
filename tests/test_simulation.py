@@ -1168,6 +1168,59 @@ class PlanTests(unittest.TestCase):
         facts = simulate(gm, WaitAction(duration=Duration(minutes=30)), rng=random.Random(1))
         self.assertFalse(any("never gets to" in fact for fact in facts))
 
+    def test_a_zone_change_ends_the_plan_with_a_not_yet_fact(self):
+        gm = GameManager()
+        facts = simulate(gm, MoveAction(destination="out"), TakeAction(item_name="knife"))
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertIn("Orton arrives at Your Building; he hasn't yet: take the knife.", facts)
+        self.assertEqual(sum("Refused" in fact for fact in facts), 0)
+
+    def test_the_actions_after_a_zone_change_are_not_refused(self):
+        gm = GameManager()
+        core = SimulationCore(gm, rng=random.Random(1))
+        core.resolve([MoveAction(destination="out"), TakeAction(item_name="Unicorn")])
+        self.assertEqual(core.refused_actions, [])
+        self.assertEqual(core.refused_plan, [])
+
+    def test_a_move_within_the_zone_lets_the_plan_go_on(self):
+        gm = GameManager()
+        facts = simulate(
+            gm,
+            MoveAction(destination="the kitchen"),
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+        )
+        self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
+        self.assertFalse(any("hasn't yet" in fact for fact in facts))
+
+    def test_an_action_before_the_zone_change_resolves(self):
+        gm = GameManager()
+        simulate(
+            gm,
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+            MoveAction(destination="out"),
+            AddGoalAction(horizon="short_term", goal_text="Find food"),
+        )
+        self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
+
+    def test_a_move_stopped_at_a_locked_door_lets_the_plan_go_on(self):
+        gm = GameManager()
+        simulate(gm, MoveAction(destination="out"))
+        gm.player.inventory.clear()
+        gm.world.barriers["door_apartment"].locked = True
+        facts = simulate(
+            gm,
+            MoveAction(destination="in"),
+            AddGoalAction(horizon="short_term", goal_text="Find water"),
+        )
+        self.assertEqual(gm.player.current_location_id, "zone_building")
+        self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
+        self.assertFalse(any("hasn't yet" in fact for fact in facts))
+
+    def test_a_plan_ending_with_the_zone_change_adds_no_fact(self):
+        gm = GameManager()
+        facts = simulate(gm, MoveAction(destination="out"))
+        self.assertFalse(any("hasn't yet" in fact for fact in facts))
+
     def test_a_none_turn_costs_one_minute(self):
         gm = GameManager()
         facts = simulate(gm)

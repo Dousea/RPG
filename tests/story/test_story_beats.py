@@ -186,11 +186,12 @@ class BeatEvaluationTests(unittest.TestCase):
         self.assertNotIn("A door slams somewhere above.", again)
 
     def test_a_beat_that_does_not_interrupt_lets_the_plan_run(self):
-        beat = Beat("quiet", PlayerInZone("zone_building"), (), "Something stirs.", False)
+        beat = Beat("quiet", PlayerInZone("zone_home"), (), "Something stirs.", False)
         gm = GameManager()
         core = SimulationCore(gm, beats={"quiet": beat})
-        core.resolve([MoveAction(destination="out"), AddGoalAction("short_term", "z")])
-        self.assertEqual(gm.narrative.goals["short_term"], ["z"])
+        facts = core.resolve([AddGoalAction("short_term", "a"), AddGoalAction("short_term", "z")])
+        self.assertIn("Something stirs.", facts)
+        self.assertEqual(gm.narrative.goals["short_term"], ["a", "z"])
 
     def test_the_action_resolves_before_a_beat_due_in_its_minute(self):
         beat = Beat("due", ClockAtOrPast(1), (SetFlag("late"),), "It is late.", False)

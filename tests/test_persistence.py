@@ -41,11 +41,14 @@ def played_game() -> GameManager:
     gm = GameManager()
     resolve_actions(
         gm,
+        AddGoalAction(horizon="short_term", goal_text="Find a weapon"),
         MoveAction(destination="out"),
-        MoveAction(destination="out"),
+    )
+    resolve_actions(gm, MoveAction(destination="out"))
+    resolve_actions(
+        gm,
         TakeAction(item_name="Crowbar"),
         AddRelationshipNoteAction(npc_name="Emma", note="Seemed shaken"),
-        AddGoalAction(horizon="short_term", goal_text="Find a weapon"),
     )
     resolve_actions(
         gm,
@@ -648,13 +651,10 @@ class SaveFileTests(IsolatedSaveTestCase):
         # neighborhood, so seeding blind would leave both boxes unchecked
         # forever -- the player would have to drop the crowbar and walk back.
         gm = GameManager()
-        resolve_actions(
-            gm,
-            MoveAction(destination="out"),  # zone_home -> zone_building
-            MoveAction(destination="out"),  # zone_building -> zone_street
-            TakeAction(item_name="Crowbar"),
-            MoveAction(destination="out"),  # zone_street -> zone_neighborhood
-        )
+        resolve_actions(gm, MoveAction(destination="out"))  # zone_home -> zone_building
+        resolve_actions(gm, MoveAction(destination="out"))  # zone_building -> zone_street
+        resolve_actions(gm, TakeAction(item_name="Crowbar"))
+        resolve_actions(gm, MoveAction(destination="out"))  # zone_street -> zone_neighborhood
 
         files.save(gm, self.save_path)
         with open(self.save_path, encoding="utf-8") as handle:

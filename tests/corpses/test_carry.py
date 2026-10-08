@@ -150,12 +150,8 @@ class CarryTests(unittest.TestCase):
 
     def test_a_body_dropped_in_the_new_zone_stays_there(self):
         gm, corpse = carrying()
-        simulate(
-            gm,
-            MoveAction(destination="Your Building"),
-            DropAction(item_name="corpse", corpse=True),
-            rng=random.Random(1),
-        )
+        simulate(gm, MoveAction(destination="Your Building"), rng=random.Random(1))
+        simulate(gm, DropAction(item_name="corpse", corpse=True), rng=random.Random(1))
         self.assertEqual(corpse.zone_id, "zone_building")
         self.assertEqual(corpse.gap, 1.0)
 
@@ -172,12 +168,8 @@ class CarryTests(unittest.TestCase):
         gm, corpse = with_body(fake_dead=True)
         simulate(gm, CarryAction(corpse_name="c1"), rng=random.Random(1))
         corpse.died_at = -10_000
-        simulate(
-            gm,
-            MoveAction(destination="Your Building"),
-            MoveAction(destination="The Street"),
-            rng=random.Random(1),
-        )
+        simulate(gm, MoveAction(destination="Your Building"), rng=random.Random(1))
+        simulate(gm, MoveAction(destination="The Street"), rng=random.Random(1))
         self.assertIn("c1", gm.world.corpses)
         self.assertEqual(gm.player.carrying_corpse, "c1")
 

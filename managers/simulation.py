@@ -320,6 +320,7 @@ class SimulationCore:
                 continue
             done.add(describe_action(action))
             self._interruption = ""
+            zone_before = self.manager.player.current_location_id
             action_facts, minutes = self._resolve_one(result)
             facts.extend(action_facts)
             total_minutes += minutes
@@ -329,6 +330,15 @@ class SimulationCore:
                 cancelled = [describe_action(a) for a in actions[index + 1 : MAX_PLAN_ACTIONS]]
                 if cancelled:
                     facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
+                break
+            if self.manager.player.current_location_id != zone_before:
+                unattempted = [describe_action(a) for a in actions[index + 1 : MAX_PLAN_ACTIONS]]
+                if unattempted and not self.manager.narrative.game_over:
+                    zone = self.manager.world.locations[self.manager.player.current_location_id]
+                    facts.append(
+                        f"{self._name} arrives at {zone.name}; {self._subject} hasn't yet: "
+                        f"{', '.join(unattempted)}."
+                    )
                 break
         if self._shouted and not total_minutes and not self.manager.narrative.game_over:
             spent, stat_facts = self._spend(NONE_TURN_MINUTES)

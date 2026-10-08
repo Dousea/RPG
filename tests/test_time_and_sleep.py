@@ -182,8 +182,8 @@ class TimeCostTests(unittest.TestCase):
         gm = GameManager()
         facts = simulate(
             gm,
-            MoveAction(destination="out"),
             WaitAction(duration=Duration(minutes=30)),
+            MoveAction(destination="out"),
         )
         self.assertEqual(gm.narrative.minutes, 31)
         self.assertEqual(facts[-1], "About 31 minutes pass.")
@@ -193,8 +193,8 @@ class TimeCostTests(unittest.TestCase):
         gm = GameManager()
         facts = simulate(
             gm,
-            MoveAction(destination="out"),
             WaitAction(duration=Duration(minutes=120)),
+            MoveAction(destination="out"),
         )
         self.assertEqual(facts[-1], "About 2 hours 1 minute pass.")
 
@@ -226,8 +226,8 @@ class TimeCostTests(unittest.TestCase):
             return advance(player, minutes, ctx, weather_for_chunk)
 
         core.stats_engine.advance = spy
-        core.resolve([MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5))])
-        self.assertEqual(handed, [1, 5])
+        core.resolve([WaitAction(duration=Duration(minutes=5)), MoveAction(destination="out")])
+        self.assertEqual(handed, [5, 1])
 
 
 class ClockEdgeCaseTests(unittest.TestCase):
@@ -287,7 +287,7 @@ class StatTurnTests(unittest.TestCase):
     def test_stat_facts_come_before_the_time_fact(self):
         gm = GameManager()
         facts = simulate(
-            gm, MoveAction(destination="out"), WaitAction(duration=Duration(minutes=5 * 60))
+            gm, WaitAction(duration=Duration(minutes=5 * 60)), MoveAction(destination="out")
         )
         self.assertTrue(facts[-1].startswith("About"))
         self.assertLess(facts.index("Orton is now Peckish."), len(facts) - 1)
@@ -310,7 +310,8 @@ class StatTurnTests(unittest.TestCase):
 
     def test_combat_minutes_are_exercise(self):
         gm = GameManager()
-        simulate(gm, MoveAction(destination="out"), MoveAction(destination="out"))
+        simulate(gm, MoveAction(destination="out"))
+        simulate(gm, MoveAction(destination="out"))
         endurance_before = gm.player.stats.get(CharacterStat.ENDURANCE)
         self.assertEqual(endurance_before, 1)
         core = SimulationCore(gm)

@@ -24,14 +24,9 @@ def assert_no_ids(case: unittest.TestCase, facts: list[str]) -> None:
 class OutcomeFactIdTests(unittest.TestCase):
     def test_a_move_a_take_a_search_and_a_refusal_hold_no_ids(self):
         gm = GameManager()
-        facts = simulate(
-            gm,
-            SearchAction(target_name="side table"),
-            MoveAction(destination="out"),
-            MoveAction(destination="out"),
-            TakeAction(item_name="Crowbar"),
-            TakeAction(item_name="Unicorn"),
-        )
+        facts = simulate(gm, SearchAction(target_name="side table"), MoveAction(destination="out"))
+        facts += simulate(gm, MoveAction(destination="out"))
+        facts += simulate(gm, TakeAction(item_name="Crowbar"), TakeAction(item_name="Unicorn"))
         self.assertTrue(any("Quest" in fact for fact in facts))
         self.assertTrue(any(fact.startswith("Refused:") for fact in facts))
         assert_no_ids(self, facts)

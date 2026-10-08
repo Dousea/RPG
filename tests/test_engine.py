@@ -40,7 +40,7 @@ from tests.support import (
     stream,
 )
 
-MOVE_OUT_ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
+MOVE_OUT_ACTIONS = "ACTIONS:\nADD_GOAL short_term Find a weapon\nMOVE_TO out"
 MOVE_OUT_STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building\n\nOPTIONS:\nNONE"
 
 
@@ -109,9 +109,9 @@ class TurnTests(EngineTestCase):
         self.llm.actions = json.dumps(
             {
                 "actions": [
-                    {"verb": "MOVE_TO", "destination": "out"},
                     {"verb": "ADD_GOAL", "horizon": "short_term", "text": "Find a weapon"},
                     {"verb": "TAKE", "item": "Nothing Like This"},
+                    {"verb": "MOVE_TO", "destination": "out"},
                 ]
             }
         )
@@ -1225,11 +1225,12 @@ class PlanCheckTests(EngineTestCase):
         ((player_input, questions),) = self.checker().plan_calls
         self.assertEqual(player_input, "go out")
         self.assertEqual(len(questions), 2)
-        self.assertIn('"go to out"', questions[0].text)
+        self.assertIn('"think about their goals"', questions[0].text)
+        self.assertIn('"go to out"', questions[1].text)
 
     def test_a_flagged_action_is_not_resolved_and_becomes_a_refusal(self):
         home = self.engine.game.player.current_location_id
-        self.checker().plan_results = [[0]]
+        self.checker().plan_results = [[1]]
         self.engine.play("go out")
         self.assertEqual(self.engine.game.player.current_location_id, home)
         self.assertIn("Find a weapon", self.engine.game.narrative.goals["short_term"])

@@ -13,7 +13,7 @@ from data.character.presets import ORTON
 from modules.body.stats import CharacterStat
 from tests.support import FakeFactChecker, FakeMemory, IsolatedSaveTestCase, ScriptedLLM
 
-ACTIONS = "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Find a weapon"
+ACTIONS = "ACTIONS:\nADD_GOAL short_term Find a weapon\nMOVE_TO out"
 STORY = "STORY:\nYou walk out into the building.\n\nEVENT:\nOrton entered the building"
 
 

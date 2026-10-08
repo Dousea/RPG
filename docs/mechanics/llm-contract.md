@@ -254,6 +254,10 @@ empty list is `NONE`.
 - **An interrupted action stops the plan.** The actions after it are cancelled with
   one fact: "Orton never gets to: take the knife, drop the bag." A story beat that
   interrupts does the same.
+- **A plan ends at its first zone change.** The actions after a `MOVE_TO` that
+  leaves the zone are neither validated nor resolved, and one fact says so: "Orton
+  arrives at the supermarket; he hasn't yet: smash the window." They are not
+  refusals. A move within the zone, or one stopped at a locked door, changes nothing.
 - **`NONE` still costs a minute.** A turn where the parser proposes nothing costs
   1 minute, so the zombies and the stats still run. A turn whose only lines were
   refused costs 0.
@@ -687,10 +691,10 @@ entry says what goes wrong and how to fix it.
   first zone-changing `MOVE_TO`. Resolve up to the move, rebuild the scene and the
   schema, and ask the parser for the rest of the input, with `[LAST TURN]` saying
   what was done. That changes the turn loop and costs a second parser call, so a
-  first step comes before it: end the plan at its first zone-changing `MOVE_TO`
-  and give the narrator a fact that the rest was not attempted. That stops actions
-  aimed at the wrong zone's things, and the player repeats the rest at the
-  destination.
+  first step comes before it, and is in place: the plan ends at its first
+  zone-changing `MOVE_TO` and the narrator gets a fact that the rest was not
+  attempted. That stops actions aimed at the wrong zone's things, and the player
+  repeats the rest at the destination. The split and the second parse are still to do.
 
 ### People
 

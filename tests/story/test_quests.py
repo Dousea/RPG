@@ -48,12 +48,9 @@ class QuestAdvancementTests(unittest.TestCase):
         gm.quests["get_crowbar"] = QuestState(
             quest_id="get_crowbar", objectives=["take:item_crowbar"]
         )
-        resolve_actions(
-            gm,
-            MoveAction(destination="out"),
-            MoveAction(destination="out"),
-            TakeAction(item_name="Crowbar"),
-        )
+        resolve_actions(gm, MoveAction(destination="out"))
+        resolve_actions(gm, MoveAction(destination="out"))
+        resolve_actions(gm, TakeAction(item_name="Crowbar"))
         self.assertEqual(gm.quests["get_crowbar"].status, QuestStatus.COMPLETED)
 
     def test_moving_into_a_location_completes_a_matching_objective(self):
@@ -150,12 +147,9 @@ class QuestFactTests(unittest.TestCase):
 
     def test_an_objective_fact_names_the_title_and_label(self):
         gm = GameManager()
-        facts = resolve_actions(
-            gm,
-            MoveAction(destination="out"),
-            MoveAction(destination="out"),
-            TakeAction(item_name="Crowbar"),
-        )
+        resolve_actions(gm, MoveAction(destination="out"))
+        resolve_actions(gm, MoveAction(destination="out"))
+        facts = resolve_actions(gm, TakeAction(item_name="Crowbar"))
         self.assertIn(
             'Quest "Make a Supply Run": done -- Find something to defend yourself with.',
             " ".join(facts),
