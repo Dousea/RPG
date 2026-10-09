@@ -1,5 +1,6 @@
 """Time costs, the clock, stats over a turn, sleep and stat deaths."""
 
+import dataclasses
 import random
 import unittest
 from unittest.mock import patch
@@ -127,6 +128,19 @@ class TimeCostTests(unittest.TestCase):
         gm = GameManager()
         gm.player.current_location_id = "zone_supermarket"
         self.assertEqual(_spent(gm, MoveAction(destination="zone_home")), 10 + 5 + 2 + 1 + 1)
+
+    def test_a_hop_climbs_through_each_window_it_crosses(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        first = gm.world.barriers["window_bodega"]
+        second = dataclasses.replace(first, barrier_id="window_bodega_side", locked=False)
+        first.locked = False
+        gm.world.barriers[second.barrier_id] = second
+        hop = time_cost_k.zone_hop_minutes("zone_street", "zone_bodega")
+        self.assertEqual(
+            _spent(gm, MoveAction(destination="zone_bodega")),
+            hop + 2 * time_cost_k.WINDOW_CLIMB_MIN,
+        )
 
     def test_a_walk_stopped_at_a_locked_door_counts_the_hops_walked(self):
         gm = GameManager()
@@ -464,6 +478,18 @@ class StatDeathTests(unittest.TestCase):
         make_dying(gm.player)
         simulate(gm, WaitAction(duration=Duration(minutes=12 * 60)))
         self.assertLess(gm.narrative.minutes, 10)
+
+    def test_a_death_on_the_first_hop_ends_a_walk_there(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_supermarket"
+        make_dying(gm.player)
+        first_hop = time_cost_k.zone_hop_minutes("zone_supermarket", "zone_neighborhood")
+        first_hop += time_cost_k.WINDOW_CLIMB_MIN
+        before = gm.narrative.minutes
+        simulate(gm, MoveAction(destination="zone_home"))
+        self.assertTrue(gm.narrative.game_over)
+        self.assertNotEqual(gm.player.current_location_id, "zone_home")
+        self.assertLessEqual(gm.narrative.minutes - before, first_hop)
 
     def test_later_actions_in_the_turn_are_refused(self):
         gm = GameManager()

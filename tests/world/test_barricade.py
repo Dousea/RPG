@@ -2,8 +2,10 @@
 
 import random
 import unittest
+from unittest.mock import patch
 
 from data.items import ITEMS
+from data.time_costs import WALK_TO_BARRIER_MIN
 from data.world.barriers import WINDOW_HEALTH_SINGLE
 from managers.game import GameManager
 from managers.simulation import SimulationCore
@@ -221,6 +223,16 @@ class BarricadeTests(unittest.TestCase):
         gm = stocked_game()
         _, minutes = run(gm, BarricadeAction(barrier_name="apartment door"))
         self.assertGreaterEqual(minutes, 1)
+
+    def test_the_slowdown_stretches_the_hammering_but_not_the_walk_to_the_door(self):
+        slow = patch.object(SimulationCore, "_action_time_multiplier", return_value=3.0)
+        with slow:
+            _, at_the_door = run(stocked_game(), BarricadeAction(barrier_name="apartment door"))
+            _, from_afar = run(
+                stocked_game(at_door=False), BarricadeAction(barrier_name="apartment door")
+            )
+        self.assertGreater(at_the_door, 1)
+        self.assertEqual(from_afar, WALK_TO_BARRIER_MIN + at_the_door)
 
     def test_a_window_can_be_boarded_up_even_when_smashed(self):
         gm = stocked_game()

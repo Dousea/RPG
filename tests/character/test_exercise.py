@@ -1,6 +1,7 @@
 """skills: Exercise: reps, regularity, stiffness, refusals and the starting regularity."""
 
 import random
+import re
 import unittest
 from unittest import mock
 
@@ -16,6 +17,7 @@ from managers.character.exercise import (
 from managers.character.skills import SkillEngine
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected
+from managers.zombies.attack import AttackOutcome
 from modules.action.parser import parse_action_line
 from modules.action.types import ExerciseAction
 from modules.body.parts import BodyPart
@@ -23,8 +25,10 @@ from modules.body.stats import CharacterStat
 from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
+from modules.entity.zombie import ZombieState
 from modules.resolution import ExercisePlan, TimeSpan
 from tests.support import simulate
+from tests.test_simulation import add_zombie, zombie_game
 
 
 def stiffness_of(player) -> dict[BodyPart, float]:
@@ -319,6 +323,23 @@ class ExerciseRunTests(unittest.TestCase):
         self.assertEqual(facts[0], "You stop, too exhausted to go on.")
         self.assertRegex(facts[1], r"^\d+ reps in all\.$")
         self.assertLessEqual(gm.player.stats.get(CharacterStat.ENDURANCE), 0.25)
+
+    def test_a_zombie_breaks_the_session_off_at_the_minutes_run(self):
+        gm = zombie_game()
+        zombie = add_zombie(gm, gap=4, state=ZombieState.CHASING)
+        zombie.time_since_seen = 0
+        before = gm.narrative.minutes
+        defended = AttackOutcome(defended=True)
+        with mock.patch("managers.zombies.population.resolve_attack", return_value=defended):
+            facts = self.run_exercise(gm, "squats", 60)
+        spent = gm.narrative.minutes - before
+        self.assertLess(spent, 60)
+        self.assertIn("break off", facts[0])
+        self.assertIn(str(spent), facts[0])
+        said = re.fullmatch(r"(\d+) reps in all\.", facts[1])
+        assert said is not None
+        reps = int(said.group(1))
+        self.assertLessEqual(reps, spent * 2)
 
     def test_a_full_session_reports_the_reps_done(self):
         gm = game_with()

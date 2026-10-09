@@ -10,14 +10,17 @@ from data.loot.catalogue import LOOT_CATALOGUE, LOOT_KIND_MODIFIERS
 from data.zombies import loot as zombie_loot
 from managers.corpses import search as loot
 from managers.game import GameManager
+from managers.zombies.attack import AttackOutcome
+from managers.zombies.population import approach_minutes
 from modules.action.parser import parse_action_line
 from modules.action.types import SearchAction, TakeAction
 from modules.body.parts import BodyLocation
 from modules.body.stats import CharacterStat
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
+from modules.entity.zombie import ZombieState
 from tests.support import ScriptedRandom, load_pack, resolve_leg, simulate
-from tests.test_simulation import zombie_game
+from tests.test_simulation import add_zombie, zombie_game
 
 NAME = "Orton"
 
@@ -234,6 +237,16 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(minutes, 3)
         self.assertEqual(corpse.gap, 1.0)
         self.assertTrue(corpse.searched)
+
+    def test_an_interrupted_approach_runs_nothing_of_the_search_and_says_so(self):
+        gm, corpse = with_body(gap=9.0)
+        add_zombie(gm, gap=4, state=ZombieState.CHASING)
+        defended = AttackOutcome(defended=True)
+        with mock.patch("managers.zombies.population.resolve_attack", return_value=defended):
+            minutes, facts = minutes_of(gm, SearchAction(target_name="c1"))
+        self.assertLessEqual(minutes, approach_minutes(9.0))
+        self.assertFalse(corpse.searched)
+        self.assertTrue(any("never gets to" in fact for fact in facts))
 
     def test_a_body_that_rises_on_the_way_is_gone_when_the_player_arrives(self):
         gm, corpse = with_body(gap=9.0, fake_dead=True, died_at=-200)

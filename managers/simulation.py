@@ -13,10 +13,9 @@ this list; it only puts prose around facts the engine already decided.
 
 import logging
 import random
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Generator
+from dataclasses import dataclass, field
 from enum import Enum, auto
-from functools import partial
 
 from data import carry as carry_k
 from data import melee as melee_k
@@ -208,6 +207,27 @@ class Motion:
     approach_target: str | None = None
     swing_target: str | None = None
     shove: bool = False
+
+
+@dataclass(frozen=True)
+class Phase:
+    """One timed part of an action, as a resolver hands it to `SimulationCore._resolve_one`.
+
+    `facts` are the phase's own words; the resolver may add to the list until it yields again
+    or finishes (the driver joins the facts of every phase only once the resolver is done), so
+    what the minutes settled can join them. `own` marks the act itself, as
+    against getting there; `asleep` spends the minutes asleep.
+    """
+
+    facts: list[str] = field(default_factory=list)
+    minutes: int = 0
+    motion: Motion = field(default_factory=Motion)
+    own: bool = False
+    asleep: bool = False
+
+
+Phases = Generator[Phase, bool]
+Resolver = Callable[["SimulationCore", Accepted], str | list[str] | Phases]
 
 
 def _hurt_levels(player: PlayerEntity) -> tuple[int, int]:
@@ -859,36 +879,90 @@ class SimulationCore:
         return facts
 
     def _resolve_one(self, accepted: Accepted) -> tuple[list[str], int]:
-        """Resolve one accepted action; returns its facts and the minutes it took."""
+        """Resolve one accepted action phase by phase; returns its facts and the minutes it took.
+
+        A resolver either returns a fact or facts, which the driver times as one own phase
+        costing `action_minutes`, or is a generator that yields a `Phase` for each timed
+        part and is sent whether that phase was interrupted or the game ended; after an
+        interruption it yields the words for being cut off and returns. Only this driver
+        spends minutes: for each phase it checks the first fact for the player's death,
+        adds the heavy-load and skill facts, hands the barrier sounds to the zombies, slows
+        or frees the own phase and spends the phase's minutes at its pace.
+        """
         if isinstance(accepted.action, MoveAction):
             if accepted.action.run:
                 self.manager.player.sneaking = False
             if isinstance(accepted.resolved, MoveToZone | MoveBlocked):
-                return self._resolve_walk(accepted)
+                return self._drive(accepted, SimulationCore._resolve_walk)
         handler = self._RESOLVERS.get(accepted.action.verb)
         if handler is None:
             return [f"No resolver registered for {accepted.action.verb}."], 0
-        self._skill_facts = []
+        return self._drive(accepted, handler)
+
+    def _drive(self, accepted: Accepted, handler: Resolver) -> tuple[list[str], int]:
         slowdown = (
             self._action_time_multiplier()
             if isinstance(accepted.action, MULTIPLIED_ACTIONS)
             else 1.0
         )
-        load_before = player_status_effect_levels(self.manager.player)[StatusEffect.HEAVY_LOAD]
+        phases = self._phases(handler, accepted)
+        parts: list[tuple[list[str], list[str]]] = []
+        spent = 0
+        sent: bool | None = None
+        while True:
+            self._skill_facts = []
+            load_before = self._heavy_load()
+            try:
+                phase = next(phases) if sent is None else phases.send(sent)
+            except StopIteration:
+                phase = None
+            noted = [
+                *level_change_facts(
+                    self._name,
+                    {StatusEffect.HEAVY_LOAD: load_before},
+                    {StatusEffect.HEAVY_LOAD: self._heavy_load()},
+                ),
+                *self._skill_facts,
+            ]
+            if phase is None:
+                if parts:
+                    parts[-1][1].extend(noted)
+                else:
+                    parts.append(([], noted))
+                break
+
+            if phase.facts:
+                phase.facts[0] = self._check_player_death(phase.facts[0])
+            self._pending_sounds.extend(self._barriers.sounds)
+            self._barriers.sounds.clear()
+            minutes = self._phase_minutes(accepted, phase, slowdown)
+            if minutes:
+                took, stat_facts = self._spend(
+                    minutes, accepted.action, asleep=phase.asleep, motion=phase.motion
+                )
+                spent += took
+                noted.extend(stat_facts)
+            parts.append((phase.facts, noted))
+            sent = bool(self._interruption) or self.manager.narrative.game_over
+
+        return [fact for own, noted in parts for fact in (*own, *noted)], spent
+
+    def _phases(self, handler: Resolver, accepted: Accepted) -> Phases:
+        """The resolver's phases; a plain return becomes one own phase."""
         result = handler(self, accepted)
-        if isinstance(result, tuple):
-            return result
-        lines = [result] if isinstance(result, str) else result
-        load_after = player_status_effect_levels(self.manager.player)[StatusEffect.HEAVY_LOAD]
-        lines = [
-            *lines,
-            *level_change_facts(
-                self._name,
-                {StatusEffect.HEAVY_LOAD: load_before},
-                {StatusEffect.HEAVY_LOAD: load_after},
-            ),
-        ]
-        minutes = action_minutes(accepted.action, accepted.resolved)
+        if isinstance(result, str | list):
+            lines = [result] if isinstance(result, str) else list(result)
+            yield Phase(lines, action_minutes(accepted.action, accepted.resolved), own=True)
+            return
+
+        yield from result
+
+    def _phase_minutes(self, accepted: Accepted, phase: Phase, slowdown: float) -> int:
+        """The minutes to spend on a phase: the own phase is slowed, and a second social action is free."""
+        minutes = phase.minutes
+        if not phase.own:
+            return minutes
+
         if isinstance(accepted.resolved, Transfer | Gathering):
             minutes = units.minutes_from_timed_action_frames(accepted.resolved.frames * slowdown)
         elif isinstance(accepted.action, MULTIPLIED_ACTIONS):
@@ -896,12 +970,15 @@ class SimulationCore:
         if isinstance(accepted.action, SOCIAL_ACTIONS):
             minutes = 0 if self._spoke else minutes
             self._spoke = True
-        facts = [self._check_player_death(lines[0]), *lines[1:], *self._skill_facts]
-        spent = 0
-        if minutes:
-            spent, stat_facts = self._spend(minutes, accepted.action)
-            facts.extend(stat_facts)
-        return facts, spent
+        return minutes
+
+    def _heavy_load(self) -> int:
+        return player_status_effect_levels(self.manager.player)[StatusEffect.HEAVY_LOAD]
+
+    def _cut_off(self, words: str) -> Phases:
+        """Say what an interruption kept from happening; a death says nothing."""
+        if not self.manager.narrative.game_over:
+            yield Phase([words])
 
     def _check_player_death(self, fact: str) -> str:
         """End the game the moment the player's HP reaches zero.
@@ -978,7 +1055,7 @@ class SimulationCore:
             case _:
                 return f"MOVE_TO had no destination; {self._name} stayed put."
 
-    def _resolve_walk(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_walk(self, accepted: Accepted) -> Phases:
         """Walk the route one hop at a time; an interruption stops the player where they are.
 
         The player enters each zone for the last minute of its hop.
@@ -989,21 +1066,16 @@ class SimulationCore:
         assert isinstance(resolved, MoveToZone | MoveBlocked)
         origin_id = player.current_location_id
         route = manager.zone_path(origin_id, resolved.location.id) or []
-        spent = 0
-        spend_facts: list[str] = []
         if not route:
-            spent, spend_facts = self._spend(WALK_TO_BARRIER_MIN, accepted.action)
+            yield Phase(minutes=WALK_TO_BARRIER_MIN)
         for zone_id in route:
-            hop_spent, hop_facts = self._walk_hop(zone_id, accepted.action, resolved.pace)
-            spent += hop_spent
-            spend_facts.extend(hop_facts)
-            if self._interruption or manager.narrative.game_over:
+            interrupted = yield from self._walk_hop(zone_id, resolved.pace)
+            if interrupted:
                 break
         interrupted = bool(self._interruption) or manager.narrative.game_over
         if isinstance(resolved, MoveBlocked) and resolved.barrier is not None and not interrupted:
             player.at_barrier = resolved.barrier.barrier_id
-        fact = self._walk_fact(resolved, origin_id, interrupted)
-        return [*spend_facts, self._check_player_death(fact)], spent
+        yield Phase([self._walk_fact(resolved, origin_id, interrupted)])
 
     def _enter_zone(self, zone_id: str) -> None:
         """Put the player in a zone; every follower who was with them arrives at once."""
@@ -1024,10 +1096,11 @@ class SimulationCore:
         for npc in followers:
             manager.move_npc(npc, manager.world.locations[zone_id])
 
-    def _walk_hop(self, zone_id: str, action: AnyAction, pace: Pace) -> tuple[int, list[str]]:
+    def _walk_hop(self, zone_id: str, pace: Pace) -> Generator[Phase, bool, bool]:
         """One hop: the first minutes in the zone being left, the last one in the new zone.
 
         Before the outbreak nobody can tell, so the whole hop is spent in the new zone.
+        Returns whether the hop was interrupted.
         """
         manager = self.manager
         player = manager.player
@@ -1036,13 +1109,12 @@ class SimulationCore:
         hop = self._hop_minutes(previous_id, zone_id, pace)
         crossing = barriers_between(manager.world, previous_id, zone_id)
         active = self._loop.active()
-        spent, facts = (self._spend(hop - 1, action, motion=motion)) if active else (0, [])
-        if self._interruption or manager.narrative.game_over:
-            return spent, facts
+        interrupted = yield Phase(minutes=hop - 1 if active else 0, motion=motion)
+        if interrupted:
+            return True
+
         shut = self._pass_through(crossing)
-        climbed, climb_facts = self._climb(crossing, action, motion)
-        spent += climbed
-        facts.extend(climb_facts)
+        yield from self._climb(crossing, motion)
         for barrier, released in shut:
             if active:
                 self._barriers.close_behind(barrier, previous_id, released)
@@ -1052,8 +1124,7 @@ class SimulationCore:
         if active:
             enter_zone(manager.world, zone_id, previous_id, self._rng, player.carrying_corpse)
         player.at_barrier = crossing[-1].barrier_id if crossing else None
-        last, last_facts = self._spend(1 if active else hop, action, motion=motion)
-        return spent + last, [*facts, *last_facts]
+        return (yield Phase(minutes=1 if active else hop, motion=motion))
 
     def _pass_through(
         self, crossing: list[BarrierEntity]
@@ -1066,19 +1137,17 @@ class SimulationCore:
                 shut.append((barrier, released))
         return shut
 
-    def _climb(
-        self, crossing: list[BarrierEntity], action: AnyAction, motion: Motion
-    ) -> tuple[int, list[str]]:
+    def _climb(self, crossing: list[BarrierEntity], motion: Motion) -> Phases:
         """Climbing through a window takes a minute more."""
         windows = [b for b in crossing if b.kind == BarrierKind.WINDOW]
         if not windows or self.manager.narrative.game_over:
-            return 0, []
+            return
+
         facts = [
             barrier_k.CLIMB_FACT.format(name=self._name, barrier=barrier.name)
             for barrier in windows
         ]
-        spent, spend_facts = self._spend(WINDOW_CLIMB_MIN * len(windows), action, motion=motion)
-        return spent, [*facts, *spend_facts]
+        yield Phase(facts, WINDOW_CLIMB_MIN * len(windows), motion)
 
     def _walk_fact(
         self, resolved: MoveToZone | MoveBlocked, origin_id: str, interrupted: bool
@@ -1189,7 +1258,7 @@ class SimulationCore:
             name=self._name, item=transfer.entities[0].item.name.lower(), bag=bag
         )
 
-    def _resolve_search_place(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_search_place(self, accepted: Accepted) -> Phases:
         """Go to the room if elsewhere, then open each container in turn, a minute each.
 
         A container's minute completes before an interruption ends the search, so that container opens.
@@ -1201,27 +1270,26 @@ class SimulationCore:
         containers = (
             resolved.containers if isinstance(resolved, TargetRoom) else (resolved.container,)
         )
-        facts: list[str] = []
-        spent = 0
         if resolved.walk:
-            spent, facts = self._spend(MOVE_ROOM_MIN, accepted.action)
+            interrupted = yield Phase(minutes=MOVE_ROOM_MIN)
             if manager.narrative.game_over:
-                return facts, spent
+                return
+
             move_to_room(manager.player, room)
-            if self._interruption:
-                return [*facts, container_k.NEVER_SEARCHES.format(name=self._name)], spent
+            if interrupted:
+                yield from self._cut_off(container_k.NEVER_SEARCHES.format(name=self._name))
+                return
+
         for container in containers:
-            minutes, minute_facts = self._spend(OPEN_CONTAINER_MIN, accepted.action)
-            spent += minutes
+            opened: list[str] = []
+            interrupted = yield Phase(opened, OPEN_CONTAINER_MIN, own=True)
             if manager.narrative.game_over:
-                facts.extend(minute_facts)
-                break
+                return
+
             open_container(self._rng, room, container)
-            facts.append(self._opened_fact(container))
-            facts.extend(minute_facts)
-            if self._interruption:
-                break
-        return facts, spent
+            opened.append(self._opened_fact(container))
+            if interrupted:
+                return
 
     def _opened_fact(self, container: ContainerEntity) -> str:
         items = items_in_words(container.contents)
@@ -1232,37 +1300,38 @@ class SimulationCore:
             name=self._name, container=container.name, items=items
         )
 
-    def _resolve_search(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_search(self, accepted: Accepted) -> Phases:
         """Walk up to the body, then go through it: the approach minutes come before the one search."""
         if isinstance(accepted.resolved, TargetRoom | TargetContainer):
-            return self._resolve_search_place(accepted)
+            yield from self._resolve_search_place(accepted)
+            return
+
         target = accepted.expect(TargetCorpse)
         manager = self.manager
-        facts: list[str] = []
-        spent = 0
         if target.approach_minutes:
             motion = Motion(Pace.WALK, approach_target=target.corpse_id)
-            spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
-        if manager.narrative.game_over:
-            return facts, spent
-        if self._interruption:
-            return [*facts, f"{self._name} never gets to search."], spent
+            if (yield Phase(minutes=target.approach_minutes, motion=motion)):
+                yield from self._cut_off(f"{self._name} never gets to search.")
+                return
+
         corpse = manager.world.corpses.get(target.corpse_id)
         if corpse is None:
-            gone = zombie_lore.CORPSE_GONE_FACT.format(name=self._name, corpse=target.corpse_id)
-            return [*facts, gone], spent
-        search_spent, search_facts = self._spend(SEARCH_MIN, accepted.action)
-        spent += search_spent
+            yield Phase(
+                [zombie_lore.CORPSE_GONE_FACT.format(name=self._name, corpse=target.corpse_id)]
+            )
+            return
+
+        found: list[str] = []
+        yield Phase(found, SEARCH_MIN, own=True)
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             loot_search(corpse, self._rng)
             if corpse.contents:
                 self._finds.append(items_in_words(corpse.contents))
-            facts.append(
+            found.append(
                 zombie_lore.SEARCH_FACT.format(
                     name=self._name, corpse=corpse.corpse_id, items=contents_in_words(corpse)
                 )
             )
-        return [*facts, *search_facts], spent
 
     def _resolve_take(self, accepted: Accepted) -> str | list[str]:
         action = accepted.action
@@ -1415,39 +1484,35 @@ class SimulationCore:
 
     # === Combat ===
 
-    def _resolve_zombie_attack(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_zombie_attack(self, accepted: Accepted) -> Phases:
         """Walk up to the zombie, then swing: the approach minutes come before the one swing."""
         target = accepted.expect(TargetZombie)
-        facts: list[str] = []
-        spent = 0
         if target.approach_minutes:
             motion = Motion(Pace.WALK, approach_target=target.zombie_id)
-            spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
-        if self.manager.narrative.game_over:
-            return facts, spent
-        if self._interruption:
-            return [*facts, f"{self._name} never gets to swing."], spent
+            if (yield Phase(minutes=target.approach_minutes, motion=motion)):
+                yield from self._cut_off(f"{self._name} never gets to swing.")
+                return
+
         swing = Motion(
             Pace.STILL,
             swing_target=target.zombie_id,
             shove=isinstance(accepted.action, ShoveAction),
         )
-        swing_spent, swing_facts = self._spend(SWING_MIN, accepted.action, motion=swing)
-        return [*facts, *swing_facts], spent + swing_spent
+        yield Phase(minutes=SWING_MIN, motion=swing, own=True)
 
     # === Doors, windows and planks ===
 
-    def _walk_to_barrier(self, accepted: Accepted, walk: bool) -> tuple[int, list[str], bool]:
-        """The minutes and facts of the walk to the barrier, and whether the player got there."""
+    def _walk_to_barrier(self, accepted: Accepted, walk: bool) -> Generator[Phase, bool, bool]:
+        """Walk to the barrier if need be; returns whether the player got there."""
         if not walk:
-            return 0, [], True
-        spent, facts = self._spend(WALK_TO_BARRIER_MIN, accepted.action, motion=Motion(Pace.WALK))
-        if self.manager.narrative.game_over:
-            return spent, facts, False
-        if self._interruption:
-            never = f"{self._name} never gets to {describe_action(accepted.action)}."
-            return spent, [*facts, never], False
-        return spent, facts, True
+            return True
+
+        if not (yield Phase(minutes=WALK_TO_BARRIER_MIN, motion=Motion(Pace.WALK))):
+            return True
+
+        never = f"{self._name} never gets to {describe_action(accepted.action)}."
+        yield from self._cut_off(never)
+        return False
 
     def _barrier_verb(
         self,
@@ -1455,75 +1520,54 @@ class SimulationCore:
         walk: bool,
         apply: Callable[[], list[str]],
         minutes: int,
-    ) -> tuple[list[str], int]:
-        """Walk to the barrier if need be, do `apply`, then spend `minutes` with the sounds it made."""
-        spent, facts, arrived = self._walk_to_barrier(accepted, walk)
-        if not arrived:
-            return facts, spent
-        done, more = self._barrier_step(accepted.action, apply, minutes)
-        return [*facts, *done], spent + more
+    ) -> Phases:
+        """Walk to the barrier if need be, then do `apply` and spend `minutes` with the sounds it made."""
+        if (yield from self._walk_to_barrier(accepted, walk)):
+            yield Phase(apply(), minutes, own=True)
 
-    def _barrier_step(
-        self, action: AnyAction, apply: Callable[[], list[str]], minutes: int
-    ) -> tuple[list[str], int]:
-        """Do `apply`, hand its sounds to the zombies, then spend `minutes`; the facts and minutes."""
-        self._skill_facts = []
-        done = apply()
-        self._pending_sounds.extend(self._barriers.sounds)
-        self._barriers.sounds.clear()
-        if done:
-            done[0] = self._check_player_death(done[0])
-        facts = [*done, *self._skill_facts]
-        spent = 0
-        if minutes:
-            spent, spend_facts = self._spend(minutes, action, motion=Motion(Pace.STILL))
-            facts.extend(spend_facts)
-        return facts, spent
-
-    def _resolve_open(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_open(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
             accepted, target.walk, lambda: self._barriers.open(target.barrier), 0
         )
 
-    def _resolve_close(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_close(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
             accepted, target.walk, lambda: self._barriers.close(target.barrier), 0
         )
 
-    def _resolve_lock(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_lock(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
             accepted, target.walk, lambda: self._barriers.lock(target.barrier), 0
         )
 
-    def _resolve_unlock(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_unlock(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
             accepted, target.walk, lambda: self._barriers.unlock(target.barrier), 0
         )
 
-    def _resolve_barricade(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_barricade(self, accepted: Accepted) -> Phases:
         kit = accepted.expect(BarricadeKit)
-        minutes = max(
-            1, round(action_minutes(accepted.action, kit) * self._action_time_multiplier())
-        )
         return self._barrier_verb(
-            accepted, kit.walk, lambda: self._barriers.barricade(kit), minutes
+            accepted,
+            kit.walk,
+            lambda: self._barriers.barricade(kit),
+            action_minutes(accepted.action, kit),
         )
 
-    def _resolve_unbarricade(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_unbarricade(self, accepted: Accepted) -> Phases:
         target = accepted.expect(PryTarget)
         player = self.manager.player
         carpentry = skill_levels(player).get(skill_k.CARPENTRY, 0)
-        base = unbarricade_minutes(carpentry, handy=trait_k.HANDY_ID in player.traits)
-        minutes = max(1, round(base * self._action_time_multiplier()))
+        minutes = unbarricade_minutes(carpentry, handy=trait_k.HANDY_ID in player.traits)
         return self._barrier_verb(
             accepted, target.walk, lambda: self._barriers.unbarricade(target), minutes
         )
 
-    def _resolve_hit_barrier(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_hit_barrier(self, accepted: Accepted) -> Phases:
         """Swing a minute at a time until the barrier gives, the count is done or something stops the run."""
         target = accepted.expect(TargetBarrier)
         action = accepted.action
@@ -1532,50 +1576,45 @@ class SimulationCore:
         until = action.swings == UNTIL_IT_GIVES
         wanted = barrier_k.MAX_BARRIER_SWINGS if until else int(action.swings)
         planned = min(wanted, barrier_k.MAX_BARRIER_SWINGS)
-        spent, facts, arrived = self._walk_to_barrier(accepted, target.walk)
-        if not arrived:
-            return facts, spent
+        if not (yield from self._walk_to_barrier(accepted, target.walk)):
+            return
+
         named = {"name": self._name, "barrier": barrier.name}
         run_fact = barrier_k.KEEPS_HITTING_UNTIL_FACT if until else barrier_k.KEEPS_HITTING_FACT
         player = self.manager.player
         for swing in range(planned):
             held = weapons.held_entity(player)
-            lead = len(facts)
-            done, more = self._barrier_step(
-                action,
-                partial(
-                    self._barriers.hit,
-                    barrier,
-                    self.manager.narrative.minutes,
-                    announce=swing == 0,
-                ),
-                SWING_MIN,
-            )
-            facts.extend(done)
-            spent += more
+            hit = self._barriers.hit(barrier, self.manager.narrative.minutes, announce=swing == 0)
+            interrupted = yield Phase(hit, SWING_MIN, own=True)
             if self.manager.narrative.game_over:
-                break
+                return
+
             if thumpable_for(barrier, player.current_location_id) is None:
-                break
+                return
+
             if not until and swing + 1 >= wanted:
-                break
+                return
+
             if held is not None and weapons.held_entity(player) is not held:
-                break
-            if self._interruption:
-                facts.append(barrier_k.SWINGS_INTERRUPTED_FACT.format(**named))
-                break
+                return
+
+            if interrupted:
+                yield Phase([barrier_k.SWINGS_INTERRUPTED_FACT.format(**named)])
+                return
+
             if swing + 1 == planned:
                 capped = barrier_k.SWINGS_CAPPED_FACT.format(
                     possessive=player.appearance.possessive, **named
                 )
-                facts.append(capped)
-                break
+                yield Phase([capped])
+                return
+
             if endurance_level(player) >= barrier_k.BARRIER_SWINGS_STOP_ENDURANCE_LEVEL:
-                facts.append(barrier_k.SWINGS_TIRED_FACT.format(**named))
-                break
+                yield Phase([barrier_k.SWINGS_TIRED_FACT.format(**named)])
+                return
+
             if swing == 0:
-                facts[lead] = run_fact.format(**named)
-        return facts, spent
+                hit[0] = run_fact.format(**named)
 
     # === First aid ===
 
@@ -1615,32 +1654,29 @@ class SimulationCore:
             player.equipment[slot] = entity
         return melee_k.EQUIP_FACT.format(name=self._name, item=item.name.lower())
 
-    def _resolve_carry(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_carry(self, accepted: Accepted) -> Phases:
         """Walk up to the body, then pick it up: the approach minutes come before the one carrying."""
         target = accepted.expect(TargetCorpse)
         manager = self.manager
         player = manager.player
-        facts: list[str] = []
-        spent = 0
         if target.approach_minutes:
             motion = Motion(Pace.WALK, approach_target=target.corpse_id)
-            spent, facts = self._spend(target.approach_minutes, accepted.action, motion=motion)
-        if manager.narrative.game_over:
-            return facts, spent
-        if self._interruption:
-            return [*facts, f"{self._name} never gets to pick the body up."], spent
+            if (yield Phase(minutes=target.approach_minutes, motion=motion)):
+                yield from self._cut_off(f"{self._name} never gets to pick the body up.")
+                return
+
         corpse = manager.world.corpses.get(target.corpse_id)
         if corpse is None:
-            gone = carry_k.BODY_GONE_FACT.format(name=self._name, corpse=target.corpse_id)
-            return [*facts, gone], spent
-        lift_spent, lift_facts = self._spend(carry_k.CARRY_CORPSE_MIN, accepted.action)
-        spent += lift_spent
+            yield Phase([carry_k.BODY_GONE_FACT.format(name=self._name, corpse=target.corpse_id)])
+            return
+
+        lifted: list[str] = []
+        yield Phase(lifted, carry_k.CARRY_CORPSE_MIN, own=True)
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             player.carrying_corpse = corpse.corpse_id
             player.carrying_skeleton = corpse.skeleton
             corpse.gap = 0.0
-            facts.append(carry_k.CARRY_BODY_FACT.format(name=self._name))
-        return [*facts, *lift_facts], spent
+            lifted.append(carry_k.CARRY_BODY_FACT.format(name=self._name))
 
     def _resolve_unequip(self, accepted: Accepted) -> str:
         player = self.manager.player
@@ -1649,7 +1685,7 @@ class SimulationCore:
         player.inventory.append(entity)
         return melee_k.UNEQUIP_FACT.format(name=self._name, item=entity.item.name.lower())
 
-    def _resolve_attack(self, accepted: Accepted) -> str | tuple[list[str], int]:
+    def _resolve_attack(self, accepted: Accepted) -> str | Phases:
         if isinstance(accepted.resolved, TargetZombie):
             return self._resolve_zombie_attack(accepted)
         if isinstance(accepted.resolved, TargetBarrier):
@@ -1801,21 +1837,24 @@ class SimulationCore:
         npc.notes = f"{npc.notes}; {action.note}" if npc.notes else action.note
         return f"Noted about {npc.name}: {action.note}"
 
-    def _resolve_wait(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_wait(self, accepted: Accepted) -> Phases:
         """Wait out the span; the lead fact gives the minutes that actually passed."""
         span = accepted.expect(TimeSpan)
-        spent, facts = self._spend(span.minutes, accepted.action)
+        started = self.manager.narrative.minutes
+        lines: list[str] = []
+        interrupted = yield Phase(lines, span.minutes, own=True)
+        spent = self.manager.narrative.minutes - started
         words = _span_words(spent)
-        if spent < span.minutes and (self._interruption or self.manager.narrative.game_over):
+        if spent < span.minutes and interrupted:
             lead = f"{self._name} waits {words}, then is interrupted."
         elif span.clamped:
             lead = f"{self._name} waits {words}, the most {self._subject} can at once."
         else:
             lead = f"{self._name} waits {words}."
         self._stated_minutes += spent
-        return [lead, *facts], spent
+        lines.append(lead)
 
-    def _resolve_sleep(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_sleep(self, accepted: Accepted) -> Phases:
         """Sleep chunk by chunk until the time is up or something wakes the player."""
         span = accepted.expect(TimeSpan)
         player = self.manager.player
@@ -1824,17 +1863,19 @@ class SimulationCore:
         logger.debug(
             "Sleep starts at minute %s for up to %s minutes", self.manager.narrative.minutes, wanted
         )
-        spent = 0
-        facts: list[str] = []
+        started = self.manager.narrative.minutes
+        lead: list[str] = []
+        yield Phase(lead)
         wake_fact = ""
+        spent = 0
         while spent < wanted and not self.manager.narrative.game_over:
             chunk = min(survival_k.MAX_CHUNK_MINUTES, wanted - spent)
-            advanced, stat_facts = self._spend(chunk, accepted.action, asleep=True)
-            spent += advanced
-            facts.extend(stat_facts)
+            yield Phase(minutes=chunk, own=True, asleep=True)
+            spent = self.manager.narrative.minutes - started
             wake_fact = self._waking(spent)
             if wake_fact:
                 break
+
         player.asleep = False
         logger.debug(
             "Sleep ends after %s of %s minutes at minute %s: %s",
@@ -1845,29 +1886,35 @@ class SimulationCore:
         )
         words = _span_words(spent)
         if span.clamped:
-            lead = f"{self._name} sleeps {words}, the most {self._subject} can at once."
+            lead.append(f"{self._name} sleeps {words}, the most {self._subject} can at once.")
         else:
-            lead = f"{self._name} sleeps {words}."
+            lead.append(f"{self._name} sleeps {words}.")
         self._stated_minutes += spent
-        return [lead, *facts, *([wake_fact] if wake_fact else [])], spent
+        if wake_fact:
+            yield Phase([wake_fact])
 
-    def _resolve_exercise(self, accepted: Accepted) -> tuple[list[str], int]:
+    def _resolve_exercise(self, accepted: Accepted) -> Phases:
         """Exercise minute by minute: the stats advance, then the minute's reps fire."""
         plan = accepted.expect(ExercisePlan)
         exercise = plan.exercise
         player = self.manager.player
-        facts: list[str] = []
+        started = self.manager.narrative.minutes
+        head: list[str] = []
+        yield Phase(head)
+        reps_facts: list[str] = []
         spent = 0
         carry = 0.0
         done = 0
         stopped = False
+        interrupted = False
         planned = action_minutes(accepted.action, plan)
         while spent < planned and not self.manager.narrative.game_over:
-            advanced, stat_facts = self._spend(1, accepted.action)
-            spent += advanced
-            facts.extend(stat_facts)
+            interrupted = yield Phase(reps_facts, 1, own=True)
+            spent = self.manager.narrative.minutes - started
             if self.manager.narrative.game_over:
-                break
+                return
+
+            reps_facts = []
             carry += reps_per_minute(
                 exercise, skill_levels(player)[skill_k.FITNESS], endurance_level(player)
             )
@@ -1875,28 +1922,28 @@ class SimulationCore:
             carry -= reps
             done += reps
             for _ in range(reps):
-                facts.extend(
+                reps_facts.extend(
                     self.exercise_engine.do_rep(player, exercise, self.manager.narrative.minutes)
                 )
-            if self._interruption:
+            if interrupted:
                 break
+
             if (
                 endurance_level(player) > exercise_k.EXERCISE_ENDURANCE_STOP_LEVEL
                 and spent < planned
             ):
                 stopped = True
                 break
-        if self.manager.narrative.game_over:
-            return facts, spent
-        if self._interruption:
+
+        if interrupted:
             lead = f"You break off after {spent} minutes of {exercise.name.lower()}."
         elif stopped:
             lead = "You stop, too exhausted to go on."
         else:
             lead = f"You finish {spent} minutes of {exercise.name.lower()}."
-        return [lead, f"{done} reps in all.", *facts], action_minutes(
-            accepted.action, TimeSpan(spent, False)
-        )
+        head.extend([lead, f"{done} reps in all."])
+        if reps_facts:
+            yield Phase(reps_facts)
 
     def _waking(self, slept_minutes: int) -> str:
         """The fact for what wakes the player after this chunk, or "" if nothing does."""
@@ -1933,9 +1980,7 @@ class SimulationCore:
             return f"{self._name} wakes fully rested {phrase}."
         return ""
 
-    _RESOLVERS: dict[
-        str, Callable[["SimulationCore", Accepted], str | list[str] | tuple[list[str], int]]
-    ] = {
+    _RESOLVERS: dict[str, Resolver] = {
         "MOVE_TO": _resolve_move,
         "STANCE": _resolve_stance,
         "TAKE": _resolve_take,
