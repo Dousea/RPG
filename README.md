@@ -201,7 +201,7 @@ Inside each layer, files group by domain: `world`, `zombies`, `corpses`,
 
 ```bash
 mise run dev          # run the game
-mise run test         # the test suite, one module per core
+mise run test         # the test suite, on 2 workers
 mise run test-serial  # the same, in one process
 mise run fmt          # ruff format + autofix
 mise run lint         # ruff, format check, layer contracts

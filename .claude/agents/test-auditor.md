@@ -15,10 +15,10 @@ the area).
 
 ## Share the machine
 
-The user works on this machine while you run. Every test or tool command
-runs under `nice -n 10`. Never run more than 2 test processes at once:
-`unittest-parallel -j 2` at most, cosmic-ray's `local` distributor only (one
-mutant at a time). Never run the full suite per mutation.
+The user works on this machine while you run. Never run more than 2 test
+processes at once: `unittest-parallel -j 2` at most, cosmic-ray's `local`
+distributor only (one mutant at a time). Claude Code's shell is already
+niced, so don't add `nice`. Never run the full suite per mutation.
 
 ## The scratch copy
 
@@ -27,7 +27,7 @@ survive between Bash calls, so write the literal path in every command.
 Make the copy (tracked and untracked, not ignored):
 
 ```bash
-cd /home/dousea/Development/RPG
+cd <repo>
 rm -rf -- /tmp/test-audit-<name> && mkdir /tmp/test-audit-<name>
 git ls-files -co --exclude-standard -z | tar --null -T - -cf - | tar -xf - -C /tmp/test-audit-<name>
 ```
@@ -38,7 +38,9 @@ the literal path and nothing else: `rm -rf -- /tmp/test-audit-<name>`. No
 wildcard, variable or `$(...)` in that command. If the removal is denied,
 name the path in your reply.
 
-The Python is `/home/dousea/Development/RPG/.venv/bin/python`; the tools are
+`<repo>` is the repo root, the directory you start in: write its absolute path
+(from `pwd` at the start) wherever this file says `<repo>`. The Python is
+`<repo>/.venv/bin/python`; the tools are
 next to it (`cosmic-ray`, `cr-report`, `coverage`, `unittest-parallel`).
 
 ## Diff mode (one task, one fix round)
@@ -57,9 +59,9 @@ and untracked files from `git status`.
    modules), then run them all in one Bash call (timeout 600000 ms):
 
    ```bash
-   cd /tmp/test-audit-<name> && nice -n 10 /home/dousea/Development/RPG/.venv/bin/python - <<'EOF'
-   import json, pathlib, subprocess
-   PY = "/home/dousea/Development/RPG/.venv/bin/python"
+   cd /tmp/test-audit-<name> && <repo>/.venv/bin/python - <<'EOF'
+   import json, pathlib, subprocess, sys
+   PY = sys.executable
    for m in json.loads(pathlib.Path("mutations.json").read_text()):
        path = pathlib.Path(m["file"])
        src = path.read_text()
@@ -94,7 +96,7 @@ The prompt names source modules and the test modules that cover them.
 
 1. **Coverage.** Run the area's test modules under coverage with per-test
    contexts:
-   `nice -n 10 .../coverage run --context=test -m unittest -b <modules>` with
+   `.../coverage run --context=test -m unittest -b <modules>` with
    `dynamic_context = "test_function"` set in a scratch `.coveragerc`
    (`[run] dynamic_context = test_function`, `source = <the source modules>`).
    From `coverage json --show-contexts`, list the source lines no test runs,
@@ -110,7 +112,7 @@ The prompt names source modules and the test modules that cover them.
    module-path = "<file>"
    timeout = <seconds>
    excluded-modules = []
-   test-command = "nice -n 10 /home/dousea/Development/RPG/.venv/bin/python -m unittest -b -f <modules>"
+   test-command = "<repo>/.venv/bin/python -m unittest -b -f <modules>"
 
    [cosmic-ray.distributor]
    name = "local"
