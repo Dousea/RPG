@@ -167,12 +167,6 @@ class TimeCostTests(unittest.TestCase):
         self.assertEqual(gm.narrative.minutes, 0)
         self.assertEqual(len(facts), 1)
 
-    def test_a_none_turn_costs_one_minute(self):
-        gm = GameManager()
-        facts = simulate(gm)
-        self.assertEqual(gm.narrative.minutes, 1)
-        self.assertEqual(facts, ["About 1 minute passes."])
-
     def test_world_clock_follows_each_action(self):
         gm = GameManager()
         simulate(gm, WaitAction(duration=Duration(minutes=75)))

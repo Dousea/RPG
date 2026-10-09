@@ -23,7 +23,7 @@ from modules.body.stats import CharacterStat
 from modules.character.equipment import CharacterHoldableSlot
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
-from tests.support import load_pack
+from tests.support import load_pack, turn_of
 
 HOME = "zone_home"
 BUILDING = "zone_building"
@@ -74,7 +74,7 @@ class Always(random.Random):
 
 def run(gm: GameManager, *actions, rng: random.Random | None = None) -> tuple[list[str], int]:
     before = gm.narrative.minutes
-    facts = SimulationCore(gm, rng=rng or random.Random(1)).run_turn(list(actions)).facts
+    facts = turn_of(SimulationCore(gm, rng=rng or random.Random(1)), actions).facts
     return list(facts), gm.narrative.minutes - before
 
 

@@ -263,19 +263,6 @@ class Leg:
     stated_minutes: int
 
 
-@dataclass(frozen=True)
-class TurnRun:
-    """What `SimulationCore.run_turn` did: every leg and the turn's own facts and refusals."""
-
-    facts: tuple[str, ...]
-    legs: tuple[Leg, ...]
-    rest_unreached: bool
-    refused: tuple[tuple[AnyAction, str], ...]
-    finds: tuple[str, ...]
-    done: tuple[AnyAction, ...]
-    tried: tuple[AnyAction, ...]
-
-
 class SimulationCore:
     def __init__(
         self,
@@ -373,7 +360,7 @@ class SimulationCore:
         whose target fits several things (`Asked`) ends the leg there: `pending` is the
         actions from it on, none of them tried. A leg doesn't stop at death: it refuses
         what is left of its plan. The facts and minutes are the leg's own; the turn's
-        (`run_turn`) add the rest.
+        (`managers/turn.py`) add the rest.
         """
         facts: list[str] = []
         rejected: list[tuple[AnyAction, str]] = []
@@ -486,77 +473,7 @@ class SimulationCore:
             stated_minutes=self._stated_minutes,
         )
 
-    def run_turn(
-        self,
-        actions: list[AnyAction],
-        *,
-        refused: int = 0,
-        reparse: Callable[[list[str], list[AnyAction]], list[AnyAction] | None] | None = None,
-    ) -> TurnRun:
-        """Run a turn's legs, parsing the plan again at the destination when one changes zone.
-
-        Temporary: the turn module takes this over. `reparse` is called once with the
-        actions done so far, in words, and every action tried, and returns the plan
-        parsed again at the destination, or None if it couldn't. That plan resolves in
-        the same turn under what is left of `MAX_PLAN_ACTIONS`. `rest_unreached` says the
-        turn stopped at or after a zone change without running a second plan.
-        """
-        levels_before = player_status_effect_levels(self.manager.player)
-        facts, minutes = self.begin_turn(idle=not actions and not refused)
-        legs: list[Leg] = []
-        done_words: list[str] = []
-        tried: list[AnyAction] = []
-        rest_unreached = False
-        plan = actions
-
-        while True:
-            leg = self.resolve(plan, budget=MAX_PLAN_ACTIONS - len(tried))
-            legs.append(leg)
-            facts.extend(leg.facts)
-            minutes += leg.minutes
-            done_words.extend(describe_action(action) for action in leg.done)
-            tried.extend(leg.tried)
-
-            if leg.stopped is LegEnd.INTERRUPTED:
-                rest_unreached = leg.moved_by is not None
-            if leg.stopped is not LegEnd.ZONE_CHANGE:
-                break
-
-            more = reparse(done_words, tried) if reparse is not None else None
-            reparse = None
-            if more and leg.stalled and self._repeats_blocked_move(more[0]):
-                more = more[1:]
-            if not more:
-                rest_unreached = True
-                break
-
-            plan = more
-
-        facts = self.end_turn(
-            facts,
-            minutes,
-            levels_before,
-            shouted=legs[-1].shouted,
-            stated_minutes=sum(leg.stated_minutes for leg in legs),
-        )
-        done = [action for leg in legs for action in leg.done]
-        redone = {describe_action(action) for action in done}
-        return TurnRun(
-            facts=tuple(facts),
-            legs=tuple(legs),
-            rest_unreached=rest_unreached,
-            refused=tuple(
-                refusal
-                for leg in legs
-                for refusal in leg.refused
-                if describe_action(refusal[0]) not in redone
-            ),
-            finds=tuple(find for leg in legs for find in leg.finds),
-            done=tuple(done),
-            tried=tuple(tried),
-        )
-
-    def _repeats_blocked_move(self, action: AnyAction) -> bool:
+    def repeats_blocked_move(self, action: AnyAction) -> bool:
         """Whether `action` is a move that ends at the barrier the player already stands at."""
         if not isinstance(action, MoveAction):
             return False

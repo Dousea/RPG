@@ -13,7 +13,7 @@ from managers.simulation import SimulationCore
 from modules.action.types import AttackAction, MoveAction, OpenAction, SearchAction
 from modules.entity.barrier import BarrierKind
 from modules.entity.item import ItemEntity
-from tests.support import ScriptedRandom, simulate
+from tests.support import ScriptedRandom, simulate, turn_of
 
 STREET = "zone_street"
 STORE = "zone_bodega"
@@ -22,7 +22,7 @@ WINDOW = "window_bodega"
 
 def run(gm: GameManager, *actions) -> tuple[list[str], int]:
     before = gm.narrative.minutes
-    facts = SimulationCore(gm, rng=random.Random(1)).run_turn(list(actions)).facts
+    facts = turn_of(SimulationCore(gm, rng=random.Random(1)), actions).facts
     return list(facts), gm.narrative.minutes - before
 
 

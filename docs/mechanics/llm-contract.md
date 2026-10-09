@@ -274,16 +274,16 @@ empty list is `NONE`.
   actions after a `MOVE_TO` that leaves the zone were parsed in the wrong scene: they
   are never put to the plan check, validated, resolved or named in any fact. The
   plan's closed sets come from the scene before the turn, so every zone change makes
-  the engine ask the parser once more in the new scene, even when nothing was parsed
-  after the move: a new prompt and a new schema built from the
-  destination, with the player's full input and, where `[LAST TURN]` sits, a
+  the turn (`managers/turn.py`) ask the parser once more, through its leg planner, in
+  the new scene, even when nothing was parsed after the move: a new prompt and a new
+  schema built from the destination, with the player's full input and, where `[LAST TURN]` sits, a
   `[THIS TURN]` note ("Already done this turn: go to supermarket. Parse only the rest
-  of the input."). The second plan goes through the same plan check, validator and
+  of the input."). The second leg goes through the same plan check, validator and
   core in the same turn: its facts, minutes, refusals and finds join the first
-  pass's, and the narrator sees one turn. The cap of 5 actions counts across both
-  plans; the second plan is cut to what is left of it. There is at most one re-parse
+  leg's, and the narrator sees one turn. The cap of 5 actions counts across both
+  legs; the second leg is cut to what is left of it. There is at most one re-parse
   per turn: a second zone change stops there. When the turn stops at or after a zone
-  change without running a second plan (an interrupted move to another zone, a second
+  change without running a second leg (an interrupted move to another zone, a second
   zone change, a failed second parse, an empty second plan), the narrator gets one
   fact that names nothing parsed: "Nothing else Orton asked for happens this turn."
   Like the `NONE` fact below, it goes to the narrator only and never into the event

@@ -70,6 +70,14 @@ PLAYER INPUT
          PLAYER OUTPUT
 ```
 
+A turn's plan runs in legs, each a run of actions in one zone. `managers/turn.py`
+owns the turn: it runs a checked first leg through the Simulation Core, ends the leg
+at its first zone change, and for the destination asks the leg planner, the one seam
+back to the LLM (`adapters/engine.py` builds it: parse, then the plan check). The
+turn module imports nothing from `adapters/`; it returns one frozen outcome with the
+facts, the refusals and the finds. See the
+[LLM contract](../mechanics/llm-contract.md#plans).
+
 ### Rules of authority
 
 The local LLM may:

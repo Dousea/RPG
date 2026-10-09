@@ -6,7 +6,9 @@ import random
 import shutil
 import tempfile
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from adapters.llm import DeltaCallback, ParserReply
 from adapters.save import files
@@ -15,6 +17,7 @@ from managers import carry
 from managers.game import GameManager
 from managers.simulation import Leg, LegEnd, SimulationCore
 from managers.story.check import StateQuestion
+from managers.turn import CheckedLeg, LegPlanner, TurnOutcome, run_turn
 from modules.action.types import AnyAction
 from modules.body.parts import PART_WEIGHT, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
@@ -44,6 +47,34 @@ def finished_leg(facts: list[str]) -> Leg:
     )
 
 
+def checked_leg(
+    actions: Sequence[AnyAction],
+    *,
+    dropped: Sequence[tuple[int, AnyAction, str]] = (),
+    cut: bool = False,
+    failures: Sequence[str] = (),
+) -> CheckedLeg:
+    """A checked leg that keeps `actions` in order; `dropped` entries stand between them by their place."""
+    places = {place for place, _, _ in dropped}
+    return CheckedLeg(
+        kept=tuple(actions),
+        kept_at=tuple(place for place in range(len(actions) + len(places)) if place not in places),
+        dropped=tuple(dropped),
+        cut=cut,
+        failures=tuple(failures),
+    )
+
+
+def turn_of(
+    core: SimulationCore,
+    actions: Sequence[AnyAction],
+    planner: LegPlanner | None = None,
+    **leg: Any,
+) -> TurnOutcome:
+    """Run `actions` as a turn through `core`; with no `planner`, a zone change leaves the rest unplanned."""
+    return run_turn(core, checked_leg(actions, **leg), planner or (lambda _done, _picks: None))
+
+
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     """Validate and resolve actions directly, bypassing the LLM turn loop.
 
@@ -56,7 +87,7 @@ def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     turn, so an earlier action (e.g. a move) can unlock a later one (e.g. a
     take) within the same call.
     """
-    facts = list(SimulationCore(gm).run_turn(list(actions)).facts)
+    facts = list(turn_of(SimulationCore(gm), actions).facts)
     for action, fact in zip(actions, facts, strict=False):
         assert not fact.startswith("Refused:"), f"setup action {action!r} failed: {fact}"
     return facts
@@ -270,7 +301,7 @@ class IsolatedSaveTestCase(unittest.TestCase):
 
 def simulate(gm: GameManager, *actions: AnyAction, rng: random.Random | None = None) -> list[str]:
     """Resolve actions through a fresh SimulationCore; refusals come back as facts."""
-    return list(SimulationCore(gm, rng=rng).run_turn(list(actions)).facts)
+    return list(turn_of(SimulationCore(gm, rng=rng), actions).facts)
 
 
 class ScriptedRandom(random.Random):

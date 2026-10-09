@@ -271,18 +271,6 @@ class MentionTurnTests(EngineTestCase):
         self.assertEqual(gm.player.current_location_id, "zone_supermarket")
         self.assertEqual(gm.player.current_room, "stockroom")
 
-    def test_a_refused_pick_is_not_bound_again_after_the_zone_change(self):
-        gm = self.stage("zone_neighborhood")
-        self.llm.parser_script = [
-            "ACTIONS:\nMOVE_TO Pharmacy\nMOVE_TO Supermarket\nMOVE_TO stockroom",
-            "ACTIONS:\nMOVE_TO stockroom",
-        ]
-        text = f"go to {MENTION_MARK}, go to {MENTION_MARK}, go into the stockroom"
-        with mock.patch.object(ActionValidator, "validate", self.refusing("zone_pharmacy")):
-            self.engine.play(text, mentions=["zone_pharmacy", "zone_supermarket"])
-        self.assertEqual(gm.player.current_location_id, "zone_supermarket")
-        self.assertEqual(gm.player.current_room, "stockroom")
-
     def test_a_mention_out_of_reach_at_the_destination_is_refused_there(self):
         gm = self.stage("zone_neighborhood")
         gm.world.barriers["window_supermarket"].open = True

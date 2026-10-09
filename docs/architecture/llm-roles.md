@@ -75,6 +75,10 @@ threshold and the retry rule are in the LLM contract's
 [plan check](../mechanics/llm-contract.md#the-plan-check) and
 [fact check](../mechanics/llm-contract.md#the-fact-check).
 
+The parser runs again when a leg ends at a zone change. `managers/turn.py` calls
+the leg planner it is given, the engine's parse and plan check for the destination,
+and takes back a checked leg; the turn module itself never calls an LLM.
+
 ---
 
 ## Narrator Constraints

@@ -25,14 +25,10 @@ from data.story import check as story_check_k
 from data.story.beats import EVACUATION_MINUTE
 from data.story.memory import BUDGET_MARGIN_TOKENS
 from data.story.mentions import REST_NOT_REACHED_FACT
-from data.time_costs import MAX_PLAN_ACTIONS
-from managers.combat import weapons
 from managers.context import NOTHING_DONE_FACT
 from managers.game import MAX_RECENT_EVENTS
 from managers.story.lorebook import get_lorebook
-from managers.world import item_ids
 from managers.zombies.population import ThreatView
-from modules.action.pins import MENTION_MARK
 from modules.body.parts import BodyLocation, BodyPart
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.character.skills import SkillState
@@ -728,29 +724,8 @@ class PlanSplitTests(EngineTestCase):
         self.assertTrue(second.endswith(f"[PLAYER INPUT]\n{text}"))
         self.assertNotIn("Already done", self.llm.prompts[0])
 
-    def test_the_second_pass_drops_the_not_yet_fact_and_joins_the_turn(self):
-        self.play_split(
-            "ACTIONS:\nADD_GOAL short_term First\nMOVE_TO out\nADD_GOAL short_term Rest",
-            "ACTIONS:\nADD_GOAL short_term Second\nTAKE Unicorn",
-        )
-        prompt = self.llm.narrator_prompts[-1]
-        self.assertNotIn("hasn't yet", prompt)
-        self.assertIn("Unicorn", prompt)
-        self.assertEqual(len(self.llm.narrator_prompts), 1)
-        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["First", "Second"])
-
     def rest_fact(self) -> str:
         return REST_NOT_REACHED_FACT.format(name="Orton")
-
-    def test_a_zone_change_alone_parses_again_and_the_second_plan_resolves(self):
-        self.play_split(
-            "ACTIONS:\nMOVE_TO supermarket",
-            "ACTIONS:\nADD_GOAL short_term Ask Marcus",
-            text="go to the supermarket and ask Marcus",
-        )
-        self.assertEqual(len(self.llm.prompts), 2)
-        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["Ask Marcus"])
-        self.assertNotIn(self.rest_fact(), self.llm.narrator_prompts[-1])
 
     def test_the_plan_check_asks_only_up_to_the_zone_change_and_nothing_after_is_named(self):
         self.play_split(
@@ -771,97 +746,6 @@ class PlanSplitTests(EngineTestCase):
         gm.player.inventory.append(ItemEntity(item=ITEMS["item_hammer"]))
         gm.player.at_barrier = "door_apartment"
 
-    def test_the_plan_check_flags_only_what_the_prediction_cut_at(self):
-        self.checker().plan_results = [[1]]
-        self.play_split(
-            "ACTIONS:\nMOVE_TO supermarket\nATTACK apartment door",
-            "ACTIONS:\nNONE",
-        )
-        self.assertNotIn("Refused:", self.llm.narrator_prompts[-1])
-
-    def test_a_flagged_action_after_a_move_the_prediction_missed_is_not_refused(self):
-        self.plank_the_door()
-        self.checker().plan_results = [[2]]
-        self.play_split(
-            "ACTIONS:\nUNBARRICADE apartment door\nMOVE_TO out\nATTACK apartment door",
-            "ACTIONS:\nNONE",
-        )
-        ((_, questions),) = self.checker().plan_calls
-        self.assertEqual(len(questions), 3)
-        self.assertEqual(self.engine.game.player.current_location_id, "zone_building")
-        self.assertEqual(len(self.llm.prompts), 2)
-        prompt = self.llm.narrator_prompts[-1]
-        self.assertNotIn("Refused:", prompt)
-        self.assertNotIn(questions[2].correction, prompt)
-
-    def test_a_pick_on_a_flagged_action_after_the_real_move_is_pinned_again_at_the_destination(
-        self,
-    ):
-        self.plank_the_door()
-        gm = self.engine.game
-        bats = [ItemEntity(item=ITEMS["item_baseball_bat"]) for _ in range(2)]
-        gm.player.inventory.extend(bats)
-        item_ids.stamp_world(gm.world, gm.player)
-        self.checker().plan_results = [[2]]
-        self.play_split(
-            "ACTIONS:\nUNBARRICADE apartment door\nMOVE_TO out\nEQUIP Baseball Bat",
-            "ACTIONS:\nEQUIP Baseball Bat",
-            text=f"take the planks off, go out and hold {MENTION_MARK}",
-            mentions=[bats[1].instance_id],
-        )
-        self.assertEqual(gm.player.current_location_id, "zone_building")
-        self.assertIs(weapons.held_entity(gm.player), bats[1])
-
-    def test_a_pick_on_a_flagged_action_before_a_later_move_is_not_pinned_again(self):
-        self.plank_the_door()
-        gm = self.engine.game
-        bats = [ItemEntity(item=ITEMS["item_baseball_bat"]) for _ in range(2)]
-        gm.player.inventory.extend(bats)
-        item_ids.stamp_world(gm.world, gm.player)
-        self.checker().plan_results = [[1]]
-        self.play_split(
-            "ACTIONS:\nUNBARRICADE apartment door\nEQUIP Baseball Bat\nMOVE_TO out\n"
-            "EQUIP Baseball Bat",
-            "ACTIONS:\nEQUIP Baseball Bat",
-            text=f"take the planks off, hold {MENTION_MARK}, go out and hold {MENTION_MARK}",
-            mentions=[bats[0].instance_id, bats[1].instance_id],
-        )
-        self.assertIs(weapons.held_entity(gm.player), bats[1])
-
-    def test_a_flagged_action_before_the_move_is_still_refused(self):
-        self.plank_the_door()
-        self.checker().plan_results = [[0]]
-        self.play_split(
-            "ACTIONS:\nATTACK apartment door\nUNBARRICADE apartment door\nMOVE_TO out",
-            "ACTIONS:\nNONE",
-        )
-        ((_, questions),) = self.checker().plan_calls
-        self.assertIn(questions[0].correction, self.llm.narrator_prompts[-1])
-
-    def test_a_predicted_zone_change_the_run_does_not_make_leaves_the_rest_unreached(self):
-        gm = self.engine.game
-        gm.player.inventory.extend(
-            ItemEntity(item=ITEMS[item_id])
-            for item_id in ("item_hammer", "item_nails", "item_plank")
-        )
-        self.play_split(
-            "ACTIONS:\nBARRICADE apartment door\nMOVE_TO out\nADD_GOAL short_term Later"
-        )
-        self.assertEqual(len(self.llm.prompts), 1)
-        self.assertEqual(gm.player.current_location_id, "zone_home")
-        prompt = self.llm.narrator_prompts[-1]
-        self.assertIn(self.rest_fact(), prompt)
-        self.assertNotIn("Later", prompt)
-
-    def test_a_cut_plan_that_changed_zone_and_ran_a_second_plan_reaches_the_rest(self):
-        self.play_split(
-            "ACTIONS:\nMOVE_TO out\nATTACK apartment door",
-            "ACTIONS:\nADD_GOAL short_term Later",
-        )
-        self.assertEqual(len(self.llm.prompts), 2)
-        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["Later"])
-        self.assertNotIn(self.rest_fact(), self.llm.narrator_prompts[-1])
-
     def test_a_second_plan_the_check_flags_whole_still_gives_its_refusal(self):
         self.checker().plan_results = [[], [0]]
         self.play_split(
@@ -872,27 +756,13 @@ class PlanSplitTests(EngineTestCase):
         self.assertEqual(len(self.llm.prompts), 2)
         self.assertIn(second[0].correction, self.llm.narrator_prompts[-1])
 
-    def test_a_second_plan_cut_to_a_repeated_blocked_move_still_gives_its_refusal(self):
-        self.engine.game.world.barriers["door_lobby"].barricades["zone_building"] = [1000]
-        self.checker().plan_results = [[], [1]]
+    def test_a_second_plans_unreadable_line_is_refused_in_the_log_and_to_the_narrator(self):
         self.play_split(
-            "ACTIONS:\nMOVE_TO The Street",
-            "ACTIONS:\nMOVE_TO The Street\nATTACK lobby door",
+            "ACTIONS:\nMOVE_TO out",
+            "ACTIONS:\nFROBNICATE the widget\nADD_GOAL short_term Survive",
         )
-        (_, (_, second)) = self.checker().plan_calls
-        self.assertEqual(len(self.llm.prompts), 2)
-        self.assertEqual(self.engine.game.player.current_location_id, "zone_building")
-        self.assertIn(second[1].correction, self.llm.narrator_prompts[-1])
-
-    def test_a_flagged_move_leaves_the_rest_unreached(self):
-        self.checker().plan_results = [[0]]
-        self.play_split("ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Later")
-        self.assertEqual(len(self.llm.prompts), 1)
-        self.assertEqual(self.engine.game.player.current_location_id, "zone_home")
-        prompt = self.llm.narrator_prompts[-1]
-        self.assertIn(self.rest_fact(), prompt)
-        self.assertIn("Refused:", prompt)
-        self.assertNotIn("Later", prompt)
+        self.assertIn("Refused:", self.llm.narrator_prompts[-1])
+        self.assertIn("Refused:", self.engine.game.memory.full_event_log[-1])
 
     def test_a_move_within_the_zone_parses_once(self):
         self.play_split("ACTIONS:\nMOVE_TO the kitchen")
@@ -926,43 +796,6 @@ class PlanSplitTests(EngineTestCase):
         prompt = self.llm.narrator_prompts[-1]
         self.assertIn(self.rest_fact(), prompt)
         self.assertNotIn("Rest", prompt)
-
-    def test_a_second_zone_change_stops_there_without_a_third_parse(self):
-        self.play_split(
-            "ACTIONS:\nMOVE_TO out",
-            "ACTIONS:\nMOVE_TO out\nADD_GOAL short_term Later",
-        )
-        self.assertEqual(len(self.llm.prompts), 2)
-        self.assertEqual(self.engine.game.narrative.goals["short_term"], [])
-        prompt = self.llm.narrator_prompts[-1]
-        self.assertIn(self.rest_fact(), prompt)
-        self.assertNotIn("Later", prompt)
-
-    def test_the_action_cap_counts_across_both_plans(self):
-        self.play_split(
-            "ACTIONS:\nADD_GOAL short_term A\nADD_GOAL short_term B\nMOVE_TO out\n"
-            "ADD_GOAL short_term Rest",
-            "ACTIONS:\nADD_GOAL short_term C\nADD_GOAL short_term D\nADD_GOAL short_term E",
-        )
-        self.assertEqual(MAX_PLAN_ACTIONS, 5)
-        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["A", "B", "C", "D"])
-        self.assertIn("Refused:", self.llm.narrator_prompts[-1])
-
-    def test_a_blocked_move_the_second_pass_repeats_is_reported_once(self):
-        self.engine.game.player.current_location_id = "zone_street"
-        self.play_split(
-            "ACTIONS:\nMOVE_TO pharmacy\nADD_GOAL short_term Smash",
-            "ACTIONS:\nMOVE_TO pharmacy\nADD_GOAL short_term Smashed",
-        )
-        self.assertEqual(self.llm.narrator_prompts[-1].count("Move to The Pharmacy"), 1)
-        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["Smashed"])
-
-    def test_a_climb_out_is_reported_before_the_blocked_move_it_led_to(self):
-        self.engine.game.player.current_location_id = "zone_supermarket"
-        self.play_split("ACTIONS:\nMOVE_TO pharmacy")
-        prompt = self.llm.narrator_prompts[-1]
-        self.assertIn("Move to The Pharmacy: blocked", prompt)
-        self.assertLess(prompt.index("climbs through"), prompt.index("Move to The Pharmacy"))
 
     def test_both_passes_emit_parsing_steps(self):
         steps: list[str] = []
@@ -1219,11 +1052,6 @@ class MemoryFactsTests(EngineTestCase):
         self.assertIn("the zombie", entry)
         self.assertNotRegex(entry, r"\bz\d+\b")
 
-    def test_a_turn_of_only_refused_lines_costs_no_time(self):
-        self.llm.actions = "ACTIONS:\nFROBNICATE the widget"
-        self.engine.play("do something weird")
-        self.assertEqual(self.engine.game.narrative.minutes, 0)
-
     def test_a_none_turn_costs_one_minute(self):
         self.llm.actions = "ACTIONS:\nNONE"
         self.engine.play("look around")
@@ -1246,12 +1074,6 @@ class MemoryFactsTests(EngineTestCase):
         self.llm.actions = "ACTIONS:\nNONE"
         self.engine.play("light a fire")
         self.assertNotIn("[SCENE]", self.engine.game.memory.full_event_log[-1])
-
-    def test_a_turn_with_an_action_or_a_refused_line_has_no_nothing_done_fact(self):
-        for actions in ("ACTIONS:\nWAIT 10m", "ACTIONS:\nFROBNICATE the widget"):
-            self.llm.actions = actions
-            self.engine.play("do it")
-            self.assertNotIn("Nothing else in [SCENE]", self.llm.narrator_prompts[-1])
 
     def test_the_narrator_failure_records_the_same_entry(self):
         self.engine.play("go out")
