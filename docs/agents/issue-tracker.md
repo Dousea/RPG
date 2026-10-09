@@ -21,6 +21,12 @@ straight into that pipeline.
 - The queue is `.claude/briefs/TODO.md`: one `- [ ] N. \`<slug>\`: <one line>`
   per brief, under a dated heading for the effort. When the task is committed, tick
   it and add the commit hash: `- [x] ... (\`abc1234\`)`.
+- `TODO.md` holds only open work. Ticked items move to `.claude/briefs/DONE.md`
+  under their effort's heading (the heading moves too once nothing under it is
+  open), so `TODO.md` stays short. Don't read `DONE.md` unless asked about past
+  work; git history holds the same through the commit hashes.
+- Brief folders stay where they are when done: they are only ever opened by slug,
+  and old reports and findings name those paths.
 - The pipeline adds `report.md` (the implementer's hand-off) and `findings.md` (the
   reviewer's and auditor's findings) beside the brief. Discussion goes there or in a
   `## Comments` section at the bottom of the brief.
@@ -29,6 +35,10 @@ straight into that pipeline.
 
 Write `.claude/briefs/<slug>/brief.md` and add its line to `.claude/briefs/TODO.md`.
 A spec or plan that needs several tickets becomes staged briefs, one per ticket.
+
+## When a skill says "list the open issues"
+
+Read `.claude/briefs/TODO.md`. Never scan the brief folders to find open work.
 
 ## When a skill says "fetch the relevant ticket"
 
