@@ -15,6 +15,7 @@ import logging
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum, auto
 from functools import partial
 
 from data import carry as carry_k
@@ -226,6 +227,55 @@ def _minutes_fact(minutes: int) -> str:
     return f"About {_span_words(minutes)} pass."
 
 
+class LegEnd(Enum):
+    """Why a leg stopped. DEAD: the player died during the leg, which still refuses the rest of its plan."""
+
+    FINISHED = auto()
+    ZONE_CHANGE = auto()
+    ASKED = auto()
+    INTERRUPTED = auto()
+    DEAD = auto()
+
+
+@dataclass(frozen=True)
+class Leg:
+    """What one leg of a plan did.
+
+    `moved_by` is the action that changed zone, if any, and `stalled` says that move
+    ended at a barrier. `pending` holds the actions from the `asked` question on.
+    `refused` leaves out a refusal a later action of the leg redid. `shouted` says the
+    player's last minute carried a shout, and `stated_minutes` is the time the leg's own
+    facts already put in words, so the turn doesn't state it twice.
+    """
+
+    facts: tuple[str, ...]
+    stopped: LegEnd
+    moved_by: AnyAction | None
+    stalled: bool
+    asked: Asked | None
+    pending: tuple[AnyAction, ...]
+    done: tuple[AnyAction, ...]
+    tried: tuple[AnyAction, ...]
+    refused: tuple[tuple[AnyAction, str], ...]
+    finds: tuple[str, ...]
+    minutes: int
+    shouted: bool
+    stated_minutes: int
+
+
+@dataclass(frozen=True)
+class TurnRun:
+    """What `SimulationCore.run_turn` did: every leg and the turn's own facts and refusals."""
+
+    facts: tuple[str, ...]
+    legs: tuple[Leg, ...]
+    rest_unreached: bool
+    refused: tuple[tuple[AnyAction, str], ...]
+    finds: tuple[str, ...]
+    done: tuple[AnyAction, ...]
+    tried: tuple[AnyAction, ...]
+
+
 class SimulationCore:
     def __init__(
         self,
@@ -258,16 +308,7 @@ class SimulationCore:
         self._shouted = False
         self._spoke = False
         self._stated_minutes = 0
-        self.refused_actions: list[tuple[str, str]] = []
-        self.found_items = False
-        self.refused_plan: list[AnyAction] = []
-        self.finds: list[str] = []
-        self.done_actions: list[AnyAction] = []
-        self.tried: list[AnyAction] = []
-        self.asked: Asked | None = None
-        self.pending: list[AnyAction] = []
-        self.rest_unreached = False
-        self.zone_change_actions: list[AnyAction | None] = []
+        self._finds: list[str] = []
         self._social = SocialManager(manager, self._rng)
         self._body = BodyEngine(self._rng)
         self._first_aid = FirstAid(self._rng, self.skill_engine)
@@ -280,14 +321,43 @@ class SimulationCore:
     def _subject(self) -> str:
         return self.manager.player.appearance.subject
 
-    def resolve(
+    def begin_turn(self, *, idle: bool = False) -> tuple[list[str], int]:
+        """Reset what lasts a turn; an `idle` turn (nothing planned, nothing refused) spends its minute.
+
+        Returns the facts and minutes of that minute.
+        """
+        self._shouted = False
+        self._spoke = False
+        self._body.begin_turn()
+        self.validator.begin_turn()
+        if not idle:
+            return [], 0
+
+        spent, stat_facts = self._spend(NONE_TURN_MINUTES)
+        return stat_facts, spent
+
+    def end_turn(
         self,
-        actions: list[AnyAction],
+        facts: list[str],
+        minutes: int,
+        levels_before: dict[StatusEffect, int],
         *,
-        refused: int = 0,
-        reparse: Callable[[list[str], list[AnyAction]], list[AnyAction] | None] | None = None,
+        shouted: bool,
+        stated_minutes: int,
     ) -> list[str]:
-        """Validate and resolve each action in order, one at a time.
+        """The turn's `facts` with what only the whole turn knows: a shout's minute, the net change in status effects, the time that passed."""
+        if shouted and not minutes and not self.manager.narrative.game_over:
+            spent, stat_facts = self._spend(NONE_TURN_MINUTES)
+            minutes += spent
+            facts = [*facts, *stat_facts]
+
+        facts = self._net_level_facts(facts, levels_before)
+        if minutes and minutes != stated_minutes:
+            facts.append(_minutes_fact(minutes))
+        return facts
+
+    def resolve(self, actions: list[AnyAction], *, budget: int = MAX_PLAN_ACTIONS) -> Leg:
+        """Validate and resolve each action in order, one at a time, for one leg.
 
         Order matters within a turn: an earlier action can change whether a
         later one is legal (move into a room, then take something only
@@ -297,163 +367,194 @@ class SimulationCore:
         list, which would reject "move north, take crowbar" because the
         crowbar wasn't reachable before the move happened.
 
-        `refused` counts the lines the parser already refused: a turn with no
-        actions and none of those is a `NONE` turn and costs a minute.
-
-        When an action changes zone, `reparse` is called once with the actions done so
-        far, in words, and every action tried (done or refused), and returns the plan
-        parsed again at the destination, or None if it couldn't. That plan resolves in
-        the same turn under what is left of `MAX_PLAN_ACTIONS`. The actions parsed after
-        the zone change come from the old scene: they are never tried or named.
-        `zone_change_actions` holds, for each plan run, the action that changed zone (or
-        None). `rest_unreached` says the turn stopped at or after a zone change without running
-        a second plan (an interrupted move, a second zone change, no second plan).
-
-        An action whose target fits several things (`Asked`) ends the plan there, as a zone
-        change does: `asked` is the question and `pending` the actions from it on, none of
-        them tried. `done_actions` and `tried` hold what resolved and what was attempted.
-
-        Afterwards `refused_actions` holds each action the validator refused and
-        no later action of the turn did, in words with the reason, and `found_items` says
-        whether a search turned anything up; the fact check asks about both. `refused_plan` holds
-        those same refused actions as actions and `finds` what each search turned up, in words,
-        for the narrator's [IN VIEW].
+        The leg stops at the end of `actions`, at the first action that changes zone, at
+        an `Asked`, at an interruption, or after `budget` actions. The actions after a
+        zone change come from the old scene: they are never tried or named. An action
+        whose target fits several things (`Asked`) ends the leg there: `pending` is the
+        actions from it on, none of them tried. A leg doesn't stop at death: it refuses
+        what is left of its plan. The facts and minutes are the leg's own; the turn's
+        (`run_turn`) add the rest.
         """
         facts: list[str] = []
-        levels_before = player_status_effect_levels(self.manager.player)
-        rejected: list[tuple[str, str]] = []
-        rejected_actions: list[AnyAction] = []
-        done: set[str] = set()
-        self.found_items = False
-        self.finds = []
-        total_minutes = 0
-        self._shouted = False
-        self._spoke = False
+        rejected: list[tuple[AnyAction, str]] = []
+        done: list[AnyAction] = []
+        tried: list[AnyAction] = []
+        self._finds = []
         self._stated_minutes = 0
-        self._body.begin_turn()
-        self.validator.begin_turn()
-        if not actions and not refused:
-            spent, stat_facts = self._spend(NONE_TURN_MINUTES)
-            total_minutes += spent
-            facts.extend(stat_facts)
-        attempted = 0
-        done_words: list[str] = []
-        self.tried = []
-        tried = self.tried
-        self.done_actions = []
-        self.asked = None
-        self.pending = []
-        self.rest_unreached = False
-        self.zone_change_actions = []
-        plan = actions
-        while True:
-            budget = MAX_PLAN_ACTIONS - attempted
-            if len(plan) > budget:
-                facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
-            moved = False
-            stalled = False
-            self.zone_change_actions.append(None)
-            for index, action in enumerate(plan[:budget]):
-                attempted += 1
-                tried.append(action)
-                self._release_vanished_body()
-                result = self.validator.validate(action)
+        minutes = 0
+        stopped = LegEnd.FINISHED
+        moved_by: AnyAction | None = None
+        stalled = False
+        asked: Asked | None = None
+        pending: list[AnyAction] = []
+        if len(actions) > budget:
+            facts.append(f"Refused: {TOO_MANY_ACTIONS_FACT.format(name=self._name)}")
 
-                if isinstance(result, Asked):
-                    logger.debug(
-                        "Action %r asks which %s: %s",
-                        action,
-                        result.attr,
-                        [(c.kind, c.id) for c in result.candidates],
-                    )
-                    self.asked = result
-                    self.pending = plan[index:budget]
-                    unattempted = [
-                        describe_action(a)
-                        for a in self.pending[: steps_in_this_scene(self.manager, self.pending)]
-                    ]
-                    facts.append(
-                        f"{self._name} can't tell which one is meant, so {self._subject} "
-                        f"hasn't yet: {', '.join(unattempted)}."
-                    )
-                    break
+        for index, action in enumerate(actions[:budget]):
+            tried.append(action)
+            self._release_vanished_body()
+            result = self.validator.validate(action)
 
-                if isinstance(result, Rejected):
-                    logger.debug("Action %r refused: %s", action, result.reason)
-                    rejected.append((describe_action(result.action), result.reason))
-                    rejected_actions.append(result.action)
-                    facts.append(f"Refused: {self._name} can't {rejected[-1][0]}: {result.reason}")
-                    continue
-                done.add(describe_action(action))
-                done_words.append(describe_action(action))
-                self.done_actions.append(action)
-                self._interruption = ""
-                zone_before = self.manager.player.current_location_id
-                clock_before = self.manager.narrative.minutes
-                logger.debug("Action %r resolved to %r", action, result.resolved)
-                action_facts, minutes = self._resolve_one(result)
+            if isinstance(result, Asked):
                 logger.debug(
-                    "Action %r took %s minutes (clock %s -> %s), facts: %s",
+                    "Action %r asks which %s: %s",
                     action,
-                    minutes,
-                    clock_before,
-                    self.manager.narrative.minutes,
-                    action_facts,
+                    result.attr,
+                    [(c.kind, c.id) for c in result.candidates],
                 )
-                facts.extend(action_facts)
-                total_minutes += minutes
-                if not self.manager.narrative.game_over:
-                    facts.extend(self._after_action())
-                changed_zone = self.manager.player.current_location_id != zone_before
-                if changed_zone:
-                    self.zone_change_actions[-1] = action
-                if self._interruption:
-                    logger.debug("Plan interrupted by %s after %r", self._interruption, action)
-                    if changed_zone:
-                        self.rest_unreached = not self.manager.narrative.game_over
-                        break
-                    later = plan[index + 1 : budget]
-                    cancelled = [
-                        describe_action(a)
-                        for a in later[: steps_in_this_scene(self.manager, later)]
-                    ]
-                    if cancelled:
-                        facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
-                    break
-                if changed_zone:
-                    moved = True
-                    stalled = isinstance(result.resolved, MoveBlocked)
-                    break
-            if not moved or self.manager.narrative.game_over:
+                asked = result
+                pending = actions[index:budget]
+                unattempted = [
+                    describe_action(a)
+                    for a in pending[: steps_in_this_scene(self.manager, pending)]
+                ]
+                facts.append(
+                    f"{self._name} can't tell which one is meant, so {self._subject} "
+                    f"hasn't yet: {', '.join(unattempted)}."
+                )
+                stopped = LegEnd.ASKED
                 break
+
+            if isinstance(result, Rejected):
+                logger.debug("Action %r refused: %s", action, result.reason)
+                rejected.append((result.action, result.reason))
+                facts.append(
+                    f"Refused: {self._name} can't {describe_action(result.action)}: {result.reason}"
+                )
+                continue
+
+            done.append(action)
+            self._interruption = ""
+            zone_before = self.manager.player.current_location_id
+            clock_before = self.manager.narrative.minutes
+            logger.debug("Action %r resolved to %r", action, result.resolved)
+            action_facts, spent = self._resolve_one(result)
+            logger.debug(
+                "Action %r took %s minutes (clock %s -> %s), facts: %s",
+                action,
+                spent,
+                clock_before,
+                self.manager.narrative.minutes,
+                action_facts,
+            )
+            facts.extend(action_facts)
+            minutes += spent
+            if not self.manager.narrative.game_over:
+                facts.extend(self._after_action())
+            changed_zone = self.manager.player.current_location_id != zone_before
+            if changed_zone:
+                moved_by = action
+            if self._interruption:
+                logger.debug("Plan interrupted by %s after %r", self._interruption, action)
+                stopped = LegEnd.INTERRUPTED
+                if changed_zone:
+                    break
+                later = actions[index + 1 : budget]
+                cancelled = [
+                    describe_action(a) for a in later[: steps_in_this_scene(self.manager, later)]
+                ]
+                if cancelled:
+                    facts.append(f"{self._name} never gets to: {', '.join(cancelled)}.")
+                break
+            if changed_zone:
+                stopped = LegEnd.ZONE_CHANGE
+                stalled = isinstance(result.resolved, MoveBlocked)
+                break
+
+        if self.manager.narrative.game_over:
+            stopped = LegEnd.DEAD
+
+        logger.debug("Resolved %s of %s actions in %s minutes", len(done), len(tried), minutes)
+        redone = {describe_action(action) for action in done}
+        return Leg(
+            facts=tuple(facts),
+            stopped=stopped,
+            moved_by=moved_by,
+            stalled=stalled,
+            asked=asked,
+            pending=tuple(pending),
+            done=tuple(done),
+            tried=tuple(tried),
+            refused=tuple(
+                (action, reason)
+                for action, reason in rejected
+                if describe_action(action) not in redone
+            ),
+            finds=tuple(self._finds),
+            minutes=minutes,
+            shouted=self._shouted,
+            stated_minutes=self._stated_minutes,
+        )
+
+    def run_turn(
+        self,
+        actions: list[AnyAction],
+        *,
+        refused: int = 0,
+        reparse: Callable[[list[str], list[AnyAction]], list[AnyAction] | None] | None = None,
+    ) -> TurnRun:
+        """Run a turn's legs, parsing the plan again at the destination when one changes zone.
+
+        Temporary: the turn module takes this over. `reparse` is called once with the
+        actions done so far, in words, and every action tried, and returns the plan
+        parsed again at the destination, or None if it couldn't. That plan resolves in
+        the same turn under what is left of `MAX_PLAN_ACTIONS`. `rest_unreached` says the
+        turn stopped at or after a zone change without running a second plan.
+        """
+        levels_before = player_status_effect_levels(self.manager.player)
+        facts, minutes = self.begin_turn(idle=not actions and not refused)
+        legs: list[Leg] = []
+        done_words: list[str] = []
+        tried: list[AnyAction] = []
+        rest_unreached = False
+        plan = actions
+
+        while True:
+            leg = self.resolve(plan, budget=MAX_PLAN_ACTIONS - len(tried))
+            legs.append(leg)
+            facts.extend(leg.facts)
+            minutes += leg.minutes
+            done_words.extend(describe_action(action) for action in leg.done)
+            tried.extend(leg.tried)
+
+            if leg.stopped is LegEnd.INTERRUPTED:
+                rest_unreached = leg.moved_by is not None
+            if leg.stopped is not LegEnd.ZONE_CHANGE:
+                break
+
             more = reparse(done_words, tried) if reparse is not None else None
             reparse = None
-            if more and stalled and self._repeats_blocked_move(more[0]):
+            if more and leg.stalled and self._repeats_blocked_move(more[0]):
                 more = more[1:]
             if not more:
-                self.rest_unreached = True
+                rest_unreached = True
                 break
+
             plan = more
-        if self._shouted and not total_minutes and not self.manager.narrative.game_over:
-            spent, stat_facts = self._spend(NONE_TURN_MINUTES)
-            total_minutes += spent
-            facts.extend(stat_facts)
-        facts = self._net_level_facts(facts, levels_before)
-        if total_minutes and total_minutes != self._stated_minutes:
-            facts.append(_minutes_fact(total_minutes))
-        logger.debug(
-            "Resolved %s of %s actions in %s minutes",
-            len(self.done_actions),
-            len(self.tried),
-            total_minutes,
+
+        facts = self.end_turn(
+            facts,
+            minutes,
+            levels_before,
+            shouted=legs[-1].shouted,
+            stated_minutes=sum(leg.stated_minutes for leg in legs),
         )
-        self.refused_actions = [refusal for refusal in rejected if refusal[0] not in done]
-        self.refused_plan = [
-            action
-            for action, (words, _) in zip(rejected_actions, rejected, strict=True)
-            if words not in done
-        ]
-        return facts
+        done = [action for leg in legs for action in leg.done]
+        redone = {describe_action(action) for action in done}
+        return TurnRun(
+            facts=tuple(facts),
+            legs=tuple(legs),
+            rest_unreached=rest_unreached,
+            refused=tuple(
+                refusal
+                for leg in legs
+                for refusal in leg.refused
+                if describe_action(refusal[0]) not in redone
+            ),
+            finds=tuple(find for leg in legs for find in leg.finds),
+            done=tuple(done),
+            tried=tuple(tried),
+        )
 
     def _repeats_blocked_move(self, action: AnyAction) -> bool:
         """Whether `action` is a move that ends at the barrier the player already stands at."""
@@ -1209,8 +1310,7 @@ class SimulationCore:
         items = items_in_words(container.contents)
         if not items:
             return container_k.SEARCH_EMPTY_FACT.format(name=self._name, container=container.name)
-        self.found_items = True
-        self.finds.append(items)
+        self._finds.append(items)
         return container_k.SEARCH_CONTAINER_FACT.format(
             name=self._name, container=container.name, items=items
         )
@@ -1239,8 +1339,7 @@ class SimulationCore:
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             loot_search(corpse, self._rng)
             if corpse.contents:
-                self.found_items = True
-                self.finds.append(items_in_words(corpse.contents))
+                self._finds.append(items_in_words(corpse.contents))
             facts.append(
                 zombie_lore.SEARCH_FACT.format(
                     name=self._name, corpse=corpse.corpse_id, items=contents_in_words(corpse)

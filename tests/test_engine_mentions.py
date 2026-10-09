@@ -18,7 +18,7 @@ from modules.body.parts import BodyPart
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
 from modules.resolution import TargetBarrier, TargetContainer, TargetZombie
-from tests.support import FakeFactChecker
+from tests.support import FakeFactChecker, finished_leg
 from tests.test_engine import EngineTestCase
 from tests.test_simulation import add_zombie, zombie_game
 
@@ -112,7 +112,9 @@ class MentionTurnTests(EngineTestCase):
         self.script("ATTACK zombie\nSHOUT")
         checker = cast(FakeFactChecker, self.engine.factcheck)
         checker.plan_results = [[1]]
-        with mock.patch.object(SimulationCore, "resolve", autospec=True, return_value=[]) as run:
+        with mock.patch.object(
+            SimulationCore, "resolve", autospec=True, return_value=finished_leg([])
+        ) as run:
             self.engine.play(f"hit {MENTION_MARK} and shout", mentions=[far.zombie_id])
         (_, questions) = checker.plan_calls[0]
         self.assertEqual(len(questions), 2)
@@ -202,7 +204,9 @@ class MentionTurnTests(EngineTestCase):
         gm = self.stage()
         gm.player.body[BodyPart.HAND_L].scratch_time = 10.0
         self.script("BANDAGE")
-        with mock.patch.object(SimulationCore, "resolve", autospec=True, return_value=[]) as run:
+        with mock.patch.object(
+            SimulationCore, "resolve", autospec=True, return_value=finished_leg([])
+        ) as run:
             self.engine.play(f"bandage {MENTION_MARK}", mentions=["hand_l"])
         (action,) = run.call_args.args[1]
         assert isinstance(action, BandageAction)

@@ -39,7 +39,7 @@ from managers.events.log import build_event_entry, event_stamp
 from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.mentions import labels, mentionables, picked
 from managers.plan import OpenChoice, bind_choices, open_choices, steps_in_this_scene, steps_of
-from managers.simulation import SimulationCore
+from managers.simulation import SimulationCore, TurnRun
 from managers.story.check import StateQuestion, build_questions, plan_questions, reach_question
 from managers.story.lore import LoreHit, record_turn, select_lore
 from managers.world import item_ids
@@ -382,7 +382,7 @@ class GameEngine:
         turn.check = None
 
         def reparse(done: list[str], tried: list[AnyAction]) -> list[AnyAction] | None:
-            moved_by = core.zone_change_actions[0]
+            moved_by = tried[-1]
             bound = (
                 turn.spent
                 | pinned_ids(tried)
@@ -405,30 +405,31 @@ class GameEngine:
             rounds.append(_Round(checked.kept, checked))
             return checked.kept
 
-        outcome_facts = core.resolve(turn.plan, refused=turn.refused, reparse=reparse)
+        run = core.run_turn(turn.plan, refused=turn.refused, reparse=reparse)
+        last = run.legs[-1]
+        refused_actions = [action for action, _ in run.refused]
+        outcome_facts = list(run.facts)
         for failure in later_failures:
             logger.warning(f"Unparseable action '{failure.raw}': {failure.reason}")
             outcome_facts.append(refusal_in_words(failure, looks.forename, looks.subject))
-        paused = core.asked is not None and not manager.narrative.game_over
+        paused = last.asked is not None and not manager.narrative.game_over
         refused_in_scene: list[tuple[AnyAction, str]] = []
-        rest_unreached = core.rest_unreached
+        rest_unreached = run.rest_unreached
         for number, rnd in enumerate(rounds):
-            change = (
-                core.zone_change_actions[number] if number < len(core.zone_change_actions) else None
-            )
+            change = run.legs[number].moved_by if number < len(run.legs) else None
             if paused and rnd is rounds[-1]:
-                refused_in_scene.extend(rnd.refused_before_pending(core.pending))
-                turn.check = rnd.resumed(core.pending)
+                refused_in_scene.extend(rnd.refused_before_pending(list(last.pending)))
+                turn.check = rnd.resumed(list(last.pending))
             else:
                 refused_in_scene.extend(rnd.refused_before(change))
-            if rnd.check.cut and change is None and core.asked is None:
+            if rnd.check.cut and change is None and last.asked is None:
                 rest_unreached = not manager.narrative.game_over
         outcome_facts.extend([*turn.extra_facts, *(fact for _, fact in refused_in_scene)])
         logger.debug("Outcome facts: %s", outcome_facts)
-        turn.done.extend(core.done_actions)
-        turn.spent |= pinned_ids(core.tried) | pinned_ids([a for a, _ in refused_in_scene])
+        turn.done.extend(run.done)
+        turn.spent |= pinned_ids(run.tried) | pinned_ids([a for a, _ in refused_in_scene])
         if paused:
-            turn.plan, turn.extra_facts, turn.refused = core.pending, [], 0
+            turn.plan, turn.extra_facts, turn.refused = list(last.pending), [], 0
             turn.nothing_parsed = False
             turn.choices = open_choices(manager, turn.plan, turn.player_input)
             _trace_choices(turn.choices)
@@ -451,8 +452,8 @@ class GameEngine:
             narrated_facts,
             deep_memories,
             max_chars=self._narrator_budget(),
-            refused=core.refused_plan,
-            finds=core.finds,
+            refused=refused_actions,
+            finds=run.finds,
             lore=lore,
         )
         logger.debug("Narrated facts: %s", narrated_facts)
@@ -473,7 +474,12 @@ class GameEngine:
             return self._snapshot(story_text=f"--- SYSTEM ERROR ---\n{exc}")
 
         parsed = self._reply(raw_response)
-        questions = build_questions(manager, narrated_facts, core.refused_actions, core.found_items)
+        questions = build_questions(
+            manager,
+            narrated_facts,
+            [(describe_action(action), reason) for action, reason in run.refused],
+            bool(run.finds),
+        )
         parsed = self._fact_checked(
             parsed,
             context,
@@ -482,11 +488,11 @@ class GameEngine:
             deep_memories,
             questions,
             emit,
-            core,
+            run,
             lore,
         )
         parsed = self._with_options(
-            parsed, context, player_input, narrated_facts, deep_memories, emit, core, lore
+            parsed, context, player_input, narrated_facts, deep_memories, emit, run, lore
         )
         record_turn(manager, lore)
         story_text = str(parsed["story"])
@@ -597,7 +603,7 @@ class GameEngine:
         deep_memories: list[str],
         questions: list[StateQuestion],
         emit: TurnListener,
-        core: SimulationCore,
+        run: TurnRun,
         lore: list[LoreHit],
     ) -> dict[str, Any]:
         """The narrator's reply, or its one retry when the story conflicts with the engine's state.
@@ -621,8 +627,8 @@ class GameEngine:
                 outcome_facts,
                 deep_memories,
                 max_chars=self._narrator_budget() - len(block),
-                refused=core.refused_plan,
-                finds=core.finds,
+                refused=[action for action, _ in run.refused],
+                finds=run.finds,
                 lore=lore,
             )
             + block
@@ -651,7 +657,7 @@ class GameEngine:
         outcome_facts: list[str],
         deep_memories: list[str],
         emit: TurnListener,
-        core: SimulationCore,
+        run: TurnRun,
         lore: list[LoreHit],
     ) -> dict[str, Any]:
         """The reply, with options from one follow-up call when it had no OPTIONS section.
@@ -669,8 +675,8 @@ class GameEngine:
                 outcome_facts,
                 deep_memories,
                 max_chars=self._narrator_budget() - len(block),
-                refused=core.refused_plan,
-                finds=core.finds,
+                refused=[action for action, _ in run.refused],
+                finds=run.finds,
                 lore=lore,
             )
             + block

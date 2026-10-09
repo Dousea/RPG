@@ -317,13 +317,13 @@ class BeatEvaluationTests(unittest.TestCase):
         gm = GameManager()
         core = SimulationCore(gm, rng=random.Random(1), beats={"street_noise": beat})
         self.assertNotIn(
-            "A door slams somewhere above.", core.resolve([AddGoalAction("short_term", "x")])
+            "A door slams somewhere above.", core.resolve([AddGoalAction("short_term", "x")]).facts
         )
-        facts = core.resolve([MoveAction(destination="out")])
+        facts = core.resolve([MoveAction(destination="out")]).facts
         self.assertIn("A door slams somewhere above.", facts)
         self.assertIs(gm.narrative.flags["heard_noise"], True)
         self.assertEqual(gm.world.fired_beats["street_noise"], gm.narrative.minutes)
-        again = core.resolve([AddGoalAction("short_term", "y")])
+        again = core.resolve([AddGoalAction("short_term", "y")]).facts
         self.assertNotIn("A door slams somewhere above.", again)
 
     def test_resolution_traces_the_action_the_beat_and_its_flag(self):
@@ -343,7 +343,9 @@ class BeatEvaluationTests(unittest.TestCase):
         beat = Beat("quiet", PlayerInZone("zone_home"), (), "Something stirs.", False)
         gm = GameManager()
         core = SimulationCore(gm, beats={"quiet": beat})
-        facts = core.resolve([AddGoalAction("short_term", "a"), AddGoalAction("short_term", "z")])
+        facts = core.resolve(
+            [AddGoalAction("short_term", "a"), AddGoalAction("short_term", "z")]
+        ).facts
         self.assertIn("Something stirs.", facts)
         self.assertEqual(gm.narrative.goals["short_term"], ["a", "z"])
 
@@ -351,10 +353,12 @@ class BeatEvaluationTests(unittest.TestCase):
         beat = Beat("due", ClockAtOrPast(1), (SetFlag("late"),), "It is late.", False)
         gm = GameManager()
         core = SimulationCore(gm, beats={"due": beat})
-        facts = core.resolve([AddGoalAction("short_term", "w"), AddGoalAction("short_term", "v")])
+        facts = core.resolve(
+            [AddGoalAction("short_term", "w"), AddGoalAction("short_term", "v")]
+        ).facts
         self.assertEqual(gm.narrative.goals["short_term"], ["w", "v"])
         self.assertNotIn("It is late.", facts)
-        facts = core.resolve([WaitAction(duration=Duration(minutes=3))])
+        facts = core.resolve([WaitAction(duration=Duration(minutes=3))]).facts
         self.assertIn("It is late.", facts)
 
     def test_beats_are_evaluated_by_the_registry_passed_in(self):

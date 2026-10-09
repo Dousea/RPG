@@ -5,6 +5,7 @@ usual, then `bind` puts each picked entity into the action's matching target fie
 `Pinned` text, so the validator resolves exactly that entity (llm-contract).
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Literal
 
@@ -165,7 +166,7 @@ def bind(actions: list[AnyAction], mentions: list[Mention]) -> list[AnyAction]:
     return bound
 
 
-def pinned_ids(actions: list[AnyAction]) -> set[str]:
+def pinned_ids(actions: Sequence[AnyAction]) -> set[str]:
     """The entity ids pinned into the target fields of `actions`."""
     return {
         pin.entity_id

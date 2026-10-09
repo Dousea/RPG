@@ -74,8 +74,8 @@ class Always(random.Random):
 
 def run(gm: GameManager, *actions, rng: random.Random | None = None) -> tuple[list[str], int]:
     before = gm.narrative.minutes
-    facts = SimulationCore(gm, rng=rng or random.Random(1)).resolve(list(actions))
-    return facts, gm.narrative.minutes - before
+    facts = SimulationCore(gm, rng=rng or random.Random(1)).run_turn(list(actions)).facts
+    return list(facts), gm.narrative.minutes - before
 
 
 def count(gm: GameManager, item_id: str) -> int:
@@ -553,7 +553,7 @@ class HitBarrierTests(unittest.TestCase):
         gm = stocked_game()
         core = SimulationCore(gm, rng=random.Random(1))
         spy = Spy(core)
-        facts = core.resolve([AttackAction(target_name="apartment door")])
+        facts = core.resolve([AttackAction(target_name="apartment door")]).facts
         self.assertEqual(gm.world.barriers["door_apartment"].health, 500)
         self.assertEqual([(s.radius, s.volume) for s in spy.sounds[0]], [(20, 20)])
         self.assertIn("with his hands", facts[0])
@@ -569,7 +569,7 @@ class HitBarrierTests(unittest.TestCase):
         gm = self.armed()
         gm.world.barriers["door_apartment"].health = 10
         core = SimulationCore(gm, rng=random.Random(1))
-        facts = core.resolve([AttackAction(target_name="apartment door")])
+        facts = core.resolve([AttackAction(target_name="apartment door")]).facts
         self.assertTrue(gm.world.barriers["door_apartment"].broken)
         self.assertTrue(any("bursts from its hinges" in fact for fact in facts), facts)
         planks = [

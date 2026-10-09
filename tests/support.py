@@ -13,7 +13,7 @@ from adapters.save import files
 from data.items import ITEMS
 from managers import carry
 from managers.game import GameManager
-from managers.simulation import SimulationCore
+from managers.simulation import Leg, LegEnd, SimulationCore
 from managers.story.check import StateQuestion
 from modules.action.types import AnyAction
 from modules.body.parts import PART_WEIGHT, BodyPart
@@ -23,6 +23,25 @@ from modules.entity.npc import NpcEntity
 from modules.entity.player import PlayerEntity
 from modules.events.modifier import AffinityModifier
 from modules.item import HoldableItem
+
+
+def finished_leg(facts: list[str]) -> Leg:
+    """A leg that ran to the end of its plan with `facts`, for tests that stand in for the simulation."""
+    return Leg(
+        facts=tuple(facts),
+        stopped=LegEnd.FINISHED,
+        moved_by=None,
+        stalled=False,
+        asked=None,
+        pending=(),
+        done=(),
+        tried=(),
+        refused=(),
+        finds=(),
+        minutes=0,
+        shouted=False,
+        stated_minutes=0,
+    )
 
 
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
@@ -37,7 +56,7 @@ def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
     turn, so an earlier action (e.g. a move) can unlock a later one (e.g. a
     take) within the same call.
     """
-    facts = SimulationCore(gm).resolve(list(actions))
+    facts = list(SimulationCore(gm).run_turn(list(actions)).facts)
     for action, fact in zip(actions, facts, strict=False):
         assert not fact.startswith("Refused:"), f"setup action {action!r} failed: {fact}"
     return facts
@@ -251,7 +270,7 @@ class IsolatedSaveTestCase(unittest.TestCase):
 
 def simulate(gm: GameManager, *actions: AnyAction, rng: random.Random | None = None) -> list[str]:
     """Resolve actions through a fresh SimulationCore; refusals come back as facts."""
-    return SimulationCore(gm, rng=rng).resolve(list(actions))
+    return list(SimulationCore(gm, rng=rng).run_turn(list(actions)).facts)
 
 
 class ScriptedRandom(random.Random):

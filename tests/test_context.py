@@ -13,7 +13,7 @@ from data.zombies.lore import CRAWLER_STATE_WORDS, STATE_WORD_DOWN
 from managers.character import creation
 from managers.context import ContextBuilder
 from managers.game import GameManager
-from managers.simulation import SimulationCore
+from managers.simulation import Leg, SimulationCore
 from managers.story.lore import LoreHit, select_lore
 from modules.action.parser import TALK_APPROACH_LABELS
 from modules.action.types import (
@@ -581,7 +581,7 @@ class WeatherFactTests(unittest.TestCase):
 
         gm = GameManager()
         gm.climate.start_period(gm.narrative.minutes // 60 + 1, 0.5)
-        facts = SimulationCore(gm).resolve([WaitAction(duration=Duration(minutes=240))])
+        facts = SimulationCore(gm).resolve([WaitAction(duration=Duration(minutes=240))]).facts
         self.assertIn("It starts to rain.", facts)
 
     def test_thunder_is_reported_once(self):
@@ -709,7 +709,7 @@ class CharacterBlockTests(unittest.TestCase):
         facts = resolve_actions(self.gm, WaitAction(duration=Duration(minutes=10)))
         self.assertEqual(facts[0], "Mara waits 10 minutes.")
         self.assertFalse(any("Orton" in fact for fact in facts))
-        refused = SimulationCore(self.gm).resolve([DropAction(item_name="Apartment Key")])
+        refused = SimulationCore(self.gm).resolve([DropAction(item_name="Apartment Key")]).facts
         self.assertEqual(refused[0].count("Mara keeps her keys on her."), 1)
 
 
@@ -802,9 +802,9 @@ class InViewTests(unittest.TestCase):
         prompt = self.prompt()
         self.assertLess(prompt.index("[OUTCOMES]"), prompt.index("[IN VIEW]"))
 
-    def lines(self, core: SimulationCore | None = None) -> list[str]:
-        refused = core.refused_plan if core else ()
-        finds = core.finds if core else ()
+    def lines(self, leg: Leg | None = None) -> list[str]:
+        refused = [action for action, _ in leg.refused] if leg else ()
+        finds = leg.finds if leg else ()
         prompt = ContextBuilder(self.gm).build_narrator_prompt(
             "look", ["a fact"], refused=refused, finds=finds
         )
@@ -860,10 +860,10 @@ class InViewTests(unittest.TestCase):
     def test_a_room_search_lists_its_finds_that_turn_and_not_the_next(self):
         self.gm.player.current_location_id = "zone_home"
         core = SimulationCore(self.gm)
-        core.resolve([SearchAction(target_name="bedroom")])
-        self.assertTrue(any(line.startswith("Found this turn:") for line in self.lines(core)))
-        core.resolve([WaitAction(duration=Duration(minutes=1))])
-        self.assertFalse(any(line.startswith("Found this turn:") for line in self.lines(core)))
+        leg = core.resolve([SearchAction(target_name="bedroom")])
+        self.assertTrue(any(line.startswith("Found this turn:") for line in self.lines(leg)))
+        leg = core.resolve([WaitAction(duration=Duration(minutes=1))])
+        self.assertFalse(any(line.startswith("Found this turn:") for line in self.lines(leg)))
 
     def test_a_body_search_lists_what_it_turned_up(self):
         corpse = CorpseEntity(
@@ -878,15 +878,14 @@ class InViewTests(unittest.TestCase):
         )
         self.gm.world.corpses["c1"] = corpse
         core = SimulationCore(self.gm, rng=random.Random(1))
-        core.resolve([SearchAction(target_name="c1")])
-        found = [line for line in self.lines(core) if line.startswith("Found this turn:")]
+        leg = core.resolve([SearchAction(target_name="c1")])
+        found = [line for line in self.lines(leg) if line.startswith("Found this turn:")]
         self.assertEqual(len(found), 1)
         self.assertIn("kitchen knife", found[0])
 
     def refused(self, *actions) -> list[str]:
         core = SimulationCore(self.gm)
-        core.resolve(list(actions))
-        return self.lines(core)
+        return self.lines(core.resolve(list(actions)))
 
     def test_a_refused_take_says_where_the_item_is(self):
         bag = ItemEntity(item=ITEMS["item_schoolbag"])
@@ -961,8 +960,8 @@ class InViewTests(unittest.TestCase):
     def test_the_turns_specifics_come_last(self):
         self.gm.player.current_location_id = "zone_home"
         core = SimulationCore(self.gm)
-        core.resolve([SearchAction(target_name="bedroom"), MoveAction(destination="bedroom")])
-        lines = self.lines(core)
+        leg = core.resolve([SearchAction(target_name="bedroom"), MoveAction(destination="bedroom")])
+        lines = self.lines(leg)
         first_find = next(i for i, line in enumerate(lines) if line.startswith("Found this turn:"))
         self.assertIn("is still in", lines[first_find - 1])
         self.assertTrue(all(line.startswith("Found this turn:") for line in lines[first_find:]))

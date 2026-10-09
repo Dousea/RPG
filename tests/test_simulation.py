@@ -9,7 +9,7 @@ from adapters.save import codec
 from data.items import ITEMS
 from managers.character.skills import SkillEngine
 from managers.game import GameManager
-from managers.simulation import SimulationCore
+from managers.simulation import LegEnd, SimulationCore
 from managers.validator import ActionValidator, Rejected
 from managers.zombies.population import (
     MinuteReport,
@@ -40,6 +40,7 @@ from modules.action.types import (
     WaitAction,
     WearAction,
 )
+from modules.action.words import describe_action
 from modules.body.parts import BodyLocation, BodyPart
 from modules.body.stats import CharacterStat
 from modules.character.equipment import CharacterHoldableSlot
@@ -143,32 +144,30 @@ class FactCheckRecordTests(unittest.TestCase):
 
     def test_a_refused_action_is_recorded_in_words(self):
         core = SimulationCore(GameManager())
-        core.resolve([BandageAction(part_name="left hand")])
-        ((action, reason),) = core.refused_actions
-        self.assertEqual(action, "bandage the left hand")
+        leg = core.resolve([BandageAction(part_name="left hand")])
+        ((action, reason),) = leg.refused
+        self.assertEqual(describe_action(action), "bandage the left hand")
         self.assertTrue(reason.endswith("."), reason)
-        self.assertIn(
-            f"Refused: Orton can't {action}: {reason}", core.resolve([BandageAction("left hand")])
-        )
+        self.assertIn(f"Refused: Orton can't {describe_action(action)}: {reason}", leg.facts)
 
     def test_an_unsupported_request_is_refused_by_name_and_costs_nothing(self):
         gm = GameManager()
         core = SimulationCore(gm)
-        facts = core.resolve([UnsupportedAction(text="light a fire")])
+        leg = core.resolve([UnsupportedAction(text="light a fire")])
         self.assertEqual(
-            facts,
-            ["Refused: Orton can't light a fire: there is no way to do that yet."],
+            leg.facts,
+            ("Refused: Orton can't light a fire: there is no way to do that yet.",),
         )
         self.assertEqual(gm.narrative.minutes, 0)
         self.assertEqual(
-            core.refused_actions, [("light a fire", "there is no way to do that yet.")]
+            leg.refused,
+            ((UnsupportedAction(text="light a fire"), "there is no way to do that yet."),),
         )
-        self.assertEqual(core.refused_plan, [UnsupportedAction(text="light a fire")])
 
     def test_an_action_done_later_in_the_turn_is_not_recorded_as_refused(self):
         gm = GameManager()
         core = SimulationCore(gm, rng=random.Random(1))
-        core.resolve(
+        leg = core.resolve(
             [
                 TakeAction(item_name="Kitchen Knife"),
                 SearchAction(target_name="kitchen counter"),
@@ -176,26 +175,26 @@ class FactCheckRecordTests(unittest.TestCase):
             ]
         )
         self.assertIn("Kitchen Knife", [e.item.name for e in gm.player.inventory])
-        self.assertEqual(core.refused_actions, [])
+        self.assertEqual(leg.refused, ())
 
     def test_each_turn_starts_with_nothing_recorded(self):
         core = SimulationCore(GameManager(), rng=random.Random(1))
         core.resolve([BandageAction(part_name="left hand")])
-        core.resolve([SearchAction(target_name="kitchen counter")])
-        self.assertEqual(core.refused_actions, [])
-        core.resolve([BandageAction(part_name="left hand")])
-        self.assertFalse(core.found_items)
+        leg = core.resolve([SearchAction(target_name="kitchen counter")])
+        self.assertEqual(leg.refused, ())
+        leg = core.resolve([BandageAction(part_name="left hand")])
+        self.assertEqual(leg.finds, ())
 
     def test_a_search_that_turns_things_up_is_recorded(self):
         core = SimulationCore(GameManager(), rng=random.Random(1))
-        core.resolve([SearchAction(target_name="kitchen counter")])
-        self.assertTrue(core.found_items)
+        leg = core.resolve([SearchAction(target_name="kitchen counter")])
+        self.assertTrue(leg.finds)
 
     def test_a_search_that_finds_nothing_is_not(self):
         core = SimulationCore(GameManager(), rng=random.Random(1))
-        facts = core.resolve([SearchAction(target_name="fridge")])
-        self.assertIn("Orton goes through the fridge and finds nothing.", facts)
-        self.assertFalse(core.found_items)
+        leg = core.resolve([SearchAction(target_name="fridge")])
+        self.assertIn("Orton goes through the fridge and finds nothing.", leg.facts)
+        self.assertEqual(leg.finds, ())
 
     def test_searching_a_body_with_things_on_it_is_recorded(self):
         gm = zombie_game()
@@ -210,8 +209,8 @@ class FactCheckRecordTests(unittest.TestCase):
             contents=[ItemEntity(item=ITEMS["item_jacket_police"])],
         )
         core = SimulationCore(gm, rng=random.Random(1))
-        core.resolve([SearchAction(target_name="c1")])
-        self.assertTrue(core.found_items)
+        leg = core.resolve([SearchAction(target_name="c1")])
+        self.assertTrue(leg.finds)
 
 
 class RefusalWordingTests(unittest.TestCase):
@@ -385,7 +384,9 @@ class TakeClothingFactTests(unittest.TestCase):
 
     def _take(self, item_id: str) -> list[str]:
         self.gm.current_location.entities.append(ItemEntity(item=ITEMS[item_id]))
-        return SimulationCore(self.gm).resolve([TakeAction(item_name=ITEMS[item_id].name)])
+        return list(
+            SimulationCore(self.gm).run_turn([TakeAction(item_name=ITEMS[item_id].name)]).facts
+        )
 
     def test_the_fact_says_a_taken_garment_is_carried_not_worn(self):
         facts = self._take("item_black_jacket")
@@ -1155,7 +1156,11 @@ class PlanTests(unittest.TestCase):
         move = MoveAction(destination="pharmacy")
         goal = AddGoalAction(horizon="short_term", goal_text="Smashed")
 
-        facts = SimulationCore(gm).resolve([move, goal], reparse=lambda _done, _tried: [move, goal])
+        facts = (
+            SimulationCore(gm)
+            .run_turn([move, goal], reparse=lambda _done, _tried: [move, goal])
+            .facts
+        )
 
         self.assertEqual(len([fact for fact in facts if fact.startswith("Move to")]), 1)
         self.assertEqual(gm.narrative.goals["short_term"], ["Smashed"])
@@ -1174,8 +1179,12 @@ class PlanTests(unittest.TestCase):
         goal = AddGoalAction(horizon="short_term", goal_text="Smashed")
         again: list[AnyAction] = [repeat, goal]
 
-        facts = SimulationCore(gm).resolve(
-            [MoveAction(destination="pharmacy"), goal], reparse=lambda _done, _tried: again
+        facts = (
+            SimulationCore(gm)
+            .run_turn(
+                [MoveAction(destination="pharmacy"), goal], reparse=lambda _done, _tried: again
+            )
+            .facts
         )
 
         return len([fact for fact in facts if fact.startswith("Move to")])
@@ -1186,11 +1195,12 @@ class PlanTests(unittest.TestCase):
         move = MoveAction(destination="pharmacy")
         core = SimulationCore(gm)
 
-        facts = core.resolve(
+        run = core.run_turn(
             [move, TakeAction(item_name="knife")], reparse=lambda _done, _tried: [move]
         )
 
-        self.assertTrue(core.rest_unreached)
+        self.assertTrue(run.rest_unreached)
+        facts = run.facts
         self.assertFalse(any("knife" in fact for fact in facts))
 
     def test_a_climb_out_comes_before_the_blocked_move_it_led_to(self):
@@ -1245,23 +1255,24 @@ class PlanTests(unittest.TestCase):
             return [AddGoalAction(horizon="short_term", goal_text="Ask Marcus")]
 
         core = SimulationCore(gm)
-        core.resolve([MoveAction(destination="out")], reparse=reparse)
+        run = core.run_turn([MoveAction(destination="out")], reparse=reparse)
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(gm.narrative.goals["short_term"], ["Ask Marcus"])
-        self.assertFalse(core.rest_unreached)
+        self.assertFalse(run.rest_unreached)
 
     def test_the_actions_after_a_zone_change_are_never_named_or_run(self):
         gm = GameManager()
         core = SimulationCore(gm)
 
-        facts = core.resolve(
+        run = core.run_turn(
             [MoveAction(destination="out"), TakeAction(item_name="knife")],
             reparse=lambda _done, _tried: None,
         )
+        facts = run.facts
 
         self.assertEqual(gm.player.current_location_id, "zone_building")
-        self.assertTrue(core.rest_unreached)
+        self.assertTrue(run.rest_unreached)
         self.assertFalse(any("knife" in fact or "hasn't yet" in fact for fact in facts))
 
     def test_each_plan_round_names_the_action_that_changed_zone(self):
@@ -1270,9 +1281,9 @@ class PlanTests(unittest.TestCase):
         move = MoveAction(destination="out")
         goal = AddGoalAction(horizon="short_term", goal_text="Ask Marcus")
 
-        core.resolve([goal, move], reparse=lambda _done, _tried: [goal])
+        run = core.run_turn([goal, move], reparse=lambda _done, _tried: [goal])
 
-        self.assertEqual(core.zone_change_actions, [move, None])
+        self.assertEqual([leg.moved_by for leg in run.legs], [move, None])
 
     def test_a_second_zone_change_leaves_the_rest_unreached(self):
         gm = GameManager()
@@ -1283,10 +1294,10 @@ class PlanTests(unittest.TestCase):
             calls.append(1)
             return [MoveAction(destination="out")]
 
-        core.resolve([MoveAction(destination="out")], reparse=reparse)
+        run = core.run_turn([MoveAction(destination="out")], reparse=reparse)
 
         self.assertEqual(len(calls), 1)
-        self.assertTrue(core.rest_unreached)
+        self.assertTrue(run.rest_unreached)
 
     def test_an_interrupted_move_to_another_zone_names_nothing_after_it(self):
         gm = GameManager()
@@ -1297,13 +1308,14 @@ class PlanTests(unittest.TestCase):
             return []
 
         with patch.object(core, "_after_action", interrupt):
-            facts = core.resolve(
+            run = core.run_turn(
                 [MoveAction(destination="out"), TakeAction(item_name="knife")],
                 reparse=lambda _done, _tried: [TakeAction(item_name="knife")],
             )
+        facts = run.facts
 
         self.assertEqual(gm.player.current_location_id, "zone_building")
-        self.assertTrue(core.rest_unreached)
+        self.assertTrue(run.rest_unreached)
         self.assertFalse(any("never gets to" in fact or "knife" in fact for fact in facts))
 
     def test_an_interruption_names_only_the_actions_in_this_scene(self):
@@ -1311,7 +1323,7 @@ class PlanTests(unittest.TestCase):
         add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
         core = SimulationCore(gm, rng=random.Random(1))
 
-        facts = core.resolve(
+        run = core.run_turn(
             [
                 WaitAction(duration=Duration(minutes=30)),
                 TakeAction(item_name="knife"),
@@ -1321,17 +1333,16 @@ class PlanTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            [fact for fact in facts if "never gets to" in fact],
+            [fact for fact in run.facts if "never gets to" in fact],
             ["Orton never gets to: take the knife, go to out."],
         )
-        self.assertFalse(core.rest_unreached)
+        self.assertFalse(run.rest_unreached)
 
     def test_the_actions_after_a_zone_change_are_not_refused(self):
         gm = GameManager()
         core = SimulationCore(gm, rng=random.Random(1))
-        core.resolve([MoveAction(destination="out"), TakeAction(item_name="Unicorn")])
-        self.assertEqual(core.refused_actions, [])
-        self.assertEqual(core.refused_plan, [])
+        leg = core.resolve([MoveAction(destination="out"), TakeAction(item_name="Unicorn")])
+        self.assertEqual(leg.refused, ())
 
     def test_a_move_within_the_zone_lets_the_plan_go_on(self):
         gm = GameManager()
@@ -1378,16 +1389,118 @@ class PlanTests(unittest.TestCase):
         goal = AddGoalAction(horizon="short_term", goal_text="Find water")
         core = SimulationCore(gm, rng=random.Random(1))
 
-        facts = core.resolve([drop, take, goal])
+        leg = core.resolve([drop, take, goal])
+        facts = leg.facts
 
-        self.assertEqual(core.done_actions, [drop])
-        assert core.asked is not None
-        self.assertEqual(core.asked.attr, "item_name")
-        self.assertEqual(core.pending, [take, goal])
+        self.assertEqual(leg.done, (drop,))
+        self.assertIs(leg.stopped, LegEnd.ASKED)
+        assert leg.asked is not None
+        self.assertEqual(leg.asked.attr, "item_name")
+        self.assertEqual(leg.pending, (take, goal))
         self.assertEqual(gm.narrative.goals["short_term"], [])
         self.assertTrue(any("hasn't yet" in f and "take the Baseball Bat" in f for f in facts))
-        self.assertEqual(core.refused_actions, [])
+        self.assertEqual(leg.refused, ())
         self.assertEqual(sum("Refused" in fact for fact in facts), 0)
+
+    def test_a_zone_change_ends_the_leg_at_the_move_and_leaves_the_rest_untried(self):
+        gm = GameManager()
+        move = MoveAction(destination="out")
+        goal = AddGoalAction(horizon="short_term", goal_text="Find water")
+
+        leg = SimulationCore(gm).resolve([move, goal])
+
+        self.assertIs(leg.stopped, LegEnd.ZONE_CHANGE)
+        self.assertEqual(leg.moved_by, move)
+        self.assertEqual(leg.tried, (move,))
+        self.assertEqual(gm.narrative.goals["short_term"], [])
+
+    def test_a_move_that_ends_at_a_barrier_ends_its_leg_stalled(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+
+        blocked = SimulationCore(gm).resolve([MoveAction(destination="pharmacy")])
+        free = SimulationCore(GameManager()).resolve([MoveAction(destination="out")])
+
+        self.assertIs(blocked.stopped, LegEnd.ZONE_CHANGE)
+        self.assertTrue(blocked.stalled)
+        self.assertIs(free.stopped, LegEnd.ZONE_CHANGE)
+        self.assertFalse(free.stalled)
+
+    def test_a_stalled_move_is_skipped_only_when_the_reparse_repeats_it(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        goal = AddGoalAction(horizon="short_term", goal_text="Smashed")
+
+        run = SimulationCore(gm).run_turn(
+            [MoveAction(destination="pharmacy")], reparse=lambda _done, _tried: [goal]
+        )
+
+        self.assertEqual(run.done[-1], goal)
+        self.assertEqual(gm.narrative.goals["short_term"], ["Smashed"])
+
+    def test_a_repeated_blocked_move_is_skipped_and_the_rest_of_the_reparse_runs(self):
+        gm = GameManager()
+        gm.player.current_location_id = "zone_street"
+        move = MoveAction(destination="pharmacy")
+        goal = AddGoalAction(horizon="short_term", goal_text="Smashed")
+
+        run = SimulationCore(gm).run_turn([move], reparse=lambda _done, _tried: [move, goal])
+
+        self.assertEqual(run.tried, (move, goal))
+        self.assertEqual(len(run.legs), 2)
+        self.assertEqual(gm.narrative.goals["short_term"], ["Smashed"])
+
+    def test_a_leg_that_kills_the_player_ends_dead_and_the_turn_is_not_parsed_again(self):
+        gm = GameManager()
+        make_dying(gm.player)
+        calls: list[int] = []
+
+        def reparse(_done: list[str], _tried: list[AnyAction]) -> list[AnyAction]:
+            calls.append(1)
+            return []
+
+        leg = SimulationCore(gm).resolve([MoveAction(destination="out")])
+        self.assertIs(leg.stopped, LegEnd.DEAD)
+
+        gm = GameManager()
+        make_dying(gm.player)
+        SimulationCore(gm).run_turn([MoveAction(destination="out")], reparse=reparse)
+        self.assertEqual(calls, [])
+
+    def test_a_leg_cut_short_by_a_zombie_ends_interrupted(self):
+        gm = zombie_game("zone_building")
+        add_zombie(gm, gap=6, state=ZombieState.ALERTED, facing_cos=1.0)
+
+        leg = SimulationCore(gm, rng=random.Random(1)).resolve(
+            [WaitAction(duration=Duration(minutes=30)), TakeAction(item_name="knife")]
+        )
+
+        self.assertIs(leg.stopped, LegEnd.INTERRUPTED)
+        self.assertEqual(len(leg.tried), 1)
+
+    def test_a_refusal_the_next_leg_redoes_is_dropped_from_the_turn(self):
+        gm = GameManager()
+        bat = ITEMS["item_baseball_bat"]
+        gm.world.locations["zone_building"].entities.append(ItemEntity(item=bat))
+        take = TakeAction(item_name="Baseball Bat")
+
+        run = SimulationCore(gm).run_turn(
+            [take, MoveAction(destination="out")], reparse=lambda _done, _tried: [take]
+        )
+
+        self.assertEqual(run.refused, ())
+        self.assertIn(take, run.done)
+
+    def test_a_refusal_no_later_leg_redoes_stays_in_the_turn(self):
+        gm = GameManager()
+        take = TakeAction(item_name="Baseball Bat")
+        goal = AddGoalAction(horizon="short_term", goal_text="Find water")
+
+        run = SimulationCore(gm).run_turn(
+            [take, MoveAction(destination="out")], reparse=lambda _done, _tried: [goal]
+        )
+
+        self.assertEqual([action for action, _ in run.refused], [take])
 
     def test_a_none_turn_costs_one_minute(self):
         gm = GameManager()
@@ -1397,9 +1510,9 @@ class PlanTests(unittest.TestCase):
 
     def test_a_turn_of_only_refused_lines_costs_nothing(self):
         gm = GameManager()
-        facts = SimulationCore(gm).resolve([], refused=2)
+        facts = SimulationCore(gm).run_turn([], refused=2).facts
         self.assertEqual(gm.narrative.minutes, 0)
-        self.assertEqual(facts, [])
+        self.assertEqual(facts, ())
 
     def test_a_turn_of_only_refused_actions_costs_nothing(self):
         gm = GameManager()
@@ -1420,7 +1533,7 @@ class ShoutTests(unittest.TestCase):
             return real(now, minute, extra_sounds)
 
         core._loop.run_minute = spy  # type: ignore[method-assign]
-        core.resolve(list(actions))
+        core.run_turn(list(actions))
         return heard
 
     def test_a_shout_is_a_sound_of_radius_30_and_volume_30(self):
@@ -1583,7 +1696,7 @@ class WeakeningInterruptionTests(unittest.TestCase):
             return real(player, hours)
 
         core._body.minute = minute  # type: ignore[method-assign]
-        facts = core.resolve([WaitAction(duration=Duration(minutes=60))])
+        facts = core.resolve([WaitAction(duration=Duration(minutes=60))]).facts
         self.assertEqual(len(calls), 3)
         self.assertIn("Orton is getting weaker.", facts)
         self.assertIn("Orton is now Minor Bleeding.", facts)
@@ -1603,7 +1716,7 @@ class WeakeningInterruptionTests(unittest.TestCase):
             return real(player, hours)
 
         core._body.minute = minute  # type: ignore[method-assign]
-        facts = core.resolve([SleepAction(duration=Duration(minutes=120))])
+        facts = core.resolve([SleepAction(duration=Duration(minutes=120))]).facts
         self.assertFalse(gm.player.asleep)
         self.assertIn("Orton wakes, badly hurt.", facts)
 
@@ -1631,8 +1744,10 @@ class WeakeningFactTests(unittest.TestCase):
     def test_two_moves_while_dying_of_thirst_give_one_fact(self):
         gm = GameManager()
         gm.player.stats.set(CharacterStat.THIRST, 0.9)
-        facts = SimulationCore(gm).resolve(
-            [MoveAction(destination="out"), MoveAction(destination="in")]
+        facts = (
+            SimulationCore(gm)
+            .resolve([MoveAction(destination="out"), MoveAction(destination="in")])
+            .facts
         )
         self.assertEqual(facts.count("Orton is weakening from thirst."), 1, facts)
 
@@ -1640,8 +1755,8 @@ class WeakeningFactTests(unittest.TestCase):
         gm = GameManager()
         gm.player.stats.set(CharacterStat.THIRST, 0.9)
         core = SimulationCore(gm)
-        core.resolve([MoveAction(destination="out")])
-        facts = core.resolve([MoveAction(destination="in")])
+        core.run_turn([MoveAction(destination="out")])
+        facts = core.run_turn([MoveAction(destination="in")]).facts
         self.assertIn("Orton is weakening from thirst.", facts)
 
 

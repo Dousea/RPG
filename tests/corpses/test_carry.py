@@ -222,7 +222,7 @@ class CarryRefusalTests(unittest.TestCase):
             return original(minutes, action, **kwargs)
 
         core._spend = spend  # type: ignore[method-assign]
-        facts = core.resolve([CarryAction(corpse_name="c1")])
+        facts = core.resolve([CarryAction(corpse_name="c1")]).facts
         self.assertIsNone(gm.player.carrying_corpse)
         self.assertTrue(any("c1" in fact for fact in facts))
 

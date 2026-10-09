@@ -46,6 +46,7 @@ from tests.support import (
     IsolatedSaveTestCase,
     ScriptedLLM,
     adjust_regard,
+    finished_leg,
     make_dying,
     npc_of,
     stream,
@@ -811,6 +812,22 @@ class PlanSplitTests(EngineTestCase):
         self.assertEqual(gm.player.current_location_id, "zone_building")
         self.assertIs(weapons.held_entity(gm.player), bats[1])
 
+    def test_a_pick_on_a_flagged_action_before_a_later_move_is_not_pinned_again(self):
+        self.plank_the_door()
+        gm = self.engine.game
+        bats = [ItemEntity(item=ITEMS["item_baseball_bat"]) for _ in range(2)]
+        gm.player.inventory.extend(bats)
+        item_ids.stamp_world(gm.world, gm.player)
+        self.checker().plan_results = [[1]]
+        self.play_split(
+            "ACTIONS:\nUNBARRICADE apartment door\nEQUIP Baseball Bat\nMOVE_TO out\n"
+            "EQUIP Baseball Bat",
+            "ACTIONS:\nEQUIP Baseball Bat",
+            text=f"take the planks off, hold {MENTION_MARK}, go out and hold {MENTION_MARK}",
+            mentions=[bats[0].instance_id, bats[1].instance_id],
+        )
+        self.assertIs(weapons.held_entity(gm.player), bats[1])
+
     def test_a_flagged_action_before_the_move_is_still_refused(self):
         self.plank_the_door()
         self.checker().plan_results = [[0]]
@@ -835,6 +852,15 @@ class PlanSplitTests(EngineTestCase):
         prompt = self.llm.narrator_prompts[-1]
         self.assertIn(self.rest_fact(), prompt)
         self.assertNotIn("Later", prompt)
+
+    def test_a_cut_plan_that_changed_zone_and_ran_a_second_plan_reaches_the_rest(self):
+        self.play_split(
+            "ACTIONS:\nMOVE_TO out\nATTACK apartment door",
+            "ACTIONS:\nADD_GOAL short_term Later",
+        )
+        self.assertEqual(len(self.llm.prompts), 2)
+        self.assertEqual(self.engine.game.narrative.goals["short_term"], ["Later"])
+        self.assertNotIn(self.rest_fact(), self.llm.narrator_prompts[-1])
 
     def test_a_second_plan_the_check_flags_whole_still_gives_its_refusal(self):
         self.checker().plan_results = [[], [0]]
@@ -1460,7 +1486,7 @@ class FactCheckRetryTests(EngineTestCase):
     def setUp(self):
         super().setUp()
         patcher = mock.patch.object(
-            engine_module.SimulationCore, "resolve", return_value=list(self.FACTS)
+            engine_module.SimulationCore, "resolve", return_value=finished_leg(self.FACTS)
         )
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1566,7 +1592,7 @@ class FactCheckRetryTests(EngineTestCase):
     def test_a_turn_without_questions_is_not_checked(self):
         checker = self.script([self.FIRST])
         with mock.patch.object(
-            engine_module.SimulationCore, "resolve", return_value=["You are winded."]
+            engine_module.SimulationCore, "resolve", return_value=finished_leg(["You are winded."])
         ):
             self.engine.play("go out")
         self.assertEqual(checker.calls, [])
@@ -1915,7 +1941,9 @@ class LoreTests(EngineTestCase):
         cast(FakeFactChecker, self.engine.factcheck).results = [["a conflict"], []]
         with (
             mock.patch.object(
-                engine_module.SimulationCore, "resolve", return_value=["z1 staggers back."]
+                engine_module.SimulationCore,
+                "resolve",
+                return_value=finished_leg(["z1 staggers back."]),
             ),
             mock.patch.object(
                 engine_module.ContextBuilder,
@@ -1958,7 +1986,9 @@ class LoreStickyTests(EngineTestCase):
         self.script([self.NO_OPTIONS, "STORY:\nA retry.", self.OPTIONS_ONLY])
         cast(FakeFactChecker, self.engine.factcheck).results = [["a conflict"], []]
         with mock.patch.object(
-            engine_module.SimulationCore, "resolve", return_value=["z1 staggers back."]
+            engine_module.SimulationCore,
+            "resolve",
+            return_value=finished_leg(["z1 staggers back."]),
         ):
             self.engine.play("go out")
         self.assertEqual(len(self.llm.narrator_prompts), 3)

@@ -315,7 +315,7 @@ class StatTurnTests(unittest.TestCase):
 
     def test_a_refused_action_advances_no_stats(self):
         gm = GameManager()
-        facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")])
+        facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")]).facts
         self.assertTrue(facts[0].startswith("Refused:"))
         self.assertEqual(gm.player.stats.get(CharacterStat.HUNGER), 0)
 
@@ -398,7 +398,7 @@ class SleepSpanTests(unittest.TestCase):
             return MinuteReport(new_seen=1 if calls["n"] == 30 else 0)
 
         with patch.object(core._loop, "run_minute", zombie_on_minute_thirty):  # pyright: ignore[reportPrivateUsage]
-            facts = core.resolve([SleepAction()])
+            facts = core.resolve([SleepAction()]).facts
         self.assertIn("A zombie wakes Orton in a panic.", facts)
         self.assertEqual(gm.narrative.minutes, 30)
         self.assertFalse(gm.player.asleep)

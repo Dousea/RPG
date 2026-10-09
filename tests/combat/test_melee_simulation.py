@@ -317,8 +317,10 @@ class ZombieFightTests(unittest.TestCase):
         crowbar.condition = 1
         zombie = add_zombie(gm, gap=1, health=100)
         rng = FixedRng(by_size={70: 0})
-        core_facts = SimulationCore(gm, rng=rng).resolve(
-            [AttackAction(target_name=zombie.zombie_id)] * 2
+        core_facts = (
+            SimulationCore(gm, rng=rng)
+            .resolve([AttackAction(target_name=zombie.zombie_id)] * 2)
+            .facts
         )
         self.assertTrue(crowbar.broken)
         self.assertIsNone(gm.player.equipment[RIGHT])
@@ -378,8 +380,10 @@ class FightInterruptionTests(unittest.TestCase):
         return gm, target
 
     def five_attacks(self, gm: GameManager, target: ZombieEntity):
-        return SimulationCore(gm, rng=random.Random(1)).resolve(
-            [AttackAction(target_name=target.zombie_id)] * 5
+        return (
+            SimulationCore(gm, rng=random.Random(1))
+            .resolve([AttackAction(target_name=target.zombie_id)] * 5)
+            .facts
         )
 
     def test_defended_attacks_do_not_stop_five_planned_attacks(self):
@@ -409,8 +413,10 @@ class FightInterruptionTests(unittest.TestCase):
         target.state = ZombieState.CHASING
         defended = AttackOutcome(defended=True)
         with mock.patch("managers.zombies.population.resolve_attack", return_value=defended):
-            facts = SimulationCore(gm, rng=random.Random(1)).resolve(
-                [AttackAction(target_name=target.zombie_id)]
+            facts = (
+                SimulationCore(gm, rng=random.Random(1))
+                .resolve([AttackAction(target_name=target.zombie_id)])
+                .facts
             )
         self.assertIn("Orton never gets to swing.", facts)
         self.assertEqual(target.hits_taken, 0)

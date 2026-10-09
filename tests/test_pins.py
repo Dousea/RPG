@@ -228,7 +228,7 @@ class ResolveTests(unittest.TestCase):
         pinned = pick(gm, "barrier", "window_supermarket")
         gm.player.current_location_id = "zone_hardware"
         actions = bind([AttackAction("window")], [pinned])
-        facts = SimulationCore(gm).resolve(actions)
+        facts = SimulationCore(gm).resolve(actions).facts
         self.assertTrue(facts[0].startswith("Refused:"), facts)
 
 

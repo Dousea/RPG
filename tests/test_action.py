@@ -492,7 +492,7 @@ class SceneFilteringTests(unittest.TestCase):
 
     def test_a_verb_that_is_not_listed_reaches_the_validator(self):
         gm = GameManager()
-        facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")])
+        facts = SimulationCore(gm).resolve([TakeAction(item_name="Unicorn")]).facts
         self.assertTrue(facts[0].startswith("Refused:"))
 
 

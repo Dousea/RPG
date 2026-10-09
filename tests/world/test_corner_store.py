@@ -22,8 +22,8 @@ WINDOW = "window_bodega"
 
 def run(gm: GameManager, *actions) -> tuple[list[str], int]:
     before = gm.narrative.minutes
-    facts = SimulationCore(gm, rng=random.Random(1)).resolve(list(actions))
-    return facts, gm.narrative.minutes - before
+    facts = SimulationCore(gm, rng=random.Random(1)).run_turn(list(actions)).facts
+    return list(facts), gm.narrative.minutes - before
 
 
 def on_the_street() -> GameManager:
