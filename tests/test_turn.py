@@ -459,6 +459,29 @@ class PickTests(unittest.TestCase):
         self.assertEqual([pick.id for pick in planner.calls[0][1]], ["free"])
         self.assertEqual(outcome.spent, {"tried", "refused", "spent"})
 
+    def test_a_pick_bound_in_two_places_is_still_never_offered_again(self):
+        planner = Planner(None)
+        picks = [self.pick(name) for name in ("spent_and_tried", "tried_and_refused")]
+        first = checked_leg(
+            [
+                self.take("spent_and_tried"),
+                self.take("tried_and_refused"),
+                MoveAction(destination="out"),
+            ],
+            dropped=[(0, self.take("tried_and_refused"), "No.")],
+        )
+
+        outcome = resume_turn(
+            SimulationCore(GameManager()),
+            Paused(first, (), Said("", tuple(picks)), (), frozenset({"spent_and_tried"})),
+            [],
+            planner,
+        )
+        assert isinstance(outcome, TurnOutcome)
+
+        self.assertEqual(planner.calls[0][1], [])
+        self.assertEqual(outcome.spent, {"spent_and_tried", "tried_and_refused"})
+
     def test_a_pick_on_a_drop_after_the_real_move_is_left_to_bind(self):
         planner = Planner(None)
         first = checked_leg(
@@ -681,6 +704,20 @@ class ResumeTests(unittest.TestCase):
                 self.assertEqual(gm.narrative.minutes, minutes)
                 self.assertEqual(gm.narrative.goals["short_term"], [])
 
+    def test_more_answers_than_choices_are_declined_even_when_each_is_a_candidate(self):
+        gm = two_bats()
+        paused = started(gm, [TakeAction(item_name="Baseball Bat"), goal("Later")])
+        assert isinstance(paused, Paused)
+        both = [c.id for c in paused.choices[0].candidates]
+        self.assertEqual(len(both), 2)
+        minutes = gm.narrative.minutes
+
+        outcome = resumed(gm, paused, both)
+
+        self.assertEqual(outcome, Declined(ANSWER_NOT_ON_OFFER))
+        self.assertEqual(gm.narrative.minutes, minutes)
+        self.assertEqual(gm.narrative.goals["short_term"], [])
+
     def test_choices_that_changed_since_they_were_offered_are_declined(self):
         gm = two_bats()
         gm.current_location.entities.append(ItemEntity(item=BAT, condition=1))
@@ -828,3 +865,70 @@ class ResumeTests(unittest.TestCase):
         self.assertIn(offered, asked)
         picks = next(line for line in lines if line.startswith("Plan screen picks"))
         self.assertIn(offered, picks)
+
+
+class ResumedPlacesTests(unittest.TestCase):
+    """The resumed check keeps the places of the actions still to run, so the drops around them are judged right."""
+
+    def test_the_places_of_the_pending_actions_are_the_slice_they_start_at(self):
+        first, second, third = goal("A"), goal("B"), goal("C")
+        check = checked_leg([first, second, third], dropped=[(1, TakeAction(item_name="x"), "No.")])
+        self.assertEqual(check.kept_at, (0, 2, 3))
+
+        for pending, places in (
+            ([first, second, third], (0, 2, 3)),
+            ([second, third], (2, 3)),
+            ([third], (3,)),
+        ):
+            with self.subTest(pending=len(pending)):
+                self.assertEqual(check.resumed(pending).kept_at, places)
+
+    def test_a_turn_paused_with_one_action_left_refuses_the_drop_before_it_and_holds_the_one_after(
+        self,
+    ):
+        gm = street()
+        gm.player.inventory.append(ItemEntity(item=BAT, condition=0))
+        gm.current_location.entities.append(ItemEntity(item=BAT))
+        first = started(
+            gm,
+            [DropAction(item_name="broken Baseball Bat"), TakeAction(item_name="Baseball Bat")],
+            dropped=[
+                (1, TakeAction(item_name="a"), "Ahead of the question."),
+                (3, TakeAction(item_name="b"), "Behind the question."),
+            ],
+        )
+        assert isinstance(first, TurnOutcome)
+        assert first.paused is not None
+        self.assertEqual(first.paused.check.kept_at, (2,))
+        self.assertIn("Ahead of the question.", first.facts)
+        self.assertNotIn("Behind the question.", first.facts)
+
+        outcome = resumed(gm, first.paused, [answer(first.paused, "good")])
+
+        assert isinstance(outcome, TurnOutcome)
+        self.assertIn("Behind the question.", outcome.facts)
+        self.assertNotIn("Ahead of the question.", outcome.facts)
+
+    def test_a_turn_paused_in_its_second_leg_judges_the_held_drops_by_the_move_that_follows(self):
+        gm = street()
+        gm.world.locations["zone_neighborhood"].entities.extend(
+            [ItemEntity(item=BAT, condition=0), ItemEntity(item=BAT)]
+        )
+        second = checked_leg(
+            [TakeAction(item_name="Baseball Bat"), MoveAction(destination="clinic")],
+            dropped=[
+                (1, TakeAction(item_name="between"), "Between."),
+                (3, TakeAction(item_name="after"), "After."),
+            ],
+        )
+        first = started(gm, [MoveAction(destination="out")], Planner(second))
+        assert isinstance(first, TurnOutcome)
+        assert first.paused is not None
+        self.assertEqual(first.paused.check.kept_at, (0, 2))
+
+        outcome = resumed(gm, first.paused, [answer(first.paused, "good")])
+
+        assert isinstance(outcome, TurnOutcome)
+        self.assertEqual(gm.player.current_location_id, "zone_clinic")
+        self.assertIn("Between.", outcome.facts)
+        self.assertNotIn("After.", outcome.facts)
