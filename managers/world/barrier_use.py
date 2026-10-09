@@ -17,23 +17,11 @@ from managers.zombies import thumping
 from managers.zombies.attack import weapon_level
 from managers.zombies.noise import Sound, barrier_hit_sound, hammer_sound, pry_sound
 from managers.zombies.population import ZombieLoop, shut_behind
-from modules import units
 from modules.body.stats import CharacterStat
 from modules.entity.barrier import BarrierEntity, BarrierKind
 from modules.entity.item import ItemEntity
 from modules.item import MeleeWeaponItem
 from modules.resolution import BarricadeKit, PryTarget
-
-
-def unbarricade_minutes(carpentry: int, *, handy: bool) -> int:
-    """Minutes to pry a plank off: 200 frames less 5 per Carpentry level and 20 for Handy."""
-    frames = (
-        barrier_k.UNBARRICADE_TIME_FRAMES_BASE
-        - barrier_k.UNBARRICADE_TIME_FRAMES_PER_CARPENTRY * carpentry
-    )
-    if handy:
-        frames -= barrier_k.UNBARRICADE_TIME_FRAMES_HANDY_BONUS
-    return units.minutes_from_timed_action_frames(frames)
 
 
 class BarrierActions:

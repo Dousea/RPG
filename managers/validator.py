@@ -23,6 +23,8 @@ from data import melee as melee_k
 from data.body import health as body_k
 from data.body import survival as survival_k
 from data.character import exercises as exercise_k
+from data.character import skills as skill_k
+from data.character import traits as trait_k
 from data.clothing.locations import EXCLUSIVE_LOCATIONS
 from data.items import ITEMS
 from data.loot import containers as container_k
@@ -49,6 +51,7 @@ from managers.body.first_aid import (
 from managers.body.health import limp_factor
 from managers.body.stats.status_effects import status_effect_level
 from managers.character.exercise import endurance_level
+from managers.character.skills import skill_levels
 from managers.combat import weapons
 from managers.combat.aim import is_down_target, is_plain_zombie
 from managers.corpses.search import find_content, perceived_corpses, with_article
@@ -1119,7 +1122,8 @@ class ActionValidator:
         if isinstance(found, str):
             return Rejected(action, found)
         barrier = found
-        side = self.manager.player.current_location_id
+        player = self.manager.player
+        side = player.current_location_id
         if not barrier.plank_count(side):
             far = barrier.plank_count(barrier.far_side(side))
             return Rejected(
@@ -1135,7 +1139,16 @@ class ActionValidator:
         ]
         if not tools:
             return Rejected(action, barrier_k.NO_PRY_TOOL.format(name=self._name))
-        return Accepted(action, PryTarget(barrier, tools[0], self._walks_to(barrier)))
+        return Accepted(
+            action,
+            PryTarget(
+                barrier,
+                tools[0],
+                self._walks_to(barrier),
+                carpentry=skill_levels(player).get(skill_k.CARPENTRY, 0),
+                handy=trait_k.HANDY_ID in player.traits,
+            ),
+        )
 
     # === Combat ===
 

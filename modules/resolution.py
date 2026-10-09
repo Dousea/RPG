@@ -192,6 +192,8 @@ class PryTarget:
     barrier: BarrierEntity
     tool: ItemEntity
     walk: bool
+    carpentry: int
+    handy: bool
 
 
 @dataclass(frozen=True)

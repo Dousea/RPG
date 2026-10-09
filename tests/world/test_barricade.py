@@ -654,7 +654,7 @@ class TimedActionTests(unittest.TestCase):
         self.assertEqual(BARRICADE_MIN, 1)
 
     def test_prying_takes_1_minute_at_every_carpentry_level_with_or_without_handy(self):
-        from managers.world.barrier_use import unbarricade_minutes
+        from data.world.barriers import unbarricade_minutes
 
         for level in range(11):
             for handy in (False, True):

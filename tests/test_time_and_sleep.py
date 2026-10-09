@@ -2,32 +2,50 @@
 
 import dataclasses
 import random
+import typing
 import unittest
 from unittest.mock import patch
 
 from data import time_costs as time_cost_k
+from data.character import skills as skill_k
+from data.character import traits as trait_k
 from data.items import ITEMS
+from data.world import barriers as barrier_k
 from data.world.clock import MINUTES_PER_DAY, TIME_OF_DAY_PHRASES, WORLD_START_MINUTE_OF_DAY
 from managers.game import GameManager
 from managers.simulation import SimulationCore
 from managers.zombies.population import MinuteReport
+from modules import units
 from modules.action.types import (
     AddGoalAction,
     AddRelationshipNoteAction,
+    AnyAction,
     AttackAction,
+    CarryAction,
     DropAction,
     Duration,
     MoveAction,
+    OpenAction,
+    SearchAction,
+    ShoveAction,
     SleepAction,
     StanceAction,
     TakeAction,
+    UnbarricadeAction,
     UseItemAction,
     WaitAction,
 )
 from modules.body.stats import CharacterStat
+from modules.character.skills import SkillState
 from modules.entity.item import ItemEntity
+from modules.entity.zombie import AttackSide, ZombieState
 from modules.world.pace import Pace
+from tests.combat.test_melee_simulation import fight_game
+from tests.corpses.test_loot import with_body
 from tests.support import make_dying, simulate
+from tests.test_context import add_zombie
+from tests.test_simulation import add_zombie as add_sim_zombie
+from tests.world.test_barricade import HOME, stocked_game
 
 
 def _spent(gm: GameManager, *actions) -> int:
@@ -247,6 +265,80 @@ class TimeCostTests(unittest.TestCase):
         core.stats_engine.advance = spy
         core.resolve([WaitAction(duration=Duration(minutes=5)), MoveAction(destination="out")])
         self.assertEqual(handed, [5, 1])
+
+
+class OwnPhaseRowTests(unittest.TestCase):
+    """clock: Time costs: an action's row is the cost of its own phase; getting there is costed apart."""
+
+    def test_every_action_type_has_a_row(self):
+        for action_type in typing.get_args(AnyAction):
+            with self.subTest(action=action_type.__name__):
+                self.assertIn(action_type, time_cost_k.TIME_COSTS)
+
+    def test_the_own_phase_is_charged_its_row(self):
+        row = 4
+        door = OpenAction(barrier_name="apartment door")
+        planked = stocked_game()
+        planked.world.barriers["door_apartment"].barricades[HOME] = [1000]
+        zombie_game = stocked_game()
+        zombie_game.world.outbreak_started_at = 0
+        zombie = add_zombie(zombie_game, 1, ZombieState.ATTACKING, health=100.0)
+        zombie.time_since_seen = 0
+        zombie.side = AttackSide.FRONT
+        fixed = {OpenAction: row, AttackAction: row}
+        function = {
+            UnbarricadeAction: lambda action, resolved: row,
+            WaitAction: lambda action, resolved: row,
+        }
+        with patch.dict(time_cost_k.TIME_COSTS, {**fixed, **function}):
+            self.assertEqual(_spent(stocked_game(), door), row)
+            self.assertEqual(
+                _spent(stocked_game(at_door=False), door), time_cost_k.WALK_TO_BARRIER_MIN + row
+            )
+            self.assertEqual(_spent(planked, UnbarricadeAction(barrier_name="apartment door")), row)
+            self.assertEqual(_spent(GameManager(), WaitAction(duration=Duration(minutes=2))), row)
+            self.assertEqual(_spent(zombie_game, AttackAction(target_name=zombie.zombie_id)), row)
+            self.assertEqual(
+                _spent(stocked_game(), AttackAction(target_name="apartment door", swings=3)),
+                3 * row,
+            )
+
+    def test_the_other_own_phases_are_charged_their_row_too(self):
+        row = 4
+        body_game, _ = with_body()
+        carry_game, _ = with_body()
+        shove_game = fight_game()
+        zombie = add_sim_zombie(shove_game, gap=1, health=100, state=ZombieState.IDLE)
+        patched = {
+            SearchAction: lambda action, resolved: row,
+            CarryAction: row,
+            ShoveAction: row,
+        }
+        with patch.dict(time_cost_k.TIME_COSTS, patched):
+            self.assertEqual(_spent(body_game, SearchAction(target_name="c1")), row)
+            self.assertEqual(
+                _spent(GameManager(), SearchAction(target_name="dresser")),
+                time_cost_k.MOVE_ROOM_MIN + row,
+            )
+            self.assertEqual(_spent(carry_game, CarryAction(corpse_name="c1")), row)
+            self.assertEqual(_spent(shove_game, ShoveAction(target_name=zombie.zombie_id)), row)
+
+    def test_unbarricading_is_charged_for_carpentry_and_handy(self):
+        gm = stocked_game()
+        gm.world.barriers["door_apartment"].barricades[HOME] = [1000]
+        gm.player.skills[skill_k.CARPENTRY] = SkillState(level=5)
+        gm.player.traits.clear()
+        gm.player.traits.append(trait_k.HANDY_ID)
+        with (
+            patch.object(barrier_k, "UNBARRICADE_TIME_FRAMES_BASE", 4000),
+            patch.object(barrier_k, "UNBARRICADE_TIME_FRAMES_PER_CARPENTRY", 200),
+            patch.object(barrier_k, "UNBARRICADE_TIME_FRAMES_HANDY_BONUS", 400),
+        ):
+            skilled = units.minutes_from_timed_action_frames(4000 - 200 * 5 - 400)
+            self.assertNotEqual(skilled, barrier_k.unbarricade_minutes(0, handy=False))
+            self.assertNotEqual(skilled, barrier_k.unbarricade_minutes(5, handy=False))
+            self.assertNotEqual(skilled, barrier_k.unbarricade_minutes(0, handy=True))
+            self.assertEqual(_spent(gm, UnbarricadeAction(barrier_name="apartment door")), skilled)
 
 
 class ClockEdgeCaseTests(unittest.TestCase):

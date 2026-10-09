@@ -1,15 +1,20 @@
 """Time cost of each action, in in-game minutes (clock).
 
-A row is a fixed number of minutes or a function of the action and what the
-validator resolved for it, so a function never re-derives what the check
-already decided.
+A row is the cost of the action's own phase: a fixed number of minutes or a
+function of the action and what the validator resolved for it, so a function
+never re-derives what the check already decided. An own phase that repeats (a
+swing, a container, a minute of exercise) costs the row once each, except the
+span verbs (`WAIT`, `SLEEP`, `EXERCISE`), whose row is the whole span the
+resolver slices. Getting there (the walk to a barrier, the approach to a body or
+zombie, the hops of a walk, the room move before a search) is costed from its
+own constants or the distance, never from the row.
 """
 
 import math
 from collections.abc import Callable
 
 from data.carry import CARRY_CORPSE_MIN
-from data.world.barriers import BARRICADE_MIN, UNBARRICADE_MIN
+from data.world.barriers import BARRICADE_MIN, unbarricade_minutes
 from modules import units
 from modules.action.parser import TALK_TURN_MINUTES
 from modules.action.types import (
@@ -56,10 +61,11 @@ from modules.resolution import (
     HeldItem,
     MoveToRoom,
     MoveToSpot,
+    PryTarget,
     Resolution,
     ShuffleInZone,
-    TargetCorpse,
-    TargetZombie,
+    TargetContainer,
+    TargetRoom,
     TimeSpan,
     Transfer,
 )
@@ -109,20 +115,10 @@ def zone_hop_minutes(from_id: str, to_id: str, pace: Pace = Pace.WALK) -> int:
     return max(1, math.ceil(walking * HOP_MINUTES_FACTOR_BY_PACE[pace]))
 
 
-def _attack_minutes(action: AnyAction, resolved: Resolution) -> int:
-    """The swing, plus the walk up to a zombie that is not yet in reach."""
-    if isinstance(resolved, TargetZombie):
-        return resolved.approach_minutes + SWING_MIN
-    return SWING_MIN
-
-
 def _search_minutes(action: AnyAction, resolved: Resolution) -> int:
-    """The walk up to a corpse that is not yet in reach, plus the minute going through it.
-
-    A room or container search is charged per container as it is opened."""
-    match resolved:
-        case TargetCorpse(approach_minutes=approach):
-            return approach + SEARCH_MIN
+    """One container opened, or the one minute going through a body."""
+    if isinstance(resolved, TargetRoom | TargetContainer):
+        return OPEN_CONTAINER_MIN
     return SEARCH_MIN
 
 
@@ -131,13 +127,6 @@ def _transfer_minutes(action: AnyAction, resolved: Resolution) -> int:
     if isinstance(resolved, Transfer):
         return units.minutes_from_timed_action_frames(resolved.frames)
     return QUICK_ACTION_MIN
-
-
-def _carry_minutes(action: AnyAction, resolved: Resolution) -> int:
-    """The walk up to a body that is not yet in reach, plus the minute picking it up."""
-    if isinstance(resolved, TargetCorpse):
-        return resolved.approach_minutes + CARRY_CORPSE_MIN
-    return CARRY_CORPSE_MIN
 
 
 def _use_item_minutes(action: AnyAction, resolved: Resolution) -> int:
@@ -158,6 +147,12 @@ def _move_minutes(action: AnyAction, resolved: Resolution) -> int:
     return 0
 
 
+def _unbarricade_minutes(action: AnyAction, resolved: Resolution) -> int:
+    if isinstance(resolved, PryTarget):
+        return unbarricade_minutes(resolved.carpentry, handy=resolved.handy)
+    return 0
+
+
 def _spent_minutes(action: AnyAction, resolved: Resolution) -> int:
     return resolved.minutes if isinstance(resolved, TimeSpan) else 0
 
@@ -171,21 +166,21 @@ def _exercise_minutes(action: AnyAction, resolved: Resolution) -> int:
 
 
 TIME_COSTS: dict[type, int | CostFunction] = {
-    AttackAction: _attack_minutes,
+    AttackAction: SWING_MIN,
     OpenAction: 0,
     CloseAction: 0,
     LockAction: 0,
     UnlockAction: 0,
     BarricadeAction: BARRICADE_MIN,
-    UnbarricadeAction: UNBARRICADE_MIN,
-    ShoveAction: _attack_minutes,
+    UnbarricadeAction: _unbarricade_minutes,
+    ShoveAction: SWING_MIN,
     SearchAction: _search_minutes,
     EquipAction: EQUIP_MIN,
     UnequipAction: UNEQUIP_MIN,
     TakeAction: _transfer_minutes,
     DropAction: _transfer_minutes,
     PutAction: _transfer_minutes,
-    CarryAction: _carry_minutes,
+    CarryAction: CARRY_CORPSE_MIN,
     WearAction: WEAR_MINUTES,
     TakeOffAction: TAKE_OFF_MINUTES,
     UseItemAction: _use_item_minutes,
@@ -206,6 +201,9 @@ TIME_COSTS: dict[type, int | CostFunction] = {
     AddRelationshipNoteAction: 0,
     UnsupportedAction: 0,
 }
+
+
+SPAN_ACTIONS: tuple[type, ...] = (WaitAction, SleepAction, ExerciseAction)
 
 
 MULTIPLIED_ACTIONS: tuple[type, ...] = (

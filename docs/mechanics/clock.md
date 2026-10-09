@@ -2,8 +2,10 @@
 
 > **Status: Implemented.**
 
-The game runs on a minute clock. Every action costs a stated number of
-in-game minutes, and the clock moves by exactly that much. The player-facing
+The game runs on a minute clock. Every action is made of phases, each costing a
+stated number of in-game minutes, and the clock moves by exactly that much. Only
+a few actions have a total that depends on what happens: hitting a barrier until
+it gives, sleep until waking, and exercise until exhausted. The player-facing
 clock is all this covers. NPC and world scheduling are not built; see
 [architecture the time-and-scheduling doc](../design/time-and-scheduling.md).
 
@@ -73,7 +75,8 @@ words that name what the player asked and what works; no time passes.
 
 `data/time_costs.py` holds one row per action type. A row is a fixed number of
 minutes or a function of the resolved action. A function receives the action and
-the validator's resolved data and returns whole minutes.
+the validator's resolved data and returns whole minutes. An action's own phase
+is charged its row; getting there is costed apart.
 
 | Action | Minutes |
 | --- | --- |
@@ -98,12 +101,15 @@ Further rules.
 
 - A refused action costs 0 minutes.
 - A turn where the parser proposes nothing costs 1 minute.
-- Each action's cost is applied after it resolves, so the clock and `World.time`
+- Time passes phase by phase: getting there (the walk to a barrier, the
+  approach to a body or zombie, the hops of a walk) and then the act itself. An
+  interruption stops the action between phases, so the clock and `World.time`
   are current for the next action in the plan.
 - The action-time multiplier (pain, mood, cold hands) only scales the fixed costs
   of the timed verbs (`TAKE`, `DROP`, `USE_ITEM` and eating, `WEAR`, `TAKE_OFF`,
-  `EQUIP`, `UNEQUIP`, `BANDAGE`, `REMOVE_BANDAGE` and `DISINFECT`). Walking,
-  `ATTACK`, `WAIT` and `SLEEP` never take it; see
+  `EQUIP`, `UNEQUIP`, `PUT`, `BARRICADE`, `UNBARRICADE`, `BANDAGE`,
+  `REMOVE_BANDAGE` and `DISINFECT`), and only the act's own phase, never the
+  getting there. Walking, `ATTACK`, `WAIT` and `SLEEP` never take it; see
   [health](health.md#what-pain-does).
 - Every spent minute is also handed to the survival stat engine
   ([survival stats](survival-stats.md#turn-flow)). If the player dies part

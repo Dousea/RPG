@@ -167,7 +167,6 @@ UNBARRICADE_XP_CARPENTRY = 2  # doors: XP, flat
 UNBARRICADE_XP_STRENGTH = 2  # doors: XP, flat
 HAMMER_WEAR_MULT = 6.0  # doors
 BARRICADE_MIN = units.minutes_from_timed_action_frames(BARRICADE_TIME_FRAMES)  # doors
-UNBARRICADE_MIN = units.minutes_from_timed_action_frames(UNBARRICADE_TIME_FRAMES_BASE)  # doors
 
 DOOR_HIT_MULT = 2  # doors
 DOOR_HIT_EXTRA_MULT = 6  # doors
@@ -259,3 +258,11 @@ NO_PLANKS = "There are no planks on the {barrier}."
 PLANKS_ON_OTHER_SIDE = "The planks are on the other side."
 NO_PRY_TOOL = "{name} has nothing to pry with."
 OTHER_SIDE_OF_BARRIER = "It's on the other side of the {kind}."
+
+
+def unbarricade_minutes(carpentry: int, *, handy: bool) -> int:
+    """Minutes to pry a plank off: 200 frames less 5 per Carpentry level and 20 for Handy."""
+    frames = UNBARRICADE_TIME_FRAMES_BASE - UNBARRICADE_TIME_FRAMES_PER_CARPENTRY * carpentry
+    if handy:
+        frames -= UNBARRICADE_TIME_FRAMES_HANDY_BONUS
+    return units.minutes_from_timed_action_frames(frames)

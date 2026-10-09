@@ -26,7 +26,6 @@ from data.body import thermal as thermal_k
 from data.body.thermal import Metabolic
 from data.character import exercises as exercise_k
 from data.character import skills as skill_k
-from data.character import traits as trait_k
 from data.character.exercises import find_exercise
 from data.loot import containers as container_k
 from data.story.beats import STORY_BEATS, Beat
@@ -38,9 +37,7 @@ from data.time_costs import (
     MOVE_ROOM_MIN,
     MULTIPLIED_ACTIONS,
     NONE_TURN_MINUTES,
-    OPEN_CONTAINER_MIN,
-    SEARCH_MIN,
-    SWING_MIN,
+    SPAN_ACTIONS,
     WALK_TO_BARRIER_MIN,
     WINDOW_CLIMB_MIN,
     action_minutes,
@@ -81,7 +78,7 @@ from managers.plan import steps_in_this_scene
 from managers.story.beats import clock_minutes, holds
 from managers.story.social import SocialManager
 from managers.validator import Accepted, ActionValidator, Asked, Rejected
-from managers.world.barrier_use import BarrierActions, unbarricade_minutes
+from managers.world.barrier_use import BarrierActions
 from managers.world.barriers import barriers_between, thumpable_for
 from managers.world.climate import weather_change_facts
 from managers.world.containers import open_container
@@ -216,11 +213,13 @@ class Phase:
     `facts` are the phase's own words; the resolver may add to the list until it yields again
     or finishes (the driver joins the facts of every phase only once the resolver is done), so
     what the minutes settled can join them. `own` marks the act itself, as
-    against getting there; `asleep` spends the minutes asleep.
+    against getting there: its minutes are the action's `TIME_COSTS` row (see
+    `data/time_costs.py` for the one exception); any other phase states its own
+    minutes. `asleep` spends the minutes asleep.
     """
 
     facts: list[str] = field(default_factory=list)
-    minutes: int = 0
+    minutes: int | None = None
     motion: Motion = field(default_factory=Motion)
     own: bool = False
     asleep: bool = False
@@ -952,16 +951,21 @@ class SimulationCore:
         result = handler(self, accepted)
         if isinstance(result, str | list):
             lines = [result] if isinstance(result, str) else list(result)
-            yield Phase(lines, action_minutes(accepted.action, accepted.resolved), own=True)
+            yield Phase(lines, own=True)
             return
 
         yield from result
 
     def _phase_minutes(self, accepted: Accepted, phase: Phase, slowdown: float) -> int:
         """The minutes to spend on a phase: the own phase is slowed, and a second social action is free."""
-        minutes = phase.minutes
         if not phase.own:
-            return minutes
+            return phase.minutes or 0
+
+        if phase.minutes is not None:
+            assert isinstance(accepted.action, SPAN_ACTIONS), "only a span row may be sliced"
+            minutes = phase.minutes
+        else:
+            minutes = action_minutes(accepted.action, accepted.resolved)
 
         if isinstance(accepted.resolved, Transfer | Gathering):
             minutes = units.minutes_from_timed_action_frames(accepted.resolved.frames * slowdown)
@@ -1282,7 +1286,7 @@ class SimulationCore:
 
         for container in containers:
             opened: list[str] = []
-            interrupted = yield Phase(opened, OPEN_CONTAINER_MIN, own=True)
+            interrupted = yield Phase(opened, own=True)
             if manager.narrative.game_over:
                 return
 
@@ -1322,7 +1326,7 @@ class SimulationCore:
             return
 
         found: list[str] = []
-        yield Phase(found, SEARCH_MIN, own=True)
+        yield Phase(found, own=True)
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             loot_search(corpse, self._rng)
             if corpse.contents:
@@ -1498,7 +1502,7 @@ class SimulationCore:
             swing_target=target.zombie_id,
             shove=isinstance(accepted.action, ShoveAction),
         )
-        yield Phase(minutes=SWING_MIN, motion=swing, own=True)
+        yield Phase(motion=swing, own=True)
 
     # === Doors, windows and planks ===
 
@@ -1519,53 +1523,42 @@ class SimulationCore:
         accepted: Accepted,
         walk: bool,
         apply: Callable[[], list[str]],
-        minutes: int,
     ) -> Phases:
-        """Walk to the barrier if need be, then do `apply` and spend `minutes` with the sounds it made."""
+        """Walk to the barrier if need be, then do `apply` and spend the verb's row with the sounds it made."""
         if (yield from self._walk_to_barrier(accepted, walk)):
-            yield Phase(apply(), minutes, own=True)
+            yield Phase(apply(), own=True)
 
     def _resolve_open(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
-            accepted, target.walk, lambda: self._barriers.open(target.barrier), 0
+            accepted, target.walk, lambda: self._barriers.open(target.barrier)
         )
 
     def _resolve_close(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
-            accepted, target.walk, lambda: self._barriers.close(target.barrier), 0
+            accepted, target.walk, lambda: self._barriers.close(target.barrier)
         )
 
     def _resolve_lock(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
-            accepted, target.walk, lambda: self._barriers.lock(target.barrier), 0
+            accepted, target.walk, lambda: self._barriers.lock(target.barrier)
         )
 
     def _resolve_unlock(self, accepted: Accepted) -> Phases:
         target = accepted.expect(TargetBarrier)
         return self._barrier_verb(
-            accepted, target.walk, lambda: self._barriers.unlock(target.barrier), 0
+            accepted, target.walk, lambda: self._barriers.unlock(target.barrier)
         )
 
     def _resolve_barricade(self, accepted: Accepted) -> Phases:
         kit = accepted.expect(BarricadeKit)
-        return self._barrier_verb(
-            accepted,
-            kit.walk,
-            lambda: self._barriers.barricade(kit),
-            action_minutes(accepted.action, kit),
-        )
+        return self._barrier_verb(accepted, kit.walk, lambda: self._barriers.barricade(kit))
 
     def _resolve_unbarricade(self, accepted: Accepted) -> Phases:
         target = accepted.expect(PryTarget)
-        player = self.manager.player
-        carpentry = skill_levels(player).get(skill_k.CARPENTRY, 0)
-        minutes = unbarricade_minutes(carpentry, handy=trait_k.HANDY_ID in player.traits)
-        return self._barrier_verb(
-            accepted, target.walk, lambda: self._barriers.unbarricade(target), minutes
-        )
+        return self._barrier_verb(accepted, target.walk, lambda: self._barriers.unbarricade(target))
 
     def _resolve_hit_barrier(self, accepted: Accepted) -> Phases:
         """Swing a minute at a time until the barrier gives, the count is done or something stops the run."""
@@ -1585,7 +1578,7 @@ class SimulationCore:
         for swing in range(planned):
             held = weapons.held_entity(player)
             hit = self._barriers.hit(barrier, self.manager.narrative.minutes, announce=swing == 0)
-            interrupted = yield Phase(hit, SWING_MIN, own=True)
+            interrupted = yield Phase(hit, own=True)
             if self.manager.narrative.game_over:
                 return
 
@@ -1671,7 +1664,7 @@ class SimulationCore:
             return
 
         lifted: list[str] = []
-        yield Phase(lifted, carry_k.CARRY_CORPSE_MIN, own=True)
+        yield Phase(lifted, own=True)
         if not manager.narrative.game_over and corpse.corpse_id in manager.world.corpses:
             player.carrying_corpse = corpse.corpse_id
             player.carrying_skeleton = corpse.skeleton
@@ -1842,7 +1835,7 @@ class SimulationCore:
         span = accepted.expect(TimeSpan)
         started = self.manager.narrative.minutes
         lines: list[str] = []
-        interrupted = yield Phase(lines, span.minutes, own=True)
+        interrupted = yield Phase(lines, own=True)
         spent = self.manager.narrative.minutes - started
         words = _span_words(spent)
         if spent < span.minutes and interrupted:
@@ -1858,7 +1851,7 @@ class SimulationCore:
         """Sleep chunk by chunk until the time is up or something wakes the player."""
         span = accepted.expect(TimeSpan)
         player = self.manager.player
-        wanted = span.minutes
+        wanted = action_minutes(accepted.action, span)
         player.asleep = True
         logger.debug(
             "Sleep starts at minute %s for up to %s minutes", self.manager.narrative.minutes, wanted
