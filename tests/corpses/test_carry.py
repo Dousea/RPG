@@ -38,7 +38,7 @@ from modules.body.stats import CharacterStat, StatusEffect
 from modules.character.equipment import CharacterArmorSlot, CharacterHoldableSlot
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
-from tests.support import simulate
+from tests.support import resolve_leg, simulate
 from tests.test_simulation import zombie_game
 
 NAME = "Orton"
@@ -96,7 +96,7 @@ class CarryTests(unittest.TestCase):
     def test_corpse_means_the_nearest(self):
         gm, near = with_body(gap=2.0)
         gm.world.corpses["c2"] = body(corpse_id="c2", gap=5.0)
-        simulate(gm, CarryAction(corpse_name="corpse"), rng=random.Random(1))
+        resolve_leg(gm, CarryAction(corpse_name="corpse"), rng=random.Random(1))
         self.assertEqual(gm.player.carrying_corpse, "c1")
 
     def test_a_body_further_than_a_tile_is_walked_up_to_first(self):

@@ -9,7 +9,7 @@ from managers.simulation import SimulationCore
 from modules.action.types import MoveAction, PutAction, SearchAction, TakeAction
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
-from tests.support import ScriptedRandom, simulate
+from tests.support import ScriptedRandom, resolve_leg, simulate
 
 NAME = "Orton"
 
@@ -152,14 +152,15 @@ class SearchContainerTests(unittest.TestCase):
         self.assertTrue(named(gm, "zone_home", "bathroom counter").opened)
         self.assertFalse(named(gm, "zone_home", "kitchen counter").opened)
 
-    def test_an_ambiguous_bare_word_pauses_the_plan_to_ask_which_one(self):
+    def test_an_ambiguous_bare_word_is_refused_within_a_leg(self):
         gm = GameManager()
         gm.player.current_location_id = "zone_bodega"
         gm.player.current_room = "shop_floor"
-        minutes, facts = elapsed(gm, SearchAction(target_name="shelves"))
-        self.assertEqual(minutes, 0)
-        self.assertEqual(len(facts), 1)
-        self.assertIn("hasn't yet: search shelves", facts[0])
+        before = gm.narrative.minutes
+        leg = resolve_leg(gm, SearchAction(target_name="shelves"), rng=random.Random(5))
+        self.assertEqual(gm.narrative.minutes, before)
+        self.assertEqual(len(leg.facts), 1)
+        self.assertIn("hasn't yet: search shelves", leg.facts[0])
 
     def test_a_container_already_gone_through_is_refused(self):
         gm = in_room("kitchen")

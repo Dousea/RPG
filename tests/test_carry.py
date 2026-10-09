@@ -37,7 +37,7 @@ from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
 from modules.entity.player import PlayerEntity
 from modules.item import ContainerItem, HoldableItem
-from tests.support import ScriptedRandom, set_health, simulate
+from tests.support import ScriptedRandom, resolve_leg, set_health, simulate
 
 
 def player(strength: int = 5, traits: tuple[str, ...] = ()) -> PlayerEntity:
@@ -63,7 +63,7 @@ class CapacityTests(unittest.TestCase):
         gm.current_location.entities.append(ItemEntity(item=ITEMS["item_barbell"]))
 
         with self.assertLogs("managers.carry", level="DEBUG") as logs:
-            facts = simulate(gm, TakeAction(item_name="barbell"))
+            facts = resolve_leg(gm, TakeAction(item_name="barbell")).facts
 
         self.assertTrue(facts[0].startswith("Refused"))
         (line,) = [r.getMessage() for r in logs.records]

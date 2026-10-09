@@ -6,22 +6,20 @@ from pathlib import Path
 from typing import cast
 from unittest import mock
 
+from adapters.engine import GameEngine
 from adapters.save import files
 from data.items import ITEMS
 from data.melee import NO_ZOMBIE_DOWN
-from data.story.mentions import AFTER_THE_MOVE
-from managers.combat import weapons
+from data.story.mentions import AFTER_THE_MOVE, ANSWER_NOT_ON_OFFER
 from managers.game import GameManager
 from managers.validator import Accepted, ActionValidator, Rejected
-from managers.world import item_ids
-from modules.action.pins import MENTION_MARK, pin_of
-from modules.action.types import AnyAction, AttackAction, MoveAction, ShoveAction
+from modules.action.pins import MENTION_MARK
+from modules.action.types import AnyAction, MoveAction, ShoveAction
 from modules.entity.item import ItemEntity
 from modules.entity.zombie import ZombieState
-from modules.resolution import TargetContainer, TargetCorpse, TargetZombie
+from modules.resolution import TargetZombie
 from tests.support import FakeFactChecker
 from tests.test_engine import EngineTestCase
-from tests.test_plan import two_bodies
 from tests.test_simulation import add_zombie, zombie_game
 
 STORY = "STORY:\nIt happens.\n\nEVENT:\nSomething happened\n\nOPTIONS:\nNONE"
@@ -128,138 +126,23 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         self.assertTrue(any(isinstance(a.action, MoveAction) for a in seen))
         self.assertTrue(any(isinstance(a.resolved, TargetZombie) for a in seen))
 
-    def test_an_unclear_item_is_picked_and_the_plan_heads_out_with_it(self):
-        gm = self.stage("zone_street")
-        self.two_bats(gm)
-        self.script("TAKE Baseball Bat\nMOVE_TO out")
-        result = self.engine.play("grab the bat and head out")
-        self.assertEqual(len(self.choices(result["plan"])), 2)
-        self.assertEqual(gm.player.current_location_id, "zone_street")
-        self.engine.go([self.candidate(result["plan"], "broken")])
-        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
-        carried = [e for e in gm.player.inventory if e.item.id == BAT.id]
-        self.assertEqual([e.broken for e in carried], [True])
+    def test_go_hands_the_players_words_to_the_narrator(self):
+        self.stage("zone_home")
+        self.script("MOVE_TO the apartment")
+        self.engine.play("go to the apartment")
+        self.engine.go(["zone_building"])
+        self.assertIn("go to the apartment", self.llm.narrator_prompts[0])
 
-    def test_two_packs_differing_in_uses_ask_and_go_drops_the_chosen_one(self):
-        gm = self.stage("zone_street")
-        wipes = ITEMS["item_alcohol_wipes"]
-        few, many = ItemEntity(item=wipes, uses=3), ItemEntity(item=wipes, uses=5)
-        gm.player.inventory.extend([few, many])
-        self.script("DROP the alcohol wipes")
-        result = self.engine.play("drop the alcohol wipes")
-        self.assertEqual(len(self.choices(result["plan"])), 2)
-        self.assertIn(few, gm.player.inventory)
-        self.engine.go([self.candidate(result["plan"], "5 left")])
-        self.assertIn(few, gm.player.inventory)
-        self.assertNotIn(many, gm.player.inventory)
-
-    def test_two_open_choices_share_one_screen_and_one_go_settles_both(self):
-        gm = self.stage("zone_street")
-        self.two_bats(gm)
-        self.script("TAKE Baseball Bat\nMOVE_TO the store")
-        result = self.engine.play("grab the bat and go to the store")
-        self.assertEqual(len(result["plan"]["choices"]), 2)
-        self.assertEqual([s["choice"] for s in result["plan"]["steps"]], [0, 1, None])
-        self.engine.go([self.candidate(result["plan"], "good"), "zone_bodega"])
-        self.assertEqual(gm.player.current_location_id, "zone_bodega")
-        self.assertFalse([e for e in gm.player.inventory if e.item.id == BAT.id and e.broken])
-
-    def test_the_questions_and_the_picks_that_settle_them_are_traced(self):
-        gm = self.stage("zone_building")
-        self.script("MOVE_TO Your Apartment")
-
-        with self.assertLogs("adapters.engine", level="DEBUG") as logs:
-            self.engine.play("go to the apartment")
-            self.engine.go(["zone_flat_vacant"])
-
-        lines = [record.getMessage() for record in logs.records]
-        asked = next(line for line in lines if line.startswith("Which-one asked"))
-        self.assertIn("destination", asked)
-        self.assertIn("zone_flat_vacant", asked)
-        picks = next(line for line in lines if line.startswith("Plan screen picks"))
-        self.assertIn("zone_flat_vacant", picks)
-        self.assertEqual(gm.player.current_location_id, "zone_flat_vacant")
-
-    def test_a_zone_the_parser_picked_for_a_kind_word_asks_and_go_moves_to_the_pick(self):
-        gm = self.stage("zone_building")
-        self.script("MOVE_TO Your Apartment")
+    def test_go_with_an_answer_not_offered_is_declined_and_drops_the_plan(self):
+        gm = self.stage("zone_home")
+        self.script("MOVE_TO the apartment")
+        self.engine.play("go to the apartment")
         minutes = gm.narrative.minutes
-        result = self.engine.play("go to the apartment")
-        self.assertEqual(
-            set(self.choices(result["plan"])),
-            {"zone_home", "zone_building", "zone_flat_vacant", "zone_flat_tenant"},
-        )
-        self.assert_nothing_ran(gm, minutes, result)
-        self.engine.go(["zone_flat_vacant"])
-        self.assertEqual(gm.player.current_location_id, "zone_flat_vacant")
-
-        gm = self.stage("zone_home")
-        self.script("MOVE_TO The Corner Store")
-        result = self.engine.play("go to the store")
-        self.assertEqual(len(self.choices(result["plan"])), 4)
-        self.assertEqual(gm.player.current_location_id, "zone_home")
-
-    def test_words_that_name_the_zone_move_without_a_question(self):
-        for text, reply, start, end in (
-            ("go to my apartment", "Your Apartment", "zone_building", "zone_home"),
-            ("go to the supermarket", "The Supermarket", "zone_neighborhood", "zone_supermarket"),
-            ("go to the stockroom", "The Corner Store", "zone_street", "zone_bodega"),
-        ):
-            with self.subTest(text):
-                gm = self.stage(start)
-                self.script(f"MOVE_TO {reply}")
-                result = self.engine.play(text)
-                self.assertIsNone(result["plan"])
-                self.assertEqual(gm.player.current_location_id, end)
-
-    def test_an_unclear_container_is_picked_and_searched(self):
-        gm = self.stage("zone_home")
-        gm.player.current_room = None
-        seen = self.accepted()
-        self.script("SEARCH counter")
-        result = self.engine.play("search the counter")
-        self.assertEqual(self.choices(result["plan"]), ["kitchen_counter", "bathroom_counter"])
-        self.engine.go(["bathroom_counter"])
-        (search,) = [a for a in seen if isinstance(a.resolved, TargetContainer)]
-        self.assertEqual(search.expect(TargetContainer).container.container_id, "bathroom_counter")
-
-    def test_two_bodies_ask_which_one_and_go_searches_the_pick(self):
-        gm = two_bodies("item_jacket_police", "item_jeans")
-        self.engine.manager = gm
-        seen = self.accepted()
-        for reply in ("SEARCH corpse", "SEARCH c1"):
-            with self.subTest(reply):
-                gm.world.corpses["c2"].searched = False
-                self.llm.narrator_prompts.clear()
-                self.script(reply)
-                minutes = gm.narrative.minutes
-                result = self.engine.play("search the body")
-                self.assertEqual(self.choices(result["plan"]), ["c1", "c2"])
-                self.assert_nothing_ran(gm, minutes, result)
-                self.engine.go(["c2"])
-                self.assertEqual(seen[-1].expect(TargetCorpse).corpse_id, "c2")
-                self.assertTrue(gm.world.corpses["c2"].searched)
-                self.assertFalse(gm.world.corpses["c1"].searched)
-
-    def test_words_naming_one_body_or_one_body_ask_nothing(self):
-        gm = two_bodies("item_jacket_police", "item_jeans")
-        self.engine.manager = gm
-        self.script("SEARCH c2")
-        result = self.engine.play("search the man in jeans")
-        self.assertIsNone(result["plan"])
-        self.assertTrue(gm.world.corpses["c2"].searched)
-
-        gm = two_bodies("item_jeans")
-        self.engine.manager = gm
-        self.script("SEARCH corpse")
-        self.assertIsNone(self.engine.play("search the body")["plan"])
-
-    def test_two_zombies_still_default_to_the_nearest_without_asking(self):
-        gm = self.stage("zone_street")
-        add_zombie(gm, gap=3, state=ZombieState.CHASING)
-        add_zombie(gm, gap=9)
-        self.script("ATTACK zombie")
-        self.assertIsNone(self.engine.play("hit the zombie")["plan"])
+        result = self.engine.go(["zone_street"])
+        self.assertEqual(result["story_text"], ANSWER_NOT_ON_OFFER)
+        self.assertEqual(gm.narrative.minutes, minutes)
+        self.assertEqual(self.llm.narrator_prompts, [])
+        self.assertFalse(self.engine.has_plan)
 
     def test_a_clear_plan_runs_as_before(self):
         self.stage("zone_street")
@@ -277,6 +160,7 @@ class AskBeforeRunningTests(PlanScreenTestCase):
         self.assertTrue(self.engine.has_plan)
         self.assertEqual(Path(self.save_path).read_text(), saved)
         self.assertNotIn("plan", json.loads(saved))
+        self.assertFalse(GameEngine().has_plan)
 
     def test_a_dropped_off_request_action_still_reaches_the_narrator_after_go(self):
         self.stage("zone_home")
@@ -315,18 +199,6 @@ class DroppingThePlanTests(PlanScreenTestCase):
         self.assertEqual(gm.narrative.minutes, minutes)
         self.assertEqual(self.llm.narrator_prompts, [])
 
-    def test_a_choice_that_is_not_offered_is_refused_with_no_time_spent(self):
-        gm, minutes = self.kept()
-        for answer in (["zone_street"], [], ["zone_home", "zone_home"]):
-            with self.subTest(answer):
-                result = self.engine.go(answer)
-                self.assertTrue(result["story_text"])
-                self.assertIsNone(result["plan"])
-                self.assertEqual(gm.narrative.minutes, minutes)
-                self.script("MOVE_TO the apartment")
-                self.engine.play("go to the apartment")
-        self.assertEqual(self.llm.narrator_prompts, [])
-
 
 class PausedPlanTests(PlanScreenTestCase):
     def pause(self) -> tuple[GameManager, dict]:
@@ -345,94 +217,6 @@ class PausedPlanTests(PlanScreenTestCase):
         self.assertEqual([s["done"] for s in steps], [True, False, False])
         self.assertEqual([s["choice"] for s in steps], [None, 0, None])
         self.assertEqual(len(set(self.choices(result["plan"]))), 2)
-
-    def test_go_resumes_without_running_the_done_steps_again(self):
-        gm, paused = self.pause()
-        result = self.engine.go([self.candidate(paused["plan"], "good")])
-        self.assertEqual(len(self.llm.prompts), 1)
-        self.assertEqual(len(self.llm.narrator_prompts), 2)
-        self.assertNotIn("Refused:", self.llm.narrator_prompts[1])
-        self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
-        carried = [e for e in gm.player.inventory if e.item.id == BAT.id]
-        self.assertEqual([e.broken for e in carried], [False])
-        self.assertIsNone(result["plan"])
-
-    def plank_the_door_and_swap_bats(self, gm: GameManager, *hammers: ItemEntity) -> None:
-        gm.world.barriers["door_apartment"].barricades["zone_home"] = [1000]
-        gm.player.inventory.extend([*hammers, ItemEntity(item=BAT, condition=0)])
-        gm.current_location.entities.append(ItemEntity(item=BAT))
-
-    def test_a_refusal_after_a_move_the_prediction_missed_waits_for_the_resumed_run(self):
-        gm = self.stage("zone_home")
-        self.plank_the_door_and_swap_bats(gm, ItemEntity(item=ITEMS["item_hammer"]))
-        checker = cast(FakeFactChecker, self.engine.factcheck)
-        checker.plan_results = [[4]]
-        self.script(
-            "DROP broken Baseball Bat\nTAKE Baseball Bat\nUNBARRICADE apartment door"
-            "\nMOVE_TO out\nATTACK apartment door",
-            "NONE",
-        )
-        paused = self.engine.play("swap bats, take the planks off, go out and hit the door")
-        self.engine.go([self.candidate(paused["plan"], "good")])
-        (_, questions) = checker.plan_calls[0]
-        self.assertEqual(gm.player.current_location_id, "zone_building")
-        for prompt in self.llm.narrator_prompts:
-            self.assertNotIn(questions[4].correction, prompt)
-
-    def test_a_pick_on_a_held_refusal_is_pinned_again_after_the_resumed_move(self):
-        gm = self.stage("zone_home")
-        hammers = [ItemEntity(item=ITEMS["item_hammer"]) for _ in range(2)]
-        self.plank_the_door_and_swap_bats(gm, *hammers)
-        item_ids.stamp_world(gm.world, gm.player)
-        cast(FakeFactChecker, self.engine.factcheck).plan_results = [[4]]
-        self.script(
-            "DROP broken Baseball Bat\nTAKE Baseball Bat\nUNBARRICADE apartment door"
-            "\nMOVE_TO out\nEQUIP Hammer",
-            "EQUIP Hammer",
-        )
-        paused = self.engine.play(
-            f"swap bats, take the planks off, go out and hold {MENTION_MARK}",
-            mentions=[hammers[1].instance_id],
-        )
-        self.engine.go([self.candidate(paused["plan"], "good")])
-        self.assertEqual(gm.player.current_location_id, "zone_building")
-        self.assertIs(weapons.held_entity(gm.player), hammers[1])
-
-    def test_a_question_in_the_part_parsed_again_after_a_zone_change_pauses_too(self):
-        gm = self.stage("zone_street")
-        gm.world.locations["zone_neighborhood"].entities.extend(
-            [ItemEntity(item=BAT, condition=0), ItemEntity(item=BAT)]
-        )
-        self.script("MOVE_TO out\nTAKE Baseball Bat", "TAKE Baseball Bat")
-        result = self.engine.play("go out and take the bat")
-        self.assertEqual(len(self.llm.prompts), 2)
-        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
-        steps = result["plan"]["steps"]
-        self.assertEqual([(s["done"], s["choice"]) for s in steps], [(True, None), (False, 0)])
-
-
-class SpentPickTests(PlanScreenTestCase):
-    def test_a_dropped_action_spends_its_pick_for_the_part_parsed_again(self):
-        gm = self.stage("zone_neighborhood")
-        zombie = add_zombie(gm, gap=3, state=ZombieState.CHASING)
-        cast(FakeFactChecker, self.engine.factcheck).plan_results = [[0]]
-        self.script(
-            "ATTACK zombie\nMOVE_TO Supermarket\nSHOUT",
-            "ATTACK zombie",
-        )
-        checked: list[Accepted | Rejected] = []
-        real = ActionValidator.validate
-
-        def spy(validator: ActionValidator, action: AnyAction):
-            result = real(validator, action)
-            checked.append(result)
-            return result
-
-        with mock.patch.object(ActionValidator, "validate", spy):
-            self.engine.play(f"hit {MENTION_MARK} then go on", mentions=[zombie.zombie_id])
-        later = [r.action for r in checked if isinstance(r.action, AttackAction)]
-        self.assertGreater(len(later), 1)
-        self.assertIsNone(pin_of(later[-1].target_name))
 
 
 class GroupWordTests(PlanScreenTestCase):

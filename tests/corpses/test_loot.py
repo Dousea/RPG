@@ -16,7 +16,7 @@ from modules.body.parts import BodyLocation
 from modules.body.stats import CharacterStat
 from modules.entity.corpse import CorpseEntity
 from modules.entity.item import ItemEntity
-from tests.support import ScriptedRandom, load_pack, simulate
+from tests.support import ScriptedRandom, load_pack, resolve_leg, simulate
 from tests.test_simulation import zombie_game
 
 NAME = "Orton"
@@ -205,7 +205,7 @@ class SearchTests(unittest.TestCase):
         far = body(corpse_id="c2", gap=6.0)
         gm.world.corpses["c2"] = far
         near.gap = 5.0
-        minutes_of(gm, SearchAction(target_name="corpse"))
+        resolve_leg(gm, SearchAction(target_name="corpse"), rng=random.Random(1))
         self.assertTrue(far.searched is False and near.searched)
 
     def test_an_unknown_corpse_is_refused(self):

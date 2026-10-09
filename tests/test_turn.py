@@ -10,13 +10,22 @@ from dataclasses import replace
 from typing import Any
 
 from data.items import ITEMS
-from data.story.mentions import REST_NOT_REACHED_FACT
+from data.story.mentions import ANSWER_NOT_ON_OFFER, REST_NOT_REACHED_FACT
 from data.time_costs import MAX_PLAN_ACTIONS
 from managers.context import NOTHING_DONE_FACT
 from managers.game import GameManager
 from managers.simulation import Leg, SimulationCore
-from managers.turn import CheckedLeg, TurnOutcome, run_turn
-from modules.action.pins import Mention, Pinned
+from managers.turn import (
+    NO_WORDS,
+    CheckedLeg,
+    Declined,
+    Paused,
+    Said,
+    TurnOutcome,
+    resume_turn,
+    start_turn,
+)
+from modules.action.pins import MENTION_MARK, Mention, Pinned
 from modules.action.types import (
     AddGoalAction,
     AnyAction,
@@ -50,8 +59,12 @@ class Planner:
     def __init__(self, *legs: CheckedLeg | None):
         self._legs = list(legs)
         self.calls: list[tuple[list[str], list[Mention]]] = []
+        self.said: list[Said] = []
 
-    def __call__(self, done: Sequence[str], picks: Sequence[Mention]) -> CheckedLeg | None:
+    def __call__(
+        self, said: Said, done: Sequence[str], picks: Sequence[Mention]
+    ) -> CheckedLeg | None:
+        self.said.append(said)
         self.calls.append((list(done), list(picks)))
         return self._legs.pop(0) if self._legs else None
 
@@ -91,9 +104,13 @@ class LegLoopTests(unittest.TestCase):
         earlier = goal("Earlier")
         planner = planning(goal("Next"))
 
-        outcome = run_turn(
-            SimulationCore(GameManager()), checked_leg([move]), planner, done=[earlier]
+        outcome = resume_turn(
+            SimulationCore(GameManager()),
+            Paused(checked_leg([move]), (), Said(), (earlier,), frozenset()),
+            [],
+            planner,
         )
+        assert isinstance(outcome, TurnOutcome)
 
         self.assertEqual(planner.calls[0][0], [describe_action(earlier), describe_action(move)])
         self.assertEqual(outcome.done, (earlier, move, goal("Next")))
@@ -431,13 +448,13 @@ class PickTests(unittest.TestCase):
             dropped=[(0, self.take("refused"), "No.")],
         )
 
-        outcome = run_turn(
+        outcome = resume_turn(
             SimulationCore(GameManager()),
-            first,
+            Paused(first, (), Said("", tuple(picks)), (), frozenset({"spent"})),
+            [],
             planner,
-            picks=picks,
-            spent=frozenset({"spent"}),
         )
+        assert isinstance(outcome, TurnOutcome)
 
         self.assertEqual([pick.id for pick in planner.calls[0][1]], ["free"])
         self.assertEqual(outcome.spent, {"tried", "refused", "spent"})
@@ -447,7 +464,7 @@ class PickTests(unittest.TestCase):
         first = checked_leg(
             [MoveAction(destination="out")], dropped=[(1, self.take("after"), "No.")]
         )
-        run_turn(SimulationCore(GameManager()), first, planner, picks=[self.pick("after")])
+        start_turn(SimulationCore(GameManager()), first, planner, Said("", (self.pick("after"),)))
 
         self.assertEqual([pick.id for pick in planner.calls[0][1]], ["after"])
 
@@ -458,12 +475,7 @@ class PickTests(unittest.TestCase):
             dropped=[(1, self.take("between"), "No.")],
         )
 
-        run_turn(
-            SimulationCore(GameManager()),
-            first,
-            planner,
-            picks=[self.pick("between")],
-        )
+        start_turn(SimulationCore(GameManager()), first, planner, Said("", (self.pick("between"),)))
 
         self.assertEqual(planner.calls[0][1], [])
 
@@ -500,8 +512,9 @@ class PausedTurnTests(unittest.TestCase):
 
         self.assertIsNotNone(outcome.paused)
         assert outcome.paused is not None
-        self.assertEqual(outcome.paused.pending, actions[1:])
         self.assertEqual(outcome.paused.check.kept, actions[1:])
+        self.assertEqual(outcome.paused.done, actions[:1])
+        self.assertEqual(len(outcome.paused.choices), 1)
         self.assertEqual(
             [reason for _, _, reason in outcome.paused.check.dropped], ["Behind the question."]
         )
@@ -518,15 +531,300 @@ class PausedTurnTests(unittest.TestCase):
     def test_a_player_who_dies_of_the_shout_is_not_paused(self):
         gm = street()
         bat = ITEMS["item_baseball_bat"]
-        gm.current_location.entities.extend(
-            [ItemEntity(item=bat, condition=0), ItemEntity(item=bat)]
-        )
+        gm.current_location.entities.append(ItemEntity(item=bat))
+        gm.player.inventory.append(ItemEntity(item=bat, condition=0))
         make_dying(gm.player)
 
-        outcome = run(gm, [ShoutAction(), TakeAction(item_name="Baseball Bat")])
+        outcome = run(
+            gm,
+            [
+                ShoutAction(),
+                DropAction(item_name="broken Baseball Bat"),
+                TakeAction(item_name="Baseball Bat"),
+            ],
+        )
 
         self.assertTrue(gm.narrative.game_over)
         self.assertIsNone(outcome.paused)
 
     def test_a_turn_that_runs_to_its_end_is_not_paused(self):
         self.assertIsNone(run(GameManager(), [goal("Rest")]).paused)
+
+
+BAT = ITEMS["item_baseball_bat"]
+
+
+def two_bats() -> GameManager:
+    gm = street()
+    gm.current_location.entities.extend([ItemEntity(item=BAT, condition=0), ItemEntity(item=BAT)])
+    return gm
+
+
+def started(
+    gm: GameManager,
+    actions: Sequence[AnyAction],
+    planner: Planner | None = None,
+    said: Said = NO_WORDS,
+    **leg,
+):
+    return start_turn(
+        SimulationCore(gm, rng=random.Random(1)),
+        checked_leg(actions, **leg),
+        planner or Planner(),
+        said,
+    )
+
+
+def answer(paused: Paused, word: str, number: int = 0) -> str:
+    """The id of the candidate of open choice `number` whose description has `word`."""
+    (found,) = [c.id for c in paused.choices[number].candidates if word in c.description]
+    return found
+
+
+def resumed(
+    gm: GameManager, paused: Paused, answers: Sequence[str], planner: Planner | None = None
+):
+    return resume_turn(
+        SimulationCore(gm, rng=random.Random(1)), paused, answers, planner or Planner()
+    )
+
+
+class StartTests(unittest.TestCase):
+    """llm-contract: Plans: a first leg with an open choice pauses before anything runs."""
+
+    def test_a_first_leg_with_an_open_choice_pauses_and_runs_nothing(self):
+        gm = two_bats()
+        minutes = gm.narrative.minutes
+        planner = Planner()
+
+        paused = started(gm, [TakeAction(item_name="Baseball Bat"), goal("Later")], planner)
+
+        assert isinstance(paused, Paused)
+        self.assertEqual(len(paused.choices), 1)
+        self.assertEqual(paused.choices[0].index, 0)
+        self.assertEqual(len(paused.check.kept), 2)
+        self.assertEqual(paused.done, ())
+        self.assertEqual(gm.narrative.minutes, minutes)
+        self.assertEqual(gm.narrative.goals["short_term"], [])
+        self.assertEqual(planner.calls, [])
+
+    def test_the_first_pause_keeps_the_players_words_for_the_later_leg(self):
+        gm = two_bats()
+        pick = Mention(kind="item", id="pick", name="the pick", description="")
+        said = Said(f"take {MENTION_MARK} then out", (pick,))
+        planner = Planner(None)
+
+        paused = started(
+            gm, [TakeAction(item_name="Baseball Bat"), MoveAction(destination="out")], said=said
+        )
+        assert isinstance(paused, Paused)
+        resumed(gm, paused, [answer(paused, "good")], planner)
+
+        self.assertEqual(paused.said, said)
+        self.assertEqual(planner.said, [said])
+
+    def test_a_first_leg_with_nothing_open_runs(self):
+        gm = street()
+
+        outcome = started(gm, [goal("Rest")])
+
+        self.assertIsInstance(outcome, TurnOutcome)
+        self.assertEqual(gm.narrative.goals["short_term"], ["Rest"])
+
+
+class SaidTests(unittest.TestCase):
+    def test_the_words_are_shown_with_the_name_of_each_pick_not_the_parsers_mark(self):
+        pick = Mention(kind="item", id="z32", name="Baseball Bat", description="")
+
+        shown = Said(f"take {MENTION_MARK}", (pick,)).shown
+
+        self.assertIn(pick.name, shown)
+        self.assertNotIn("pinned", shown)
+        self.assertNotIn(pick.id, shown)
+
+
+class ResumeTests(unittest.TestCase):
+    """llm-contract: Plans: the answers bind the open choices and the turn runs."""
+
+    def test_good_answers_bind_both_choices_and_the_turn_runs(self):
+        gm = two_bats()
+        gm.current_location.entities.append(ItemEntity(item=ITEMS["item_hammer"]))
+        paused = started(
+            gm, [TakeAction(item_name="Baseball Bat"), MoveAction(destination="the store")]
+        )
+        assert isinstance(paused, Paused)
+        self.assertEqual(len(paused.choices), 2)
+
+        outcome = resumed(gm, paused, [answer(paused, "good"), "zone_bodega"])
+
+        assert isinstance(outcome, TurnOutcome)
+        self.assertIn("zone_bodega", outcome.spent)
+        carried = [e for e in gm.player.inventory if e.item.id == BAT.id]
+        self.assertEqual([e.broken for e in carried], [False])
+        self.assertIsNone(outcome.paused)
+
+    def test_answers_the_scene_cannot_take_are_declined_and_nothing_runs(self):
+        for name, answers in (
+            ("not offered", ["zone_street"]),
+            ("too few", []),
+            ("too many", ["a", "b"]),
+        ):
+            with self.subTest(name):
+                gm = two_bats()
+                paused = started(gm, [TakeAction(item_name="Baseball Bat"), goal("Later")])
+                assert isinstance(paused, Paused)
+                minutes = gm.narrative.minutes
+
+                outcome = resumed(gm, paused, answers)
+
+                self.assertEqual(outcome, Declined(ANSWER_NOT_ON_OFFER))
+                self.assertEqual(gm.narrative.minutes, minutes)
+                self.assertEqual(gm.narrative.goals["short_term"], [])
+
+    def test_choices_that_changed_since_they_were_offered_are_declined(self):
+        gm = two_bats()
+        gm.current_location.entities.append(ItemEntity(item=BAT, condition=1))
+        paused = started(gm, [TakeAction(item_name="Baseball Bat")])
+        assert isinstance(paused, Paused)
+        offered = answer(paused, "good")
+        gm.current_location.entities.pop()
+
+        outcome = resumed(gm, paused, [offered])
+
+        self.assertEqual(outcome, Declined(ANSWER_NOT_ON_OFFER))
+
+    def test_a_turn_paused_midway_keeps_the_players_words(self):
+        gm = street()
+        gm.player.inventory.append(ItemEntity(item=BAT, condition=0))
+        gm.current_location.entities.append(ItemEntity(item=BAT))
+        said = Said(
+            f"drop {MENTION_MARK}", (Mention(kind="item", id="p", name="p", description=""),)
+        )
+
+        outcome = started(
+            gm,
+            [DropAction(item_name="broken Baseball Bat"), TakeAction(item_name="Baseball Bat")],
+            said=said,
+        )
+
+        assert isinstance(outcome, TurnOutcome)
+        assert outcome.paused is not None
+        self.assertEqual(outcome.paused.said, said)
+
+    def test_a_turn_paused_midway_resumes_without_running_the_done_steps_again(self):
+        gm = street()
+        gm.player.inventory.append(ItemEntity(item=BAT, condition=0))
+        gm.current_location.entities.append(ItemEntity(item=BAT))
+        first = started(
+            gm,
+            [
+                DropAction(item_name="broken Baseball Bat"),
+                TakeAction(item_name="Baseball Bat"),
+                goal("Find water"),
+            ],
+        )
+        assert isinstance(first, TurnOutcome)
+        paused = first.paused
+        assert paused is not None
+
+        outcome = resumed(gm, paused, [answer(paused, "good")])
+
+        assert isinstance(outcome, TurnOutcome)
+        self.assertEqual(gm.narrative.goals["short_term"], ["Find water"])
+        carried = [e for e in gm.player.inventory if e.item.id == BAT.id]
+        self.assertEqual([e.broken for e in carried], [False])
+        self.assertEqual(outcome.done[0], DropAction(item_name="broken Baseball Bat"))
+        self.assertEqual(len(outcome.done), 3)
+        self.assertIsNone(outcome.paused)
+
+    def test_a_refusal_after_the_pending_actions_is_given_when_the_turn_resumes(self):
+        gm = street()
+        gm.player.inventory.append(ItemEntity(item=BAT, condition=0))
+        gm.current_location.entities.append(ItemEntity(item=BAT))
+        first = started(
+            gm,
+            [
+                DropAction(item_name="broken Baseball Bat"),
+                TakeAction(item_name="Baseball Bat"),
+                goal("Find water"),
+            ],
+            dropped=[(3, TakeAction(item_name="a"), "Behind the question.")],
+        )
+        assert isinstance(first, TurnOutcome)
+        assert first.paused is not None
+        self.assertNotIn("Behind the question.", first.facts)
+
+        outcome = resumed(gm, first.paused, [answer(first.paused, "good")])
+
+        assert isinstance(outcome, TurnOutcome)
+        self.assertIn("Behind the question.", outcome.facts)
+
+    def test_a_refusal_held_behind_the_pause_is_judged_against_the_move_of_the_resumed_run(self):
+        gm = street()
+        gm.player.inventory.append(ItemEntity(item=BAT, condition=0))
+        gm.current_location.entities.append(ItemEntity(item=BAT))
+        pick = Mention(kind="item", id="after", name="after", description="")
+        first = started(
+            gm,
+            [
+                DropAction(item_name="broken Baseball Bat"),
+                TakeAction(item_name="Baseball Bat"),
+                MoveAction(destination="out"),
+            ],
+            dropped=[
+                (2, TakeAction(item_name="between"), "Between."),
+                (4, TakeAction(item_name=Pinned("after", "item", "after")), "After."),
+            ],
+            said=Said("", (pick,)),
+        )
+        assert isinstance(first, TurnOutcome)
+        assert first.paused is not None
+        planner = Planner(None)
+
+        outcome = resumed(gm, first.paused, [answer(first.paused, "good")], planner)
+
+        assert isinstance(outcome, TurnOutcome)
+        self.assertIn("Between.", outcome.facts)
+        self.assertNotIn("After.", outcome.facts)
+        self.assertEqual([p.id for p in planner.calls[0][1]], ["after"])
+
+    def test_a_question_after_a_zone_change_pauses_with_the_first_leg_done(self):
+        gm = street()
+        gm.world.locations["zone_neighborhood"].entities.extend(
+            [ItemEntity(item=BAT, condition=0), ItemEntity(item=BAT)]
+        )
+        planner = planning(TakeAction(item_name="Baseball Bat"))
+
+        outcome = started(gm, [MoveAction(destination="out")], planner)
+
+        assert isinstance(outcome, TurnOutcome)
+        assert outcome.paused is not None
+        self.assertEqual(gm.player.current_location_id, "zone_neighborhood")
+        self.assertEqual(outcome.paused.done, (MoveAction(destination="out"),))
+        self.assertEqual(len(outcome.paused.choices), 1)
+
+    def test_the_picks_and_text_reach_the_planner_of_a_resumed_turn(self):
+        said = Said("go out", (Mention(kind="item", id="pick", name="pick", description=""),))
+        planner = Planner(None)
+        gm = street()
+        paused = Paused(checked_leg([MoveAction(destination="out")]), (), said, (), frozenset())
+
+        resume_turn(SimulationCore(gm, rng=random.Random(1)), paused, [], planner)
+
+        self.assertEqual(planner.said, [said])
+
+    def test_the_open_choices_and_the_answers_are_traced(self):
+        gm = two_bats()
+
+        with self.assertLogs("managers.turn", level="DEBUG") as logs:
+            paused = started(gm, [TakeAction(item_name="Baseball Bat")])
+            assert isinstance(paused, Paused)
+            offered = answer(paused, "good")
+            resumed(gm, paused, [offered])
+
+        lines = [record.getMessage() for record in logs.records]
+        asked = next(line for line in lines if line.startswith("Which-one asked"))
+        self.assertIn("item_name", asked)
+        self.assertIn(offered, asked)
+        picks = next(line for line in lines if line.startswith("Plan screen picks"))
+        self.assertIn(offered, picks)

@@ -9,7 +9,7 @@ docs/architecture/engine-authority.md.
 import logging
 import threading
 from collections.abc import Callable, Sequence
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict
 from typing import Any
 
 import config
@@ -38,18 +38,26 @@ from managers.corpses.search import corpse_views
 from managers.events.log import build_event_entry, event_stamp
 from managers.game import MAX_RECENT_EVENTS, GameManager
 from managers.mentions import labels, mentionables, picked
-from managers.plan import OpenChoice, bind_choices, open_choices, steps_in_this_scene, steps_of
+from managers.plan import steps_in_this_scene
 from managers.simulation import SimulationCore
 from managers.story.check import StateQuestion, build_questions, plan_questions, reach_question
 from managers.story.lore import LoreHit, record_turn, select_lore
-from managers.turn import CheckedLeg, TurnOutcome, run_turn
+from managers.turn import (
+    CheckedLeg,
+    Declined,
+    LegPlanner,
+    Paused,
+    Said,
+    TurnOutcome,
+    resume_turn,
+    start_turn,
+)
 from managers.world import item_ids
 from managers.world.barriers import barriers_of, state_word
 from managers.world.climate import scene_weather, weather_summary
 from managers.world.rooms import current_room
 from managers.world.scenes import setting_word
 from managers.zombies.population import threat_views
-from modules.action.choices import Candidate
 from modules.action.pins import Mention, bind, render_input
 from modules.action.types import AnyAction, UnsupportedAction
 from modules.action.words import describe_action, refusal_in_words
@@ -86,24 +94,6 @@ def _ignore(_event: dict[str, Any]) -> None:
     pass
 
 
-@dataclass
-class _Turn:
-    """A turn's plan on its way to the run, kept in memory while the player settles an open choice (never saved).
-
-    `typed` is the player's text with a mark where each pick stands, kept so the part after a zone change can
-    be parsed again; `check` holds what is still to run, `done` what already ran; `spent` holds the ids of the
-    picks the actions already placed or dropped.
-    """
-
-    typed: str
-    player_input: str
-    picks: list[Mention]
-    check: CheckedLeg
-    spent: frozenset[str] = frozenset()
-    done: tuple[AnyAction, ...] = ()
-    choices: list[OpenChoice] = field(default_factory=list[OpenChoice])
-
-
 def _story_listener(emit: TurnListener) -> llm.DeltaCallback:
     """Turns the narrator's streamed pieces into thinking events and story-so-far events."""
     written: list[str] = []
@@ -136,7 +126,7 @@ class GameEngine:
         self.lore_index = LoreIndex(self.memory)
         self.factcheck = FactChecker()
         self.manager: GameManager | None = files.load()
-        self._kept: _Turn | None = None
+        self._kept: Paused | None = None
         self.memory.rebuild(self.manager.memory.full_event_log if self.manager else [])
 
     @property
@@ -204,7 +194,8 @@ class GameEngine:
             if gone:
                 return self._snapshot(story_text=mention_k.NO_LONGER_IN_REACH)
             typed = player_input
-            player_input = render_input(typed, picks, for_parser=False)
+            said = Said(typed, tuple(picks))
+            player_input = said.shown
             logger.debug(
                 "Turn start: input=%r picks=%s minute=%s (%s %s) zone=%s",
                 player_input,
@@ -225,15 +216,14 @@ class GameEngine:
             _trace_rewrites(actions, aimed_actions)
             actions = aimed_actions
             checked = self._checked_plan(manager, player_input, actions, emit, parse_failures)
-            turn = _Turn(typed=typed, player_input=player_input, picks=picks, check=checked)
 
-            # 2. A target that fits several things is asked about before anything runs.
-            turn.choices = open_choices(manager, checked.kept, player_input)
-            if turn.choices:
-                _trace_choices(turn.choices)
-                self._kept = turn
-                return self._snapshot(story_text="")
-            return self._run(manager, turn, emit)
+            # 2. Start the turn: a target that fits several things is asked about before anything runs.
+            return self._advance(
+                manager,
+                player_input,
+                emit,
+                lambda core, planner: start_turn(core, checked, planner, said),
+            )
 
     def go(self, answers: Sequence[str], on_event: TurnListener | None = None) -> dict[str, Any]:
         """Run the kept plan with `answers` (one candidate id per open choice, in order), or refuse them in words.
@@ -243,27 +233,17 @@ class GameEngine:
         emit = on_event or _ignore
         with self._lock:
             manager = self.manager
-            turn, self._kept = self._kept, None
+            paused, self._kept = self._kept, None
             if manager is None:
                 return self._snapshot(story_text="")
-            if turn is None or manager.narrative.game_over:
+            if paused is None or manager.narrative.game_over:
                 return self._snapshot(story_text=mention_k.NO_PLAN_WAITING)
-            now = open_choices(manager, turn.check.kept, turn.player_input)
-            answered = self._answered(turn.choices, now, answers)
-            if answered is None:
-                return self._snapshot(story_text=mention_k.ANSWER_NOT_ON_OFFER)
-            logger.debug(
-                "Plan screen picks: %s",
-                [
-                    (choice.index, choice.attr, pick.id)
-                    for choice, pick in zip(now, answered, strict=True)
-                ],
+            return self._advance(
+                manager,
+                paused.said.shown,
+                emit,
+                lambda core, planner: resume_turn(core, paused, answers, planner),
             )
-            turn.check = replace(
-                turn.check, kept=tuple(bind_choices(turn.check.kept, now, answered))
-            )
-            turn.choices = []
-            return self._run(manager, turn, emit)
 
     def cancel_plan(self) -> dict[str, Any]:
         """Drop the plan that waits for an answer."""
@@ -271,25 +251,56 @@ class GameEngine:
             self._kept = None
             return self._snapshot(story_text="")
 
-    @staticmethod
-    def _answered(
-        asked: list[OpenChoice], now: list[OpenChoice], answers: Sequence[str]
-    ) -> list[Candidate] | None:
-        """The candidate each answer names, or None when the choices changed or an answer is not among theirs."""
-        if now != asked or len(answers) != len(now):
-            return None
-        found: list[Candidate] = []
-        for choice, answer in zip(now, answers, strict=True):
-            candidate = next((c for c in choice.candidates if c.id == answer), None)
-            if candidate is None:
+    def _advance(
+        self,
+        manager: GameManager,
+        player_input: str,
+        emit: TurnListener,
+        begin: Callable[[SimulationCore, LegPlanner], Paused | TurnOutcome | Declined],
+    ) -> dict[str, Any]:
+        """Start or resume the turn; a turn that pauses is kept, one that ran is narrated and recorded."""
+        stamp = event_stamp(manager)
+        minutes_before = manager.narrative.minutes
+
+        def planner(
+            said: Said, done: Sequence[str], unbound: Sequence[Mention]
+        ) -> CheckedLeg | None:
+            try:
+                more, failures = self._parsed(
+                    manager, said.typed, list(said.picks), emit, done, list(unbound)
+                )
+            except llm.LLMError as exc:
+                logger.warning(f"Parser failed on the rest of the plan: {exc}")
                 return None
-            found.append(candidate)
-        return found
+            _trace_plan("Re-parsed plan at the destination", more)
+            aimed_more = aimed(more, said.shown)
+            _trace_rewrites(more, aimed_more)
+            return self._checked_plan(manager, said.shown, aimed_more, emit, failures)
 
-    def _run(self, manager: GameManager, turn: _Turn, emit: TurnListener) -> dict[str, Any]:
-        """Validate and simulate `turn`'s plan, narrate it and record it; a plan that meets an unclear target pauses and is kept."""
-        player_input = turn.player_input
+        # Validate and simulate, one action at a time in order. This is where the
+        # engine decides what happens -- before the narrator writes a single word
+        # about it. A plan that changes zone is parsed once more from the destination.
+        outcome = begin(SimulationCore(manager), planner)
+        if isinstance(outcome, Declined):
+            return self._snapshot(story_text=outcome.words)
+        if isinstance(outcome, Paused):
+            self._kept = outcome
+            return self._snapshot(story_text="")
 
+        logger.debug("Outcome facts: %s", outcome.facts)
+        self._kept = outcome.paused
+        return self._narrated(manager, player_input, stamp, minutes_before, outcome, emit)
+
+    def _narrated(
+        self,
+        manager: GameManager,
+        player_input: str,
+        stamp: str,
+        minutes_before: int,
+        outcome: TurnOutcome,
+        emit: TurnListener,
+    ) -> dict[str, Any]:
+        """Narrate what the turn did, check it, record it in memory and save."""
         # 1. Recall semantically relevant past events (for the narrator).
         indices = self.memory.search(player_input, DEFAULT_RECALL + MAX_RECENT_EVENTS)
         deep_memories = [
@@ -301,44 +312,7 @@ class GameEngine:
         logger.debug(f"Recalled {len(deep_memories)} deep memories.")
         lore_scores = self.lore_index.scores(player_input)
 
-        stamp = event_stamp(manager)
-        minutes_before = manager.narrative.minutes
-
-        # 2. Validate and simulate, one action at a time in order. This is
-        # where the engine decides what happens -- before the narrator
-        # writes a single word about it. A plan that changes zone is parsed
-        # once more from the destination.
-        def planner(done: Sequence[str], unbound: Sequence[Mention]) -> CheckedLeg | None:
-            try:
-                more, failures = self._parsed(
-                    manager, turn.typed, turn.picks, emit, done, list(unbound)
-                )
-            except llm.LLMError as exc:
-                logger.warning(f"Parser failed on the rest of the plan: {exc}")
-                return None
-            _trace_plan("Re-parsed plan at the destination", more)
-            aimed_more = aimed(more, player_input)
-            _trace_rewrites(more, aimed_more)
-            return self._checked_plan(manager, player_input, aimed_more, emit, failures)
-
-        outcome = run_turn(
-            SimulationCore(manager),
-            turn.check,
-            planner,
-            picks=turn.picks,
-            spent=turn.spent,
-            done=turn.done,
-        )
-        logger.debug("Outcome facts: %s", outcome.facts)
-        turn.done = outcome.done
-        turn.spent = outcome.spent
-        if outcome.paused is not None:
-            turn.check = outcome.paused.check
-            turn.choices = open_choices(manager, turn.check.kept, turn.player_input)
-            _trace_choices(turn.choices)
-            self._kept = turn
-
-        # 3. Ask the narrator to describe what already happened. A turn the
+        # 2. Ask the narrator to describe what already happened. A turn the
         # parser found nothing in would otherwise be narrated as the input.
         narrated_facts = list(outcome.narrated)
         context = ContextBuilder(manager)
@@ -397,13 +371,13 @@ class GameEngine:
         options = list(parsed["options"])
         entry = build_event_entry(manager, stamp, player_input, list(outcome.facts))
 
-        # 4. Record the event in both memory tiers and reindex.
+        # 3. Record the event in both memory tiers and reindex.
         emit({"type": "step", "step": "saving"})
         manager.record_event(entry)
         manager.memory.last_story = story_text
         self.memory.rebuild(manager.memory.full_event_log)
 
-        # 5. Summarize if enough history has built up.
+        # 4. Summarize if enough history has built up.
         self._run_summarization(manager)
 
         files.save(manager)
@@ -761,16 +735,14 @@ class GameEngine:
 
     def _plan_payload(self, manager: GameManager) -> dict[str, Any] | None:
         """The plan screen: each step in words with its default target or open choice, and each choice's candidates. None when no plan waits."""
-        turn = self._kept
-        if turn is None:
+        paused = self._kept
+        if paused is None:
             return None
         return {
-            "steps": [
-                asdict(step) for step in steps_of(manager, turn.done, turn.check.kept, turn.choices)
-            ],
+            "steps": [asdict(step) for step in paused.steps(manager)],
             "choices": [
                 {"candidates": [asdict(candidate) for candidate in choice.candidates]}
-                for choice in turn.choices
+                for choice in paused.choices
             ],
         }
 
@@ -784,16 +756,6 @@ def _trace_rewrites(before: Sequence[AnyAction], after: Sequence[AnyAction]) -> 
     for index, (old, new) in enumerate(zip(before, after, strict=True)):
         if old != new:
             logger.debug("Rewrote action [%s]: %r -> %r", index, old, new)
-
-
-def _trace_choices(choices: Sequence[OpenChoice]) -> None:
-    for choice in choices:
-        logger.debug(
-            "Which-one asked for action [%s] %s: %s",
-            choice.index,
-            choice.attr,
-            [(c.id, c.name) for c in choice.candidates],
-        )
 
 
 def _inventory(player: PlayerEntity) -> list[dict[str, Any]]:

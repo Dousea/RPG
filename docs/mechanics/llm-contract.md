@@ -263,9 +263,9 @@ empty list is `NONE`.
 - **A which-one question does.** An action whose target fits several things (an item that
   looks different from another of its name, a container, a zone) is not refused: the plan
   ends there, the actions from it on are not tried, and the narrator is told what is not
-  done yet. The engine asks the same questions of every action up to the first zone change
-  before the plan runs, and a plan with an open choice runs nothing until the player
-  answers ([entity resolution](../architecture/entity-resolution.md#which-one)).
+  done yet. The turn (`managers/turn.py`) asks the same questions of every action up to the first
+  zone change before the plan runs, and a plan with an open choice runs nothing until the
+  player answers ([entity resolution](../architecture/entity-resolution.md#which-one)).
 - **An interrupted action stops the plan.** The actions after it are cancelled with
   one fact: "Orton never gets to: take the knife, drop the bag." A story beat that
   interrupts does the same. Only the actions in the same scene are named: the ones
@@ -731,7 +731,7 @@ model changes. The plan check's reason pick has its own cases, `evals/plan_check
   on an answer, a step with a default target showing which one it is, and Go and Cancel.
   Go is enabled once every picker has a choice. Typing another turn or Cancel drops the
   plan. A plan that meets a question while it runs comes back the same way with the done
-  steps ticked. It is held in memory and never saved.
+  steps ticked. The turn module holds it as a paused turn, in memory, and never saves it.
 - **Turn status:** while a turn runs, a line under the story names its step (Parsing…,
   Thinking…, Narrating…, Fact checking…, Rewriting…, Writing options…, Saving…) with
   the seconds spent on it, the story appears as it is written, and a collapsed

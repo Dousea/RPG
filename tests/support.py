@@ -17,7 +17,7 @@ from managers import carry
 from managers.game import GameManager
 from managers.simulation import Leg, LegEnd, SimulationCore
 from managers.story.check import StateQuestion
-from managers.turn import CheckedLeg, LegPlanner, TurnOutcome, run_turn
+from managers.turn import CheckedLeg, LegPlanner, Said, TurnOutcome, start_turn
 from modules.action.types import AnyAction
 from modules.body.parts import PART_WEIGHT, BodyPart
 from modules.character.equipment import CharacterHoldableSlot
@@ -72,7 +72,11 @@ def turn_of(
     **leg: Any,
 ) -> TurnOutcome:
     """Run `actions` as a turn through `core`; with no `planner`, a zone change leaves the rest unplanned."""
-    return run_turn(core, checked_leg(actions, **leg), planner or (lambda _done, _picks: None))
+    outcome = start_turn(
+        core, checked_leg(actions, **leg), planner or (lambda _said, _done, _picks: None), Said()
+    )
+    assert isinstance(outcome, TurnOutcome), "the plan has an open choice; resolve one leg instead"
+    return outcome
 
 
 def resolve_actions(gm: GameManager, *actions: AnyAction) -> list[str]:
@@ -302,6 +306,11 @@ class IsolatedSaveTestCase(unittest.TestCase):
 def simulate(gm: GameManager, *actions: AnyAction, rng: random.Random | None = None) -> list[str]:
     """Resolve actions through a fresh SimulationCore; refusals come back as facts."""
     return list(turn_of(SimulationCore(gm, rng=rng), actions).facts)
+
+
+def resolve_leg(gm: GameManager, *actions: AnyAction, rng: random.Random | None = None) -> Leg:
+    """Resolve actions as one leg, without the turn's asking about unclear targets."""
+    return SimulationCore(gm, rng=rng).resolve(list(actions))
 
 
 class ScriptedRandom(random.Random):
